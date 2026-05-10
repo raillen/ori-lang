@@ -1,9 +1,0 @@
-namespace app.main
-
-import std.list as list
-
-func main() -> int
-    const value: int = 1
-    const first: optional<int> = list.first(value)
-    return first.or(0)
-end

@@ -1,6 +1,0 @@
-namespace app.main
-
-func main() -> int
-    const value: group<int, int> = (1, 2)
-    return 0
-end

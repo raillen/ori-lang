@@ -1,9 +1,0 @@
-namespace app.main
-
-func main() -> int
-    var total: int = 0
-    for value in range(10, 0, -2)
-        total = total + value
-    end
-    return total - 30
-end

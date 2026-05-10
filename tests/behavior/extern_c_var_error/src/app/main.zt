@@ -1,9 +1,0 @@
-namespace app.main
-
-extern c
-    var global_value: int
-end
-
-public func main() -> int
-    return 0
-end

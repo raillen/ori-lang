@@ -1,9 +1,0 @@
-namespace app.right
-
-public struct Flag
-    value: int
-end
-
-public func make(value: int) -> right.Flag
-    return right.Flag(value: value)
-end

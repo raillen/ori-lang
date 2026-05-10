@@ -1,3 +1,0 @@
-namespace app.config
-
-public var COUNTER: int = 1

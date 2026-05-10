@@ -1,9 +1,0 @@
-namespace app.main
-
-func main() -> int
-    try
-        return 1
-    catch e
-        return 2
-    end
-end

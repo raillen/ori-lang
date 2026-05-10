@@ -1,8 +1,0 @@
-namespace app.main
-
-union Shape
-end
-
-func main() -> int
-    return 0
-end

@@ -1,6 +1,0 @@
-namespace app.main
-
-/* this is a C-style block comment */
-public func main() -> int
-    return 0
-end

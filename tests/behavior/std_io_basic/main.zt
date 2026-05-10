@@ -1,9 +1,0 @@
-import std.io as io
-
-func main(): result<void, text> {
-    const r1 = io.write("Hello from std.io!")
-    if not r1 { return r1 }
-    const r2 = io.write("\n")
-    if not r2 { return r2 }
-    return success()
-}

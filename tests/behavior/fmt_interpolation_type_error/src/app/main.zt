@@ -1,7 +1,0 @@
-namespace app.main
-
-func main() -> int
-    const payload: bytes = hex bytes "CA FE"
-    const text_value: text = f"Payload {payload}"
-    return 0
-end

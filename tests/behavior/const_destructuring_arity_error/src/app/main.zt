@@ -1,6 +1,0 @@
-namespace app.main
-
-func main() -> int 
-    const (left, right, extra) = (1, 2)
-    return 0
-end

@@ -1,6 +1,0 @@
-namespace app.main
-
-func main() -> int 
-    check(true)
-    return 0
-end

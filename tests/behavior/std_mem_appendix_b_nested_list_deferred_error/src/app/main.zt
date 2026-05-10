@@ -1,9 +1,0 @@
-namespace app.main
-
-import std.mem as mem
-
-func main() -> int
-    const nested: list<list<int>> = [[1, 2], [3]]
-    const copied: list<list<int>> = mem.edit(nested)
-    return len(copied)
-end

@@ -1,7 +1,0 @@
---- @target: Job
-```zt
-public struct Job<T>
-```
-
-Tipo publico `Job`.
----

@@ -1,9 +1,0 @@
-namespace app.main
-
-func main() -> int
-    const value: int = 7
-    match value
-        case default:
-            return 1
-    end
-end

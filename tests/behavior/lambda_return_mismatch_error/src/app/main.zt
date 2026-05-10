@@ -1,9 +1,0 @@
-namespace app.main
-
-public func main() -> int 
-    const wrong: func(int) -> bool = func(value: int) => value + 1
-    if wrong(1) 
-        return 1
-    end
-    return 0
-end

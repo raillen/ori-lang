@@ -1,9 +1,0 @@
-namespace app.main
-
-func main() -> int
-    const value: float = math.abs(-1.0)
-    if value == 1.0
-        return 0
-    end
-    return 1
-end

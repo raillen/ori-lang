@@ -1,9 +1,0 @@
-namespace app.main
-
-import std.map as map
-
-func main() -> int
-    const base: map<bool, int> = { true: 1 }
-    const changed: map<bool, int> = map.set(base, false, 2)
-    return len(changed)
-end

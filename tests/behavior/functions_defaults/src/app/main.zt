@@ -1,9 +1,0 @@
-namespace app.main
-
-func total(base: int, bonus: int = 10, extra: int = 3) -> int
-    return base + bonus + extra
-end
-
-func main() -> int
-    return total(5, extra: 3)
-end

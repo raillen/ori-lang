@@ -1,7 +1,0 @@
---- @target: Shared
-```zt
-public struct Shared<T>
-```
-
-Tipo publico `Shared`.
----

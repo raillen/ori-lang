@@ -1,7 +1,0 @@
-- [Home](Home)
-- [Getting Started](Getting-Started)
-- [Compiler Architecture](Compiler-Architecture)
-- [Roadmap and Releases](Roadmap-and-Releases)
-- [Contributing](Contributing)
-- [Licensing](Licensing)
-- [Documentation Map](Documentation-Map)

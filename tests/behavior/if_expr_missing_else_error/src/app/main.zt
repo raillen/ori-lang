@@ -1,9 +1,0 @@
-namespace app.main
-
-func main() -> int
-    const value: int = if true then 1
-    const other: int = if true
-        2
-    end
-    return value
-end

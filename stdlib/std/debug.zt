@@ -1,9 +1,0 @@
-namespace std.debug
-
-extern c
-    public func zt_debug_size_of(value: text) -> int
-end
-
-public func size_of(value: text) -> int
-    return debug.zt_debug_size_of(value)
-end

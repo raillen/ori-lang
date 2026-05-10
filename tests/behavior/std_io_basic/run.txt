@@ -1,4 +1,0 @@
-args:
-exit: 0
-output: Hello from std.io!
-Stderr outputs correctly.

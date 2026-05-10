@@ -1,6 +1,0 @@
-namespace app.main
-import app.missing as missing
-
-func main() -> int
-    return 0
-end

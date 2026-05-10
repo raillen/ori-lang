@@ -1,9 +1,0 @@
-namespace app.main
-
-func main() -> int
-    const a: u8 = 7
-    if a == 7
-        return 0
-    end
-    return 1
-end

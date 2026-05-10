@@ -1,6 +1,0 @@
-namespace app.main
-
-public func main() -> int
-    const msg: text = f"hello {}"
-    return 0
-end

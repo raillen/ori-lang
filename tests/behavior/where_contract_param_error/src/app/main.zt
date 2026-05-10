@@ -1,9 +1,0 @@
-namespace app.main
-
-func require_positive(value: int where it > 0) -> int
-    return value
-end
-
-func main() -> int
-    return require_positive(0)
-end

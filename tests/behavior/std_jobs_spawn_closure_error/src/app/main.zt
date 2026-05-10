@@ -1,9 +1,0 @@
-namespace app.main
-
-import std.jobs as jobs
-
-public func main() -> int
-    const base: int = 40
-    const handle: jobs.Job<int> = jobs.spawn(func() => base + 2)
-    return jobs.join(handle)
-end

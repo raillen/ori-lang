@@ -1,6 +1,0 @@
-namespace app.main
-
-public func main() -> int
-    type LocalInt = int
-    return 0
-end

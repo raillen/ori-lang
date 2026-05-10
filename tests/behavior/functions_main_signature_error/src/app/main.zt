@@ -1,5 +1,0 @@
-namespace app.main
-
-func main(value: int) -> int
-    return value
-end

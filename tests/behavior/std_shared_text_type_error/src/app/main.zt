@@ -1,8 +1,0 @@
-namespace app.main
-
-import std.shared as shared
-
-public func main() -> int
-    const value: shared.Shared<text> = shared.create("shared")
-    return len(shared.get(value))
-end

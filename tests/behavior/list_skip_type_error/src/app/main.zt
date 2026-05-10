@@ -1,9 +1,0 @@
-namespace app.main
-
-import std.list as list
-
-func main() -> int
-    const values: list<int> = [1, 2]
-    const rest: list<int> = list.skip(values, "two")
-    return len(rest)
-end

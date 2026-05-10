@@ -1,9 +1,0 @@
-namespace app.main
-
-func main() -> int
-    var total: int = 0
-    repeat -1 times
-        total = total + 1
-    end
-    return total
-end

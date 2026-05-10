@@ -1,9 +1,0 @@
-namespace app.main
-
-func fail(msg: text) -> int
-    panic(msg)
-end
-
-func main() -> int
-    return fail("explicit panic")
-end

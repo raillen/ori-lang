@@ -1,5 +1,0 @@
-namespace app.main
-
-func main() -> int
-    return 0
-end

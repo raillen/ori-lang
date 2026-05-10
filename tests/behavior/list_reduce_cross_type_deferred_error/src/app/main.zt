@@ -1,9 +1,0 @@
-namespace app.main
-
-import std.list as list
-
-func main() -> int
-    const values: list<int> = [1, 2]
-    const label: text = list.reduce(values, "", func(acc: text, value: int) => acc + "x")
-    return len(label)
-end

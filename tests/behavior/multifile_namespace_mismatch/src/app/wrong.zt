@@ -1,5 +1,0 @@
-namespace app.other
-
-func value() -> int
-    return 1
-end
