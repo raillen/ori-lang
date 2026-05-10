@@ -595,7 +595,8 @@ set_expr
    ============================================================ *)
 
 struct_literal
-    = type_ref "(" [ field_init { "," field_init } [ "," ] ] ")"
+    = type_ref "(" [ field_init { "," field_init } [ "," ] ] ")"   (* full form: Point(x: 0, y: 0) *)
+    | "." "{" [ field_init { "," field_init } [ "," ] ] "}"          (* anon form: .{x: 0, y: 0} *)
     ;
 
 field_init
@@ -603,8 +604,10 @@ field_init
     ;
 
 enum_variant_expr
-    = type_ref "." IDENT [ "(" [ expression { "," expression } ] ")" ]
-    | "." IDENT [ "(" [ expression { "," expression } ] ")" ]  (* shorthand *)
+    = type_ref "." IDENT [ "(" [ expression { "," expression } ] ")" ]      (* full: Shape.Circle(r: 5.0) *)
+    | type_ref "." IDENT "{" [ field_init { "," field_init } ] "}"          (* full struct variant *)
+    | "." IDENT [ "(" [ expression { "," expression } ] ")" ]               (* shorthand: .Circle(r: 5.0) *)
+    | "." IDENT "{" [ field_init { "," field_init } ] "}"                   (* shorthand struct variant: .Circle{r: 5.0} *)
     ;
 
 

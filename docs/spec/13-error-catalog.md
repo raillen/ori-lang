@@ -67,6 +67,8 @@ Errors produced by the type checker.
 | `type.ambiguous_generic` | error | Type argument cannot be inferred; provide explicitly |
 | `type.comparison_not_supported` | error | `==` applied to a type without equality (e.g. `any<Trait>`, `func`) |
 | `type.equality_unsupported_field` | error | Struct contains a field type that does not support `==` |
+| `type.anon_struct_type_unknown` | error | `.{...}` used where the expected struct type cannot be inferred |
+| `type.anon_struct_field_mismatch` | error | Field in `.{...}` does not exist on the target struct type |
 | `type.invalid_is_check` | error | `is` check on a non-dynamic type |
 | `type.incompatible_result_error` | error | `?` used but error types are incompatible |
 | `type.propagation_context` | error | `?` used in a function that does not return `optional<_>` or `result<_,_>` |

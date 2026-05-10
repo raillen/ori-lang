@@ -219,12 +219,45 @@ do(x: int) -> int ... end               -- block closure
 
 ## Struct Literal
 
+**Full form** — always valid, type is explicit:
+
 ```ori
-const user: User = User(name: "Ada", age: 36)
+const p: Point = Point(x: 0, y: 0)
+const u: User  = User(name: "Ada", age: 36)
 ```
 
-All fields must be provided unless the type implements `Default`.
-Field names are required (positional construction is not allowed).
+**Anonymous form** — `.{field: value}` when the type is known from context:
+
+```ori
+-- From type annotation
+const p: Point = .{x: 0, y: 0}
+
+-- From function return type
+func origin() -> Point
+    return .{x: 0, y: 0}
+end
+
+-- From parameter type
+func draw(point: Point)
+draw(.{x: 10, y: 20})
+
+-- Nested
+const l: Line = .{start: .{x: 0, y: 0}, end: .{x: 5, y: 5}}
+
+-- With Default: all fields use their default values
+const p: Point = .{}
+```
+
+The `.{` prefix is unambiguous — it cannot be confused with a map literal
+(`{"key": value}`) or a block.
+
+Rules:
+- All fields must be provided unless the type implements `Default`.
+- Field names are required (positional construction is not allowed).
+- If the expected type cannot be inferred, `.{...}` is a compile error:
+  `error[type.anon_struct_type_unknown]`.
+- If a field name does not exist on the target struct:
+  `error[type.anon_struct_field_mismatch]`.
 
 ---
 
@@ -246,9 +279,12 @@ The result is a new value; `original` is not mutated.
 
 ## Enum Variant Expression
 
+**Full form:**
+
 ```ori
 Direction.North
 Shape.Circle(radius: 10.0)
+Shape.Rectangle(width: 5.0, height: 3.0)
 ```
 
 **Shorthand** (when the enum type is known from context):
@@ -257,6 +293,15 @@ Shape.Circle(radius: 10.0)
 const d: Direction = .North
 const s: Shape = .Circle(radius: 5.0)
 ```
+
+**Struct variant shorthand** (enum variant with named fields):
+
+```ori
+const s: Shape = .Rectangle{width: 5.0, height: 3.0}
+```
+
+The `.Variant{field: value}` form is the struct-variant equivalent of `.{field: value}`.
+It follows the same type-inference rules.
 
 ---
 
