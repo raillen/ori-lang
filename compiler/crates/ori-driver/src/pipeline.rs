@@ -4,7 +4,7 @@ use ori_lexer::Token;
 use ori_ast::item::SourceFile;
 use ori_types::resolve::ResolvedModule;
 
-// ── Output types ──────────────────────────────────────────────────────────────
+// â”€â”€ Output types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub struct LexOutput {
     pub cache:       SourceCache,
@@ -26,7 +26,7 @@ pub struct CheckOutput {
     pub has_errors:  bool,
 }
 
-// ── Pipeline steps ────────────────────────────────────────────────────────────
+// â”€â”€ Pipeline steps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Read `path` from disk, lex it and return the token stream.
 pub fn run_lex(path: &Path) -> Result<LexOutput, String> {
@@ -58,7 +58,7 @@ pub struct CompileOutput {
     pub has_errors:  bool,
 }
 
-/// Full pipeline → Cranelift object → linker → native binary.
+/// Full pipeline â†’ Cranelift object â†’ linker â†’ native binary.
 pub fn run_compile(source_path: &Path, output: &Path) -> Result<CompileOutput, String> {
     let source  = read_file(source_path)?;
     let mut cache = SourceCache::default();
@@ -70,9 +70,7 @@ pub fn run_compile(source_path: &Path, output: &Path) -> Result<CompileOutput, S
     let resolved = ori_types::resolve::resolve(&ast, file_id, &mut sink);
 
     if !sink.has_errors() {
-        let mut checker = ori_types::check::Checker::new(
-            &resolved.def_map, &resolved.namespace, file_id, &mut sink,
-        );
+        let mut checker = ori_types::check::Checker::new(&resolved.def_map, &resolved.func_sigs, &resolved.namespace, file_id, &mut sink);
         checker.check_file(&ast);
     }
 
@@ -92,7 +90,7 @@ pub fn run_compile(source_path: &Path, output: &Path) -> Result<CompileOutput, S
     Ok(CompileOutput { cache, exe_path: output.to_owned(), diagnostics, has_errors })
 }
 
-/// Full pipeline: lex → parse → resolve names → type-check.
+/// Full pipeline: lex â†’ parse â†’ resolve names â†’ type-check.
 pub fn run_check(path: &Path) -> Result<CheckOutput, String> {
     let source  = read_file(path)?;
     let mut cache = SourceCache::default();
@@ -102,20 +100,15 @@ pub fn run_check(path: &Path) -> Result<CheckOutput, String> {
     // Lex
     let tokens = ori_lexer::lex(&source, file_id, &mut sink);
 
-    // Parse — continue even with lex errors
+    // Parse â€” continue even with lex errors
     let ast = ori_parser::parse(&tokens, &source, file_id, &mut sink);
 
     // Name resolution
     let resolved = ori_types::resolve::resolve(&ast, file_id, &mut sink);
 
-    // Type checking — only if no fatal parse errors so far
+    // Type checking â€” only if no fatal parse errors so far
     if !sink.has_errors() {
-        let mut checker = ori_types::check::Checker::new(
-            &resolved.def_map,
-            &resolved.namespace,
-            file_id,
-            &mut sink,
-        );
+        let mut checker = ori_types::check::Checker::new(&resolved.def_map, &resolved.func_sigs, &resolved.namespace, file_id, &mut sink);
         checker.check_file(&ast);
     }
 
@@ -143,9 +136,7 @@ pub fn run_build(path: &Path) -> Result<BuildOutput, String> {
     let resolved = ori_types::resolve::resolve(&ast, file_id, &mut sink);
 
     if !sink.has_errors() {
-        let mut checker = ori_types::check::Checker::new(
-            &resolved.def_map, &resolved.namespace, file_id, &mut sink,
-        );
+        let mut checker = ori_types::check::Checker::new(&resolved.def_map, &resolved.func_sigs, &resolved.namespace, file_id, &mut sink);
         checker.check_file(&ast);
     }
 
@@ -163,14 +154,14 @@ pub fn run_build(path: &Path) -> Result<BuildOutput, String> {
     Ok(BuildOutput { cache, c_source, diagnostics, has_errors })
 }
 
-// ── Utilities ─────────────────────────────────────────────────────────────────
+// â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn read_file(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path)
         .map_err(|e| format!("cannot read `{}`: {}", path.display(), e))
 }
 
-/// The Ori runtime as embedded C source — compiled on demand with `cc -c`.
+/// The Ori runtime as embedded C source â€” compiled on demand with `cc -c`.
 /// This avoids linking issues from Rust staticlibs pulling in Rust std.
 const ORI_RUNTIME_C: &str = r#"
 #include <stdio.h>
@@ -198,6 +189,32 @@ char* ori_int_to_cstr(long long n) {
     char* buf = (char*)malloc(32);
     if (buf) snprintf(buf, 32, "%lld", (long long)n);
     return buf;
+}
+
+/* ori_to_string(n: i64) -> *u8  (same as ori_int_to_cstr) */
+char* ori_to_string(long long n) {
+    return ori_int_to_cstr(n);
+}
+
+/* ori_len(ptr: *u8) -> i64  (strlen) */
+long long ori_len(const char* ptr) {
+    if (!ptr) return 0;
+    return (long long)strlen(ptr);
+}
+
+/* ori_math_abs(n: i64) -> i64 */
+long long ori_math_abs(long long n) {
+    return n < 0 ? -n : n;
+}
+
+/* ori_math_min(a: i64, b: i64) -> i64 */
+long long ori_math_min(long long a, long long b) {
+    return a < b ? a : b;
+}
+
+/* ori_math_max(a: i64, b: i64) -> i64 */
+long long ori_math_max(long long a, long long b) {
+    return a > b ? a : b;
 }
 "#;
 

@@ -230,9 +230,20 @@ impl NativeBackend {
         // ori_to_string(n: i64) -> (*u8, i64) -- TODO: multi-value; stub as ptr for now
         let id = decl("ori_int_to_cstr", &[types::I64], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_to_string"), id);
-        // strlen(ptr: *u8) -> i64  (returns size_t, we treat as i64)
+        // strlen(ptr: *u8) -> i64
         let id = decl("strlen", &[pt], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("strlen"), id);
+        // ori_len(ptr: *u8) -> i64
+        let id = decl("ori_len", &[pt], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_len"), id);
+        // ori_math_abs(n: i64) -> i64
+        let id = decl("ori_math_abs", &[types::I64], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_math_abs"), id);
+        // ori_math_min / ori_math_max
+        let id = decl("ori_math_min", &[types::I64, types::I64], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_math_min"), id);
+        let id = decl("ori_math_max", &[types::I64, types::I64], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_math_max"), id);
         // malloc / free for runtime allocation
         let id = decl("malloc", &[types::I64], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("malloc"), id);
@@ -707,8 +718,11 @@ impl<'a> FuncCodegen<'a> {
                             let mut cl_args = Vec::new();
                             for a in args {
                                 let v = self.emit_expr(a)?;
-                                // If arg is a string pointer, add (ptr, len)
-                                if matches!(a.ty, Ty::String) {
+                                // ori_io_print always takes (ptr, len); any string-like arg
+                                // (String, Infer, or ptr type) gets strlen added
+                                let is_str = matches!(&a.ty, Ty::String | Ty::Infer(_))
+                                    || cl_type(&a.ty, self.ptr_ty) == Some(self.ptr_ty);
+                                if is_str {
                                     let len = self.str_len_from_ptr(v);
                                     cl_args.push(v);
                                     cl_args.push(len);

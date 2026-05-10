@@ -4,8 +4,9 @@ use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label};
 use ori_ast::expr::{BinaryOp, Expr, UnaryOp};
 use ori_ast::item::{FuncDecl, Item, SourceFile};
 use ori_ast::stmt::{Block, Stmt};
-use crate::def::{DefMap};
+use crate::def::{DefId, DefKind, DefMap};
 use crate::lower::lower_type;
+use crate::resolve::FuncSig;
 use crate::ty::Ty;
 
 // ── Environment ───────────────────────────────────────────────────────────────
@@ -25,6 +26,7 @@ impl Scope {
 
 pub struct Checker<'a> {
     def_map:   &'a DefMap,
+    func_sigs: &'a [FuncSig],   // return types for all declared functions
     namespace: &'a str,
     file_id:   FileId,
     sink:      &'a mut DiagnosticSink,
@@ -34,11 +36,17 @@ pub struct Checker<'a> {
 impl<'a> Checker<'a> {
     pub fn new(
         def_map:   &'a DefMap,
+        func_sigs: &'a [FuncSig],
         namespace: &'a str,
         file_id:   FileId,
         sink:      &'a mut DiagnosticSink,
     ) -> Self {
-        Self { def_map, namespace, file_id, sink, scopes: vec![Scope::default()] }
+        Self { def_map, func_sigs, namespace, file_id, sink, scopes: vec![Scope::default()] }
+    }
+
+    /// Look up the return type of a function by its DefId.
+    fn func_return_ty(&self, def_id: DefId) -> Option<Ty> {
+        self.func_sigs.iter().find(|s| s.def_id == def_id).map(|s| s.return_ty.clone())
     }
 
     pub fn check_file(&mut self, file: &SourceFile) {
@@ -227,15 +235,41 @@ impl<'a> Checker<'a> {
                 let rt = self.infer_expr(rhs);
                 self.infer_binary(*op, &lt, &rt, *span)
             }
-            Expr::Field { object, field, span } => {
-                // Field access — type unknown until struct layout is resolved
-                let _ = self.infer_expr(object);
-                let _ = (field, span);
+            Expr::Field { object, field, .. } => {
+                let obj_ty = self.infer_expr(object);
+                // Try to look up field type if we know the struct
+                if let Ty::Named(def_id, _) = &obj_ty {
+                    if let Some(sig) = self.func_sigs.iter().find(|_| false) {
+                        let _ = sig; // placeholder — struct field lookup requires struct layout
+                    }
+                    let _ = (def_id, field); // TODO: look up in struct layout
+                }
                 Ty::Infer(0)
             }
-            Expr::Call { callee, .. } => {
-                let _ = self.infer_expr(callee);
-                Ty::Infer(0) // return type unknown without full signature lookup
+            Expr::Call { callee, args, .. } => {
+                let _callee_ty = self.infer_expr(callee);
+                for a in args {
+                    let expr = match &a.value {
+                        ori_ast::expr::ArgValue::Expr(e) | ori_ast::expr::ArgValue::Spread(e) => e.as_ref(),
+                    };
+                    self.infer_expr(expr);
+                }
+                // If callee is a named function, look up its return type
+                if let Expr::QualifiedIdent(q) = callee.as_ref() {
+                    let path = q.to_string();
+                    let full_path = format!("{}.{}", self.namespace, path);
+                    let id = self.def_map.lookup(&full_path)
+                        .or_else(|| self.def_map.lookup(&path));
+                    if let Some(def_id) = id {
+                        let def = self.def_map.get(def_id);
+                        if def.kind == DefKind::Func {
+                            if let Some(ret) = self.func_return_ty(def_id) {
+                                return ret;
+                            }
+                        }
+                    }
+                }
+                Ty::Infer(0)
             }
             Expr::Try { expr, .. } => {
                 let inner = self.infer_expr(expr);

@@ -275,6 +275,19 @@ impl<'src> Parser<'src> {
                 Some(Expr::QualifiedIdent(name))
             }
 
+            // Primitive type keywords used as conversion functions: string(x), int(x), etc.
+            TokenKind::StringTy | TokenKind::IntTy | TokenKind::Int8Ty | TokenKind::Int16Ty
+            | TokenKind::Int32Ty | TokenKind::Int64Ty | TokenKind::U8Ty | TokenKind::U16Ty
+            | TokenKind::U32Ty | TokenKind::U64Ty | TokenKind::FloatTy | TokenKind::Float32Ty
+            | TokenKind::Float64Ty | TokenKind::BytesTy | TokenKind::BoolTy => {
+                let tok = self.advance().unwrap();
+                let name = ori_ast::common::Name::new(
+                    smol_str::SmolStr::new(self.slice(tok.span)),
+                    tok.span,
+                );
+                Some(Expr::QualifiedIdent(ori_ast::common::QualifiedName::single(name)))
+            }
+
             _ => {
                 let span = self.current_span();
                 self.error("parse.expected_expression", "expected an expression", span);
