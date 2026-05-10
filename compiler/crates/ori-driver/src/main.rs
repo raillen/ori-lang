@@ -23,19 +23,22 @@ struct Cli {
 enum Commands {
     /// Type-check an Ori source file and report diagnostics.
     Check {
-        /// Path to the `.ori` source file.
+        /// Path to the `.orl` source file.
         file: PathBuf,
     },
     /// Print the raw token stream (debug).
     Lex {
+        /// Path to the `.orl` source file.
         file: PathBuf,
     },
     /// Print the AST (debug).
     Parse {
+        /// Path to the `.orl` source file.
         file: PathBuf,
     },
     /// Compile to a native binary via Cranelift (no C compiler needed).
     Compile {
+        /// Path to the `.orl` source file.
         file: PathBuf,
         /// Output executable path (default: same name as source, no extension).
         #[arg(short, long)]
@@ -43,6 +46,7 @@ enum Commands {
     },
     /// Compile to C source (debug backend).
     Build {
+        /// Path to the `.orl` source file.
         file: PathBuf,
         /// Write generated C to this file instead of stdout.
         #[arg(short, long)]

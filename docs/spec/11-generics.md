@@ -161,7 +161,7 @@ reports a clear error when a type argument fails to satisfy a `where` constraint
 
 ```
 error[generic.constraint_not_satisfied]: T does not satisfy constraint
-  --> src/app/main.ori:12:5
+  --> src/app/main.orl:12:5
    |
 12 |    const keys: list<K> = sorted_keys(my_map)
    |                          ^^^^^^^^^^^^^^^^

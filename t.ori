@@ -1,0 +1,9 @@
+namespace app.main
+import ori.io as io
+func main()
+    var i: int = 0
+    while i < 3
+        i = i + 1
+    end
+    io.print(string(i))
+end

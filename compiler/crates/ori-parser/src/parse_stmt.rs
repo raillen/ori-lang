@@ -292,6 +292,11 @@ impl<'src> Parser<'src> {
 fn expr_to_lvalue(expr: Expr) -> Option<LValue> {
     match expr {
         Expr::Ident(n) => Some(LValue::Ident(n)),
+        // Single-segment qualified names are simple identifiers (the parser always
+        // produces QualifiedIdent for bare names). Multi-segment paths reject below.
+        Expr::QualifiedIdent(q) if q.parts.len() == 1 => {
+            Some(LValue::Ident(q.parts.into_iter().next().unwrap()))
+        }
         Expr::QualifiedIdent(_) => None, // multi-segment paths are not lvalues
         Expr::Field { object, field, span } => {
             let base = expr_to_lvalue(*object)?;

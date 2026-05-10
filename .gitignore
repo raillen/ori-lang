@@ -4,8 +4,8 @@ Cargo.lock
 *.pdb
 
 # Ori compiler output
-*.ori.c
-*.ori.o
+*.orl.c
+*.orl.o
 dist/
 build/
 

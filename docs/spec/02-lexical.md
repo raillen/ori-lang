@@ -7,7 +7,7 @@
 
 ## Source Encoding
 
-Ori source files are UTF-8 encoded. The `.ori` extension is canonical.
+Ori source files are UTF-8 encoded. The `.orl` extension is canonical.
 
 A byte order mark (BOM) at the start of a file is accepted and ignored.
 

@@ -265,6 +265,19 @@ impl NativeBackend {
         self.stdlib_ids.insert(SmolStr::new("ori_math_min"), id);
         let id = decl("ori_math_max", &[types::I64, types::I64], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_max"), id);
+        // list<T> runtime
+        let id = decl("ori_list_new",  &[],                         Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_new"), id);
+        let id = decl("ori_list_push", &[pt, types::I64],            None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_push"), id);
+        let id = decl("ori_list_get",  &[pt, types::I64],            Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_get"), id);
+        let id = decl("ori_list_set",  &[pt, types::I64, types::I64], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_set"), id);
+        let id = decl("ori_list_len",  &[pt],                         Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_len"), id);
+        let id = decl("ori_list_free", &[pt],                         None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_free"), id);
         // malloc / free for runtime allocation
         let id = decl("malloc", &[types::I64], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("malloc"), id);
@@ -539,23 +552,34 @@ impl<'a> FuncCodegen<'a> {
     }
 
     fn emit_while(&mut self, cond: &HirExpr, body: &HirBlock) -> Result<(), String> {
-        let header = self.builder.create_block();
-        let body_b = self.builder.create_block();
-        let exit   = self.builder.create_block();
-        self.builder.ins().jump(header, &[]);
-        self.builder.switch_to_block(header);
-        let cv = self.emit_expr(cond)?;
-        self.builder.ins().brif(cv, body_b, &[], exit, &[]);
-        self.builder.seal_block(body_b);
-        self.builder.switch_to_block(body_b);
+        let cond_blk = self.builder.create_block();
+        let body_blk = self.builder.create_block();
+        let exit_blk = self.builder.create_block();
+
+        // Fall through to condition check
+        if !self.terminated { self.builder.ins().jump(cond_blk, &[]); }
         self.terminated = false;
-        self.loop_stack.push((header, exit));
-        self.emit_block(body)?;
+
+        // Condition block — do NOT seal yet (back-edge from body not known yet)
+        self.builder.switch_to_block(cond_blk);
+        let cv = self.emit_expr(cond)?;
+        self.builder.ins().brif(cv, body_blk, &[], exit_blk, &[]);
+
+        // Body block — only cond_blk jumps here, safe to seal immediately
+        self.builder.seal_block(body_blk);
+        self.builder.switch_to_block(body_blk);
+        self.loop_stack.push((cond_blk, exit_blk));
+        for s in &body.stmts { self.emit_stmt(s)?; }
         self.loop_stack.pop();
-        if !self.terminated { self.builder.ins().jump(header, &[]); }
-        self.builder.seal_block(header);
-        self.builder.seal_block(exit);
-        self.builder.switch_to_block(exit);
+        if !self.terminated { self.builder.ins().jump(cond_blk, &[]); }
+        self.terminated = false;
+
+        // Seal cond_blk NOW — both predecessors (entry and back-edge) are known
+        self.builder.seal_block(cond_blk);
+
+        // Exit block — only cond_blk branches here
+        self.builder.seal_block(exit_blk);
+        self.builder.switch_to_block(exit_blk);
         self.terminated = false;
         Ok(())
     }
@@ -881,6 +905,22 @@ impl<'a> FuncCodegen<'a> {
                     // Fallback: treat as opaque pointer load (first field)
                     self.builder.ins().load(types::I64, MemFlags::new(), ptr, 0)
                 }
+            }
+            HirExprKind::ListLit { elements, .. } => {
+                // Allocate list, push each element
+                let list_ptr = if let Some(&new_ref) = self.func_refs.get("ori_list_new") {
+                    let call = self.builder.ins().call(new_ref, &[]);
+                    self.builder.inst_results(call)[0]
+                } else {
+                    self.builder.ins().iconst(self.ptr_ty, 0)
+                };
+                if let Some(&push_ref) = self.func_refs.get("ori_list_push") {
+                    for elem in elements {
+                        let v = self.emit_expr(elem)?;
+                        self.builder.ins().call(push_ref, &[list_ptr, v]);
+                    }
+                }
+                list_ptr
             }
             HirExprKind::Range { start, end } => {
                 let _s = self.emit_expr(start)?;

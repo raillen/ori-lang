@@ -24,6 +24,13 @@ fn stdlib_c_name(ori_path: &str) -> Option<&'static str> {
         "int"    => Some("ori_to_int"),
         "float"  => Some("ori_to_float"),
         "len"    => Some("ori_len"),
+        // list operations (used as method calls: list.push, list.get, etc.)
+        "ori.list.new"  | "list.new"  => Some("ori_list_new"),
+        "ori.list.push" | "list.push" => Some("ori_list_push"),
+        "ori.list.get"  | "list.get"  => Some("ori_list_get"),
+        "ori.list.set"  | "list.set"  => Some("ori_list_set"),
+        "ori.list.len"  | "list.len"  => Some("ori_list_len"),
+        "ori.list.free" | "list.free" => Some("ori_list_free"),
         // ori.math
         "ori.math.sqrt" => Some("sqrt"),
         "ori.math.abs"  => Some("ori_math_abs"),
@@ -257,7 +264,25 @@ impl<'a> Lowerer<'a> {
                 let arms = m.cases.iter().map(|c| self.lower_match_case(c, tp)).collect();
                 Some(HirStmt::Match { scrutinee, arms, span: m.span })
             }
-            _ => None, // using, check, assign, ifsome, whilesome — TODO
+            Stmt::Assign(a) => {
+                let lvalue = lower_lvalue(&a.lvalue, self, tp);
+                let value  = self.lower_expr(&a.value, tp);
+                Some(HirStmt::Assign { lvalue, value, span: a.span })
+            }
+            Stmt::CompoundAssign(c) => {
+                // Lower `x += v` to `x = x + v` for v1
+                let lvalue = lower_lvalue(&c.lvalue, self, tp);
+                let cur    = lvalue_to_expr(&lvalue, c.span);
+                let rhs    = self.lower_expr(&c.value, tp);
+                let op     = compound_op_to_binary(c.op);
+                let ty     = binary_result_ty(op, &cur.ty, &rhs.ty);
+                let value  = HirExpr {
+                    kind: HirExprKind::Binary { op, lhs: Box::new(cur), rhs: Box::new(rhs) },
+                    ty, span: c.span,
+                };
+                Some(HirStmt::Assign { lvalue, value, span: c.span })
+            }
+            _ => None, // using, check, ifsome, whilesome — TODO
         }
     }
 
@@ -521,5 +546,53 @@ fn binary_result_ty(op: ori_ast::expr::BinaryOp, lty: &Ty, _rty: &Ty) -> Ty {
     match op {
         Add | Sub | Mul | Div | Rem => lty.clone(),
         Eq | Ne | Lt | Le | Gt | Ge | And | Or => Ty::Bool,
+    }
+}
+
+fn lower_lvalue(lv: &ori_ast::stmt::LValue, lowerer: &mut Lowerer, tp: &[SmolStr]) -> HirLValue {
+    use ori_ast::stmt::LValue;
+    match lv {
+        LValue::Ident(n) => HirLValue::Var(n.text.clone()),
+        LValue::Field { base, field, .. } => HirLValue::Field {
+            base: Box::new(lower_lvalue(base, lowerer, tp)),
+            field: field.text.clone(),
+        },
+        LValue::Index { base, index, .. } => HirLValue::Index {
+            base: Box::new(lower_lvalue(base, lowerer, tp)),
+            index: Box::new(lowerer.lower_expr(index, tp)),
+        },
+    }
+}
+
+fn lvalue_to_expr(lv: &HirLValue, span: Span) -> HirExpr {
+    match lv {
+        HirLValue::Var(name) => HirExpr {
+            kind: HirExprKind::Var(name.clone()), ty: Ty::Infer(0), span,
+        },
+        HirLValue::Field { base, field } => {
+            let obj = lvalue_to_expr(base, span);
+            HirExpr {
+                kind: HirExprKind::Field { object: Box::new(obj), field: field.clone() },
+                ty: Ty::Infer(0), span,
+            }
+        }
+        HirLValue::Index { base, index } => {
+            let obj = lvalue_to_expr(base, span);
+            HirExpr {
+                kind: HirExprKind::Index { object: Box::new(obj), index: index.clone() },
+                ty: Ty::Infer(0), span,
+            }
+        }
+    }
+}
+
+fn compound_op_to_binary(op: ori_ast::stmt::CompoundOp) -> ori_ast::expr::BinaryOp {
+    use ori_ast::stmt::CompoundOp;
+    use ori_ast::expr::BinaryOp;
+    match op {
+        CompoundOp::Add => BinaryOp::Add,
+        CompoundOp::Sub => BinaryOp::Sub,
+        CompoundOp::Mul => BinaryOp::Mul,
+        CompoundOp::Div => BinaryOp::Div,
     }
 }

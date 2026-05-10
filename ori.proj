@@ -3,7 +3,7 @@
 
 name = "my-project"
 version = "0.1.0"
-entry = "src/main.ori"
+entry = "src/main.orl"
 
 [dependencies]
 -- ori add <package> to add dependencies

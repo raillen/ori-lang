@@ -237,6 +237,36 @@ ori_result_i64_str_t ori_error_str(const char* e) {
     ori_result_i64_str_t r; r.is_ok = 0; r.ok = 0; r.err = e; return r;
 }
 
+/* ---------- list<T> (dynamic array of i64) ---------- */
+/* All list operations work on i64 elements for now (covers int, bool, pointer) */
+typedef struct { long long* data; long long len; long long cap; } ori_list_t;
+
+ori_list_t* ori_list_new(void) {
+    ori_list_t* l = (ori_list_t*)malloc(sizeof(ori_list_t));
+    l->data = (long long*)malloc(8 * sizeof(long long));
+    l->len  = 0;
+    l->cap  = 8;
+    return l;
+}
+void ori_list_push(ori_list_t* l, long long v) {
+    if (l->len >= l->cap) {
+        l->cap *= 2;
+        l->data = (long long*)realloc(l->data, (size_t)l->cap * sizeof(long long));
+    }
+    l->data[l->len++] = v;
+}
+long long ori_list_get(ori_list_t* l, long long i) {
+    if (i < 0 || i >= l->len) return 0;
+    return l->data[i];
+}
+void ori_list_set(ori_list_t* l, long long i, long long v) {
+    if (i >= 0 && i < l->len) l->data[i] = v;
+}
+long long ori_list_len(ori_list_t* l) { return l ? l->len : 0; }
+void ori_list_free(ori_list_t* l) {
+    if (l) { free(l->data); free(l); }
+}
+
 /* ---------- generic optional/result helpers ---------- */
 /* These operate on pointer-sized optional (has_value + ptr) */
 typedef struct { char has_value; void* ptr; } ori_opt_ptr_t;

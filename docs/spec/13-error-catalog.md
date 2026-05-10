@@ -20,7 +20,7 @@ All diagnostics follow the format:
 
 ```
 severity[code]: short description
-  --> file.ori:line:col
+  --> file.orl:line:col
    |
 N  | source line
    | ^^^^^^^^^^ annotation
@@ -264,7 +264,7 @@ Example:
 
 ```
 error[type.constraint_not_satisfied]: T does not satisfy constraint
-  --> src/app/sort.ori:8:14
+  --> src/app/sort.orl:8:14
    |
 8  |    const sorted: list<User> = iter.sort(users)
    |                               ^^^^^^^^^

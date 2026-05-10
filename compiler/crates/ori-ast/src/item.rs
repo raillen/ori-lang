@@ -6,7 +6,7 @@ use crate::ty::Type;
 
 // ── Source file ───────────────────────────────────────────────────────────────
 
-/// The root node: one `.ori` source file.
+/// The root node: one `.orl` source file.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SourceFile {
     pub namespace: NamespaceDecl,
