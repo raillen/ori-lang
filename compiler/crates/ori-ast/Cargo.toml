@@ -7,3 +7,4 @@ license.workspace = true
 
 [dependencies]
 ori-diagnostics = { workspace = true }
+smol_str        = { workspace = true }
