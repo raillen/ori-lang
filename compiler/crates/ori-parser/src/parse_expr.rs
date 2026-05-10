@@ -163,6 +163,15 @@ impl<'src> Parser<'src> {
             TokenKind::False => { self.advance(); Some(Expr::BoolLit(false, span)) }
             TokenKind::None  => { self.advance(); Some(Expr::None(span)) }
 
+            // Builtin wrappers: some(x), success(x), error(x)
+            TokenKind::Some | TokenKind::Success | TokenKind::ErrorKw => {
+                let tok = self.advance().unwrap();
+                let name = ori_ast::common::Name::new(
+                    smol_str::SmolStr::new(self.slice(tok.span)), tok.span
+                );
+                Some(Expr::QualifiedIdent(ori_ast::common::QualifiedName::single(name)))
+            }
+
             TokenKind::IntLit => {
                 let tok = self.advance().unwrap();
                 Some(Expr::IntLit { raw: SmolStr::new(self.slice(tok.span)), span })

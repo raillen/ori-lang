@@ -101,6 +101,27 @@ fn is_float_ty(ty: &Ty) -> bool {
     matches!(ty, Ty::Float | Ty::Float32 | Ty::Float64)
 }
 
+/// Layout of an `optional<T>`: `{ has_value: i8, [padding], value: T }`.
+fn optional_layout(inner: &Ty, ptr_ty: types::Type) -> (u32, u32) {
+    // Returns (value_offset, total_size)
+    let (val_size, val_align) = field_size_align(inner, ptr_ty);
+    let val_offset = (1u32 + val_align as u32 - 1) & !(val_align as u32 - 1);
+    let total = ((val_offset + val_size + val_align as u32 - 1) & !(val_align as u32 - 1)).max(2);
+    (val_offset, total)
+}
+
+/// Layout of `result<T,E>`: `{ is_ok: i8, [padding], union { ok: T | err: E } }`.
+fn result_layout(ok: &Ty, err: &Ty, ptr_ty: types::Type) -> (u32, u32, u32) {
+    // Returns (payload_offset, ok_size, total_size)
+    let (ok_size,  ok_align)  = field_size_align(ok,  ptr_ty);
+    let (err_size, err_align) = field_size_align(err, ptr_ty);
+    let pay_align  = ok_align.max(err_align);
+    let pay_size   = ok_size.max(err_size);
+    let pay_offset = (1u32 + pay_align as u32 - 1) & !(pay_align as u32 - 1);
+    let total = ((pay_offset + pay_size + pay_align as u32 - 1) & !(pay_align as u32 - 1)).max(2);
+    (pay_offset, ok_size, total)
+}
+
 // == Struct layout ==
 
 #[derive(Debug, Clone)]
@@ -674,8 +695,54 @@ impl<'a> FuncCodegen<'a> {
                 Ty::Float32 => self.builder.ins().f32const(*f as f32),
                 _           => self.builder.ins().f64const(*f),
             },
-            HirExprKind::Unit | HirExprKind::None_ =>
+            HirExprKind::Unit =>
                 self.builder.ins().iconst(self.ptr_ty, 0),
+            HirExprKind::None_ => {
+                // Allocate optional<ptr> with has_value = 0
+                let slot = self.builder.create_sized_stack_slot(
+                    StackSlotData::new(StackSlotKind::ExplicitSlot, 16, 8)
+                );
+                let base = self.builder.ins().stack_addr(self.ptr_ty, slot, 0);
+                let zero8 = self.builder.ins().iconst(types::I8, 0);
+                self.builder.ins().store(MemFlags::new(), zero8, base, 0);
+                base
+            }
+            HirExprKind::Some_(inner) => {
+                let val = self.emit_expr(inner)?;
+                let (val_off, total) = optional_layout(&inner.ty, self.ptr_ty);
+                let slot = self.builder.create_sized_stack_slot(
+                    StackSlotData::new(StackSlotKind::ExplicitSlot, total, 8)
+                );
+                let base  = self.builder.ins().stack_addr(self.ptr_ty, slot, 0);
+                let one8  = self.builder.ins().iconst(types::I8, 1);
+                self.builder.ins().store(MemFlags::new(), one8, base, 0);
+                self.builder.ins().store(MemFlags::new(), val, base, val_off as i32);
+                base
+            }
+            HirExprKind::Ok_(inner) => {
+                let val = self.emit_expr(inner)?;
+                let (pay_off, _, total) = result_layout(&inner.ty, &Ty::String, self.ptr_ty);
+                let slot = self.builder.create_sized_stack_slot(
+                    StackSlotData::new(StackSlotKind::ExplicitSlot, total, 8)
+                );
+                let base = self.builder.ins().stack_addr(self.ptr_ty, slot, 0);
+                let one8 = self.builder.ins().iconst(types::I8, 1);
+                self.builder.ins().store(MemFlags::new(), one8, base, 0);
+                self.builder.ins().store(MemFlags::new(), val, base, pay_off as i32);
+                base
+            }
+            HirExprKind::Err_(inner) => {
+                let val = self.emit_expr(inner)?;
+                let (pay_off, _, total) = result_layout(&Ty::Void, &inner.ty, self.ptr_ty);
+                let slot = self.builder.create_sized_stack_slot(
+                    StackSlotData::new(StackSlotKind::ExplicitSlot, total, 8)
+                );
+                let base  = self.builder.ins().stack_addr(self.ptr_ty, slot, 0);
+                let zero8 = self.builder.ins().iconst(types::I8, 0);
+                self.builder.ins().store(MemFlags::new(), zero8, base, 0);
+                self.builder.ins().store(MemFlags::new(), val, base, pay_off as i32);
+                base
+            }
             HirExprKind::StrLit(s) => {
                 // Return a pointer to the static string data
                 if let Some(&gv) = self.string_gvs.get(s.as_str()) {
@@ -752,7 +819,26 @@ impl<'a> FuncCodegen<'a> {
                 let ev = self.emit_expr(else_)?;
                 self.builder.ins().select(cv, tv, ev)
             }
-            HirExprKind::Propagate(inner) => self.emit_expr(inner)?,
+            HirExprKind::Propagate(inner) => {
+                // `expr?` — load has_value/is_ok flag; if false, early return; else unwrap
+                let ptr   = self.emit_expr(inner)?;
+                let flag  = self.builder.ins().load(types::I8, MemFlags::new(), ptr, 0);
+                let ok_blk  = self.builder.create_block();
+                let err_blk = self.builder.create_block();
+                self.builder.ins().brif(flag, ok_blk, &[], err_blk, &[]);
+                // Error path: return the whole tagged pointer (propagate error upward)
+                self.builder.seal_block(err_blk);
+                self.builder.switch_to_block(err_blk);
+                self.terminated = false;
+                self.builder.ins().return_(&[ptr]);
+                self.terminated = true;
+                // Ok path: continue with unwrapped value
+                self.builder.seal_block(ok_blk);
+                self.builder.switch_to_block(ok_blk);
+                self.terminated = false;
+                // Load value at offset 8 (after has_value byte + 7 padding)
+                self.builder.ins().load(types::I64, MemFlags::new(), ptr, 8)
+            }
             HirExprKind::StructLit { def_id, fields } => {
                 if let Some(layout) = self.struct_layouts.get(def_id).cloned() {
                     let slot = self.builder.create_sized_stack_slot(StackSlotData::new(

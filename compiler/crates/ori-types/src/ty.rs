@@ -68,15 +68,28 @@ impl Ty {
         matches!(self, Ty::Float | Ty::Float32 | Ty::Float64)
     }
 
-    /// `Never` and `Infer` are subtypes of everything (v1 — full inference pending).
+    /// Returns `true` if this type or any contained type is an inference variable.
+    pub fn contains_infer(&self) -> bool {
+        match self {
+            Ty::Infer(_)       => true,
+            Ty::Optional(t) | Ty::List(t) | Ty::Set(t) | Ty::Range(t) | Ty::Lazy(t) => t.contains_infer(),
+            Ty::Any(_)         => false,
+            Ty::Result(a, b) | Ty::Map(a, b) => a.contains_infer() || b.contains_infer(),
+            Ty::Tuple(ts)      => ts.iter().any(|t| t.contains_infer()),
+            Ty::Func { params, ret } => params.iter().any(|p| p.contains_infer()) || ret.contains_infer(),
+            Ty::Named(_, args) => args.iter().any(|a| a.contains_infer()),
+            _                  => false,
+        }
+    }
+
+    /// `Never` and `Infer` (at any depth) are subtypes of everything (v1 — full inference pending).
     pub fn is_assignable_to(&self, other: &Ty) -> bool {
         if self == other    { return true; }
         if self.is_error()  { return true; }
         if self.is_never()  { return true; }
         if other.is_error() { return true; }
-        // Infer on either side means "not yet resolved" — skip the check in v1
-        if matches!(self,  Ty::Infer(_)) { return true; }
-        if matches!(other, Ty::Infer(_)) { return true; }
+        // If either side contains an unresolved Infer, skip the check in v1
+        if self.contains_infer() || other.contains_infer() { return true; }
         false
     }
 

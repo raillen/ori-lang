@@ -216,6 +216,36 @@ long long ori_math_min(long long a, long long b) {
 long long ori_math_max(long long a, long long b) {
     return a > b ? a : b;
 }
+
+/* ---------- optional<int> helpers (value = i64) ---------- */
+typedef struct { char has_value; long long value; } ori_opt_i64_t;
+
+ori_opt_i64_t ori_some_i64(long long v) {
+    ori_opt_i64_t r; r.has_value = 1; r.value = v; return r;
+}
+ori_opt_i64_t ori_none_i64(void) {
+    ori_opt_i64_t r; r.has_value = 0; r.value = 0; return r;
+}
+
+/* ---------- result<int, *char> helpers ---------- */
+typedef struct { char is_ok; long long ok; const char* err; } ori_result_i64_str_t;
+
+ori_result_i64_str_t ori_success_i64(long long v) {
+    ori_result_i64_str_t r; r.is_ok = 1; r.ok = v; r.err = 0; return r;
+}
+ori_result_i64_str_t ori_error_str(const char* e) {
+    ori_result_i64_str_t r; r.is_ok = 0; r.ok = 0; r.err = e; return r;
+}
+
+/* ---------- generic optional/result helpers ---------- */
+/* These operate on pointer-sized optional (has_value + ptr) */
+typedef struct { char has_value; void* ptr; } ori_opt_ptr_t;
+ori_opt_ptr_t ori_some_ptr(void* p) {
+    ori_opt_ptr_t r; r.has_value = 1; r.ptr = p; return r;
+}
+ori_opt_ptr_t ori_none_ptr(void) {
+    ori_opt_ptr_t r; r.has_value = 0; r.ptr = 0; return r;
+}
 "#;
 
 /// Compile the embedded C runtime to an object file and return its path.

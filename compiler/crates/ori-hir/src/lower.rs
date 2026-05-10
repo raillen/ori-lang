@@ -351,6 +351,43 @@ impl<'a> Lowerer<'a> {
                 HirExpr { kind: HirExprKind::TupleIndex { object: Box::new(obj), index: *index }, ty: Ty::Infer(0), span }
             }
             Expr::Call { callee, args, .. } => {
+                // Intercept builtin wrapper functions before generic lowering
+                if let Expr::QualifiedIdent(q) = callee.as_ref() {
+                    let name = q.to_string();
+                    match name.as_str() {
+                        "some" | "Some" => {
+                            if let Some(a) = args.first() {
+                                let e = match &a.value {
+                                    ori_ast::expr::ArgValue::Expr(e) | ori_ast::expr::ArgValue::Spread(e) => e,
+                                };
+                                let inner = self.lower_expr(e, tp);
+                                let ty = Ty::Optional(Box::new(inner.ty.clone()));
+                                return HirExpr { kind: HirExprKind::Some_(Box::new(inner)), ty, span };
+                            }
+                        }
+                        "success" | "Success" => {
+                            if let Some(a) = args.first() {
+                                let e = match &a.value {
+                                    ori_ast::expr::ArgValue::Expr(e) | ori_ast::expr::ArgValue::Spread(e) => e,
+                                };
+                                let inner = self.lower_expr(e, tp);
+                                let ty = Ty::Result(Box::new(inner.ty.clone()), Box::new(Ty::String));
+                                return HirExpr { kind: HirExprKind::Ok_(Box::new(inner)), ty, span };
+                            }
+                        }
+                        "error" | "Error" => {
+                            if let Some(a) = args.first() {
+                                let e = match &a.value {
+                                    ori_ast::expr::ArgValue::Expr(e) | ori_ast::expr::ArgValue::Spread(e) => e,
+                                };
+                                let inner = self.lower_expr(e, tp);
+                                let ty = Ty::Result(Box::new(Ty::Void), Box::new(inner.ty.clone()));
+                                return HirExpr { kind: HirExprKind::Err_(Box::new(inner)), ty, span };
+                            }
+                        }
+                        _ => {}
+                    }
+                }
                 let callee_h = self.lower_expr(callee, tp);
                 let args_h: Vec<HirExpr> = args.iter().map(|a| match &a.value {
                     ori_ast::expr::ArgValue::Expr(e) => self.lower_expr(e, tp),
