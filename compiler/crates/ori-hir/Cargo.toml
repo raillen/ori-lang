@@ -1,0 +1,11 @@
+﻿[package]
+name    = "ori-hir"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+ori-diagnostics = { workspace = true }
+ori-ast = { workspace = true }
+ori-types = { workspace = true }

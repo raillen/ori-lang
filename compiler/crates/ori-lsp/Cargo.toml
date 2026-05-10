@@ -1,0 +1,17 @@
+[package]
+name    = "ori-lsp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ori-lsp"
+path = "src/main.rs"
+
+[dependencies]
+ori-diagnostics = { workspace = true }
+ori-driver      = { workspace = true }
+lsp-types       = { workspace = true }
+tower-lsp       = { workspace = true }
+tokio           = { workspace = true }

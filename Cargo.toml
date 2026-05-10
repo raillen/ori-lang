@@ -22,3 +22,21 @@ repository = "https://github.com/ori-lang/ori"
 
 [workspace.dependencies]
 # Shared dependencies across crates (pinned here, referenced with { workspace = true })
+logos      = "0.14"
+smol_str   = "0.2"
+thiserror  = "2"
+lsp-types  = "0.95"
+tower-lsp  = "0.20"
+tokio      = { version = "1", features = ["full"] }
+clap       = { version = "4", features = ["derive"] }
+
+# Internal crates
+ori-diagnostics = { path = "compiler/crates/ori-diagnostics" }
+ori-lexer       = { path = "compiler/crates/ori-lexer" }
+ori-ast         = { path = "compiler/crates/ori-ast" }
+ori-parser      = { path = "compiler/crates/ori-parser" }
+ori-types       = { path = "compiler/crates/ori-types" }
+ori-hir         = { path = "compiler/crates/ori-hir" }
+ori-codegen     = { path = "compiler/crates/ori-codegen" }
+ori-runtime     = { path = "compiler/crates/ori-runtime" }
+ori-driver      = { path = "compiler/crates/ori-driver" }

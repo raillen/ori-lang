@@ -1,0 +1,11 @@
+﻿[package]
+name    = "ori-codegen"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+ori-diagnostics = { workspace = true }
+ori-hir = { workspace = true }
+ori-types = { workspace = true }

@@ -1,0 +1,24 @@
+[package]
+name    = "ori-driver"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "ori"
+path = "src/main.rs"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ori-diagnostics = { workspace = true }
+ori-lexer       = { workspace = true }
+ori-ast         = { workspace = true }
+ori-parser      = { workspace = true }
+ori-types       = { workspace = true }
+ori-hir         = { workspace = true }
+ori-codegen     = { workspace = true }
+ori-runtime     = { workspace = true }
+clap            = { workspace = true }
