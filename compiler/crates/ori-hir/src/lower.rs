@@ -386,6 +386,40 @@ impl<'a> Lowerer<'a> {
                 let ty = then.ty.clone();
                 HirExpr { kind: HirExprKind::IfExpr { cond: Box::new(cond), then: Box::new(then), else_: Box::new(else_) }, ty, span }
             }
+            Expr::StructLit { ty: type_name, fields, .. } => {
+                let path = format!("{}.{}", self.namespace, type_name.last().as_str());
+                let def_id = self.def_map.lookup(&path)
+                    .or_else(|| self.def_map.lookup(&type_name.to_string()))
+                    .unwrap_or(ori_types::DefId(u32::MAX));
+                let ty = Ty::Named(def_id, Vec::new());
+                let hfields: Vec<(SmolStr, HirExpr)> = fields.iter()
+                    .map(|f| (f.name.text.clone(), self.lower_expr(&f.value, tp)))
+                    .collect();
+                HirExpr { kind: HirExprKind::StructLit { def_id, fields: hfields }, ty, span }
+            }
+            Expr::AnonStructLit { fields, .. } => {
+                let hfields: Vec<(SmolStr, HirExpr)> = fields.iter()
+                    .map(|f| (f.name.text.clone(), self.lower_expr(&f.value, tp)))
+                    .collect();
+                HirExpr { kind: HirExprKind::StructLit { def_id: ori_types::DefId(u32::MAX), fields: hfields }, ty: Ty::Infer(0), span }
+            }
+            Expr::EnumVariantUnit { ty: type_name, variant, .. } => {
+                let name = type_name.as_ref().map(|t| format!("{}.{}", t, variant.text))
+                    .unwrap_or_else(|| variant.text.to_string());
+                HirExpr { kind: HirExprKind::Var(SmolStr::new(&name)), ty: Ty::Infer(0), span }
+            }
+            Expr::EnumVariantNamed { ty: type_name, variant, fields, .. } => {
+                let def_path = type_name.as_ref()
+                    .map(|t| format!("{}.{}", self.namespace, t.last().as_str()))
+                    .unwrap_or_default();
+                let def_id = self.def_map.lookup(&def_path)
+                    .unwrap_or(ori_types::DefId(u32::MAX));
+                let hfields: Vec<(SmolStr, HirExpr)> = fields.iter()
+                    .map(|f| (f.name.text.clone(), self.lower_expr(&f.value, tp)))
+                    .collect();
+                // Enum variants with named fields are treated as struct-like
+                HirExpr { kind: HirExprKind::StructLit { def_id, fields: hfields }, ty: Ty::Infer(0), span }
+            }
             _ => Lowerer::err_expr(span),
         }
     }

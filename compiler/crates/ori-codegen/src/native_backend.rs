@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use smol_str::SmolStr;
 
-use cranelift_codegen::ir::{self, types, AbiParam, InstBuilder};
+use cranelift_codegen::ir::{self, types, AbiParam, InstBuilder, MemFlags, StackSlotData, StackSlotKind};
 use cranelift_codegen::{settings, Context};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module};
@@ -101,16 +101,60 @@ fn is_float_ty(ty: &Ty) -> bool {
     matches!(ty, Ty::Float | Ty::Float32 | Ty::Float64)
 }
 
+// == Struct layout ==
+
+#[derive(Debug, Clone)]
+pub struct FieldLayout {
+    pub offset: u32,
+    pub ty:     Ty,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct StructLayout {
+    pub size:   u32,
+    pub align:  u8,
+    pub fields: Vec<(SmolStr, FieldLayout)>,
+}
+
+impl StructLayout {
+    pub fn field(&self, name: &str) -> Option<&FieldLayout> {
+        self.fields.iter().find(|(n, _)| n == name).map(|(_, f)| f)
+    }
+}
+
+fn field_size_align(ty: &Ty, ptr_ty: types::Type) -> (u32, u8) {
+    let cl = cl_type(ty, ptr_ty).unwrap_or(ptr_ty);
+    let bytes = cl.bytes() as u32;
+    let align = bytes.min(8).max(1) as u8;
+    (bytes, align)
+}
+
+fn compute_struct_layout(fields: &[HirField], ptr_ty: types::Type) -> StructLayout {
+    let mut offset    = 0u32;
+    let mut max_align = 1u8;
+    let mut result    = Vec::new();
+    for f in fields {
+        let (size, align) = field_size_align(&f.ty, ptr_ty);
+        // Align to field requirement
+        let aligned = (offset + align as u32 - 1) & !(align as u32 - 1);
+        result.push((f.name.clone(), FieldLayout { offset: aligned, ty: f.ty.clone() }));
+        offset = aligned + size;
+        if align > max_align { max_align = align; }
+    }
+    // Pad total to struct alignment
+    let total = ((offset + max_align as u32 - 1) & !(max_align as u32 - 1)).max(1);
+    StructLayout { size: total, align: max_align, fields: result }
+}
+
 // == Module-level backend ==
 
 pub struct NativeBackend {
-    module:      ObjectModule,
-    ptr_ty:      types::Type,
-    func_ids:    HashMap<SmolStr, FuncId>,
-    /// Extern C functions declared for stdlib/runtime use.
-    stdlib_ids:  HashMap<SmolStr, FuncId>,
-    /// Static string data: source text → DataId in the object.
-    string_data: HashMap<SmolStr, DataId>,
+    module:         ObjectModule,
+    ptr_ty:         types::Type,
+    func_ids:       HashMap<SmolStr, FuncId>,
+    stdlib_ids:     HashMap<SmolStr, FuncId>,
+    string_data:    HashMap<SmolStr, DataId>,
+    struct_layouts: HashMap<ori_types::DefId, StructLayout>,
 }
 
 impl NativeBackend {
@@ -125,15 +169,21 @@ impl NativeBackend {
             isa, "ori_module", cranelift_module::default_libcall_names(),
         ).map_err(|e| format!("ObjectBuilder failed: {e}"))?;
         Ok(Self {
-            module: ObjectModule::new(builder),
+            module:         ObjectModule::new(builder),
             ptr_ty,
-            func_ids:    HashMap::new(),
-            stdlib_ids:  HashMap::new(),
-            string_data: HashMap::new(),
+            func_ids:       HashMap::new(),
+            stdlib_ids:     HashMap::new(),
+            string_data:    HashMap::new(),
+            struct_layouts: HashMap::new(),
         })
     }
 
     pub fn compile(mut self, hir: &HirModule) -> Result<Vec<u8>, String> {
+        // Compute struct layouts before anything else
+        for s in &hir.structs {
+            let layout = compute_struct_layout(&s.fields, self.ptr_ty);
+            self.struct_layouts.insert(s.def_id, layout);
+        }
         self.emit_module_strings(hir)?;
         self.declare_stdlib()?;
         self.declare_all(hir)?;
@@ -249,6 +299,7 @@ impl NativeBackend {
                 FuncCodegen {
                     builder, func_refs: &func_refs,
                     string_gvs: &string_gvs,
+                    struct_layouts: &self.struct_layouts,
                     vars: HashMap::new(), ptr_ty: self.ptr_ty,
                     loop_stack: Vec::new(), terminated: false,
                 }.emit(f)?;
@@ -288,13 +339,14 @@ impl NativeBackend {
 // == Per-function codegen ==
 
 struct FuncCodegen<'a> {
-    builder:    FunctionBuilder<'a>,
-    func_refs:  &'a HashMap<SmolStr, ir::FuncRef>,
-    string_gvs: &'a HashMap<SmolStr, ir::GlobalValue>,
-    vars:       HashMap<SmolStr, (Variable, Ty)>,
-    ptr_ty:     types::Type,
-    loop_stack: Vec<(ir::Block, ir::Block)>,
-    terminated: bool,
+    builder:        FunctionBuilder<'a>,
+    func_refs:      &'a HashMap<SmolStr, ir::FuncRef>,
+    string_gvs:     &'a HashMap<SmolStr, ir::GlobalValue>,
+    struct_layouts: &'a HashMap<ori_types::DefId, StructLayout>,
+    vars:           HashMap<SmolStr, (Variable, Ty)>,
+    ptr_ty:         types::Type,
+    loop_stack:     Vec<(ir::Block, ir::Block)>,
+    terminated:     bool,
 }
 
 impl<'a> FuncCodegen<'a> {
@@ -687,11 +739,53 @@ impl<'a> FuncCodegen<'a> {
                 self.builder.ins().select(cv, tv, ev)
             }
             HirExprKind::Propagate(inner) => self.emit_expr(inner)?,
+            HirExprKind::StructLit { def_id, fields } => {
+                if let Some(layout) = self.struct_layouts.get(def_id).cloned() {
+                    let slot = self.builder.create_sized_stack_slot(StackSlotData::new(
+                        StackSlotKind::ExplicitSlot,
+                        layout.size,
+                        layout.align,
+                    ));
+                    let base = self.builder.ins().stack_addr(self.ptr_ty, slot, 0);
+                    for (fname, fexpr) in fields {
+                        let val = self.emit_expr(fexpr)?;
+                        if let Some(fi) = layout.field(fname) {
+                            if let Some(cl_ty) = cl_type(&fi.ty, self.ptr_ty) {
+                                let _ = cl_ty; // type known for loads; store doesn't need it
+                                self.builder.ins().store(MemFlags::new(), val, base, fi.offset as i32);
+                            }
+                        }
+                    }
+                    base // return pointer to the stack-allocated struct
+                } else {
+                    self.builder.ins().iconst(self.ptr_ty, 0)
+                }
+            }
+            HirExprKind::Field { object, field } => {
+                let ptr = self.emit_expr(object)?;
+                // Look up layout by DefId embedded in object's type
+                let layout_opt = if let Ty::Named(def_id, _) = &object.ty {
+                    self.struct_layouts.get(def_id).cloned()
+                } else { None };
+                if let Some(layout) = layout_opt {
+                    if let Some(fi) = layout.field(field) {
+                        if let Some(cl_ty) = cl_type(&fi.ty, self.ptr_ty) {
+                            self.builder.ins().load(cl_ty, MemFlags::new(), ptr, fi.offset as i32)
+                        } else {
+                            self.builder.ins().iconst(self.ptr_ty, 0)
+                        }
+                    } else {
+                        self.builder.ins().iconst(types::I64, 0)
+                    }
+                } else {
+                    // Fallback: treat as opaque pointer load (first field)
+                    self.builder.ins().load(types::I64, MemFlags::new(), ptr, 0)
+                }
+            }
             HirExprKind::Range { start, end } => {
-                // Encode range as (start, end) pair packed into i128  simplified
                 let _s = self.emit_expr(start)?;
                 let _e = self.emit_expr(end)?;
-                self.builder.ins().iconst(types::I64, 0) // range object not yet supported
+                self.builder.ins().iconst(types::I64, 0)
             }
             _ => self.builder.ins().iconst(types::I64, 0),
         })
