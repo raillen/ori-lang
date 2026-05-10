@@ -10,4 +10,9 @@ ori-diagnostics = { workspace = true }
 ori-ast         = { workspace = true }
 ori-hir         = { workspace = true }
 ori-types       = { workspace = true }
-smol_str        = { workspace = true }
+smol_str           = { workspace = true }
+cranelift-codegen  = { workspace = true }
+cranelift-frontend = { workspace = true }
+cranelift-module   = { workspace = true }
+cranelift-object   = { workspace = true }
+cranelift-native   = { workspace = true }

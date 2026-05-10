@@ -30,6 +30,13 @@ tower-lsp  = "0.20"
 tokio      = { version = "1", features = ["full"] }
 clap       = { version = "4", features = ["derive"] }
 
+# Cranelift — native code generation
+cranelift-codegen  = "0.131"
+cranelift-frontend = "0.131"
+cranelift-module   = "0.131"
+cranelift-object   = "0.131"
+cranelift-native   = "0.131"
+
 # Internal crates
 ori-diagnostics = { path = "compiler/crates/ori-diagnostics" }
 ori-lexer       = { path = "compiler/crates/ori-lexer" }

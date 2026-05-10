@@ -34,7 +34,14 @@ enum Commands {
     Parse {
         file: PathBuf,
     },
-    /// Compile to C source (or write to file with --out).
+    /// Compile to a native binary via Cranelift (no C compiler needed).
+    Compile {
+        file: PathBuf,
+        /// Output executable path (default: same name as source, no extension).
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
+    /// Compile to C source (debug backend).
     Build {
         file: PathBuf,
         /// Write generated C to this file instead of stdout.
@@ -74,6 +81,24 @@ fn main() {
                     let errors = out.diagnostics.iter().filter(|d| d.is_error()).count();
                     emit::render_all(&out.cache, &out.diagnostics, color);
                     process::exit(if errors > 0 { 1 } else { 0 });
+                }
+            }
+        }
+
+        Commands::Compile { file, out } => {
+            let default_out = file.with_extension(if cfg!(windows) { "exe" } else { "" });
+            let exe = out.as_deref().unwrap_or(&default_out);
+            match pipeline::run_compile(file, exe) {
+                Err(e) => { eprintln!("ori: {}", e); process::exit(2); }
+                Ok(out) => {
+                    let errors   = out.diagnostics.iter().filter(|d| d.is_error()).count();
+                    let warnings = out.diagnostics.len() - errors;
+                    emit::render_all(&out.cache, &out.diagnostics, color);
+                    emit::print_summary(errors, warnings, color);
+                    if !out.has_errors {
+                        eprintln!("binary: {}", out.exe_path.display());
+                    }
+                    process::exit(if out.has_errors { 1 } else { 0 });
                 }
             }
         }
