@@ -1,12 +1,37 @@
 use smol_str::SmolStr;
 use std::collections::HashMap;
-use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label, Span};
-use ori_ast::common::{Visibility};
+use ori_diagnostics::{DiagnosticSink, FileId, Span};
+use ori_ast::common::Visibility;
 use ori_ast::expr::{Expr, FStrPart};
 use ori_ast::item::{Item, SourceFile};
 use ori_ast::stmt::{Block, MatchCase, Stmt};
 use ori_types::{DefMap, Ty, lower_type};
 use crate::hir::*;
+
+/// Maps an Ori stdlib qualified path to the C function name used at link time.
+fn stdlib_c_name(ori_path: &str) -> Option<&'static str> {
+    match ori_path {
+        // ori.io
+        "ori.io.print" | "ori.io.println"  => Some("ori_io_print"),
+        "ori.io.eprint" | "ori.io.eprintln" => Some("ori_io_eprint"),
+        "ori.io.read_line"                 => Some("ori_io_read_line"),
+        // ori.string
+        "ori.string.len"    => Some("ori_string_len"),
+        "ori.string.concat" => Some("ori_string_concat"),
+        "ori.string.slice"  => Some("ori_string_slice"),
+        // builtin conversion functions
+        "string" => Some("ori_to_string"),
+        "int"    => Some("ori_to_int"),
+        "float"  => Some("ori_to_float"),
+        "len"    => Some("ori_len"),
+        // ori.math
+        "ori.math.sqrt" => Some("sqrt"),
+        "ori.math.abs"  => Some("ori_math_abs"),
+        "ori.math.min"  => Some("ori_math_min"),
+        "ori.math.max"  => Some("ori_math_max"),
+        _ => None,
+    }
+}
 
 // ── Scope stack ───────────────────────────────────────────────────────────────
 
@@ -21,13 +46,33 @@ struct Lowerer<'a> {
     file_id:   FileId,
     sink:      &'a mut DiagnosticSink,
     scopes:    Vec<Scope>,
+    /// `import ori.io as io` → `io` maps to `ori.io`.
+    aliases:   HashMap<SmolStr, SmolStr>,
     /// Current function's return type (for `?` desugaring).
     ret_ty:    Ty,
 }
 
 impl<'a> Lowerer<'a> {
     fn new(def_map: &'a DefMap, namespace: &'a str, file_id: FileId, sink: &'a mut DiagnosticSink) -> Self {
-        Self { def_map, namespace, file_id, sink, scopes: vec![Scope::default()], ret_ty: Ty::Void }
+        Self { def_map, namespace, file_id, sink, scopes: vec![Scope::default()],
+               aliases: HashMap::new(), ret_ty: Ty::Void }
+    }
+
+    /// Resolve `io.print` → `ori.io.print` using the import alias map,
+    /// then look up in the stdlib table.
+    fn resolve_stdlib(&self, name: &str) -> Option<&'static str> {
+        // Direct hit (e.g., builtin `string`, `len`, `int`)
+        if let Some(c) = stdlib_c_name(name) { return Some(c); }
+        // Qualified via alias: `io.print` where `io → ori.io`
+        if let Some(dot) = name.find('.') {
+            let prefix = &name[..dot];
+            let suffix = &name[dot + 1..];
+            if let Some(full_ns) = self.aliases.get(prefix) {
+                let full = format!("{}.{}", full_ns, suffix);
+                return stdlib_c_name(&full);
+            }
+        }
+        None
     }
     fn push(&mut self) { self.scopes.push(Scope::default()); }
     fn pop(&mut self)  { self.scopes.pop(); }
@@ -61,6 +106,13 @@ pub fn lower(
     sink:      &mut DiagnosticSink,
 ) -> HirModule {
     let mut l = Lowerer::new(def_map, namespace, file_id, sink);
+
+    // Build alias map from imports: `import ori.io as io` → `io → ori.io`
+    for import in &file.imports {
+        if let Some(alias) = &import.alias {
+            l.aliases.insert(alias.text.clone(), SmolStr::new(import.path.to_string()));
+        }
+    }
     let mut structs = Vec::new();
     let mut enums   = Vec::new();
     let mut funcs   = Vec::new();
@@ -259,12 +311,20 @@ impl<'a> Lowerer<'a> {
                 HirExpr { kind: HirExprKind::Var(n.text.clone()), ty, span }
             }
             Expr::QualifiedIdent(q) => {
+                let path = q.to_string();
+                // Check stdlib / alias resolution first
+                if let Some(c_name) = self.resolve_stdlib(&path) {
+                    return HirExpr {
+                        kind: HirExprKind::Var(SmolStr::new(c_name)),
+                        ty:   Ty::Infer(0),
+                        span,
+                    };
+                }
                 if q.is_single() {
                     let name = q.last().text.clone();
                     let ty = self.lookup(&name);
                     HirExpr { kind: HirExprKind::Var(name), ty, span }
                 } else {
-                    let path = q.to_string();
                     let ty = if let Some(id) = self.def_map.lookup(&path) {
                         Ty::Named(id, Vec::new())
                     } else { Ty::Error };

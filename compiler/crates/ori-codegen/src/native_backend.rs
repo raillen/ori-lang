@@ -4,12 +4,79 @@ use smol_str::SmolStr;
 use cranelift_codegen::ir::{self, types, AbiParam, InstBuilder};
 use cranelift_codegen::{settings, Context};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use cranelift_module::{FuncId, Linkage, Module};
+use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 
 use ori_ast::expr::{BinaryOp, UnaryOp};
 use ori_hir::hir::*;
 use ori_types::Ty;
+
+// == String collection ==
+
+fn collect_strings_expr(expr: &HirExpr, out: &mut Vec<SmolStr>) {
+    match &expr.kind {
+        HirExprKind::StrLit(s) => { if !out.contains(s) { out.push(s.clone()); } }
+        HirExprKind::Call { callee, args } => {
+            collect_strings_expr(callee, out);
+            for a in args { collect_strings_expr(a, out); }
+        }
+        HirExprKind::Binary { lhs, rhs, .. } => {
+            collect_strings_expr(lhs, out); collect_strings_expr(rhs, out);
+        }
+        HirExprKind::Unary { operand, .. } => collect_strings_expr(operand, out),
+        HirExprKind::Field { object, .. } => collect_strings_expr(object, out),
+        HirExprKind::IfExpr { cond, then, else_ } => {
+            collect_strings_expr(cond, out);
+            collect_strings_expr(then, out);
+            collect_strings_expr(else_, out);
+        }
+        HirExprKind::Propagate(e) | HirExprKind::Some_(e) | HirExprKind::Ok_(e)
+        | HirExprKind::Err_(e) => collect_strings_expr(e, out),
+        HirExprKind::ListLit { elements, .. } => { for e in elements { collect_strings_expr(e, out); } }
+        HirExprKind::TupleLit(elems) => { for e in elems { collect_strings_expr(e, out); } }
+        HirExprKind::InterpolatedStr(parts) => {
+            for p in parts { if let HirStrPart::Expr(e) = p { collect_strings_expr(e, out); } }
+        }
+        HirExprKind::Range { start, end } => {
+            collect_strings_expr(start, out); collect_strings_expr(end, out);
+        }
+        _ => {}
+    }
+}
+
+fn collect_strings_block(block: &HirBlock, out: &mut Vec<SmolStr>) {
+    for s in &block.stmts { collect_strings_stmt(s, out); }
+}
+
+fn collect_strings_stmt(stmt: &HirStmt, out: &mut Vec<SmolStr>) {
+    match stmt {
+        HirStmt::Let { value, .. } => collect_strings_expr(value, out),
+        HirStmt::Assign { value, .. } => collect_strings_expr(value, out),
+        HirStmt::Return(Some(e), _) => collect_strings_expr(e, out),
+        HirStmt::Expr(e) => collect_strings_expr(e, out),
+        HirStmt::If { cond, then, else_ifs, else_, .. } => {
+            collect_strings_expr(cond, out);
+            collect_strings_block(then, out);
+            for (c, b) in else_ifs { collect_strings_expr(c, out); collect_strings_block(b, out); }
+            if let Some(eb) = else_ { collect_strings_block(eb, out); }
+        }
+        HirStmt::While { cond, body, .. } => { collect_strings_expr(cond, out); collect_strings_block(body, out); }
+        HirStmt::For  { iterable, body, .. } => { collect_strings_expr(iterable, out); collect_strings_block(body, out); }
+        HirStmt::Loop { body, .. } => collect_strings_block(body, out),
+        HirStmt::Match { scrutinee, arms, .. } => {
+            collect_strings_expr(scrutinee, out);
+            for arm in arms { for s in &arm.body { collect_strings_stmt(s, out); } }
+        }
+        _ => {}
+    }
+}
+
+fn collect_all_strings(hir: &HirModule) -> Vec<SmolStr> {
+    let mut out = Vec::new();
+    for f in &hir.funcs { collect_strings_block(&f.body, &mut out); }
+    for c in &hir.consts { collect_strings_expr(&c.value, &mut out); }
+    out
+}
 
 // == Type mapping ==
 
@@ -37,9 +104,13 @@ fn is_float_ty(ty: &Ty) -> bool {
 // == Module-level backend ==
 
 pub struct NativeBackend {
-    module:   ObjectModule,
-    ptr_ty:   types::Type,
-    func_ids: HashMap<SmolStr, FuncId>,
+    module:      ObjectModule,
+    ptr_ty:      types::Type,
+    func_ids:    HashMap<SmolStr, FuncId>,
+    /// Extern C functions declared for stdlib/runtime use.
+    stdlib_ids:  HashMap<SmolStr, FuncId>,
+    /// Static string data: source text → DataId in the object.
+    string_data: HashMap<SmolStr, DataId>,
 }
 
 impl NativeBackend {
@@ -53,13 +124,71 @@ impl NativeBackend {
         let builder = ObjectBuilder::new(
             isa, "ori_module", cranelift_module::default_libcall_names(),
         ).map_err(|e| format!("ObjectBuilder failed: {e}"))?;
-        Ok(Self { module: ObjectModule::new(builder), ptr_ty, func_ids: HashMap::new() })
+        Ok(Self {
+            module: ObjectModule::new(builder),
+            ptr_ty,
+            func_ids:    HashMap::new(),
+            stdlib_ids:  HashMap::new(),
+            string_data: HashMap::new(),
+        })
     }
 
     pub fn compile(mut self, hir: &HirModule) -> Result<Vec<u8>, String> {
+        self.emit_module_strings(hir)?;
+        self.declare_stdlib()?;
         self.declare_all(hir)?;
         self.define_all(hir)?;
         self.module.finish().emit().map_err(|e| format!("object emit failed: {e}"))
+    }
+
+    /// Emit all string literals as static null-terminated data in .rodata.
+    fn emit_module_strings(&mut self, hir: &HirModule) -> Result<(), String> {
+        for s in collect_all_strings(hir) {
+            if self.string_data.contains_key(&s) { continue; }
+            let mut bytes: Vec<u8> = s.as_bytes().to_vec();
+            bytes.push(0); // null-terminate for `puts` compatibility
+            let mut desc = DataDescription::new();
+            desc.define(bytes.into_boxed_slice());
+            let id = self.module
+                .declare_anonymous_data(false, false)
+                .map_err(|e| format!("declare string data: {e}"))?;
+            self.module
+                .define_data(id, &desc)
+                .map_err(|e| format!("define string data: {e}"))?;
+            self.string_data.insert(s, id);
+        }
+        Ok(())
+    }
+
+    /// Declare C library / runtime functions used by the stdlib mapping.
+    fn declare_stdlib(&mut self) -> Result<(), String> {
+        let pt = self.ptr_ty;
+        let mut decl = |name: &'static str, params: &[types::Type], ret: Option<types::Type>| {
+            let mut sig = self.module.make_signature();
+            for &p in params { sig.params.push(AbiParam::new(p)); }
+            if let Some(r) = ret { sig.returns.push(AbiParam::new(r)); }
+            self.module
+                .declare_function(name, Linkage::Import, &sig)
+                .map_err(|e| format!("declare {name}: {e}"))
+        };
+        // ori_io_print(ptr: *u8, len: i64) -- prints len bytes from ptr
+        let id = decl("ori_io_print", &[pt, types::I64], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_io_print"), id);
+        // ori_io_eprint(ptr: *u8, len: i64) -- stderr print
+        let id = decl("ori_io_eprint", &[pt, types::I64], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_io_eprint"), id);
+        // ori_to_string(n: i64) -> (*u8, i64) -- TODO: multi-value; stub as ptr for now
+        let id = decl("ori_int_to_cstr", &[types::I64], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_to_string"), id);
+        // strlen(ptr: *u8) -> i64  (returns size_t, we treat as i64)
+        let id = decl("strlen", &[pt], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("strlen"), id);
+        // malloc / free for runtime allocation
+        let id = decl("malloc", &[types::I64], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("malloc"), id);
+        let id = decl("free", &[pt], None)?;
+        self.stdlib_ids.insert(SmolStr::new("free"), id);
+        Ok(())
     }
 
     fn make_sig(&self, f: &HirFunc) -> ir::Signature {
@@ -94,18 +223,24 @@ impl NativeBackend {
     }
 
     fn define_all(&mut self, hir: &HirModule) -> Result<(), String> {
-        // Define each Ori function
         for f in &hir.funcs {
-            let sig    = self.make_sig(f);
+            let sig     = self.make_sig(f);
             let func_id = self.func_ids[&f.name];
             let mut ctx = self.module.make_context();
             ctx.func.signature = sig;
 
-            // Pre-declare all func refs into ctx.func BEFORE creating the builder
+            // Pre-declare ALL function references (user + stdlib) before builder takes ownership
             let mut func_refs: HashMap<SmolStr, ir::FuncRef> = HashMap::new();
-            for (name, &id) in &self.func_ids {
+            for (name, &id) in self.func_ids.iter().chain(self.stdlib_ids.iter()) {
                 let fref = self.module.declare_func_in_func(id, &mut ctx.func);
                 func_refs.insert(name.clone(), fref);
+            }
+
+            // Pre-declare all string global values
+            let mut string_gvs: HashMap<SmolStr, ir::GlobalValue> = HashMap::new();
+            for (s, &data_id) in &self.string_data {
+                let gv = self.module.declare_data_in_func(data_id, &mut ctx.func);
+                string_gvs.insert(s.clone(), gv);
             }
 
             let mut bctx = FunctionBuilderContext::new();
@@ -113,6 +248,7 @@ impl NativeBackend {
                 let builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
                 FuncCodegen {
                     builder, func_refs: &func_refs,
+                    string_gvs: &string_gvs,
                     vars: HashMap::new(), ptr_ty: self.ptr_ty,
                     loop_stack: Vec::new(), terminated: false,
                 }.emit(f)?;
@@ -154,6 +290,7 @@ impl NativeBackend {
 struct FuncCodegen<'a> {
     builder:    FunctionBuilder<'a>,
     func_refs:  &'a HashMap<SmolStr, ir::FuncRef>,
+    string_gvs: &'a HashMap<SmolStr, ir::GlobalValue>,
     vars:       HashMap<SmolStr, (Variable, Ty)>,
     ptr_ty:     types::Type,
     loop_stack: Vec<(ir::Block, ir::Block)>,
@@ -474,8 +611,17 @@ impl<'a> FuncCodegen<'a> {
                 Ty::Float32 => self.builder.ins().f32const(*f as f32),
                 _           => self.builder.ins().f64const(*f),
             },
-            HirExprKind::Unit | HirExprKind::None_
-            | HirExprKind::StrLit(_) | HirExprKind::InterpolatedStr(_) =>
+            HirExprKind::Unit | HirExprKind::None_ =>
+                self.builder.ins().iconst(self.ptr_ty, 0),
+            HirExprKind::StrLit(s) => {
+                // Return a pointer to the static string data
+                if let Some(&gv) = self.string_gvs.get(s.as_str()) {
+                    self.builder.ins().global_value(self.ptr_ty, gv)
+                } else {
+                    self.builder.ins().iconst(self.ptr_ty, 0)
+                }
+            }
+            HirExprKind::InterpolatedStr(_) =>
                 self.builder.ins().iconst(self.ptr_ty, 0),
             HirExprKind::Var(name) => {
                 if let Some((var, _)) = self.vars.get(name) {
@@ -502,16 +648,36 @@ impl<'a> FuncCodegen<'a> {
                 }
             }
             HirExprKind::Call { callee, args } => {
-                let args_v: Vec<ir::Value> = args.iter()
-                    .map(|a| self.emit_expr(a))
-                    .collect::<Result<_, _>>()?;
                 if let HirExprKind::Var(name) = &callee.kind {
-                    if let Some(&fref) = self.func_refs.get(name.as_str()) {
-                        let call = self.builder.ins().call(fref, &args_v);
-                        let res  = self.builder.inst_results(call);
-                        if res.is_empty() { self.builder.ins().iconst(types::I8, 0) }
-                        else              { res[0] }
-                    } else { self.builder.ins().iconst(types::I64, 0) }
+                    // ori_io_print takes (ptr: *u8, len: i64) — build args accordingly
+                    if name == "ori_io_print" || name == "ori_io_eprint" {
+                        if let Some(&fref) = self.func_refs.get(name.as_str()) {
+                            let mut cl_args = Vec::new();
+                            for a in args {
+                                let v = self.emit_expr(a)?;
+                                // If arg is a string pointer, add (ptr, len)
+                                if matches!(a.ty, Ty::String) {
+                                    let len = self.str_len_from_ptr(v);
+                                    cl_args.push(v);
+                                    cl_args.push(len);
+                                } else {
+                                    cl_args.push(v);
+                                }
+                            }
+                            self.builder.ins().call(fref, &cl_args);
+                            self.builder.ins().iconst(types::I8, 0)
+                        } else { self.builder.ins().iconst(types::I64, 0) }
+                    } else {
+                        let args_v: Vec<ir::Value> = args.iter()
+                            .map(|a| self.emit_expr(a))
+                            .collect::<Result<_, _>>()?;
+                        if let Some(&fref) = self.func_refs.get(name.as_str()) {
+                            let call = self.builder.ins().call(fref, &args_v);
+                            let res  = self.builder.inst_results(call);
+                            if res.is_empty() { self.builder.ins().iconst(types::I8, 0) }
+                            else              { res[0] }
+                        } else { self.builder.ins().iconst(types::I64, 0) }
+                    }
                 } else { self.builder.ins().iconst(types::I64, 0) }
             }
             HirExprKind::IfExpr { cond, then, else_ } => {
@@ -529,6 +695,18 @@ impl<'a> FuncCodegen<'a> {
             }
             _ => self.builder.ins().iconst(types::I64, 0),
         })
+    }
+
+    /// For a null-terminated string pointer, compute its length as an i64.
+    /// Uses strlen-like logic: call strlen if available, else scan bytes.
+    /// For now we use the `strlen` libc function declared on demand.
+    fn str_len_from_ptr(&mut self, ptr: ir::Value) -> ir::Value {
+        if let Some(&fref) = self.func_refs.get("strlen") {
+            let call = self.builder.ins().call(fref, &[ptr]);
+            // strlen declared as returning I64; result is already the right type
+            return self.builder.inst_results(call)[0];
+        }
+        self.builder.ins().iconst(types::I64, 0)
     }
 
     fn emit_binary(&mut self, op: BinaryOp, lv: ir::Value, rv: ir::Value, ty: &Ty)
@@ -570,11 +748,19 @@ pub fn emit_native(hir: &HirModule, obj_path: &std::path::Path) -> Result<(), St
         .map_err(|e| format!("write {} failed: {e}", obj_path.display()))
 }
 
-pub fn link(obj_path: &std::path::Path, exe_path: &std::path::Path) -> Result<(), String> {
-    let status = std::process::Command::new("cc")
-        .arg("-o").arg(exe_path).arg(obj_path)
-        .status()
-        .map_err(|e| format!("could not invoke cc: {e}"))?;
+/// Link `obj_path` into an executable at `exe_path`.
+/// `extra_libs`: additional static libraries to link (e.g., libori_rt.a).
+pub fn link(
+    obj_path:   &std::path::Path,
+    exe_path:   &std::path::Path,
+    extra_libs: &[std::path::PathBuf],
+) -> Result<(), String> {
+    let mut cmd = std::process::Command::new("cc");
+    cmd.arg("-o").arg(exe_path).arg(obj_path);
+    for lib in extra_libs {
+        cmd.arg(lib);
+    }
+    let status = cmd.status().map_err(|e| format!("could not invoke cc: {e}"))?;
     if status.success() { Ok(()) }
     else { Err(format!("linker exited with code {}", status.code().unwrap_or(-1))) }
 }

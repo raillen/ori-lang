@@ -78,10 +78,13 @@ pub fn run_compile(source_path: &Path, output: &Path) -> Result<CompileOutput, S
 
     if !sink.has_errors() {
         let hir = ori_hir::lower(&ast, &resolved.def_map, &resolved.namespace, file_id, &mut sink);
-        let obj_path = output.with_extension("o");
+        let obj_path  = output.with_extension("o");
+        let rt_lib    = build_runtime_lib()?;
         ori_codegen::emit_native(&hir, &obj_path)?;
-        ori_codegen::link(&obj_path, output)?;
-        let _ = std::fs::remove_file(&obj_path); // clean up intermediate .o
+        let extra: Vec<_> = rt_lib.into_iter().collect();
+        ori_codegen::link(&obj_path, output, &extra)?;
+        let _ = std::fs::remove_file(&obj_path);
+        for e in &extra { let _ = std::fs::remove_file(e); }
     }
 
     let has_errors  = sink.has_errors();
@@ -147,7 +150,9 @@ pub fn run_build(path: &Path) -> Result<BuildOutput, String> {
     }
 
     let c_source = if !sink.has_errors() {
-        let hir = ori_hir::lower(&ast, &resolved.def_map, &resolved.namespace, file_id, &mut sink);
+        let hir = ori_hir::lower(
+            &ast, &resolved.def_map, &resolved.namespace, file_id, &mut sink
+        );
         ori_codegen::emit_c(&hir)
     } else {
         String::new()
@@ -163,4 +168,61 @@ pub fn run_build(path: &Path) -> Result<BuildOutput, String> {
 fn read_file(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path)
         .map_err(|e| format!("cannot read `{}`: {}", path.display(), e))
+}
+
+/// The Ori runtime as embedded C source — compiled on demand with `cc -c`.
+/// This avoids linking issues from Rust staticlibs pulling in Rust std.
+const ORI_RUNTIME_C: &str = r#"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* ori.io.print(ptr: *u8, len: i64) */
+void ori_io_print(const char* ptr, long long len) {
+    if (!ptr || len <= 0) { printf("\n"); return; }
+    fwrite(ptr, 1, (size_t)len, stdout);
+    printf("\n");
+    fflush(stdout);
+}
+
+/* ori.io.eprint(ptr: *u8, len: i64) */
+void ori_io_eprint(const char* ptr, long long len) {
+    if (!ptr || len <= 0) { fprintf(stderr, "\n"); return; }
+    fwrite(ptr, 1, (size_t)len, stderr);
+    fprintf(stderr, "\n");
+    fflush(stderr);
+}
+
+/* ori_int_to_cstr(n: i64) -> *u8  (malloc'd, caller must free) */
+char* ori_int_to_cstr(long long n) {
+    char* buf = (char*)malloc(32);
+    if (buf) snprintf(buf, 32, "%lld", (long long)n);
+    return buf;
+}
+"#;
+
+/// Compile the embedded C runtime to an object file and return its path.
+/// The object file is placed alongside `output` and cleaned up after linking.
+fn build_runtime_lib() -> Result<Option<std::path::PathBuf>, String> {
+    let tmp_c   = std::env::temp_dir().join("ori_rt.c");
+    let tmp_obj = std::env::temp_dir().join("ori_rt.o");
+
+    std::fs::write(&tmp_c, ORI_RUNTIME_C)
+        .map_err(|e| format!("write ori_rt.c: {e}"))?;
+
+    let status = std::process::Command::new("cc")
+        .arg("-c")
+        .arg(&tmp_c)
+        .arg("-o")
+        .arg(&tmp_obj)
+        .status()
+        .map_err(|e| format!("cc -c ori_rt.c: {e}"))?;
+
+    let _ = std::fs::remove_file(&tmp_c);
+
+    if status.success() {
+        Ok(Some(tmp_obj))
+    } else {
+        Ok(None) // cc not available; functions will be unresolved at runtime
+    }
 }
