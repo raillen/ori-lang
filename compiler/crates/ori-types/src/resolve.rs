@@ -1,6 +1,6 @@
 use smol_str::SmolStr;
 use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label};
-use ori_ast::item::{Item, ItemWithAttrs, SourceFile};
+use ori_ast::item::{Item, SourceFile};
 use crate::def::{DefId, DefKind, DefMap};
 use crate::lower::lower_type;
 use crate::ty::Ty;

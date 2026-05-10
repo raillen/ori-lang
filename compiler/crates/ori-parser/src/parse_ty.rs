@@ -1,6 +1,5 @@
 use ori_lexer::TokenKind;
 use ori_ast::ty::Type;
-use ori_ast::common::QualifiedName;
 use crate::parser::Parser;
 
 impl<'src> Parser<'src> {

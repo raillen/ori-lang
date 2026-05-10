@@ -42,6 +42,14 @@ impl SourceFile {
         let col = offset - self.line_starts[line];
         (line as u32 + 1, col + 1)
     }
+
+    /// Returns the source text of a 1-indexed line (without trailing newline).
+    pub fn line_text(&self, line: u32) -> &str {
+        let idx = (line as usize).saturating_sub(1);
+        let start = self.line_starts.get(idx).copied().unwrap_or(0) as usize;
+        let end   = self.line_starts.get(idx + 1).copied().unwrap_or(self.content.len() as u32) as usize;
+        self.content[start..end].trim_end_matches('\n').trim_end_matches('\r')
+    }
 }
 
 /// Holds all source files for a compilation session.

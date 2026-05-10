@@ -2,7 +2,6 @@ use smol_str::SmolStr;
 use ori_lexer::TokenKind;
 use ori_ast::expr::{Arg, ArgValue, BinaryOp, ClosureBody, ClosureExpr, ClosureParam,
                     Expr, FieldInit, FStrPart, IndexExpr, UnaryOp};
-use ori_ast::stmt::Block;
 use crate::parser::Parser;
 
 // ── Pratt precedence ──────────────────────────────────────────────────────────
