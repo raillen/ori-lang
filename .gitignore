@@ -32,3 +32,7 @@ __pycache__/
 
 # OS
 Thumbs.db
+
+node_modules/
+*.lock
+
