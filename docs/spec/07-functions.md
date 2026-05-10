@@ -57,16 +57,16 @@ Rules:
 - Named arguments may be given in any order.
 - For public functions, parameter names are part of the public API.
 
-### Value Contracts (`where` on parameters)
+### Value Contracts (`if` on parameters)
 
 ```ori
-func sqrt(value: float where value >= 0.0) -> float
+func sqrt(value: float if it >= 0.0) -> float
+func clamp(v: int, lo: int, hi: int if it >= lo) -> int
 ```
 
-The `where` constraint on a parameter is a value contract checked at call time.
-`it` in a field contract refers to the field value; `value` in a parameter
-contract refers to the parameter itself (use the parameter name, not `it`).
-A contract violation is a runtime panic.
+`it` is the contextual keyword that refers to the parameter value being checked.
+The contract is evaluated at every call site. A violation is a runtime panic
+(`contract.param_violation`).
 
 ### Variadic Parameters
 

@@ -36,18 +36,47 @@ line is ignored by the compiler.
 ### Block Comments
 
 ```ori
----
+--|
 This is a block comment.
 It spans multiple lines.
----
+|--
 ```
 
-A `---` sequence begins and ends a block comment. Block comments do not nest.
+`--|` opens a block comment. `|--` closes it. Block comments do not nest.
+The tokens `--|` and `|--` are mirrored by design — they cannot appear inside
+normal code because `|--` is not valid syntax anywhere else.
 
 ### Documentation Comments
 
-Documentation for public declarations uses the ZDoc format, which is line
-comments with a structured tag system. ZDoc is processed by `ori doc`.
+A block comment placed immediately before a `public` declaration is a
+**documentation comment** processed by `ori doc`:
+
+```ori
+--|
+Calculates the area of a rectangle.
+@param width  Width in pixels (must be positive).
+@param height Height in pixels (must be positive).
+@returns The computed area.
+@example
+    const a: int = area(10, 5)  -- 50
+|--
+public func area(width: int, height: int) -> int
+    return width * height
+end
+```
+
+Doc comment tags:
+
+| Tag | Description |
+|---|---|
+| `@param name description` | Documents a parameter |
+| `@returns description` | Documents the return value |
+| `@example` | Code block that follows is an example |
+| `@deprecated message` | Marks as deprecated with a reason |
+| `@since version` | Version when the declaration was added |
+
+The compiler validates that `@param` names match actual parameter names.
+A mismatch emits `doc.param_name_mismatch`.
 
 ---
 
@@ -59,7 +88,7 @@ The following identifiers are reserved and cannot be used as user-defined names:
 namespace  import     as         public
 func       return     end        const      var
 if         else       while      for        in
-repeat     times      break      continue
+repeat     break      continue
 match      case       loop
 struct     trait      implement  enum
 where      is         alias      do
@@ -70,6 +99,8 @@ any        optional   result     list       map      set
 range      void
 ```
 
+Note: `times` was removed from the reserved list. See Contextual Keywords below.
+
 ### Contextual Keywords
 
 The following words are recognized only in specific syntactic positions and may
@@ -79,7 +110,8 @@ be used as identifiers elsewhere:
 |---|---|
 | `c` | After `extern`, names the C ABI: `extern c` |
 | `host` | After `extern`, names the host ABI |
-| `it` | Inside a `where` field contract, refers to the field value |
+| `it` | Inside an `if` value contract on a field or parameter — refers to the value being checked |
+| `times` | After `repeat expression` — optional readability word: `repeat 5 times` |
 
 ---
 
@@ -237,8 +269,9 @@ yield a range of exactly one element.
 =
 ?   |>
 (   )   [   ]   <   >
-:   ,   ;
+:   ,
 @
+--|   |--
 ```
 
 The `..` token is the range operator and slice operator.
@@ -246,7 +279,52 @@ The `->` token separates parameter lists from return types.
 The `=>` token separates closure parameters from expression bodies.
 The `?` token is the error propagation operator.
 The `|>` token is the pipe operator.
-The `@` token introduces field access in struct literals: `@field`.
+The `@` token is the attribute prefix: `@test`, `@deprecated("message")`.
+The `--|` / `|--` tokens delimit block and documentation comments.
+
+### Tuple Field Access
+
+Fields of a `tuple<...>` are accessed by integer index after `.`:
+
+```ori
+const pair: tuple<int, string> = tuple(1, "one")
+const n: int    = pair.0
+const s: string = pair.1
+```
+
+The lexer accepts `INTEGER` tokens immediately after `.` in this context.
+The indices are zero-based and must be valid compile-time integer literals.
+
+### Attribute Annotations
+
+Attributes annotate declarations:
+
+```ori
+@test
+func test_addition()
+    check 1 + 1 == 2
+end
+
+@deprecated("use new_api() instead")
+public func old_api() -> int
+
+@inline
+func hot_path(n: int) -> int
+    return n * 2
+end
+```
+
+Built-in attributes:
+
+| Attribute | Applies to | Effect |
+|---|---|---|
+| `@test` | `func` | Marks as a test function, run by `ori test` |
+| `@deprecated(msg)` | any declaration | Emits `attr.deprecated` warning at use sites |
+| `@inline` | `func` | Hint to inline at call sites |
+| `@no_inline` | `func` | Prohibit inlining |
+| `@cfg(condition)` | any declaration | Conditionally include based on build config |
+
+Custom attributes are not supported in v1.
 
 ---
 

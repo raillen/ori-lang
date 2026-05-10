@@ -217,7 +217,7 @@ implement Iterable<int> for CountUp
 end
 
 for n in CountUp(current: 1, limit: 5)
-    io.print(to_string(n))  -- 1 2 3 4 5
+    io.print(string(n))?  -- 1 2 3 4 5
 end
 ```
 
@@ -228,7 +228,7 @@ end
 ```ori
 implement From<int> for string
     func from(value: int) -> string
-        return to_string(value)
+        return string(value)
     end
 end
 

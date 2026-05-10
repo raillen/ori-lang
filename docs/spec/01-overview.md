@@ -135,7 +135,7 @@ Key differences from Zenith:
 | `func f(mut self)` | `mut func f()` |
 | `while true` | `loop` |
 | `type Alias = T` | `alias Alias = T` |
-| `to_text()` | `to_string()` |
+| `to_text()` | `string()` builtin (trait method stays `to_string()`) |
 | `TextRepresentable` | `Displayable` |
 | Ranges are exclusive (`0..9` = 0–8) | Ranges are inclusive (`0..9` = 0–9) |
 | Anonymous functions use `func` | Anonymous functions use `do` |

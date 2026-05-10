@@ -64,13 +64,14 @@ references.
 
 ```ori
 struct Rectangle
-    width: int  where it > 0
-    height: int where it > 0
+    width: int  if it > 0
+    height: int if it > 0
 end
 ```
 
-`it` refers to the field value being validated. Contracts are checked at
-construction time and on mutation. A violation is a runtime panic.
+`it` is the contextual keyword that refers to the field value being validated.
+Contracts are checked at construction time and on mutation. A violation is a
+runtime panic (`contract.field_violation`).
 
 ### Enum
 
@@ -93,8 +94,11 @@ end
 
 Variants may be:
 - **Unit**: no payload (`North`)
-- **Tuple variant**: positional payload (`Circle(radius: float)`)
-- **Struct variant**: named payload (`Rectangle(width: float, height: float)`)
+- **Named variant**: all fields must have explicit names (`Circle(radius: float)`)
+
+Positional (unnamed) enum payload is not allowed in Ori. All variant fields
+must be named. This is required by the reading-first philosophy: `Circle(float)`
+does not tell the reader what the float represents.
 
 Enums are value types.
 
@@ -284,6 +288,28 @@ Aliases are transparent: `UserId` and `int` are interchangeable everywhere.
 
 ---
 
+## `success()` — Void Result
+
+When a function returns `result<void, E>`, `success()` with no arguments is valid:
+
+```ori
+func ping() -> result<void, string>
+    send_packet()?
+    return success()
+end
+
+func start() -> result<void, string>
+    ping()?
+    return success()
+end
+```
+
+This is the exact analogue of `return` with no value in a `void` function.
+The `void` value is implicit. `success()` with no args is a compile error
+when the expected type is not `result<void, _>`.
+
+---
+
 ## Structural Equality (`==`)
 
 All types support `==` and `!=` by default using structural equality:
@@ -333,8 +359,8 @@ const w: int64 = int64(n)     -- explicit widening
 **String conversion:** any type implementing `Displayable` can be converted:
 
 ```ori
-const s: string = to_string(42)
-const s: string = to_string(3.14)
+const s: string = string(42)
+const t: string = string(3.14)
 ```
 
 **Type checking at runtime** (for `any<Trait>`):

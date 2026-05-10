@@ -185,11 +185,11 @@ For `map<K, V>`: second binding is the value `V` (first is the key `K`).
 
 ```ori
 for i in 0..9
-    io.print(to_string(i))
+    io.print(string(i))?
 end
 
 for i in 9..0          -- descending: 9, 8, ..., 0
-    io.print(to_string(i))
+    io.print(string(i))?
 end
 ```
 
@@ -198,13 +198,19 @@ end
 ## `repeat` — Fixed Count
 
 ```ori
-repeat 3 times
+repeat 3
+    attempt()
+end
+
+repeat 3 times     -- `times` is optional for readability
     attempt()
 end
 ```
 
 The count expression is evaluated once. Must be integral (`int` or unsigned int).
 Zero produces no iterations. Negative value is a runtime panic.
+`times` is a contextual keyword: only special after `repeat expression`;
+otherwise it is a valid identifier.
 
 ---
 
@@ -319,6 +325,11 @@ logic error handling.
 The optional second argument is a message string for the panic message.
 
 Use `result<T, E>` for expected, recoverable failures.
+
+**Difference from `if` value contracts:**
+`check` is imperative — it is a statement called explicitly at a point
+in the code. `if` contracts on fields and parameters are declarative —
+they are checked automatically at construction or call time.
 
 ---
 

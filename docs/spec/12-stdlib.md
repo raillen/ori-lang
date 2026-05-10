@@ -39,7 +39,7 @@ No import required. These types and functions are built into the language.
 
 ```ori
 len(collection)              -- int: length of list, map, set, string, bytes
-to_string(value)             -- string: convert any Displayable value
+string(value)                -- string: convert any Displayable value (calls to_string())
 int(value)                   -- int: convert float or numeric string to int
 float(value)                 -- float: convert int or numeric string to float
 u8(value)                    -- u8: explicit narrowing conversion
@@ -129,7 +129,7 @@ bytes.concat(a: bytes, b: bytes)             -> bytes
 bytes.slice(b: bytes, range: range<int>)     -> bytes
 bytes.to_hex(b: bytes)                       -> string
 bytes.from_hex(s: string)                    -> result<bytes, string>
-bytes.to_string(b: bytes)                    -> result<string, string>
+bytes.decode_utf8(b: bytes)                  -> result<string, string>
 bytes.get(b: bytes, index: int)              -> u8
 ```
 

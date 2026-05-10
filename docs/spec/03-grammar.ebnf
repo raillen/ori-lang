@@ -44,15 +44,33 @@ qualified_name
    ============================================================ *)
 
 top_level_decl
-    = func_decl
-    | struct_decl
-    | enum_decl
-    | trait_decl
-    | implement_decl
-    | alias_decl
-    | const_decl
-    | var_decl
+    = [ attr_list ] func_decl
+    | [ attr_list ] struct_decl
+    | [ attr_list ] enum_decl
+    | [ attr_list ] trait_decl
+    | [ attr_list ] implement_decl
+    | [ attr_list ] alias_decl
+    | [ attr_list ] const_decl
+    | [ attr_list ] var_decl
     | extern_block
+    ;
+
+attr_list
+    = attr { attr }
+    ;
+
+attr
+    = "@" IDENT [ "(" attr_arg_list ")" ]
+    ;
+
+attr_arg_list
+    = attr_arg { "," attr_arg }
+    ;
+
+attr_arg
+    = STRING
+    | IDENT ":" STRING
+    | IDENT ":" IDENT
     ;
 
 visibility
@@ -79,13 +97,14 @@ param_list
     ;
 
 param
-    = IDENT ":" type [ "..." ]          (* variadic: last param only *)
-    | IDENT ":" type "=" expression     (* default value *)
-    | IDENT ":" type "where" expr_contract
+    = IDENT ":" type [ "..." ]           (* variadic: last param only *)
+    | IDENT ":" type "=" expression      (* default value *)
+    | IDENT ":" type "if" value_contract (* value contract: checked at call time *)
+    | IDENT ":" type "=" expression "if" value_contract  (* default + contract *)
     ;
 
-expr_contract
-    = expression                         (* uses "it" to refer to the param value *)
+value_contract
+    = expression                          (* uses contextual "it" for the checked value *)
     ;
 
 type_params
@@ -196,7 +215,7 @@ struct_decl
     ;
 
 struct_field
-    = IDENT ":" type [ "where" expr_contract ]
+    = IDENT ":" type [ "if" value_contract ]  (* value contract: checked at construction/mutation *)
     ;
 
 struct_method
@@ -216,9 +235,12 @@ enum_decl
     ;
 
 enum_variant
-    = IDENT                              (* unit variant *)
-    | IDENT "(" type { "," type } ")"   (* tuple variant *)
-    | IDENT struct_body                  (* struct variant *)
+    = IDENT                                       (* unit variant: North *)
+    | IDENT "(" named_field { "," named_field } ")"  (* named variant: Circle(radius: float) *)
+    ;
+
+named_field
+    = IDENT ":" type                              (* field with explicit name and type *)
     ;
 
 struct_body
@@ -257,8 +279,7 @@ func_signature
    ============================================================ *)
 
 implement_decl
-    = "implement" type_ref "for" type_ref
-      [ type_params ]
+    = "implement" [ type_params ] type_ref "for" type_ref
       [ where_clause ]
       { func_decl }
       "end"
@@ -400,7 +421,7 @@ for_stmt
     ;
 
 repeat_stmt
-    = "repeat" expression "times" block
+    = "repeat" expression [ "times" ] block  (* "times" is optional contextual keyword *)
     ;
 
 loop_stmt
@@ -416,21 +437,27 @@ match_stmt
 match_case
     = "case" pattern [ "if" expression ] ":"
       { statement }
+    | "case" "else" ":"                           (* explicit fallback — no pattern *)
+      { statement }
     ;
 
 pattern
-    = "_"                                         (* wildcard *)
-    | literal                                     (* literal pattern *)
-    | IDENT                                       (* binding *)
-    | IDENT "(" [ pattern { "," pattern } ] ")"  (* enum variant with payload *)
-    | "." IDENT                                   (* shorthand enum variant *)
-    | "." IDENT "(" [ pattern { "," pattern } ] ")"  (* shorthand with payload *)
-    | "some" "(" pattern ")"                      (* optional some *)
-    | "none"                                      (* optional none *)
-    | "success" "(" pattern ")"                   (* result success *)
-    | "error"   "(" pattern ")"                   (* result error *)
-    | "tuple" "(" pattern { "," pattern } ")"     (* tuple destructure *)
-    | "case" "else"                               (* fallback *)
+    = "_"                                              (* wildcard *)
+    | literal                                          (* literal pattern *)
+    | IDENT                                            (* binding *)
+    | IDENT "(" [ named_pattern { "," named_pattern } ] ")"  (* named variant payload *)
+    | "." IDENT                                        (* shorthand unit variant *)
+    | "." IDENT "(" [ named_pattern { "," named_pattern } ] ")"  (* shorthand named payload *)
+    | "some" "(" pattern ")"                           (* optional some *)
+    | "none"                                           (* optional none *)
+    | "success" "(" pattern ")"                        (* result success *)
+    | "error"   "(" pattern ")"                        (* result error *)
+    | "tuple" "(" pattern { "," pattern } ")"          (* tuple destructure *)
+    ;
+
+named_pattern
+    = IDENT ":" pattern                               (* name: binding *)
+    | IDENT                                            (* positional shorthand — binds to same name *)
     ;
 
 
@@ -507,6 +534,7 @@ postfix_expr
 
 postfix_op
     = "." IDENT                           (* field access *)
+    | "." INTEGER                         (* tuple index access: pair.0, pair.1 *)
     | "(" [ arg_list ] ")"               (* call *)
     | "[" index_expr "]"                 (* index or slice *)
     | "?"                                (* error propagation *)

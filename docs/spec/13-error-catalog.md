@@ -206,6 +206,45 @@ Errors related to project structure and `ori.proj`.
 
 ---
 
+## Category: `attr`
+
+Errors related to attribute annotations.
+
+| Code | Severity | Description |
+|---|---|---|
+| `attr.unknown` | error | Attribute name is not a known built-in attribute |
+| `attr.invalid_arg` | error | Attribute argument has wrong type or structure |
+| `attr.invalid_target` | error | Attribute applied to an unsupported declaration kind |
+| `attr.deprecated` | warning | Use of a declaration marked `@deprecated` |
+| `attr.duplicate` | warning | Same attribute appears more than once on a declaration |
+
+---
+
+## Category: `doc`
+
+Errors related to documentation comments processed by `ori doc`.
+
+| Code | Severity | Description |
+|---|---|---|
+| `doc.param_name_mismatch` | warning | `@param` name does not match any actual parameter |
+| `doc.missing_return` | warning | Public function with non-void return has no `@returns` tag |
+| `doc.unclosed_block` | error | `--|` block comment is not closed with `|--` |
+
+---
+
+## Category: `contract`
+
+Errors related to `if` value contracts on fields and parameters.
+
+| Code | Severity | Description |
+|---|---|---|
+| `contract.field_violation` | runtime panic | Field `if` contract violated at construction or mutation |
+| `contract.param_violation` | runtime panic | Parameter `if` contract violated at call site |
+| `contract.check_failure` | runtime panic | `check` assertion failed |
+| `contract.success_void_mismatch` | error | `success()` with no args used where return type is not `result<void, _>` |
+
+---
+
 ## Diagnostic Format Contract
 
 Every diagnostic must provide:
