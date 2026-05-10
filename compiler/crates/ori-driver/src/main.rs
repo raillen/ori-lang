@@ -34,6 +34,13 @@ enum Commands {
     Parse {
         file: PathBuf,
     },
+    /// Compile to C source (or write to file with --out).
+    Build {
+        file: PathBuf,
+        /// Write generated C to this file instead of stdout.
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
 }
 
 fn main() {
@@ -67,6 +74,28 @@ fn main() {
                     let errors = out.diagnostics.iter().filter(|d| d.is_error()).count();
                     emit::render_all(&out.cache, &out.diagnostics, color);
                     process::exit(if errors > 0 { 1 } else { 0 });
+                }
+            }
+        }
+
+        Commands::Build { file, out } => {
+            match pipeline::run_build(file) {
+                Err(e) => { eprintln!("ori: {}", e); process::exit(2); }
+                Ok(build) => {
+                    let errors   = build.diagnostics.iter().filter(|d| d.is_error()).count();
+                    let warnings = build.diagnostics.len() - errors;
+                    emit::render_all(&build.cache, &build.diagnostics, color);
+                    emit::print_summary(errors, warnings, color);
+                    if !build.has_errors {
+                        match out {
+                            Some(p) => {
+                                std::fs::write(p, &build.c_source)
+                                    .unwrap_or_else(|e| { eprintln!("ori: {}", e); process::exit(2); });
+                            }
+                            None => print!("{}", build.c_source),
+                        }
+                    }
+                    process::exit(if build.has_errors { 1 } else { 0 });
                 }
             }
         }

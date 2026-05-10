@@ -179,12 +179,21 @@ impl<'a> Checker<'a> {
                 self.lookup_var(&n.text, n.span)
             }
             Expr::QualifiedIdent(q) => {
+                // Single-segment names may be local variables — check scope first
+                if q.is_single() {
+                    let name = q.last().as_str();
+                    // Try local scope
+                    for scope in self.scopes.iter().rev() {
+                        if let Some(ty) = scope.get(name) { return ty.clone(); }
+                    }
+                }
+                // Fall back to global def_map
                 let path = q.to_string();
                 if let Some(id) = self.def_map.lookup(&path) {
                     let def = self.def_map.get(id);
                     match def.kind {
                         crate::def::DefKind::Const | crate::def::DefKind::Var => Ty::Infer(id.0),
-                        _ => Ty::Error,
+                        _ => Ty::Infer(0),
                     }
                 } else {
                     Ty::Infer(0)

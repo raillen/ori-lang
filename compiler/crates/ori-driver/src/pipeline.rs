@@ -83,6 +83,43 @@ pub fn run_check(path: &Path) -> Result<CheckOutput, String> {
     Ok(CheckOutput { cache, resolved, diagnostics, has_errors })
 }
 
+pub struct BuildOutput {
+    pub cache:       SourceCache,
+    pub c_source:    String,
+    pub diagnostics: Vec<Diagnostic>,
+    pub has_errors:  bool,
+}
+
+/// Full pipeline + HIR lowering + C code generation.
+pub fn run_build(path: &Path) -> Result<BuildOutput, String> {
+    let source  = read_file(path)?;
+    let mut cache = SourceCache::default();
+    let mut sink  = DiagnosticSink::default();
+    let file_id   = cache.add(path, source.clone());
+
+    let tokens   = ori_lexer::lex(&source, file_id, &mut sink);
+    let ast      = ori_parser::parse(&tokens, &source, file_id, &mut sink);
+    let resolved = ori_types::resolve::resolve(&ast, file_id, &mut sink);
+
+    if !sink.has_errors() {
+        let mut checker = ori_types::check::Checker::new(
+            &resolved.def_map, &resolved.namespace, file_id, &mut sink,
+        );
+        checker.check_file(&ast);
+    }
+
+    let c_source = if !sink.has_errors() {
+        let hir = ori_hir::lower(&ast, &resolved.def_map, &resolved.namespace, file_id, &mut sink);
+        ori_codegen::emit_c(&hir)
+    } else {
+        String::new()
+    };
+
+    let has_errors  = sink.has_errors();
+    let diagnostics = sink.into_diagnostics();
+    Ok(BuildOutput { cache, c_source, diagnostics, has_errors })
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 fn read_file(path: &Path) -> Result<String, String> {

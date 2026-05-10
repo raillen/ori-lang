@@ -68,12 +68,15 @@ impl Ty {
         matches!(self, Ty::Float | Ty::Float32 | Ty::Float64)
     }
 
-    /// `Never` is a subtype of everything.
+    /// `Never` and `Infer` are subtypes of everything (v1 — full inference pending).
     pub fn is_assignable_to(&self, other: &Ty) -> bool {
         if self == other    { return true; }
-        if self.is_error()  { return true; } // avoid cascading errors
+        if self.is_error()  { return true; }
         if self.is_never()  { return true; }
         if other.is_error() { return true; }
+        // Infer on either side means "not yet resolved" — skip the check in v1
+        if matches!(self,  Ty::Infer(_)) { return true; }
+        if matches!(other, Ty::Infer(_)) { return true; }
         false
     }
 
