@@ -1,0 +1,233 @@
+use smol_str::SmolStr;
+use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label, Span};
+use ori_lexer::{Token, TokenKind};
+use ori_ast::common::{Name, QualifiedName, TypeParam, WhereClause, WhereConstraint};
+
+// ── Parser core ───────────────────────────────────────────────────────────────
+
+pub(crate) struct Parser<'src> {
+    pub tokens:  &'src [Token],
+    pub pos:     usize,
+    pub source:  &'src str,
+    pub file_id: FileId,
+    pub sink:    &'src mut DiagnosticSink,
+}
+
+impl<'src> Parser<'src> {
+    pub fn new(
+        tokens:  &'src [Token],
+        source:  &'src str,
+        file_id: FileId,
+        sink:    &'src mut DiagnosticSink,
+    ) -> Self {
+        let mut p = Self { tokens, pos: 0, source, file_id, sink };
+        p.skip_trivia();
+        p
+    }
+
+    fn skip_trivia(&mut self) {
+        while self.pos < self.tokens.len() && self.tokens[self.pos].is_trivia() {
+            self.pos += 1;
+        }
+    }
+
+    pub fn peek(&self) -> Option<&Token> {
+        self.tokens.get(self.pos)
+    }
+
+    pub fn peek_kind(&self) -> Option<&TokenKind> {
+        self.peek().map(|t| &t.kind)
+    }
+
+    pub fn at(&self, kind: &TokenKind) -> bool {
+        self.peek_kind() == Some(kind)
+    }
+
+    pub fn at_any(&self, kinds: &[TokenKind]) -> bool {
+        self.peek_kind().map_or(false, |k| kinds.contains(k))
+    }
+
+    pub fn at_eof(&self) -> bool {
+        self.pos >= self.tokens.len()
+    }
+
+    /// Peek at the nth non-trivia token ahead (0 = current).
+    pub fn peek_nth_kind(&self, n: usize) -> Option<&TokenKind> {
+        let mut count = 0usize;
+        let mut i = self.pos;
+        while i < self.tokens.len() {
+            if !self.tokens[i].is_trivia() {
+                if count == n { return Some(&self.tokens[i].kind); }
+                count += 1;
+            }
+            i += 1;
+        }
+        None
+    }
+
+    pub fn advance(&mut self) -> Option<Token> {
+        if self.pos < self.tokens.len() {
+            let tok = self.tokens[self.pos].clone();
+            self.pos += 1;
+            self.skip_trivia();
+            Some(tok)
+        } else {
+            None
+        }
+    }
+
+    /// Consume the current token if it matches `kind`. Returns its span.
+    pub fn expect(&mut self, kind: &TokenKind) -> Option<Span> {
+        if self.peek_kind() == Some(kind) {
+            Some(self.advance().unwrap().span)
+        } else {
+            let span = self.current_span();
+            let found = self.peek_kind()
+                .map(|k| k.display_name())
+                .unwrap_or("end of file");
+            self.error(
+                "parse.unexpected_token",
+                format!("expected {}, found {}", kind.display_name(), found),
+                span,
+            );
+            None
+        }
+    }
+
+    /// Consume and return `true` if the current token matches `kind`.
+    pub fn eat(&mut self, kind: &TokenKind) -> bool {
+        if self.peek_kind() == Some(kind) {
+            self.advance();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Eat and return the span if matching.
+    pub fn eat_span(&mut self, kind: &TokenKind) -> Option<Span> {
+        if self.peek_kind() == Some(kind) {
+            Some(self.advance().unwrap().span)
+        } else {
+            None
+        }
+    }
+
+    pub fn current_span(&self) -> Span {
+        self.peek().map(|t| t.span).unwrap_or_else(|| {
+            self.tokens
+                .last()
+                .map(|t| Span::new(t.span.end as usize, t.span.end as usize))
+                .unwrap_or(Span::DUMMY)
+        })
+    }
+
+    pub fn slice(&self, span: Span) -> &str {
+        &self.source[span.as_range()]
+    }
+
+    pub fn error(&mut self, code: &'static str, msg: impl Into<String>, span: Span) {
+        let diag = Diagnostic::error(code, msg)
+            .with_label(Label::primary(self.file_id, span, "here"));
+        self.sink.emit(diag);
+    }
+
+    // ── Common grammar helpers ────────────────────────────────────────────────
+
+    pub fn parse_name(&mut self) -> Option<Name> {
+        match self.peek_kind() {
+            Some(TokenKind::Ident) => {
+                let tok = self.advance().unwrap();
+                let text = SmolStr::new(self.slice(tok.span));
+                Some(Name::new(text, tok.span))
+            }
+            _ => {
+                let span = self.current_span();
+                self.error("parse.expected_identifier", "expected identifier", span);
+                None
+            }
+        }
+    }
+
+    /// Parse `ident (.ident)*` in a type or import context.
+    pub fn parse_qualified_name(&mut self) -> Option<QualifiedName> {
+        let first = self.parse_name()?;
+        let mut span = first.span;
+        let mut parts = vec![first];
+        // Continue only if Dot is followed by Ident (not a field access)
+        while self.at(&TokenKind::Dot)
+            && self.peek_nth_kind(1) == Some(&TokenKind::Ident)
+        {
+            self.advance(); // dot
+            let name = self.parse_name()?;
+            span = span.cover(name.span);
+            parts.push(name);
+        }
+        Some(QualifiedName { parts, span })
+    }
+
+    /// Parse optional `<T, U, …>` type parameters.
+    pub fn parse_type_params_opt(&mut self) -> Vec<TypeParam> {
+        if !self.at(&TokenKind::Lt) {
+            return Vec::new();
+        }
+        // Is this `<ident` (type param) or `<expr` (comparison)?
+        // In declaration context, always parse as type params.
+        self.advance(); // <
+        let mut params = Vec::new();
+        loop {
+            if self.at_eof() || self.at(&TokenKind::Gt) { break; }
+            if let Some(name) = self.parse_name() {
+                params.push(TypeParam { name });
+            } else {
+                break;
+            }
+            if !self.eat(&TokenKind::Comma) { break; }
+        }
+        self.expect(&TokenKind::Gt);
+        params
+    }
+
+    /// Parse optional `where T is Trait, U is not Trait` clause.
+    pub fn parse_where_clause_opt(&mut self) -> Option<WhereClause> {
+        if !self.at(&TokenKind::Where) {
+            return None;
+        }
+        let start = self.advance().unwrap().span; // `where`
+        let mut constraints = Vec::new();
+        loop {
+            let param = self.parse_name()?;
+            let negated = if self.eat(&TokenKind::Is) {
+                let neg = self.eat(&TokenKind::Not);
+                neg
+            } else {
+                self.expect(&TokenKind::Is)?;
+                false
+            };
+            let bound = self.parse_qualified_name()?;
+            let span = param.span.cover(bound.span);
+            if negated {
+                constraints.push(WhereConstraint::IsNot { param, bound, span });
+            } else {
+                constraints.push(WhereConstraint::Is { param, bound, span });
+            }
+            if !self.eat(&TokenKind::Comma) { break; }
+            // Stop if next token is not an Ident (end of where clause)
+            if !self.at(&TokenKind::Ident) { break; }
+        }
+        let end = constraints.last()
+            .map(|c| match c {
+                WhereConstraint::Is   { span, .. } => *span,
+                WhereConstraint::IsNot { span, .. } => *span,
+            })
+            .unwrap_or(start);
+        Some(WhereClause { constraints, span: start.cover(end) })
+    }
+
+    /// Advance past all tokens that are NOT in the sync set (error recovery).
+    pub fn synchronize(&mut self, sync: &[TokenKind]) {
+        while !self.at_eof() && !self.at_any(sync) {
+            self.advance();
+        }
+    }
+}

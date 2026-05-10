@@ -7,5 +7,6 @@ license.workspace = true
 
 [dependencies]
 ori-diagnostics = { workspace = true }
-ori-lexer = { workspace = true }
-ori-ast = { workspace = true }
+ori-lexer       = { workspace = true }
+ori-ast         = { workspace = true }
+smol_str        = { workspace = true }
