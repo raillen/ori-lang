@@ -5,7 +5,7 @@ use ori_ast::common::Visibility;
 use ori_ast::expr::{Expr, FStrPart};
 use ori_ast::item::{Item, SourceFile};
 use ori_ast::stmt::{Block, MatchCase, Stmt};
-use ori_types::{DefMap, Ty, lower_type};
+use ori_types::{DefKind, DefMap, Ty, lower_type_with_aliases};
 use crate::hir::*;
 
 /// Maps an Ori stdlib qualified path to the C function name used at link time.
@@ -86,14 +86,56 @@ impl<'a> Lowerer<'a> {
     fn bind(&mut self, name: SmolStr, ty: Ty) {
         if let Some(s) = self.scopes.last_mut() { s.vars.insert(name, ty); }
     }
-    fn lookup(&self, name: &str) -> Ty {
+    fn lookup_var(&self, name: &str) -> Option<Ty> {
         for s in self.scopes.iter().rev() {
-            if let Some(t) = s.vars.get(name) { return t.clone(); }
+            if let Some(t) = s.vars.get(name) { return Some(t.clone()); }
         }
-        Ty::Error
+        None
+    }
+    fn lookup(&self, name: &str) -> Ty {
+        self.lookup_var(name).unwrap_or(Ty::Error)
+    }
+    fn expand_alias(&self, name: &str) -> SmolStr {
+        if let Some(dot) = name.find('.') {
+            let prefix = &name[..dot];
+            let suffix = &name[dot + 1..];
+            if let Some(full_ns) = self.aliases.get(prefix) {
+                return SmolStr::new(format!("{}.{}", full_ns, suffix));
+            }
+        }
+        SmolStr::new(name)
+    }
+    fn resolve_def_path(&self, name: &str) -> Option<SmolStr> {
+        let expanded = self.expand_alias(name);
+        if self.def_map.lookup(&expanded).is_some() {
+            return Some(expanded);
+        }
+        let local = SmolStr::new(format!("{}.{}", self.namespace, expanded));
+        if self.def_map.lookup(&local).is_some() {
+            return Some(local);
+        }
+        None
+    }
+    fn ty_for_def_path(&self, path: &str) -> Ty {
+        if let Some(id) = self.def_map.lookup(path) {
+            match self.def_map.get(id).kind {
+                DefKind::Struct | DefKind::Enum | DefKind::TypeAlias => Ty::Named(id, Vec::new()),
+                _ => Ty::Infer(0),
+            }
+        } else {
+            Ty::Error
+        }
     }
     fn lower_ast_ty(&mut self, t: &ori_ast::ty::Type, tp: &[SmolStr]) -> Ty {
-        lower_type(t, self.namespace, tp, self.def_map, self.file_id, self.sink)
+        lower_type_with_aliases(
+            t,
+            self.namespace,
+            tp,
+            self.def_map,
+            self.file_id,
+            self.sink,
+            &self.aliases,
+        )
     }
     fn dummy_expr(ty: Ty, span: Span) -> HirExpr {
         HirExpr { kind: HirExprKind::Unit, ty, span }
@@ -116,9 +158,10 @@ pub fn lower(
 
     // Build alias map from imports: `import ori.io as io` → `io → ori.io`
     for import in &file.imports {
-        if let Some(alias) = &import.alias {
-            l.aliases.insert(alias.text.clone(), SmolStr::new(import.path.to_string()));
-        }
+        let alias = import.alias.as_ref()
+            .map(|a| a.text.clone())
+            .unwrap_or_else(|| import.path.last().text.clone());
+        l.aliases.insert(alias, SmolStr::new(import.path.to_string()));
     }
     let mut structs = Vec::new();
     let mut enums   = Vec::new();
@@ -137,7 +180,7 @@ pub fn lower(
                 let path = format!("{}.{}", namespace, s.name.text);
                 let def_id = def_map.lookup(&path).unwrap_or(ori_types::DefId(u32::MAX));
                 structs.push(HirStruct {
-                    def_id, name: s.name.text.clone(), fields,
+                    def_id, name: SmolStr::new(&path), fields,
                     is_public: s.visibility == Visibility::Public, span: s.span,
                 });
             }
@@ -155,7 +198,7 @@ pub fn lower(
                     span: v.span,
                 }).collect();
                 enums.push(HirEnum {
-                    def_id, name: e.name.text.clone(), variants,
+                    def_id, name: SmolStr::new(&path), variants,
                     is_public: e.visibility == Visibility::Public, span: e.span,
                 });
             }
@@ -177,7 +220,7 @@ pub fn lower(
                 let path = format!("{}.{}", namespace, f.name.text);
                 let def_id = def_map.lookup(&path).unwrap_or(ori_types::DefId(u32::MAX));
                 funcs.push(HirFunc {
-                    def_id, name: f.name.text.clone(), params, return_ty, body,
+                    def_id, name: SmolStr::new(&path), params, return_ty, body,
                     is_public: f.visibility == Visibility::Public,
                     is_mut: f.is_mut, span: f.span,
                 });
@@ -188,7 +231,7 @@ pub fn lower(
                 let path  = format!("{}.{}", namespace, c.name.text);
                 let def_id = def_map.lookup(&path).unwrap_or(ori_types::DefId(u32::MAX));
                 consts.push(HirConst {
-                    def_id, name: c.name.text.clone(), ty, value,
+                    def_id, name: SmolStr::new(&path), ty, value,
                     is_public: c.visibility == Visibility::Public, span: c.span,
                 });
             }
@@ -332,8 +375,14 @@ impl<'a> Lowerer<'a> {
             Expr::SelfExpr(_) =>
                 HirExpr { kind: HirExprKind::Var(SmolStr::new("self")), ty: self.lookup("self"), span },
             Expr::Ident(n) => {
-                let ty = self.lookup(&n.text);
-                HirExpr { kind: HirExprKind::Var(n.text.clone()), ty, span }
+                if let Some(ty) = self.lookup_var(&n.text) {
+                    HirExpr { kind: HirExprKind::Var(n.text.clone()), ty, span }
+                } else if let Some(path) = self.resolve_def_path(&n.text) {
+                    let ty = self.ty_for_def_path(&path);
+                    HirExpr { kind: HirExprKind::Var(path), ty, span }
+                } else {
+                    HirExpr { kind: HirExprKind::Var(n.text.clone()), ty: Ty::Error, span }
+                }
             }
             Expr::QualifiedIdent(q) => {
                 let path = q.to_string();
@@ -347,13 +396,18 @@ impl<'a> Lowerer<'a> {
                 }
                 if q.is_single() {
                     let name = q.last().text.clone();
-                    let ty = self.lookup(&name);
-                    HirExpr { kind: HirExprKind::Var(name), ty, span }
+                    if let Some(ty) = self.lookup_var(&name) {
+                        HirExpr { kind: HirExprKind::Var(name), ty, span }
+                    } else if let Some(path) = self.resolve_def_path(&name) {
+                        let ty = self.ty_for_def_path(&path);
+                        HirExpr { kind: HirExprKind::Var(path), ty, span }
+                    } else {
+                        HirExpr { kind: HirExprKind::Var(name), ty: Ty::Error, span }
+                    }
                 } else {
-                    let ty = if let Some(id) = self.def_map.lookup(&path) {
-                        Ty::Named(id, Vec::new())
-                    } else { Ty::Error };
-                    HirExpr { kind: HirExprKind::Var(SmolStr::new(&path)), ty, span }
+                    let resolved = self.resolve_def_path(&path).unwrap_or_else(|| SmolStr::new(&path));
+                    let ty = self.ty_for_def_path(&resolved);
+                    HirExpr { kind: HirExprKind::Var(resolved), ty, span }
                 }
             }
             Expr::Binary { op, lhs, rhs, .. } => {

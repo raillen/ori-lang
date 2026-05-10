@@ -5,8 +5,8 @@ use ori_ast::expr::{BinaryOp, Expr, UnaryOp};
 use ori_ast::item::{FuncDecl, Item, SourceFile};
 use ori_ast::stmt::{Block, Stmt};
 use crate::def::{DefId, DefKind, DefMap};
-use crate::lower::lower_type;
-use crate::resolve::FuncSig;
+use crate::lower::lower_type_with_aliases;
+use crate::resolve::{FuncSig, ValueSig};
 use crate::ty::Ty;
 
 // ── Environment ───────────────────────────────────────────────────────────────
@@ -27,21 +27,33 @@ impl Scope {
 pub struct Checker<'a> {
     def_map:   &'a DefMap,
     func_sigs: &'a [FuncSig],   // return types for all declared functions
+    value_sigs: &'a [ValueSig],
     namespace: &'a str,
     file_id:   FileId,
     sink:      &'a mut DiagnosticSink,
     scopes:    Vec<Scope>,
+    aliases:   HashMap<SmolStr, SmolStr>,
 }
 
 impl<'a> Checker<'a> {
     pub fn new(
         def_map:   &'a DefMap,
         func_sigs: &'a [FuncSig],
+        value_sigs: &'a [ValueSig],
         namespace: &'a str,
         file_id:   FileId,
         sink:      &'a mut DiagnosticSink,
     ) -> Self {
-        Self { def_map, func_sigs, namespace, file_id, sink, scopes: vec![Scope::default()] }
+        Self {
+            def_map,
+            func_sigs,
+            value_sigs,
+            namespace,
+            file_id,
+            sink,
+            scopes: vec![Scope::default()],
+            aliases: HashMap::new(),
+        }
     }
 
     /// Look up the return type of a function by its DefId.
@@ -49,10 +61,32 @@ impl<'a> Checker<'a> {
         self.func_sigs.iter().find(|s| s.def_id == def_id).map(|s| s.return_ty.clone())
     }
 
+    fn value_ty(&self, def_id: DefId) -> Option<Ty> {
+        self.value_sigs.iter().find(|s| s.def_id == def_id).map(|s| s.ty.clone())
+    }
+
     pub fn check_file(&mut self, file: &SourceFile) {
+        self.aliases.clear();
+        for import in &file.imports {
+            let alias = import.alias.as_ref()
+                .map(|a| a.text.clone())
+                .unwrap_or_else(|| import.path.last().text.clone());
+            self.aliases.insert(alias, SmolStr::new(import.path.to_string()));
+        }
         for item in &file.items {
-            if let Item::Func(f) = &item.item {
-                self.check_func(f);
+            match &item.item {
+                Item::Func(f) => self.check_func(f),
+                Item::Const(c) => {
+                    let expected = self.lower(&c.ty, &[]);
+                    let actual = self.infer_expr(&c.value);
+                    self.expect_assignable(&actual, &expected, c.value.span());
+                }
+                Item::Var(v) => {
+                    let expected = self.lower(&v.ty, &[]);
+                    let actual = self.infer_expr(&v.value);
+                    self.expect_assignable(&actual, &expected, v.value.span());
+                }
+                _ => {}
             }
         }
     }
@@ -197,10 +231,11 @@ impl<'a> Checker<'a> {
                 }
                 // Fall back to global def_map
                 let path = q.to_string();
-                if let Some(id) = self.def_map.lookup(&path) {
+                if let Some(id) = self.resolve_def_id(&path) {
                     let def = self.def_map.get(id);
                     match def.kind {
-                        crate::def::DefKind::Const | crate::def::DefKind::Var => Ty::Infer(id.0),
+                        crate::def::DefKind::Const | crate::def::DefKind::Var =>
+                            self.value_ty(id).unwrap_or(Ty::Infer(id.0)),
                         _ => Ty::Infer(0),
                     }
                 } else {
@@ -257,10 +292,7 @@ impl<'a> Checker<'a> {
                 // If callee is a named function, look up its return type
                 if let Expr::QualifiedIdent(q) = callee.as_ref() {
                     let path = q.to_string();
-                    let full_path = format!("{}.{}", self.namespace, path);
-                    let id = self.def_map.lookup(&full_path)
-                        .or_else(|| self.def_map.lookup(&path));
-                    if let Some(def_id) = id {
+                    if let Some(def_id) = self.resolve_def_id(&path) {
                         let def = self.def_map.get(def_id);
                         if def.kind == DefKind::Func {
                             if let Some(ret) = self.func_return_ty(def_id) {
@@ -330,7 +362,15 @@ impl<'a> Checker<'a> {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     fn lower(&mut self, ty: &ori_ast::ty::Type, type_params: &[SmolStr]) -> Ty {
-        lower_type(ty, self.namespace, type_params, self.def_map, self.file_id, self.sink)
+        lower_type_with_aliases(
+            ty,
+            self.namespace,
+            type_params,
+            self.def_map,
+            self.file_id,
+            self.sink,
+            &self.aliases,
+        )
     }
 
     fn push_scope(&mut self) { self.scopes.push(Scope::default()); }
@@ -350,6 +390,23 @@ impl<'a> Checker<'a> {
                 .with_action("declare the variable with `const` or `var` before using it"),
         );
         Ty::Error
+    }
+
+    fn expand_alias(&self, name: &str) -> String {
+        if let Some(dot) = name.find('.') {
+            let prefix = &name[..dot];
+            let suffix = &name[dot + 1..];
+            if let Some(full_ns) = self.aliases.get(prefix) {
+                return format!("{}.{}", full_ns, suffix);
+            }
+        }
+        name.to_string()
+    }
+
+    fn resolve_def_id(&self, name: &str) -> Option<DefId> {
+        let expanded = self.expand_alias(name);
+        self.def_map.lookup(&expanded)
+            .or_else(|| self.def_map.lookup(&format!("{}.{}", self.namespace, expanded)))
     }
 
     fn expect_bool(&mut self, ty: &Ty, span: ori_diagnostics::Span) {

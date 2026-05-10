@@ -8,6 +8,6 @@ pub mod ty;
 
 pub use check::Checker;
 pub use def::{Def, DefId, DefKind, DefMap};
-pub use lower::lower_type;
-pub use resolve::{resolve, FuncSig, ResolvedModule};
+pub use lower::{lower_type, lower_type_with_aliases};
+pub use resolve::{resolve, FuncSig, ResolvedModule, ValueSig};
 pub use ty::Ty;

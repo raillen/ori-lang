@@ -101,6 +101,22 @@ fn is_float_ty(ty: &Ty) -> bool {
     matches!(ty, Ty::Float | Ty::Float32 | Ty::Float64)
 }
 
+fn mangle_symbol(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .collect()
+}
+
+fn native_func_symbol(name: &str) -> String {
+    format!("ORI__{}", mangle_symbol(name))
+}
+
+fn is_entry_main(hir: &HirModule, f: &HirFunc) -> bool {
+    let entry = format!("{}.main", hir.namespace);
+    f.params.is_empty()
+        && (f.name.as_str() == "main" || f.name.as_str() == entry)
+}
+
 /// Layout of an `optional<T>`: `{ has_value: i8, [padding], value: T }`.
 fn optional_layout(inner: &Ty, ptr_ty: types::Type) -> (u32, u32) {
     // Returns (value_offset, total_size)
@@ -302,13 +318,13 @@ impl NativeBackend {
     fn declare_all(&mut self, hir: &HirModule) -> Result<(), String> {
         for f in &hir.funcs {
             let sig  = self.make_sig(f);
-            let link = if f.is_public || f.name == "main" { Linkage::Export } else { Linkage::Local };
+            let link = if f.is_public { Linkage::Export } else { Linkage::Local };
             let id   = self.module
-                .declare_function(&format!("ORI__{}", f.name), link, &sig)
+                .declare_function(&native_func_symbol(&f.name), link, &sig)
                 .map_err(|e| format!("declare '{}': {e}", f.name))?;
             self.func_ids.insert(f.name.clone(), id);
         }
-        if hir.funcs.iter().any(|f| f.name == "main" && f.params.is_empty()) {
+        if hir.funcs.iter().any(|f| is_entry_main(hir, f)) {
             let mut sig = self.module.make_signature();
             sig.returns.push(AbiParam::new(types::I32));
             self.module.declare_function("main", Linkage::Export, &sig)
@@ -318,6 +334,9 @@ impl NativeBackend {
     }
 
     fn define_all(&mut self, hir: &HirModule) -> Result<(), String> {
+        let const_exprs: HashMap<SmolStr, HirExpr> = hir.consts.iter()
+            .map(|c| (c.name.clone(), c.value.clone()))
+            .collect();
         for f in &hir.funcs {
             let sig     = self.make_sig(f);
             let func_id = self.func_ids[&f.name];
@@ -344,6 +363,7 @@ impl NativeBackend {
                 FuncCodegen {
                     builder, func_refs: &func_refs,
                     string_gvs: &string_gvs,
+                    const_exprs: &const_exprs,
                     struct_layouts: &self.struct_layouts,
                     vars: HashMap::new(), ptr_ty: self.ptr_ty,
                     loop_stack: Vec::new(), terminated: false,
@@ -354,7 +374,8 @@ impl NativeBackend {
         }
 
         // Define C main wrapper
-        if let Some(&ori_main_id) = self.func_ids.get("main".into()) {
+        if let Some(entry_main) = hir.funcs.iter().find(|f| is_entry_main(hir, f)) {
+            let ori_main_id = self.func_ids[&entry_main.name];
             let mut sig = self.module.make_signature();
             sig.returns.push(AbiParam::new(types::I32));
             let main_id = self.module.declare_function("main", Linkage::Export, &sig)
@@ -387,6 +408,7 @@ struct FuncCodegen<'a> {
     builder:        FunctionBuilder<'a>,
     func_refs:      &'a HashMap<SmolStr, ir::FuncRef>,
     string_gvs:     &'a HashMap<SmolStr, ir::GlobalValue>,
+    const_exprs:    &'a HashMap<SmolStr, HirExpr>,
     struct_layouts: &'a HashMap<ori_types::DefId, StructLayout>,
     vars:           HashMap<SmolStr, (Variable, Ty)>,
     ptr_ty:         types::Type,
@@ -603,28 +625,42 @@ impl<'a> FuncCodegen<'a> {
 
     fn emit_for(&mut self, binding: &SmolStr, elem_ty: &Ty,
                 iterable: &HirExpr, body: &HirBlock) -> Result<(), String> {
-        let (start_v, end_v) = if let HirExprKind::Range { start, end } = &iterable.kind {
-            (self.emit_expr(start)?, self.emit_expr(end)?)
-        } else {
-            let v = self.emit_expr(iterable)?;
-            (v, v)
-        };
+        match &iterable.kind {
+            HirExprKind::Range { start, end } =>
+                self.emit_for_range(binding, elem_ty, start, end, body),
+            _ if matches!(&iterable.ty, Ty::List(_)) =>
+                self.emit_for_list(binding, elem_ty, iterable, body),
+            _ => Err(format!("unsupported `for` iterable type `{}`", iterable.ty.display())),
+        }
+    }
+
+    fn emit_for_range(&mut self, binding: &SmolStr, elem_ty: &Ty,
+                      start: &HirExpr, end: &HirExpr, body: &HirBlock) -> Result<(), String> {
+        let start_v = self.emit_expr(start)?;
+        let end_v = self.emit_expr(end)?;
         let idx_var = self.builder.declare_var(types::I64);
         self.builder.def_var(idx_var, start_v);
         let end_var = self.builder.declare_var(types::I64);
         self.builder.def_var(end_var, end_v);
+        let asc_var = self.builder.declare_var(types::I8);
+        let asc = self.builder.ins().icmp(ir::condcodes::IntCC::SignedLessThanOrEqual, start_v, end_v);
+        self.builder.def_var(asc_var, asc);
         if let Some(cl_ty) = cl_type(elem_ty, self.ptr_ty) {
             let bvar = self.builder.declare_var(cl_ty);
             self.vars.insert(binding.clone(), (bvar, elem_ty.clone()));
         }
         let header = self.builder.create_block();
         let body_b = self.builder.create_block();
+        let step   = self.builder.create_block();
         let exit   = self.builder.create_block();
         self.builder.ins().jump(header, &[]);
         self.builder.switch_to_block(header);
         let cur = self.builder.use_var(idx_var);
         let lim = self.builder.use_var(end_var);
-        let cond = self.builder.ins().icmp(ir::condcodes::IntCC::SignedLessThanOrEqual, cur, lim);
+        let asc_flag = self.builder.use_var(asc_var);
+        let cond_asc = self.builder.ins().icmp(ir::condcodes::IntCC::SignedLessThanOrEqual, cur, lim);
+        let cond_desc = self.builder.ins().icmp(ir::condcodes::IntCC::SignedGreaterThanOrEqual, cur, lim);
+        let cond = self.builder.ins().select(asc_flag, cond_asc, cond_desc);
         self.builder.ins().brif(cond, body_b, &[], exit, &[]);
         self.builder.seal_block(body_b);
         self.builder.switch_to_block(body_b);
@@ -635,16 +671,83 @@ impl<'a> FuncCodegen<'a> {
             self.builder.def_var(bvar, cur2);
         }
         self.terminated = false;
-        self.loop_stack.push((header, exit));
+        self.loop_stack.push((step, exit));
         self.emit_block(body)?;
         self.loop_stack.pop();
         if !self.terminated {
-            let cur2 = self.builder.use_var(idx_var);
-            let one  = self.builder.ins().iconst(types::I64, 1);
-            let next = self.builder.ins().iadd(cur2, one);
-            self.builder.def_var(idx_var, next);
-            self.builder.ins().jump(header, &[]);
+            self.builder.ins().jump(step, &[]);
         }
+        self.terminated = false;
+        self.builder.seal_block(step);
+        self.builder.switch_to_block(step);
+        let cur2 = self.builder.use_var(idx_var);
+        let asc_flag = self.builder.use_var(asc_var);
+        let one = self.builder.ins().iconst(types::I64, 1);
+        let neg_one = self.builder.ins().iconst(types::I64, -1);
+        let inc = self.builder.ins().select(asc_flag, one, neg_one);
+        let next = self.builder.ins().iadd(cur2, inc);
+        self.builder.def_var(idx_var, next);
+        self.builder.ins().jump(header, &[]);
+        self.builder.seal_block(header);
+        self.builder.seal_block(exit);
+        self.builder.switch_to_block(exit);
+        self.terminated = false;
+        Ok(())
+    }
+
+    fn emit_for_list(&mut self, binding: &SmolStr, elem_ty: &Ty,
+                     iterable: &HirExpr, body: &HirBlock) -> Result<(), String> {
+        let list_v = self.emit_expr(iterable)?;
+        let len_ref = *self.func_refs.get("ori_list_len")
+            .ok_or_else(|| "missing runtime function `ori_list_len`".to_string())?;
+        let get_ref = *self.func_refs.get("ori_list_get")
+            .ok_or_else(|| "missing runtime function `ori_list_get`".to_string())?;
+        let len_call = self.builder.ins().call(len_ref, &[list_v]);
+        let len_v = self.builder.inst_results(len_call)[0];
+        let idx_var = self.builder.declare_var(types::I64);
+        let zero = self.builder.ins().iconst(types::I64, 0);
+        self.builder.def_var(idx_var, zero);
+        let len_var = self.builder.declare_var(types::I64);
+        self.builder.def_var(len_var, len_v);
+        if let Some(cl_ty) = cl_type(elem_ty, self.ptr_ty) {
+            let bvar = self.builder.declare_var(cl_ty);
+            self.vars.insert(binding.clone(), (bvar, elem_ty.clone()));
+        }
+        let header = self.builder.create_block();
+        let body_b = self.builder.create_block();
+        let step   = self.builder.create_block();
+        let exit   = self.builder.create_block();
+        self.builder.ins().jump(header, &[]);
+        self.builder.switch_to_block(header);
+        let cur = self.builder.use_var(idx_var);
+        let len = self.builder.use_var(len_var);
+        let cond = self.builder.ins().icmp(ir::condcodes::IntCC::SignedLessThan, cur, len);
+        self.builder.ins().brif(cond, body_b, &[], exit, &[]);
+        self.builder.seal_block(body_b);
+        self.builder.switch_to_block(body_b);
+        if let Some((bvar, _)) = self.vars.get(binding) {
+            let bvar = *bvar;
+            let cur2 = self.builder.use_var(idx_var);
+            let call = self.builder.ins().call(get_ref, &[list_v, cur2]);
+            let elem = self.builder.inst_results(call)[0];
+            let elem = self.from_list_storage_value(elem, elem_ty);
+            self.builder.def_var(bvar, elem);
+        }
+        self.terminated = false;
+        self.loop_stack.push((step, exit));
+        self.emit_block(body)?;
+        self.loop_stack.pop();
+        if !self.terminated {
+            self.builder.ins().jump(step, &[]);
+        }
+        self.terminated = false;
+        self.builder.seal_block(step);
+        self.builder.switch_to_block(step);
+        let cur2 = self.builder.use_var(idx_var);
+        let one  = self.builder.ins().iconst(types::I64, 1);
+        let next = self.builder.ins().iadd(cur2, one);
+        self.builder.def_var(idx_var, next);
+        self.builder.ins().jump(header, &[]);
         self.builder.seal_block(header);
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
@@ -781,6 +884,8 @@ impl<'a> FuncCodegen<'a> {
                 if let Some((var, _)) = self.vars.get(name) {
                     let var = *var;
                     self.builder.use_var(var)
+                } else if let Some(expr) = self.const_exprs.get(name).cloned() {
+                    self.emit_expr(&expr)?
                 } else {
                     self.builder.ins().iconst(types::I64, 0)
                 }
@@ -906,7 +1011,7 @@ impl<'a> FuncCodegen<'a> {
                     self.builder.ins().load(types::I64, MemFlags::new(), ptr, 0)
                 }
             }
-            HirExprKind::ListLit { elements, .. } => {
+            HirExprKind::ListLit { elem_ty, elements } => {
                 // Allocate list, push each element
                 let list_ptr = if let Some(&new_ref) = self.func_refs.get("ori_list_new") {
                     let call = self.builder.ins().call(new_ref, &[]);
@@ -917,6 +1022,7 @@ impl<'a> FuncCodegen<'a> {
                 if let Some(&push_ref) = self.func_refs.get("ori_list_push") {
                     for elem in elements {
                         let v = self.emit_expr(elem)?;
+                        let v = self.to_list_storage_value(v, elem_ty);
                         self.builder.ins().call(push_ref, &[list_ptr, v]);
                     }
                 }
@@ -941,6 +1047,24 @@ impl<'a> FuncCodegen<'a> {
             return self.builder.inst_results(call)[0];
         }
         self.builder.ins().iconst(types::I64, 0)
+    }
+
+    fn to_list_storage_value(&mut self, value: ir::Value, ty: &Ty) -> ir::Value {
+        match ty {
+            Ty::Bool | Ty::Int8 | Ty::U8 |
+            Ty::Int16 | Ty::U16 |
+            Ty::Int32 | Ty::U32 => self.builder.ins().uextend(types::I64, value),
+            _ => value,
+        }
+    }
+
+    fn from_list_storage_value(&mut self, value: ir::Value, ty: &Ty) -> ir::Value {
+        match ty {
+            Ty::Bool | Ty::Int8 | Ty::U8 => self.builder.ins().ireduce(types::I8, value),
+            Ty::Int16 | Ty::U16 => self.builder.ins().ireduce(types::I16, value),
+            Ty::Int32 | Ty::U32 => self.builder.ins().ireduce(types::I32, value),
+            _ => value,
+        }
     }
 
     fn emit_binary(&mut self, op: BinaryOp, lv: ir::Value, rv: ir::Value, ty: &Ty)

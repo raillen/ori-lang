@@ -1,4 +1,5 @@
 use smol_str::SmolStr;
+use std::collections::HashMap;
 use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label};
 use ori_ast::ty::Type as AstType;
 use ori_ast::common::QualifiedName;
@@ -17,8 +18,21 @@ pub fn lower_type(
     file_id:     FileId,
     sink:        &mut DiagnosticSink,
 ) -> Ty {
+    let aliases = HashMap::new();
+    lower_type_with_aliases(ast_ty, module_path, type_params, def_map, file_id, sink, &aliases)
+}
+
+pub fn lower_type_with_aliases(
+    ast_ty:      &AstType,
+    module_path: &str,
+    type_params: &[SmolStr],
+    def_map:     &DefMap,
+    file_id:     FileId,
+    sink:        &mut DiagnosticSink,
+    aliases:     &HashMap<SmolStr, SmolStr>,
+) -> Ty {
     macro_rules! rec {
-        ($t:expr) => { lower_type($t, module_path, type_params, def_map, file_id, sink) };
+        ($t:expr) => { lower_type_with_aliases($t, module_path, type_params, def_map, file_id, sink, aliases) };
     }
     match ast_ty {
         // ── Primitives ────────────────────────────────────────────────────────
@@ -49,7 +63,7 @@ pub fn lower_type(
         AstType::Lazy(inner, _)          => Ty::Lazy(Box::new(rec!(inner))),
         AstType::Tuple(elems, _)         => Ty::Tuple(elems.iter().map(|t| rec!(t)).collect()),
         AstType::Any(trait_name, span)   => {
-            let id = resolve_name(trait_name, module_path, def_map, file_id, *span, sink);
+            let id = resolve_name(trait_name, module_path, def_map, file_id, *span, sink, aliases);
             Ty::Any(id.unwrap_or(crate::def::DefId(u32::MAX)))
         }
 
@@ -61,11 +75,11 @@ pub fn lower_type(
         }
 
         // ── Named / generic types ─────────────────────────────────────────────
-        AstType::Named(name) => lower_named(name, &[], module_path, type_params, def_map, file_id, sink),
+        AstType::Named(name) => lower_named(name, &[], module_path, type_params, def_map, file_id, sink, aliases),
 
         AstType::Generic { name, args, .. } => {
             let lowered_args: Vec<Ty> = args.iter().map(|t| rec!(t)).collect();
-            lower_named(name, &lowered_args, module_path, type_params, def_map, file_id, sink)
+            lower_named(name, &lowered_args, module_path, type_params, def_map, file_id, sink, aliases)
         }
     }
 }
@@ -78,6 +92,7 @@ fn lower_named(
     def_map:     &DefMap,
     file_id:     FileId,
     sink:        &mut DiagnosticSink,
+    aliases:     &HashMap<SmolStr, SmolStr>,
 ) -> Ty {
     // Check if it's an in-scope type parameter (must be a single-segment name)
     if name.is_single() {
@@ -87,7 +102,7 @@ fn lower_named(
         }
     }
     let span = name.span;
-    match resolve_name(name, module_path, def_map, file_id, span, sink) {
+    match resolve_name(name, module_path, def_map, file_id, span, sink, aliases) {
         Some(id) => Ty::Named(id, args.to_vec()),
         None     => Ty::Error,
     }
@@ -100,14 +115,16 @@ fn resolve_name(
     file_id:     FileId,
     span:        ori_diagnostics::Span,
     sink:        &mut DiagnosticSink,
+    aliases:     &HashMap<SmolStr, SmolStr>,
 ) -> Option<crate::def::DefId> {
     let path_str = name.to_string();
+    let expanded = expand_alias(&path_str, aliases);
     // Try fully-qualified first
-    if let Some(id) = def_map.lookup(&path_str) {
+    if let Some(id) = def_map.lookup(&expanded) {
         return Some(id);
     }
     // Try with module prefix
-    let local = format!("{}.{}", module_path, path_str);
+    let local = format!("{}.{}", module_path, expanded);
     if let Some(id) = def_map.lookup(&local) {
         return Some(id);
     }
@@ -119,4 +136,15 @@ fn resolve_name(
             ),
     );
     None
+}
+
+fn expand_alias(name: &str, aliases: &HashMap<SmolStr, SmolStr>) -> String {
+    if let Some(dot) = name.find('.') {
+        let prefix = &name[..dot];
+        let suffix = &name[dot + 1..];
+        if let Some(full_ns) = aliases.get(prefix) {
+            return format!("{}.{}", full_ns, suffix);
+        }
+    }
+    name.to_string()
 }

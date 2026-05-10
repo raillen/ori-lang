@@ -1,7 +1,7 @@
 use std::fmt::Write as FmtWrite;
 use ori_ast::expr::{BinaryOp, UnaryOp};
 use ori_hir::hir::*;
-use ori_types::Ty;
+use ori_types::{DefId, Ty};
 
 // ── Runtime header ────────────────────────────────────────────────────────────
 
@@ -77,7 +77,8 @@ impl CCodegen {
 
         // Forward declarations for all structs
         for s in &module.structs {
-            self.line(&format!("typedef struct {} {};", mangle(&s.name), mangle(&s.name)));
+            let name = def_c_name(s.def_id);
+            self.line(&format!("typedef struct {} {};", name, name));
         }
         if !module.structs.is_empty() { self.out.push('\n'); }
 
@@ -113,10 +114,9 @@ impl CCodegen {
         }
 
         // Entry point: if there is a `main` func with no params, wrap it in C main
-        let has_main = module.funcs.iter().any(|f| f.name == "main" && f.params.is_empty());
-        if has_main {
+        if let Some(main_fn) = module.funcs.iter().find(|f| is_entry_main(module, f)) {
             self.out.push_str("int main(void) {\n");
-            self.out.push_str("    ORI__main();\n");
+            self.out.push_str(&format!("    {}();\n", Self::func_c_name(&main_fn.name)));
             self.out.push_str("    return 0;\n}\n");
         }
 
@@ -126,7 +126,7 @@ impl CCodegen {
     // ── Struct ────────────────────────────────────────────────────────────────
 
     fn emit_struct(&mut self, s: &HirStruct) {
-        self.line(&format!("struct {} {{", mangle(&s.name)));
+        self.line(&format!("struct {} {{", def_c_name(s.def_id)));
         self.push();
         for f in &s.fields {
             self.line(&format!("{} {};", ty_to_c(&f.ty), mangle(&f.name)));
@@ -139,20 +139,21 @@ impl CCodegen {
     // ── Enum (tagged union) ───────────────────────────────────────────────────
 
     fn emit_enum(&mut self, e: &HirEnum) {
+        let name = def_c_name(e.def_id);
         // Discriminant enum
         self.line(&format!("typedef enum {{"));
         self.push();
         for v in &e.variants {
-            self.line(&format!("{}__{},", mangle(&e.name), mangle(&v.name)));
+            self.line(&format!("{}__{},", name, mangle(&v.name)));
         }
         self.pop();
-        self.line(&format!("}} {}_tag_t;", mangle(&e.name)));
+        self.line(&format!("}} {}_tag_t;", name));
         self.out.push('\n');
 
         // Payload union + outer struct
-        self.line(&format!("typedef struct {} {{", mangle(&e.name)));
+        self.line(&format!("typedef struct {} {{", name));
         self.push();
-        self.line(&format!("{}_tag_t tag;", mangle(&e.name)));
+        self.line(&format!("{}_tag_t tag;", name));
         self.line("union {");
         self.push();
         for v in &e.variants {
@@ -169,7 +170,7 @@ impl CCodegen {
         self.pop();
         self.line("} payload;");
         self.pop();
-        self.line(&format!("}} {};", mangle(&e.name)));
+        self.line(&format!("}} {};", name));
         self.out.push('\n');
     }
 
@@ -403,6 +404,10 @@ impl CCodegen {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+fn def_c_name(id: DefId) -> String {
+    format!("ori_def_{}_t", id.0)
+}
+
 fn ty_to_c(ty: &Ty) -> String {
     match ty {
         Ty::Bool    => "bool".into(),
@@ -425,7 +430,7 @@ fn ty_to_c(ty: &Ty) -> String {
         Ty::Result(ok, err) => format!("ori_result_{}_{}_t", ty_tag(ok), ty_tag(err)),
         Ty::List(t)  => format!("ori_list_{}_t", ty_tag(t)),
         Ty::Tuple(_) => "void*".into(), // TODO: named tuple struct
-        Ty::Named(id, _) => format!("ori_def_{}_t", id.0),
+        Ty::Named(id, _) => def_c_name(*id),
         Ty::Range(_) => "ori_range_t".into(),
         _ => "void*".into(),
     }
@@ -453,6 +458,12 @@ fn mangle_ns(ns: &str, name: &str) -> String {
 }
 
 fn mangle_ns_str(s: &str) -> String { mangle(s) }
+
+fn is_entry_main(module: &HirModule, f: &HirFunc) -> bool {
+    let entry = format!("{}.main", module.namespace);
+    f.params.is_empty()
+        && (f.name.as_str() == "main" || f.name.as_str() == entry)
+}
 
 fn binop_to_c(op: BinaryOp) -> &'static str {
     match op {

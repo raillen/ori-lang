@@ -1,5 +1,6 @@
-use std::path::Path;
-use ori_diagnostics::{Diagnostic, DiagnosticSink, SourceCache};
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label, SourceCache};
 use ori_lexer::Token;
 use ori_ast::item::SourceFile;
 use ori_types::resolve::ResolvedModule;
@@ -24,6 +25,12 @@ pub struct CheckOutput {
     pub resolved:    ResolvedModule,
     pub diagnostics: Vec<Diagnostic>,
     pub has_errors:  bool,
+}
+
+struct LoadedSource {
+    path:    PathBuf,
+    file_id: FileId,
+    ast:     SourceFile,
 }
 
 // â”€â”€ Pipeline steps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -60,22 +67,16 @@ pub struct CompileOutput {
 
 /// Full pipeline â†’ Cranelift object â†’ linker â†’ native binary.
 pub fn run_compile(source_path: &Path, output: &Path) -> Result<CompileOutput, String> {
-    let source  = read_file(source_path)?;
     let mut cache = SourceCache::default();
     let mut sink  = DiagnosticSink::default();
-    let file_id   = cache.add(source_path, source.clone());
-
-    let tokens   = ori_lexer::lex(&source, file_id, &mut sink);
-    let ast      = ori_parser::parse(&tokens, &source, file_id, &mut sink);
-    let resolved = ori_types::resolve::resolve(&ast, file_id, &mut sink);
+    let (loaded, resolved) = load_and_resolve(source_path, &mut cache, &mut sink)?;
 
     if !sink.has_errors() {
-        let mut checker = ori_types::check::Checker::new(&resolved.def_map, &resolved.func_sigs, &resolved.namespace, file_id, &mut sink);
-        checker.check_file(&ast);
+        check_loaded_sources(&loaded, &resolved, &mut sink);
     }
 
     if !sink.has_errors() {
-        let hir = ori_hir::lower(&ast, &resolved.def_map, &resolved.namespace, file_id, &mut sink);
+        let hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
         let obj_path  = output.with_extension("o");
         let rt_lib    = build_runtime_lib()?;
         ori_codegen::emit_native(&hir, &obj_path)?;
@@ -92,24 +93,13 @@ pub fn run_compile(source_path: &Path, output: &Path) -> Result<CompileOutput, S
 
 /// Full pipeline: lex â†’ parse â†’ resolve names â†’ type-check.
 pub fn run_check(path: &Path) -> Result<CheckOutput, String> {
-    let source  = read_file(path)?;
     let mut cache = SourceCache::default();
     let mut sink  = DiagnosticSink::default();
-    let file_id   = cache.add(path, source.clone());
-
-    // Lex
-    let tokens = ori_lexer::lex(&source, file_id, &mut sink);
-
-    // Parse â€” continue even with lex errors
-    let ast = ori_parser::parse(&tokens, &source, file_id, &mut sink);
-
-    // Name resolution
-    let resolved = ori_types::resolve::resolve(&ast, file_id, &mut sink);
+    let (loaded, resolved) = load_and_resolve(path, &mut cache, &mut sink)?;
 
     // Type checking â€” only if no fatal parse errors so far
     if !sink.has_errors() {
-        let mut checker = ori_types::check::Checker::new(&resolved.def_map, &resolved.func_sigs, &resolved.namespace, file_id, &mut sink);
-        checker.check_file(&ast);
+        check_loaded_sources(&loaded, &resolved, &mut sink);
     }
 
     let has_errors  = sink.has_errors();
@@ -126,24 +116,16 @@ pub struct BuildOutput {
 
 /// Full pipeline + HIR lowering + C code generation.
 pub fn run_build(path: &Path) -> Result<BuildOutput, String> {
-    let source  = read_file(path)?;
     let mut cache = SourceCache::default();
     let mut sink  = DiagnosticSink::default();
-    let file_id   = cache.add(path, source.clone());
-
-    let tokens   = ori_lexer::lex(&source, file_id, &mut sink);
-    let ast      = ori_parser::parse(&tokens, &source, file_id, &mut sink);
-    let resolved = ori_types::resolve::resolve(&ast, file_id, &mut sink);
+    let (loaded, resolved) = load_and_resolve(path, &mut cache, &mut sink)?;
 
     if !sink.has_errors() {
-        let mut checker = ori_types::check::Checker::new(&resolved.def_map, &resolved.func_sigs, &resolved.namespace, file_id, &mut sink);
-        checker.check_file(&ast);
+        check_loaded_sources(&loaded, &resolved, &mut sink);
     }
 
     let c_source = if !sink.has_errors() {
-        let hir = ori_hir::lower(
-            &ast, &resolved.def_map, &resolved.namespace, file_id, &mut sink
-        );
+        let hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
         ori_codegen::emit_c(&hir)
     } else {
         String::new()
@@ -159,6 +141,158 @@ pub fn run_build(path: &Path) -> Result<BuildOutput, String> {
 fn read_file(path: &Path) -> Result<String, String> {
     std::fs::read_to_string(path)
         .map_err(|e| format!("cannot read `{}`: {}", path.display(), e))
+}
+
+fn load_and_resolve(
+    path: &Path,
+    cache: &mut SourceCache,
+    sink: &mut DiagnosticSink,
+) -> Result<(Vec<LoadedSource>, ResolvedModule), String> {
+    let mut loaded = Vec::new();
+    let mut seen = HashSet::new();
+    load_source_recursive(path, cache, sink, &mut seen, &mut loaded)?;
+    let entry_namespace = loaded.first()
+        .map(|s| namespace_of(&s.ast))
+        .unwrap_or_default();
+    let files: Vec<_> = loaded.iter().map(|s| (&s.ast, s.file_id)).collect();
+    let resolved = ori_types::resolve::resolve_many(&files, entry_namespace, sink);
+    Ok((loaded, resolved))
+}
+
+fn load_source_recursive(
+    path: &Path,
+    cache: &mut SourceCache,
+    sink: &mut DiagnosticSink,
+    seen: &mut HashSet<PathBuf>,
+    loaded: &mut Vec<LoadedSource>,
+) -> Result<(), String> {
+    let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_owned());
+    if !seen.insert(path.clone()) {
+        return Ok(());
+    }
+    let source = read_file(&path)?;
+    let file_id = cache.add(&path, source.clone());
+    let tokens = ori_lexer::lex(&source, file_id, sink);
+    let ast = ori_parser::parse(&tokens, &source, file_id, sink);
+    let imports: Vec<_> = ast.imports.iter()
+        .map(|i| (i.path.to_string(), i.span))
+        .collect();
+    loaded.push(LoadedSource { path: path.clone(), file_id, ast });
+    for (import, span) in imports {
+        if is_stdlib_import(&import) {
+            continue;
+        }
+        if let Some(import_path) = find_import_path(&path, &import) {
+            load_source_recursive(&import_path, cache, sink, seen, loaded)?;
+            if let Some(imported) = loaded.iter().find(|s| s.path == import_path) {
+                let declared = namespace_of(&imported.ast);
+                if declared != import {
+                    sink.emit(
+                        Diagnostic::error(
+                            "bind.import_namespace_mismatch",
+                            format!("import `{}` resolved to file declaring `{}`", import, declared),
+                        )
+                            .with_label(Label::primary(file_id, span, "imported here"))
+                            .with_action("make the imported file namespace match the import path"),
+                    );
+                }
+            }
+        } else {
+            sink.emit(
+                Diagnostic::error("bind.import_not_found", format!("import `{}` not found", import))
+                    .with_label(Label::primary(file_id, span, "imported here"))
+                    .with_action("place the imported namespace in a matching `.orl` file"),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn namespace_of(file: &SourceFile) -> String {
+    file.namespace.name.to_string()
+}
+
+fn is_stdlib_import(import: &str) -> bool {
+    import == "ori" || import.starts_with("ori.")
+}
+
+fn find_import_path(importer: &Path, import: &str) -> Option<PathBuf> {
+    let dir = importer.parent()?;
+    for base in dir.ancestors() {
+        for candidate in import_candidates(base, import) {
+            if candidate.is_file() {
+                return Some(std::fs::canonicalize(&candidate).unwrap_or(candidate));
+            }
+        }
+    }
+    None
+}
+
+fn import_candidates(base: &Path, import: &str) -> Vec<PathBuf> {
+    let parts: Vec<_> = import.split('.').filter(|p| !p.is_empty()).collect();
+    let mut candidates = Vec::new();
+    if !parts.is_empty() {
+        let mut nested = base.to_path_buf();
+        for part in &parts {
+            nested.push(part);
+        }
+        nested.set_extension("orl");
+        candidates.push(nested);
+        if let Some(last) = parts.last() {
+            candidates.push(base.join(format!("{last}.orl")));
+        }
+    }
+    candidates
+}
+
+fn check_loaded_sources(
+    loaded: &[LoadedSource],
+    resolved: &ResolvedModule,
+    sink: &mut DiagnosticSink,
+) {
+    for source in loaded {
+        let namespace = namespace_of(&source.ast);
+        let mut checker = ori_types::check::Checker::new(
+            &resolved.def_map,
+            &resolved.func_sigs,
+            &resolved.value_sigs,
+            &namespace,
+            source.file_id,
+            sink,
+        );
+        checker.check_file(&source.ast);
+    }
+}
+
+fn lower_loaded_sources(
+    loaded: &[LoadedSource],
+    resolved: &ResolvedModule,
+    sink: &mut DiagnosticSink,
+) -> ori_hir::HirModule {
+    let (first, rest) = loaded.split_first().expect("entry source is loaded");
+    let first_namespace = namespace_of(&first.ast);
+    let mut merged = ori_hir::lower(
+        &first.ast,
+        &resolved.def_map,
+        &first_namespace,
+        first.file_id,
+        sink,
+    );
+    for source in rest {
+        let namespace = namespace_of(&source.ast);
+        let mut hir = ori_hir::lower(
+            &source.ast,
+            &resolved.def_map,
+            &namespace,
+            source.file_id,
+            sink,
+        );
+        merged.structs.append(&mut hir.structs);
+        merged.enums.append(&mut hir.enums);
+        merged.funcs.append(&mut hir.funcs);
+        merged.consts.append(&mut hir.consts);
+    }
+    merged
 }
 
 /// The Ori runtime as embedded C source â€” compiled on demand with `cc -c`.

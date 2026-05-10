@@ -71,6 +71,14 @@ impl<'src> Parser<'src> {
                 continue;
             }
 
+            if self.at(&TokenKind::DotDot) && min_prec == 0 {
+                self.advance();
+                let rhs = self.parse_expr_prec(0)?;
+                let span = lhs.span().cover(rhs.span());
+                lhs = Expr::Range { start: Box::new(lhs), end: Box::new(rhs), span };
+                continue;
+            }
+
             // Standard binary operators
             if let Some(&(left_prec, right_prec)) =
                 self.peek_kind().and_then(infix_prec).as_ref()
@@ -334,12 +342,12 @@ impl<'src> Parser<'src> {
         // `a..b`, `a..`, `..b`, `..` — range index
         if self.at(&TokenKind::DotDot) {
             self.advance();
-            let end = if !self.at(&TokenKind::RBracket) { Some(Box::new(self.parse_expr()?)) } else { None };
+            let end = if !self.at(&TokenKind::RBracket) { Some(Box::new(self.parse_expr_prec(1)?)) } else { None };
             return Some(IndexExpr::Range { start: None, end });
         }
-        let expr = self.parse_expr()?;
+        let expr = self.parse_expr_prec(1)?;
         if self.eat(&TokenKind::DotDot) {
-            let end = if !self.at(&TokenKind::RBracket) { Some(Box::new(self.parse_expr()?)) } else { None };
+            let end = if !self.at(&TokenKind::RBracket) { Some(Box::new(self.parse_expr_prec(1)?)) } else { None };
             Some(IndexExpr::Range { start: Some(Box::new(expr)), end })
         } else {
             Some(IndexExpr::Single(Box::new(expr)))
