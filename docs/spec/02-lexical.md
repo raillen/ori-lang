@@ -1,0 +1,288 @@
+# Ori Language Specification — Chapter 02: Lexical Structure
+
+> Status: normative
+> Audience: compiler implementers
+
+---
+
+## Source Encoding
+
+Ori source files are UTF-8 encoded. The `.ori` extension is canonical.
+
+A byte order mark (BOM) at the start of a file is accepted and ignored.
+
+---
+
+## Whitespace
+
+Spaces, tabs, and newlines are whitespace. Whitespace separates tokens and is
+otherwise not significant. Ori does not use indentation as syntax.
+
+Recommended indentation: 4 spaces.
+
+---
+
+## Comments
+
+### Line Comments
+
+```ori
+-- this is a line comment
+```
+
+A `--` sequence begins a line comment. Everything from `--` to the end of the
+line is ignored by the compiler.
+
+### Block Comments
+
+```ori
+---
+This is a block comment.
+It spans multiple lines.
+---
+```
+
+A `---` sequence begins and ends a block comment. Block comments do not nest.
+
+### Documentation Comments
+
+Documentation for public declarations uses the ZDoc format, which is line
+comments with a structured tag system. ZDoc is processed by `ori doc`.
+
+---
+
+## Reserved Words
+
+The following identifiers are reserved and cannot be used as user-defined names:
+
+```
+namespace  import     as         public
+func       return     end        const      var
+if         else       while      for        in
+repeat     times      break      continue
+match      case       loop
+struct     trait      implement  enum
+where      is         alias      do
+and        or         not
+true       false      none       success    error    some
+mut        self       attr       extern
+any        optional   result     list       map      set
+range      void
+```
+
+### Contextual Keywords
+
+The following words are recognized only in specific syntactic positions and may
+be used as identifiers elsewhere:
+
+| Word | Position |
+|---|---|
+| `c` | After `extern`, names the C ABI: `extern c` |
+| `host` | After `extern`, names the host ABI |
+| `it` | Inside a `where` field contract, refers to the field value |
+
+---
+
+## Identifiers
+
+An identifier starts with a Unicode letter or `_`, followed by zero or more
+Unicode letters, digits, or `_`.
+
+```
+identifier = letter { letter | digit | "_" } ;
+letter     = any Unicode letter or "_" ;
+digit      = "0" | "1" | ... | "9" ;
+```
+
+Conventions (enforced by `ori fmt`):
+
+| Shape | Convention |
+|---|---|
+| Types, traits, enums | `PascalCase` |
+| Functions, variables, namespaces | `snake_case` |
+| Constants at module level | `SCREAMING_SNAKE_CASE` (optional) |
+
+Shadowing of an existing binding in the same scope is a compile error.
+
+---
+
+## Literals
+
+### Boolean
+
+```ori
+true
+false
+```
+
+### Integer
+
+```ori
+0
+42
+1_000_000       -- underscores allowed as separators
+0xFF            -- hexadecimal
+0b1010_1010     -- binary
+0o755           -- octal
+```
+
+The default integer type is `int` (64-bit signed). Explicit suffixes select a
+specific width:
+
+```ori
+42i8    42i16    42i32    42i64
+42u8    42u16    42u32    42u64
+```
+
+### Float
+
+```ori
+3.14
+1.0e10
+1.0e-5
+6.022_140_76e23
+```
+
+The default float type is `float` (64-bit). Explicit suffix:
+
+```ori
+3.14f32    3.14f64
+```
+
+### String
+
+Single-line strings are delimited by double quotes:
+
+```ori
+"hello"
+"line one\nline two"
+"tab\there"
+"unicode \u{1F600}"
+```
+
+Escape sequences:
+
+| Sequence | Meaning |
+|---|---|
+| `\\` | Backslash |
+| `\"` | Double quote |
+| `\n` | Newline |
+| `\r` | Carriage return |
+| `\t` | Tab |
+| `\0` | Null byte |
+| `\u{XXXX}` | Unicode scalar value |
+
+### Multi-line Strings (Triple-quote)
+
+```ori
+const sql: string = """
+    SELECT *
+    FROM users
+    WHERE active = true
+    """
+```
+
+Rules:
+
+- The opening `"""` must be followed by a newline.
+- The closing `"""` sets the indentation baseline: all leading whitespace
+  up to the column of `"""` is stripped from every line.
+- The closing `"""` line is not included in the string content.
+- Escape sequences are processed normally inside triple-quote strings.
+
+### Interpolated Strings
+
+```ori
+const name: string = "Ada"
+const greeting: string = f"hello {name}"
+const detail: string = f"score: {score + 1}"
+```
+
+Rules:
+
+- Prefix `f` activates interpolation.
+- `{expr}` interpolates any expression whose type implements `Displayable`.
+- Interpolation expressions may not contain string literals.
+- Multi-line interpolated strings: prefix `f` on a triple-quote: `f"""..."""`.
+
+### Byte Strings
+
+```ori
+const raw: bytes = b"hello"
+const hex: bytes = b"\xFF\x00"
+```
+
+Prefix `b` produces a `bytes` literal. No Unicode escapes in `b"..."`.
+
+### Range Literals
+
+```ori
+0..9        -- range<int>: 0, 1, 2, ..., 9  (inclusive both ends)
+5..3        -- range<int>: 5, 4, 3          (descending, inclusive)
+0.0..1.0    -- range<float>
+```
+
+Ranges are always inclusive on both ends. Direction is determined by whether
+`start <= end` (ascending) or `start > end` (descending). Equal endpoints
+yield a range of exactly one element.
+
+---
+
+## Operators and Punctuation
+
+```
+.   ..  ->  =>
++   -   *   /   %
+==  !=  <   <=  >   >=
+=
+?   |>
+(   )   [   ]   <   >
+:   ,   ;
+@
+```
+
+The `..` token is the range operator and slice operator.
+The `->` token separates parameter lists from return types.
+The `=>` token separates closure parameters from expression bodies.
+The `?` token is the error propagation operator.
+The `|>` token is the pipe operator.
+The `@` token introduces field access in struct literals: `@field`.
+
+---
+
+## Operator Precedence
+
+Operators bind in the following order (highest to lowest):
+
+| Level | Operators | Associativity |
+|---|---|---|
+| 1 | `.field`  `call()`  `[index]` | Left |
+| 2 | `?` | Postfix |
+| 3 | `-` (unary)  `not` | Prefix |
+| 4 | `*`  `/`  `%` | Left |
+| 5 | `+`  `-` | Left |
+| 6 | `==`  `!=`  `<`  `<=`  `>`  `>=` | Non-chainable* |
+| 7 | `and` | Left |
+| 8 | `or` | Left |
+| 9 | `\|>` | Left |
+
+*Comparison operators do not chain. `a < b < c` is a compile error.
+Use `a < b and b < c` instead.
+
+---
+
+## Token Summary
+
+| Category | Examples |
+|---|---|
+| Keywords | `func`, `struct`, `namespace`, `implement`, `loop`, `do` ... |
+| Identifiers | `player`, `User`, `get_name`, `_internal` |
+| Integer literals | `0`, `42`, `0xFF`, `1_000` |
+| Float literals | `3.14`, `1.0e10` |
+| String literals | `"hello"`, `f"hi {name}"`, `"""..."""` |
+| Byte literals | `b"data"` |
+| Boolean literals | `true`, `false` |
+| Range literals | `0..9`, `5..3` |
+| Operators | `+`, `-`, `==`, `?`, `\|>`, `..` |
+| Delimiters | `(`, `)`, `[`, `]`, `:`, `,` |
+| Comments | `-- line`, `--- block ---` |

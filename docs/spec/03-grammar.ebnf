@@ -1,0 +1,631 @@
+(* ============================================================
+   Ori Language — Formal Grammar
+   Chapter 03 of the Ori Language Specification
+
+   Notation: Extended Backus-Naur Form (EBNF)
+     A = B C        -- A is B followed by C
+     A = B | C      -- A is B or C
+     A = [ B ]      -- B is optional
+     A = { B }      -- B zero or more times
+     A = ( B )      -- grouping
+     "x"            -- terminal: literal token x
+     UPPER          -- terminal defined in Chapter 02 (lexer token)
+     lower          -- non-terminal defined in this grammar
+
+   Whitespace and comments between tokens are always ignored.
+   ============================================================ *)
+
+
+(* ============================================================
+   SOURCE FILE
+   ============================================================ *)
+
+source_file
+    = namespace_decl
+      { import_decl }
+      { top_level_decl }
+    ;
+
+namespace_decl
+    = "namespace" qualified_name
+    ;
+
+import_decl
+    = "import" qualified_name [ "as" IDENT ]
+    ;
+
+qualified_name
+    = IDENT { "." IDENT }
+    ;
+
+
+(* ============================================================
+   TOP-LEVEL DECLARATIONS
+   ============================================================ *)
+
+top_level_decl
+    = func_decl
+    | struct_decl
+    | enum_decl
+    | trait_decl
+    | implement_decl
+    | alias_decl
+    | const_decl
+    | var_decl
+    | extern_block
+    ;
+
+visibility
+    = "public"
+    | (* empty — private by default *)
+    ;
+
+
+(* ============================================================
+   FUNCTIONS
+   ============================================================ *)
+
+func_decl
+    = visibility [ "mut" ] "func" IDENT
+      [ type_params ]
+      "(" [ param_list ] ")"
+      [ "->" type ]
+      [ where_clause ]
+      block
+    ;
+
+param_list
+    = param { "," param } [ "," ]
+    ;
+
+param
+    = IDENT ":" type [ "..." ]          (* variadic: last param only *)
+    | IDENT ":" type "=" expression     (* default value *)
+    | IDENT ":" type "where" expr_contract
+    ;
+
+expr_contract
+    = expression                         (* uses "it" to refer to the param value *)
+    ;
+
+type_params
+    = "<" type_param { "," type_param } ">"
+    ;
+
+type_param
+    = IDENT
+    ;
+
+where_clause
+    = "where" where_constraint
+    | "where" "(" where_constraint { "and" where_constraint } ")"
+    ;
+
+where_constraint
+    = IDENT "is" type_ref
+    | IDENT "is" "not" type_ref
+    | "(" where_constraint { "and" where_constraint } ")"
+    ;
+
+
+(* ============================================================
+   CLOSURES
+   ============================================================ *)
+
+closure_expr
+    = "do" "(" [ closure_param_list ] ")" [ "->" type ] closure_body
+    ;
+
+closure_param_list
+    = closure_param { "," closure_param }
+    ;
+
+closure_param
+    = IDENT ":" type
+    ;
+
+closure_body
+    = "=>" expression                    (* single expression, no end *)
+    | block                              (* statement block, ends with end *)
+    ;
+
+
+(* ============================================================
+   TYPES
+   ============================================================ *)
+
+type
+    = primitive_type
+    | named_type
+    | generic_type
+    | func_type
+    | tuple_type
+    ;
+
+primitive_type
+    = "bool"
+    | "int" | "int8" | "int16" | "int32" | "int64"
+    | "u8"  | "u16"  | "u32"  | "u64"
+    | "float" | "float32" | "float64"
+    | "string"
+    | "bytes"
+    | "void"
+    ;
+
+named_type
+    = qualified_name
+    ;
+
+generic_type
+    = "optional" "<" type ">"
+    | "result"   "<" type "," type ">"
+    | "list"     "<" type ">"
+    | "map"      "<" type "," type ">"
+    | "set"      "<" type ">"
+    | "range"    "<" type ">"
+    | "lazy"     "<" type ">"
+    | "any"      "<" type_ref ">"
+    | qualified_name "<" type { "," type } ">"
+    ;
+
+func_type
+    = "func" "(" [ type { "," type } ] ")" "->" type
+    | "func" "(" [ type { "," type } ] ")"       (* void return *)
+    ;
+
+tuple_type
+    = "tuple" "<" type "," type { "," type } ">"
+    ;
+
+type_ref
+    = qualified_name
+    ;
+
+
+(* ============================================================
+   STRUCTS
+   ============================================================ *)
+
+struct_decl
+    = visibility "struct" IDENT
+      [ type_params ]
+      [ where_clause ]
+      { struct_field }
+      { struct_method }
+      "end"
+    ;
+
+struct_field
+    = IDENT ":" type [ "where" expr_contract ]
+    ;
+
+struct_method
+    = func_decl
+    ;
+
+
+(* ============================================================
+   ENUMS
+   ============================================================ *)
+
+enum_decl
+    = visibility "enum" IDENT
+      [ type_params ]
+      { enum_variant }
+      "end"
+    ;
+
+enum_variant
+    = IDENT                              (* unit variant *)
+    | IDENT "(" type { "," type } ")"   (* tuple variant *)
+    | IDENT struct_body                  (* struct variant *)
+    ;
+
+struct_body
+    = struct_field { struct_field }
+    ;
+
+
+(* ============================================================
+   TRAITS
+   ============================================================ *)
+
+trait_decl
+    = visibility "trait" IDENT
+      [ type_params ]
+      [ where_clause ]
+      { trait_member }
+      "end"
+    ;
+
+trait_member
+    = func_signature          (* required: no body *)
+    | func_decl               (* default: has body *)
+    ;
+
+func_signature
+    = visibility [ "mut" ] "func" IDENT
+      [ type_params ]
+      "(" [ param_list ] ")"
+      [ "->" type ]
+      [ where_clause ]
+    ;
+
+
+(* ============================================================
+   IMPLEMENT
+   ============================================================ *)
+
+implement_decl
+    = "implement" type_ref "for" type_ref
+      [ type_params ]
+      [ where_clause ]
+      { func_decl }
+      "end"
+    ;
+
+
+(* ============================================================
+   ALIAS
+   ============================================================ *)
+
+alias_decl
+    = visibility "alias" IDENT [ type_params ] "=" type
+    ;
+
+
+(* ============================================================
+   CONST AND VAR
+   ============================================================ *)
+
+const_decl
+    = visibility "const" IDENT ":" type "=" expression
+    ;
+
+var_decl
+    = visibility "var" IDENT ":" type "=" expression
+    ;
+
+
+(* ============================================================
+   EXTERN BLOCKS
+   ============================================================ *)
+
+extern_block
+    = "extern" abi_label
+      { extern_member }
+      "end"
+    ;
+
+abi_label
+    = "c"
+    | "host"
+    ;
+
+extern_member
+    = visibility "func" IDENT "(" [ param_list ] ")" [ "->" type ]
+    | visibility "var"  IDENT ":" type
+    ;
+
+
+(* ============================================================
+   BLOCKS AND STATEMENTS
+   ============================================================ *)
+
+block
+    = { statement }
+      "end"
+    ;
+
+statement
+    = const_decl
+    | var_decl
+    | assignment_stmt
+    | compound_assign_stmt
+    | return_stmt
+    | break_stmt
+    | continue_stmt
+    | if_stmt
+    | if_some_stmt
+    | while_stmt
+    | while_some_stmt
+    | for_stmt
+    | repeat_stmt
+    | loop_stmt
+    | match_stmt
+    | using_stmt
+    | check_stmt
+    | expression_stmt
+    ;
+
+assignment_stmt
+    = lvalue "=" expression
+    ;
+
+compound_assign_stmt
+    = lvalue "+=" expression
+    | lvalue "-=" expression
+    | lvalue "*=" expression
+    | lvalue "/=" expression
+    ;
+
+lvalue
+    = IDENT
+    | lvalue "." IDENT
+    | lvalue "[" expression "]"
+    ;
+
+return_stmt
+    = "return" [ expression ]
+    ;
+
+break_stmt
+    = "break"
+    ;
+
+continue_stmt
+    = "continue"
+    ;
+
+expression_stmt
+    = expression
+    ;
+
+
+(* ============================================================
+   CONTROL FLOW STATEMENTS
+   ============================================================ *)
+
+if_stmt
+    = "if" expression block
+      { "else" "if" expression block }
+      [ "else" block ]
+    ;
+
+if_some_stmt
+    = "if" "some" "(" IDENT ")" "=" expression block
+      [ "else" block ]
+    ;
+
+while_stmt
+    = "while" expression block
+    ;
+
+while_some_stmt
+    = "while" "some" "(" IDENT ")" "=" expression block
+    ;
+
+for_stmt
+    = "for" IDENT [ "," IDENT ] "in" expression block
+    ;
+
+repeat_stmt
+    = "repeat" expression "times" block
+    ;
+
+loop_stmt
+    = "loop" block
+    ;
+
+match_stmt
+    = "match" expression
+      { match_case }
+      "end"
+    ;
+
+match_case
+    = "case" pattern [ "if" expression ] ":"
+      { statement }
+    ;
+
+pattern
+    = "_"                                         (* wildcard *)
+    | literal                                     (* literal pattern *)
+    | IDENT                                       (* binding *)
+    | IDENT "(" [ pattern { "," pattern } ] ")"  (* enum variant with payload *)
+    | "." IDENT                                   (* shorthand enum variant *)
+    | "." IDENT "(" [ pattern { "," pattern } ] ")"  (* shorthand with payload *)
+    | "some" "(" pattern ")"                      (* optional some *)
+    | "none"                                      (* optional none *)
+    | "success" "(" pattern ")"                   (* result success *)
+    | "error"   "(" pattern ")"                   (* result error *)
+    | "tuple" "(" pattern { "," pattern } ")"     (* tuple destructure *)
+    | "case" "else"                               (* fallback *)
+    ;
+
+
+(* ============================================================
+   USING (resource cleanup)
+   ============================================================ *)
+
+using_stmt
+    = "using" IDENT ":" type "=" expression
+    ;
+
+
+(* ============================================================
+   CHECK
+   ============================================================ *)
+
+check_stmt
+    = "check" expression [ "," STRING ]
+    ;
+
+
+(* ============================================================
+   EXPRESSIONS
+   ============================================================ *)
+
+expression
+    = or_expr
+    | closure_expr
+    | if_expr
+    | struct_update_expr
+    ;
+
+or_expr
+    = and_expr { "or" and_expr }
+    ;
+
+and_expr
+    = compare_expr { "and" compare_expr }
+    ;
+
+compare_expr
+    = add_expr [ compare_op add_expr ]   (* single comparison only, no chaining *)
+    ;
+
+compare_op
+    = "==" | "!=" | "<" | "<=" | ">" | ">="
+    ;
+
+add_expr
+    = mul_expr { add_op mul_expr }
+    ;
+
+add_op
+    = "+" | "-"
+    ;
+
+mul_expr
+    = unary_expr { mul_op unary_expr }
+    ;
+
+mul_op
+    = "*" | "/" | "%"
+    ;
+
+unary_expr
+    = "-" unary_expr
+    | "not" unary_expr
+    | postfix_expr
+    ;
+
+postfix_expr
+    = primary_expr { postfix_op }
+    ;
+
+postfix_op
+    = "." IDENT                           (* field access *)
+    | "(" [ arg_list ] ")"               (* call *)
+    | "[" index_expr "]"                 (* index or slice *)
+    | "?"                                (* error propagation *)
+    | "|>" expression                    (* pipe *)
+    ;
+
+index_expr
+    = expression                          (* single index *)
+    | expression ".." expression          (* range slice *)
+    | expression ".."                     (* slice from *)
+    | ".." expression                     (* slice to *)
+    | ".."                                (* full slice *)
+    ;
+
+arg_list
+    = arg { "," arg } [ "," ]
+    ;
+
+arg
+    = [ IDENT ":" ] expression            (* positional or named *)
+    | ".." expression                     (* spread list into variadic *)
+    ;
+
+primary_expr
+    = literal
+    | IDENT
+    | qualified_name
+    | "self"
+    | "(" expression ")"
+    | tuple_expr
+    | list_expr
+    | map_expr
+    | set_expr
+    | struct_literal
+    | enum_variant_expr
+    ;
+
+
+(* ============================================================
+   IF EXPRESSION (inline)
+   ============================================================ *)
+
+if_expr
+    = "if" expression "then" expression "else" expression
+    ;
+
+
+(* ============================================================
+   STRUCT UPDATE EXPRESSION
+   ============================================================ *)
+
+struct_update_expr
+    = expression "with"
+      { IDENT ":" expression }
+      "end"
+    ;
+
+
+(* ============================================================
+   COLLECTION LITERALS
+   ============================================================ *)
+
+tuple_expr
+    = "tuple" "(" expression "," expression { "," expression } ")"
+    ;
+
+list_expr
+    = "[" [ expression { "," expression } [ "," ] ] "]"
+    ;
+
+map_expr
+    = "{" [ map_entry { "," map_entry } [ "," ] ] "}"
+    ;
+
+map_entry
+    = expression ":" expression
+    ;
+
+set_expr
+    = "set" "{" [ expression { "," expression } [ "," ] ] "}"
+    ;
+
+
+(* ============================================================
+   STRUCT LITERALS
+   ============================================================ *)
+
+struct_literal
+    = type_ref "(" [ field_init { "," field_init } [ "," ] ] ")"
+    ;
+
+field_init
+    = IDENT ":" expression
+    ;
+
+enum_variant_expr
+    = type_ref "." IDENT [ "(" [ expression { "," expression } ] ")" ]
+    | "." IDENT [ "(" [ expression { "," expression } ] ")" ]  (* shorthand *)
+    ;
+
+
+(* ============================================================
+   LITERALS (terminals)
+   ============================================================ *)
+
+literal
+    = INTEGER
+    | FLOAT
+    | STRING
+    | FSTRING
+    | TRIPLE_STRING
+    | TRIPLE_FSTRING
+    | BYTES
+    | "true"
+    | "false"
+    | "none"
+    | range_literal
+    ;
+
+range_literal
+    = expression ".." expression
+    ;
