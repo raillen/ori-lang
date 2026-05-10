@@ -1,5 +1,0 @@
-namespace app.main
-func main()
-    var i: int = 5
-    i = 7
-end

@@ -9,6 +9,14 @@ Cargo.lock
 dist/
 build/
 
+# Scratch test files at repo root
+/t*.orl
+/t*.exe
+/t*.o
+/t*.txt
+/hello.*
+/test*.*
+
 # IDE
 .idea/
 .vscode/settings.json
