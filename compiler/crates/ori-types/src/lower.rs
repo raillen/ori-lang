@@ -1,0 +1,122 @@
+use smol_str::SmolStr;
+use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label};
+use ori_ast::ty::Type as AstType;
+use ori_ast::common::QualifiedName;
+use crate::def::DefMap;
+use crate::ty::Ty;
+
+/// Lower an AST type into a canonical `Ty`.
+///
+/// `module_path` is the current namespace (e.g. `"app.user"`).
+/// `type_params` are the in-scope generic type parameter names.
+pub fn lower_type(
+    ast_ty:      &AstType,
+    module_path: &str,
+    type_params: &[SmolStr],
+    def_map:     &DefMap,
+    file_id:     FileId,
+    sink:        &mut DiagnosticSink,
+) -> Ty {
+    macro_rules! rec {
+        ($t:expr) => { lower_type($t, module_path, type_params, def_map, file_id, sink) };
+    }
+    match ast_ty {
+        // ── Primitives ────────────────────────────────────────────────────────
+        AstType::Bool(_)    => Ty::Bool,
+        AstType::Int(_)     => Ty::Int,
+        AstType::Int8(_)    => Ty::Int8,
+        AstType::Int16(_)   => Ty::Int16,
+        AstType::Int32(_)   => Ty::Int32,
+        AstType::Int64(_)   => Ty::Int64,
+        AstType::U8(_)      => Ty::U8,
+        AstType::U16(_)     => Ty::U16,
+        AstType::U32(_)     => Ty::U32,
+        AstType::U64(_)     => Ty::U64,
+        AstType::Float(_)   => Ty::Float,
+        AstType::Float32(_) => Ty::Float32,
+        AstType::Float64(_) => Ty::Float64,
+        AstType::String(_)  => Ty::String,
+        AstType::Bytes(_)   => Ty::Bytes,
+        AstType::Void(_)    => Ty::Void,
+
+        // ── Built-in generic types ────────────────────────────────────────────
+        AstType::Optional(inner, _)      => Ty::Optional(Box::new(rec!(inner))),
+        AstType::Result(ok, err, _)      => Ty::Result(Box::new(rec!(ok)), Box::new(rec!(err))),
+        AstType::List(elem, _)           => Ty::List(Box::new(rec!(elem))),
+        AstType::Map(key, val, _)        => Ty::Map(Box::new(rec!(key)), Box::new(rec!(val))),
+        AstType::Set(elem, _)            => Ty::Set(Box::new(rec!(elem))),
+        AstType::Range(elem, _)          => Ty::Range(Box::new(rec!(elem))),
+        AstType::Lazy(inner, _)          => Ty::Lazy(Box::new(rec!(inner))),
+        AstType::Tuple(elems, _)         => Ty::Tuple(elems.iter().map(|t| rec!(t)).collect()),
+        AstType::Any(trait_name, span)   => {
+            let id = resolve_name(trait_name, module_path, def_map, file_id, *span, sink);
+            Ty::Any(id.unwrap_or(crate::def::DefId(u32::MAX)))
+        }
+
+        // ── Callable type ─────────────────────────────────────────────────────
+        AstType::Func { params, return_ty, .. } => {
+            let ps = params.iter().map(|t| rec!(t)).collect();
+            let ret = return_ty.as_ref().map_or(Ty::Void, |t| rec!(t));
+            Ty::Func { params: ps, ret: Box::new(ret) }
+        }
+
+        // ── Named / generic types ─────────────────────────────────────────────
+        AstType::Named(name) => lower_named(name, &[], module_path, type_params, def_map, file_id, sink),
+
+        AstType::Generic { name, args, .. } => {
+            let lowered_args: Vec<Ty> = args.iter().map(|t| rec!(t)).collect();
+            lower_named(name, &lowered_args, module_path, type_params, def_map, file_id, sink)
+        }
+    }
+}
+
+fn lower_named(
+    name:        &QualifiedName,
+    args:        &[Ty],
+    module_path: &str,
+    type_params: &[SmolStr],
+    def_map:     &DefMap,
+    file_id:     FileId,
+    sink:        &mut DiagnosticSink,
+) -> Ty {
+    // Check if it's an in-scope type parameter (must be a single-segment name)
+    if name.is_single() {
+        let n = name.last().as_str();
+        if let Some(idx) = type_params.iter().position(|p| p == n) {
+            return Ty::Param { index: idx as u32, name: SmolStr::new(n) };
+        }
+    }
+    let span = name.span;
+    match resolve_name(name, module_path, def_map, file_id, span, sink) {
+        Some(id) => Ty::Named(id, args.to_vec()),
+        None     => Ty::Error,
+    }
+}
+
+fn resolve_name(
+    name:        &QualifiedName,
+    module_path: &str,
+    def_map:     &DefMap,
+    file_id:     FileId,
+    span:        ori_diagnostics::Span,
+    sink:        &mut DiagnosticSink,
+) -> Option<crate::def::DefId> {
+    let path_str = name.to_string();
+    // Try fully-qualified first
+    if let Some(id) = def_map.lookup(&path_str) {
+        return Some(id);
+    }
+    // Try with module prefix
+    let local = format!("{}.{}", module_path, path_str);
+    if let Some(id) = def_map.lookup(&local) {
+        return Some(id);
+    }
+    sink.emit(
+        Diagnostic::error("type.undefined_name", format!("undefined type `{}`", path_str))
+            .with_label(Label::primary(file_id, span, "not defined in scope"))
+            .with_action(
+                "ensure the type is defined in this namespace or imported with `import`",
+            ),
+    );
+    None
+}
