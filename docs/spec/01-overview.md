@@ -92,7 +92,7 @@ import ori.io as io
 
 struct User
     name: string
-    age: int where it >= 0
+    age: int if it >= 0
 end
 
 trait Displayable

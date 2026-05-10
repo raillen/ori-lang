@@ -243,10 +243,6 @@ named_field
     = IDENT ":" type                              (* field with explicit name and type *)
     ;
 
-struct_body
-    = struct_field { struct_field }
-    ;
-
 
 (* ============================================================
    TRAITS
