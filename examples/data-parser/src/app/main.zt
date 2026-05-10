@@ -1,0 +1,26 @@
+namespace app.main
+
+import std.json as json
+
+func required_field(data: map<text, text>, key: text) -> result<text, core.Error>
+    match data.get(key)
+        case some(value):
+            return success(value)
+        case none:
+            return error("missing field")
+    end
+end
+
+func main() -> result<void, core.Error>
+    const source: text = "{\"name\":\"Zenith\",\"kind\":\"language\",\"version\":\"7\"}"
+    const data: map<text, text> = json.parse(source)?
+    const name: text = required_field(data, "name")?
+    const kind: text = required_field(data, "kind")?
+
+    if name != "Zenith" or kind != "language"
+        return error("data parser failed")
+    end
+
+    print("parsed")
+    return success()
+end

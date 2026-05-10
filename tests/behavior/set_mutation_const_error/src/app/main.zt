@@ -1,0 +1,9 @@
+namespace app.main
+
+import std.set as set
+
+func main() -> int
+    const values: set<int> = {1}
+    set.add(values, 2)
+    return set.len(values)
+end

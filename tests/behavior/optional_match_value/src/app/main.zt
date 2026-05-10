@@ -1,0 +1,41 @@
+namespace app.main
+
+func present_value() -> optional<int> 
+    return 42
+end
+
+func absent_value() -> optional<int> 
+    return none
+end
+
+func test_match_value() -> int 
+    const opt: optional<int> = present_value()
+    match opt
+        case value x ->
+            return x
+        case none ->
+            return 0
+    end
+end
+
+func test_match_none() -> int 
+    const opt: optional<int> = absent_value()
+    match opt
+        case value x ->
+            return x
+        case none ->
+            return 99
+    end
+end
+
+func main() -> int 
+    const a: int = test_match_value()
+    const b: int = test_match_none()
+    if a != 42 
+        return 1
+    end
+    if b != 99 
+        return 2
+    end
+    return 0
+end

@@ -1,0 +1,14 @@
+namespace app.main
+
+import std.test as test
+
+func main() -> int
+    test.is_true(true)
+    test.is_false(false)
+    test.equal_int(42, 42)
+    test.equal_text("zenith", "zenith")
+    test.not_equal_int(42, 7)
+    test.not_equal_text("zenith", "keter")
+
+    return 0
+end

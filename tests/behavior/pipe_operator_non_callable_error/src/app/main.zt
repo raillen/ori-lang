@@ -1,0 +1,6 @@
+namespace app.main
+
+func main() -> int 
+    const outcome: int = 3 |> 4
+    return outcome
+end

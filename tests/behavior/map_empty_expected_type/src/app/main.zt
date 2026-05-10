@@ -1,0 +1,31 @@
+namespace app.main
+
+func expect_empty(flags: map<int, bool>) -> int
+    return len(flags)
+end
+
+func main() -> int
+    const seed: map<int, bool> = {}
+    const empty_score: int = expect_empty({})
+
+    var working: map<int, bool> = seed
+    working[1] = true
+
+    if empty_score != 0
+        return 1
+    end
+
+    if len(seed) != 0
+        return 2
+    end
+
+    if len(working) != 1
+        return 3
+    end
+
+    if working[1] != true
+        return 4
+    end
+
+    return 0
+end

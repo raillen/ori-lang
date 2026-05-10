@@ -1,0 +1,42 @@
+namespace app.main
+
+import std.list as list
+import std.text as text
+
+func main() -> int
+    const values: list<text> = ["zen", "lang", "zest"]
+    const upper: list<text> = list.map(values, func(value: text) => text.to_upper(value))
+    const zeds: list<text> = list.filter(values, func(value: text) => text.starts_with(value, "ze"))
+    const found: optional<text> = list.find(values, func(value: text) => value == "lang")
+    const sorted_desc: list<text> = list.sort_by(values, func(value: text) => 0 - len(value))
+
+    if len(upper) != 3 or upper[0] != "ZEN" or upper[2] != "ZEST"
+        return 1
+    end
+    if len(zeds) != 2 or zeds[1] != "zest"
+        return 2
+    end
+    if found.is_some() == false
+        return 3
+    end
+    if sorted_desc[0] != "lang" or sorted_desc[2] != "zen"
+        return 9
+    end
+    if list.any(values, func(value: text) => value == "zen") == false
+        return 4
+    end
+    if list.any(values, func(value: text) => value == "none")
+        return 5
+    end
+    if list.all(values, func(value: text) => len(value) >= 3) == false
+        return 6
+    end
+    if list.all(values, func(value: text) => value == "zen")
+        return 7
+    end
+    if list.count(values, func(value: text) => text.starts_with(value, "ze")) != 2
+        return 8
+    end
+
+    return 0
+end

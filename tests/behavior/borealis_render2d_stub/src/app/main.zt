@@ -1,0 +1,28 @@
+namespace app.main
+
+extern c
+    func zt_borealis_open_window(title: text, width: int, height: int, target_fps: int, backend_id: int) -> result<int, core.Error>
+    func zt_borealis_close_window(window_id: int) -> result<void, core.Error>
+    func zt_borealis_begin_frame(window_id: int, clear_r: int, clear_g: int, clear_b: int, clear_a: int) -> result<void, core.Error>
+    func zt_borealis_end_frame(window_id: int) -> result<void, core.Error>
+    func zt_borealis_draw_line(window_id: int, x1: float, y1: float, x2: float, y2: float, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_draw_rect(window_id: int, x: float, y: float, width: float, height: float, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_draw_rect_outline(window_id: int, x: float, y: float, width: float, height: float, thickness: float, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_draw_circle(window_id: int, x: float, y: float, radius: float, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_draw_circle_outline(window_id: int, x: float, y: float, radius: float, thickness: float, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_draw_text(window_id: int, value: text, x: int, y: int, size: int, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+end
+
+func main() -> result<void, core.Error>
+    const window_id: int = zt_borealis_open_window("borealis-render2d-stub", 640, 360, 60, 0)?
+    zt_borealis_begin_frame(window_id, 20, 24, 32, 255)?
+    zt_borealis_draw_line(window_id, 10.0, 10.0, 120.0, 10.0, 255, 255, 255, 255)?
+    zt_borealis_draw_rect(window_id, 80.0, 60.0, 96.0, 64.0, 255, 170, 40, 255)?
+    zt_borealis_draw_rect_outline(window_id, 78.0, 58.0, 100.0, 68.0, 2.0, 240, 240, 240, 255)?
+    zt_borealis_draw_circle(window_id, 220.0, 120.0, 28.0, 100, 200, 140, 255)?
+    zt_borealis_draw_circle_outline(window_id, 220.0, 120.0, 34.0, 2.0, 240, 240, 240, 255)?
+    zt_borealis_draw_text(window_id, "render2d", 16, 16, 18, 255, 255, 255, 255)?
+    zt_borealis_end_frame(window_id)?
+    zt_borealis_close_window(window_id)?
+    return success()
+end

@@ -1,0 +1,571 @@
+namespace borealis.game.input
+
+public struct ActionState
+    pressed: bool = false
+    down: bool = false
+    released: bool = false
+end
+
+public struct ActionBinding
+    source: text = ""
+    context: text = "global"
+end
+
+public struct AxisBinding
+    negative_action: text = ""
+    positive_action: text = ""
+end
+
+public struct InputContext
+    name: text
+    enabled: bool = true
+end
+
+public struct InputFrame
+    down: contracts.ActionInput
+    pressed: contracts.ActionInput
+    released: contracts.ActionInput
+    mouse: contracts.MouseState
+    gamepad: contracts.GamepadState
+end
+
+public var input_binding_source: map<text, text> = {}
+public var input_binding_context: map<text, text> = {}
+public var input_axis_negative: map<text, text> = {}
+public var input_axis_positive: map<text, text> = {}
+public var input_contexts_enabled: map<text, bool> = {}
+public var input_context_stack: map<int, text> = {}
+public var input_context_depth: int = 0
+public var input_recording_next_id: int = 1
+public var input_recording_last_id: int = 0
+public var input_recording_last_frame: input.InputFrame = input.InputFrame(
+    down: contracts.ActionInput(),
+    pressed: contracts.ActionInput(),
+    released: contracts.ActionInput(),
+    mouse: contracts.MouseState(),
+    gamepad: contracts.GamepadState()
+)
+public var input_locked: bool = false
+public var input_deadzone: float = 0.2
+public var input_repeat_delay: float = 0.25
+public var input_repeat_rate: float = 0.05
+public var input_mouse_locked: bool = false
+public var input_cursor_visible: bool = true
+public var input_text_value: text = ""
+
+public func action_state(
+    pressed: bool = false,
+    down: bool = false,
+    released: bool = false
+) -> input.ActionState
+    return input.ActionState(
+        pressed: pressed,
+        down: down,
+        released: released
+    )
+end
+
+public func input_frame(
+    down: contracts.ActionInput = contracts.action_input(),
+    pressed: contracts.ActionInput = contracts.action_input(),
+    released: contracts.ActionInput = contracts.action_input(),
+    mouse: contracts.MouseState = contracts.mouse_state(),
+    gamepad: contracts.GamepadState = contracts.gamepad_state()
+) -> input.InputFrame
+    return input.InputFrame(
+        down: down,
+        pressed: pressed,
+        released: released,
+        mouse: mouse,
+        gamepad: gamepad
+    )
+end
+
+public func key_state(ctx: game.GameContext, key: game.Key) -> input.ActionState
+    return input.ActionState(
+        pressed: game.key_pressed(ctx, key),
+        down: game.key_down(ctx, key),
+        released: game.key_released(ctx, key)
+    )
+end
+
+public func mouse_hover(mouse: game.Vector2, area: game.Rect) -> bool
+    return mouse.x >= area.x and
+           mouse.x <= (area.x + area.width) and
+           mouse.y >= area.y and
+           mouse.y <= (area.y + area.height)
+end
+
+public func mouse_hover_state(mouse: contracts.MouseState, area: game.Rect) -> bool
+    return input.mouse_hover(contracts.mouse_position(mouse), area)
+end
+
+public func mouse_button_pressed(mouse: contracts.MouseState, button: text) -> bool
+    if button == "left"
+        return mouse.left_pressed
+    end
+    if button == "right"
+        return mouse.right_pressed
+    end
+    return false
+end
+
+public func mouse_button_down(mouse: contracts.MouseState, button: text) -> bool
+    if button == "left"
+        return mouse.left_down
+    end
+    if button == "right"
+        return mouse.right_down
+    end
+    return false
+end
+
+public func mouse_button_released(mouse: contracts.MouseState, button: text) -> bool
+    if button == "left"
+        return mouse.left_released
+    end
+    if button == "right"
+        return mouse.right_released
+    end
+    return false
+end
+
+public func gamepad_button_pressed(pad: contracts.GamepadState, button: text) -> bool
+    if button == "south"
+        return pad.south_pressed
+    end
+    if button == "east"
+        return pad.east_pressed
+    end
+    return false
+end
+
+public func gamepad_button_down(pad: contracts.GamepadState, button: text) -> bool
+    if button == "south"
+        return pad.south_down
+    end
+    if button == "east"
+        return pad.east_down
+    end
+    return false
+end
+
+public func gamepad_button_released(pad: contracts.GamepadState, button: text) -> bool
+    if button == "south"
+        return pad.south_released
+    end
+    if button == "east"
+        return pad.east_released
+    end
+    return false
+end
+
+public func gamepad_axis_get(pad: contracts.GamepadState, axis: text) -> float
+    if axis == "left_x"
+        return pad.left_x
+    end
+    if axis == "left_y"
+        return pad.left_y
+    end
+    if axis == "right_x"
+        return pad.right_x
+    end
+    if axis == "right_y"
+        return pad.right_y
+    end
+    return 0.0
+end
+
+public func input_apply_deadzone(value: float, deadzone: float = input.input_deadzone) -> float
+    if value > 0.0
+        if value < deadzone
+            return 0.0
+        end
+        return value
+    end
+    if value < 0.0
+        if (0.0 - value) < deadzone
+            return 0.0
+        end
+        return value
+    end
+    return 0.0
+end
+
+public func action_input_from_keyboard(ctx: game.GameContext) -> contracts.ActionInput
+    return contracts.ActionInput(
+        up: game.key_down(ctx, game.Key.Up),
+        down: game.key_down(ctx, game.Key.Down),
+        left: game.key_down(ctx, game.Key.Left),
+        right: game.key_down(ctx, game.Key.Right),
+        jump: game.key_pressed(ctx, game.Key.Space),
+        dash: false,
+        primary: game.key_pressed(ctx, game.Key.Space),
+        secondary: game.key_released(ctx, game.Key.Space)
+    )
+end
+
+public func action_input_from_mouse(mouse: contracts.MouseState) -> contracts.ActionInput
+    return contracts.ActionInput(
+        primary: mouse.left_pressed or mouse.left_down,
+        secondary: mouse.right_pressed or mouse.right_down
+    )
+end
+
+public func action_input_from_gamepad(
+    pad: contracts.GamepadState,
+    deadzone: float = input.input_deadzone
+) -> contracts.ActionInput
+    const left_x: float = input.input_apply_deadzone(pad.left_x, deadzone)
+    const left_y: float = input.input_apply_deadzone(pad.left_y, deadzone)
+    return contracts.ActionInput(
+        up: left_y < 0.0,
+        down: left_y > 0.0,
+        left: left_x < 0.0,
+        right: left_x > 0.0,
+        jump: pad.south_pressed,
+        dash: pad.east_pressed,
+        primary: pad.south_down,
+        secondary: pad.east_down
+    )
+end
+
+public func input_context_create(name: text) -> result<input.InputContext, core.Error>
+    if name == ""
+        return error("input: context name cannot be empty")
+    end
+    input_contexts_enabled = input.set_bool(input_contexts_enabled, name, true)
+    return success(input.InputContext(name: name, enabled: true))
+end
+
+public func input_context_push(name: text) -> result<void, core.Error>
+    input.input_context_create(name)?
+    input_context_stack = input.set_text(input_context_stack, input_context_depth, name)
+    input_context_depth = input_context_depth + 1
+    return success()
+end
+
+public func input_context_pop() -> optional<text>
+    if input_context_depth <= 0
+        return none
+    end
+
+    const top_index: int = input_context_depth - 1
+    const name: text = input.text_or(input_context_stack, top_index, "")
+    input_context_stack = input.set_text(input_context_stack, top_index, "")
+    input_context_depth = top_index
+    return name
+end
+
+public func input_context_clear() -> void
+    input_context_stack = {}
+    input_context_depth = 0
+end
+
+public func input_context_current() -> optional<text>
+    if input_context_depth <= 0
+        return none
+    end
+    return input.text_or(input_context_stack, input_context_depth - 1, "")
+end
+
+public func input_context_enabled(name: text) -> bool
+    return input.bool_or(input_contexts_enabled, name, false)
+end
+
+public func input_context_set_enabled(name: text, enabled: bool) -> result<void, core.Error>
+    if name == ""
+        return error("input: context name cannot be empty")
+    end
+    input_contexts_enabled = input.set_bool(input_contexts_enabled, name, enabled)
+    return success()
+end
+
+public func input_context_active(name: text) -> bool
+    if name == "global"
+        return true
+    end
+    if input.input_context_enabled(name) == false
+        return false
+    end
+
+    const current: optional<text> = input.input_context_current()
+    match current
+        case value active_name ->
+            return active_name == name
+        case none ->
+            return false
+    end
+end
+
+public func action_bind(
+    action: text,
+    source: text,
+    context: text = "global"
+) -> result<void, core.Error>
+    if action == ""
+        return error("input: action name cannot be empty")
+    end
+    if source == ""
+        return error("input: action source cannot be empty")
+    end
+    input_binding_source = input.set_text_key(input_binding_source, action, source)
+    input_binding_context = input.set_text_key(input_binding_context, action, context)
+    return success()
+end
+
+public func axis_bind(
+    axis: text,
+    negative_action: text,
+    positive_action: text
+) -> result<void, core.Error>
+    if axis == ""
+        return error("input: axis name cannot be empty")
+    end
+    input_axis_negative = input.set_text_key(input_axis_negative, axis, negative_action)
+    input_axis_positive = input.set_text_key(input_axis_positive, axis, positive_action)
+    return success()
+end
+
+public func input_rebind(action: text, source: text) -> result<void, core.Error>
+    const context: text = input.text_key_or(input_binding_context, action, "global")
+    return input.action_bind(action, source, context: context)
+end
+
+public func input_record(frame: input.InputFrame) -> int
+    const recording_id: int = input_recording_next_id
+    input_recording_next_id = input_recording_next_id + 1
+    input_recording_last_id = recording_id
+    input_recording_last_frame = frame
+    return recording_id
+end
+
+public func input_playback(recording_id: int) -> optional<input.InputFrame>
+    if recording_id == input_recording_last_id
+        return input_recording_last_frame
+    end
+    return none
+end
+
+public func input_lock() -> void
+    input_locked = true
+end
+
+public func input_unlock() -> void
+    input_locked = false
+end
+
+public func input_is_locked() -> bool
+    return input_locked
+end
+
+public func input_set_deadzone(value: float) -> void
+    if value < 0.0
+        input_deadzone = 0.0
+        return
+    end
+    if value > 1.0
+        input_deadzone = 1.0
+        return
+    end
+    input_deadzone = value
+end
+
+public func input_set_repeat_delay(value: float) -> void
+    if value < 0.0
+        input_repeat_delay = 0.0
+        return
+    end
+    input_repeat_delay = value
+end
+
+public func input_set_repeat_rate(value: float) -> void
+    if value < 0.0
+        input_repeat_rate = 0.0
+        return
+    end
+    input_repeat_rate = value
+end
+
+public func input_set_mouse_locked(value: bool) -> void
+    input_mouse_locked = value
+end
+
+public func input_set_cursor_visible(value: bool) -> void
+    input_cursor_visible = value
+end
+
+public func input_set_text_value(value: text) -> void
+    input_text_value = value
+end
+
+public func text_input_get() -> text
+    return input_text_value
+end
+
+public func action_pressed(frame: input.InputFrame, action: text) -> bool
+    return input.action_state_from_binding(frame, action).pressed
+end
+
+public func action_down(frame: input.InputFrame, action: text) -> bool
+    return input.action_state_from_binding(frame, action).down
+end
+
+public func action_released(frame: input.InputFrame, action: text) -> bool
+    return input.action_state_from_binding(frame, action).released
+end
+
+public func axis_get(frame: input.InputFrame, axis: text) -> float
+    const negative_action: text = input.text_key_or(input_axis_negative, axis, "")
+    const positive_action: text = input.text_key_or(input_axis_positive, axis, "")
+    var value: float = 0.0
+    if negative_action != "" and input.action_down(frame, negative_action)
+        value = value - 1.0
+    end
+    if positive_action != "" and input.action_down(frame, positive_action)
+        value = value + 1.0
+    end
+    return value
+end
+
+public func input_any_pressed(frame: input.InputFrame) -> bool
+    return contracts.action_input_any(frame.pressed) or
+           frame.mouse.left_pressed or
+           frame.mouse.right_pressed or
+           frame.gamepad.south_pressed or
+           frame.gamepad.east_pressed
+end
+
+public func input_any_released(frame: input.InputFrame) -> bool
+    return contracts.action_input_any(frame.released) or
+           frame.mouse.left_released or
+           frame.mouse.right_released or
+           frame.gamepad.south_released or
+           frame.gamepad.east_released
+end
+
+public func action_state_from_binding(
+    frame: input.InputFrame,
+    action: text
+) -> input.ActionState
+    if input_locked
+        return input.ActionState()
+    end
+
+    const source: text = input.text_key_or(input_binding_source, action, "")
+    const context: text = input.text_key_or(input_binding_context, action, "global")
+    if source == ""
+        return input.ActionState()
+    end
+    if input.input_context_active(context) == false
+        return input.ActionState()
+    end
+    return input.binding_state(frame, source)
+end
+
+public func binding_state(
+    frame: input.InputFrame,
+    source: text
+) -> input.ActionState
+    if source == "up"
+        return input.ActionState(pressed: frame.pressed.up, down: frame.down.up, released: frame.released.up)
+    end
+    if source == "down"
+        return input.ActionState(pressed: frame.pressed.down, down: frame.down.down, released: frame.released.down)
+    end
+    if source == "left"
+        return input.ActionState(pressed: frame.pressed.left, down: frame.down.left, released: frame.released.left)
+    end
+    if source == "right"
+        return input.ActionState(pressed: frame.pressed.right, down: frame.down.right, released: frame.released.right)
+    end
+    if source == "jump"
+        return input.ActionState(pressed: frame.pressed.jump, down: frame.down.jump, released: frame.released.jump)
+    end
+    if source == "dash"
+        return input.ActionState(pressed: frame.pressed.dash, down: frame.down.dash, released: frame.released.dash)
+    end
+    if source == "primary"
+        return input.ActionState(pressed: frame.pressed.primary, down: frame.down.primary, released: frame.released.primary)
+    end
+    if source == "secondary"
+        return input.ActionState(pressed: frame.pressed.secondary, down: frame.down.secondary, released: frame.released.secondary)
+    end
+    if source == "mouse_left"
+        return input.ActionState(
+            pressed: frame.mouse.left_pressed,
+            down: frame.mouse.left_down,
+            released: frame.mouse.left_released
+        )
+    end
+    if source == "mouse_right"
+        return input.ActionState(
+            pressed: frame.mouse.right_pressed,
+            down: frame.mouse.right_down,
+            released: frame.mouse.right_released
+        )
+    end
+    if source == "gamepad_south"
+        return input.ActionState(
+            pressed: frame.gamepad.south_pressed,
+            down: frame.gamepad.south_down,
+            released: frame.gamepad.south_released
+        )
+    end
+    if source == "gamepad_east"
+        return input.ActionState(
+            pressed: frame.gamepad.east_pressed,
+            down: frame.gamepad.east_down,
+            released: frame.gamepad.east_released
+        )
+    end
+    return input.ActionState()
+end
+
+public func bool_or(values: map<text, bool>, key: text, fallback: bool) -> bool
+    const maybe: optional<bool> = values.get(key)
+    match maybe
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func text_or(values: map<int, text>, key: int, fallback: text) -> text
+    const maybe: optional<text> = values.get(key)
+    match maybe
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func set_bool(values: map<text, bool>, key: text, value: bool) -> map<text, bool>
+    var next: map<text, bool> = values
+    next[key] = value
+    return next
+end
+
+public func set_text(values: map<int, text>, key: int, value: text) -> map<int, text>
+    var next: map<int, text> = values
+    next[key] = value
+    return next
+end
+
+public func text_key_or(values: map<text, text>, key: text, fallback: text) -> text
+    const maybe: optional<text> = values.get(key)
+    match maybe
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func set_text_key(values: map<text, text>, key: text, value: text) -> map<text, text>
+    var next: map<text, text> = values
+    next[key] = value
+    return next
+end

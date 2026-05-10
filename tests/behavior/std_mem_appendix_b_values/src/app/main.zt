@@ -1,0 +1,157 @@
+namespace app.main
+
+import std.list as list
+import std.map as map
+import std.mem as mem
+import std.set as set
+
+struct Person
+    name: text
+    age: int
+end
+
+func check_primitive_scalars() -> result<void, core.Error>
+    const copied: int = mem.edit(41)
+    if copied != 41
+        return error("mem scalar helpers should preserve primitive values")
+    end
+
+    return success()
+end
+
+func check_safe_tuples() -> result<void, core.Error>
+    const pair: tuple<int, text> = (7, "seven")
+    const owned: tuple<int, text> = mem.own(pair)
+    const viewed: tuple<int, text> = mem.view(pair)
+    const edited: tuple<int, text> = mem.edit(pair)
+
+    if owned.0 != 7 or viewed.1 != "seven" or edited.1 != "seven"
+        return error("mem tuple helpers should preserve safe tuple fields")
+    end
+
+    const nested: tuple<int, tuple<text, bool>> = (1, ("nested", true))
+    const copied: tuple<int, tuple<text, bool>> = mem.edit(nested)
+    const inner: tuple<text, bool> = copied.1
+    if copied.0 != 1 or inner.0 != "nested" or inner.1 == false
+        return error("mem tuple helpers should preserve nested safe tuples")
+    end
+
+    return success()
+end
+
+func check_safe_structs() -> result<void, core.Error>
+    const ada: Person = Person(name: "Ada", age: 36)
+    const owned: Person = mem.own(ada)
+    const edited: Person = mem.edit(ada)
+
+    if owned.name != "Ada" or edited.age != 36
+        return error("mem struct helpers should preserve safe struct fields")
+    end
+
+    return success()
+end
+
+func check_tuple_lists() -> result<void, core.Error>
+    const points: list<tuple<int, text>> = [(1, "one"), (2, "two")]
+    const owned: list<tuple<int, text>> = mem.own(points)
+    const viewed: list<tuple<int, text>> = mem.view(points)
+    var edited: list<tuple<int, text>> = mem.edit(points)
+
+    edited[0] = (9, "nine")
+
+    if len(owned) != 2 or len(viewed) != 2 or len(edited) != 2
+        return error("mem list<tuple> helpers should preserve lengths")
+    end
+    if points[0].0 != 1 or edited[0].0 != 9
+        return error("mem.edit(list<tuple>) should return an editable copy")
+    end
+    if list.contains(["one", "two"], points[1].1) == false
+        return error("list<tuple> fixture should keep tuple text fields")
+    end
+
+    return success()
+end
+
+func check_struct_lists() -> result<void, core.Error>
+    const people: list<Person> = [
+        Person(name: "Ada", age: 36),
+        Person(name: "Lin", age: 32),
+    ]
+    const owned: list<Person> = mem.own(people)
+    var edited: list<Person> = mem.edit(people)
+
+    edited[0] = Person(name: "Grace", age: 85)
+
+    if len(owned) != 2 or len(edited) != 2
+        return error("mem list<struct> helpers should preserve lengths")
+    end
+    if people[0].name != "Ada" or edited[0].name != "Grace"
+        return error("mem.edit(list<struct>) should return an editable copy")
+    end
+
+    return success()
+end
+
+func check_sets() -> result<void, core.Error>
+    const numbers: set<int> = {1, 2}
+    const owned_numbers: set<int> = mem.own(numbers)
+    var edited_numbers: set<int> = mem.edit(numbers)
+    set.add(edited_numbers, 3)
+
+    const words: set<text> = {"zen", "lang"}
+    const viewed_words: set<text> = mem.view(words)
+    var edited_words: set<text> = mem.edit(words)
+    set.add(edited_words, "docs")
+
+    if set.len(owned_numbers) != 2 or set.len(edited_numbers) != 3 or set.len(numbers) != 2
+        return error("mem set<int> helpers should copy editable sets")
+    end
+    if set.has(viewed_words, "zen") == false or set.len(edited_words) != 3 or set.len(words) != 2
+        return error("mem set<text> helpers should preserve and copy text sets")
+    end
+
+    return success()
+end
+
+func check_maps() -> result<void, core.Error>
+    const empty_text: text = ""
+    const one_label: text = "one"
+    const two_label: text = "two"
+    const three_label: text = "three"
+    const labels: map<int, text> = {1: one_label, 2: two_label}
+    const owned_labels: map<int, text> = mem.own(labels)
+    const changed_labels: map<int, text> = map.set(mem.edit(labels), 3, three_label)
+
+    const one_key: text = "one"
+    const two_key: text = "two"
+    const three_key: text = "three"
+    const counts: map<text, int> = {one_key: 1, two_key: 2}
+    const viewed_counts: map<text, int> = mem.view(counts)
+    const changed_counts: map<text, int> = map.set(mem.edit(counts), three_key, 3)
+
+    if len(owned_labels) != 2 or len(changed_labels) != 3 or len(labels) != 2
+        return error("mem map<int,text> helpers should copy editable maps")
+    end
+    if map.get(changed_labels, 3).or(empty_text) != three_label
+        return error("mem map<int,text> copy should keep inserted values")
+    end
+    if len(viewed_counts) != 2 or len(changed_counts) != 3 or len(counts) != 2
+        return error("mem map<text,int> helpers should preserve source maps")
+    end
+    if map.get(changed_counts, three_key).or(0) != 3
+        return error("mem map<text,int> copy should keep inserted values")
+    end
+
+    return success()
+end
+
+func main() -> result<void, core.Error>
+    check_primitive_scalars()?
+    check_safe_tuples()?
+    check_safe_structs()?
+    check_tuple_lists()?
+    check_struct_lists()?
+    check_sets()?
+    check_maps()?
+    return success()
+end

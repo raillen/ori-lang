@@ -1,0 +1,46 @@
+namespace app.main
+
+import borealis.engine.ecs as ecs
+
+func main() -> result<void, core.Error>
+    const player_id: int = 1001
+
+    ecs.ecs_component_set(player_id, "transform", "x=10;y=20")?
+    ecs.ecs_component_set(player_id, "health", "100")?
+
+    if ecs.ecs_component_count(player_id) != 2
+        return error("player should have two components")
+    end
+
+    const maybe_health: optional<text> = ecs.ecs_component_get(player_id, "health")
+    match maybe_health
+        case value payload ->
+            if payload != "100"
+                return error("health payload mismatch")
+            end
+        case none ->
+            return error("health component should exist")
+    end
+
+    if ecs.ecs_component_has(player_id, "health") == false
+        return error("health component should be present")
+    end
+
+    ecs.ecs_component_remove(player_id, "health")?
+
+    if ecs.ecs_component_has(player_id, "health")
+        return error("health component should be removed")
+    end
+
+    if ecs.ecs_component_count(player_id) != 1
+        return error("player should have one component after removal")
+    end
+
+    const blob: text = ecs.ecs_component_list_blob(player_id)
+    if blob == "|"
+        return error("component blob should not be empty")
+    end
+
+    return success()
+end
+

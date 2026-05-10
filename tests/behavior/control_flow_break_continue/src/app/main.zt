@@ -1,0 +1,20 @@
+namespace app.main
+
+func main() -> int
+    var i: int = 0
+    var total: int = 0
+    while i < 6
+        i = i + 1
+
+        if i == 2
+            continue
+        end
+
+        if i == 5
+            break
+        end
+
+        total = total + i
+    end
+    return total
+end

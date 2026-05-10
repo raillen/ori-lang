@@ -1,0 +1,1250 @@
+namespace app.main
+
+import borealis.game as game
+import borealis.game.assets as assets
+import borealis.game.database as database
+import borealis.game.debug as debug
+import borealis.game.editor as editor
+import borealis.game.events as events
+import borealis.game.save as save
+import borealis.game.services as services
+import borealis.game.settings as settings
+import borealis.game.storage as storage
+import borealis.game.ui as ui
+import borealis.game.ui.hud as hud
+
+func main() -> result<void, core.Error>
+    assets.asset_cache_clear()?
+    database.reset()
+    services.reset()
+    save.reset()
+    storage.clear()
+    verify_assets_module()?
+    verify_events_module()?
+    verify_save_module()?
+    verify_storage_module()?
+    verify_services_module()?
+    verify_database_module()?
+    verify_debug_module()?
+    verify_ui_module()?
+    verify_hud_module()?
+    verify_editor_module()?
+    verify_settings()?
+    return success()
+end
+
+func verify_assets_module() -> result<void, core.Error>
+    const hero: assets.AssetHandle = assets.asset_load_image("hero.png")?
+    const script: assets.AssetHandle = assets.asset_load_text("hero.txt")?
+    const portrait: assets.AssetHandle = assets.asset_load_texture("portrait.png")?
+    const font: assets.AssetHandle = assets.asset_load_font("ui.fnt")?
+    const sound: assets.AssetHandle = assets.asset_load_sound("click.wav")?
+    const music: assets.AssetHandle = assets.asset_load_music("theme.ogg")?
+    const shader: assets.AssetHandle = assets.asset_load_shader("outline.shader")?
+    const atlas: assets.AssetHandle = assets.asset_load_atlas("menu.atlas")?
+    const spritesheet: assets.AssetHandle = assets.asset_load_spritesheet("hero.sheet")?
+    const bundle: assets.AssetHandle = assets.asset_load_from("ui.bundle", "binary", "bundle:ui")?
+    const payload: assets.AssetHandle = assets.asset_load_binary("payload.bin")?
+    verify_asset_counts_and_kinds(
+        hero,
+        portrait,
+        font,
+        sound,
+        music,
+        shader,
+        atlas,
+        spritesheet,
+        payload
+    )?
+    const maybe_hero_info: optional<assets.AssetInfo> = assets.asset_info(hero)
+    match maybe_hero_info
+        case some(info):
+            if info.source != "runtime"
+                return error("asset info should keep default runtime source")
+            end
+            if info.created_stamp <= 0
+                return error("asset info should keep a positive created stamp")
+            end
+            if info.loaded_stamp != info.created_stamp
+                return error("newly loaded asset should reuse created stamp as first loaded stamp")
+            end
+            if info.reload_count != 0
+                return error("newly loaded asset should start with reload count zero")
+            end
+        case none:
+            return error("asset info should exist for loaded handles")
+    end
+    const maybe_bundle_info: optional<assets.AssetInfo> = assets.asset_info(bundle)
+    match maybe_bundle_info
+        case some(info):
+            if info.source != "bundle:ui"
+                return error("asset_load_from should preserve explicit source names")
+            end
+        case none:
+            return error("asset info should exist for custom source assets")
+    end
+    const maybe_hero: optional<assets.AssetHandle> = assets.asset_get("hero.png")
+    match maybe_hero
+        case some(loaded):
+            if loaded.kind != "image"
+                return error("hero asset should keep image kind")
+            end
+        case none:
+            return error("hero asset should be cached")
+    end
+    const maybe_script: optional<assets.AssetHandle> = assets.asset_get_kind("text", "hero.txt")
+    match maybe_script
+        case some(loaded):
+            if loaded.key != "hero.txt"
+                return error("text asset should keep original key")
+            end
+        case none:
+            return error("text asset should be found by kind")
+    end
+    const maybe_script_by_id: optional<assets.AssetHandle> = assets.asset_find_id(script.id)
+    match maybe_script_by_id
+        case some(found):
+            if found.key != "hero.txt"
+                return error("asset find by id should keep the original key")
+            end
+        case none:
+            return error("asset find by id should resolve registered handles")
+    end
+    const maybe_script_info_id: optional<assets.AssetInfo> = assets.asset_info_id(script.id)
+    match maybe_script_info_id
+        case some(info):
+            if info.key != "hero.txt"
+                return error("asset_info_id should resolve metadata by id")
+            end
+        case none:
+            return error("asset_info_id should resolve registered ids")
+    end
+    verify_asset_lifecycle(hero, script, font)?
+    return success()
+end
+
+func verify_asset_counts_and_kinds(
+    hero: assets.AssetHandle,
+    portrait: assets.AssetHandle,
+    font: assets.AssetHandle,
+    sound: assets.AssetHandle,
+    music: assets.AssetHandle,
+    shader: assets.AssetHandle,
+    atlas: assets.AssetHandle,
+    spritesheet: assets.AssetHandle,
+    payload: assets.AssetHandle
+) -> result<void, core.Error>
+    if assets.asset_count() != 11
+        return error("assets should count loaded handles")
+    end
+    if assets.asset_total_count() != 11
+        return error("assets total count should include registered handles")
+    end
+    if assets.asset_is_loaded(hero) == false
+        return error("hero asset should be loaded")
+    end
+    if assets.asset_exists("hero.png") == false
+        return error("asset exists should track registered asset keys")
+    end
+    if assets.asset_count_kind("image") != 1
+        return error("asset count by kind should track loaded image assets")
+    end
+    if assets.asset_count_kind("text") != 1
+        return error("asset count by kind should track loaded text assets")
+    end
+    if portrait.kind != "texture"
+        return error("asset_load_texture should register texture kind")
+    end
+    if font.kind != "font"
+        return error("asset_load_font should register font kind")
+    end
+    if sound.kind != "sound"
+        return error("asset_load_sound should register sound kind")
+    end
+    if music.kind != "music"
+        return error("asset_load_music should register music kind")
+    end
+    if shader.kind != "shader"
+        return error("asset_load_shader should register shader kind")
+    end
+    if atlas.kind != "atlas"
+        return error("asset_load_atlas should register atlas kind")
+    end
+    if spritesheet.kind != "spritesheet"
+        return error("asset_load_spritesheet should register spritesheet kind")
+    end
+    if payload.kind != "binary"
+        return error("asset_load_binary should register binary kind")
+    end
+    if assets.asset_exists_kind("font", "ui.fnt") == false
+        return error("asset_exists_kind should track typed registrations")
+    end
+    if assets.asset_count_source("runtime") != 10
+        return error("asset_count_source should count loaded runtime assets")
+    end
+    if assets.asset_count_source("bundle:ui") != 1
+        return error("asset_count_source should count loaded custom sources")
+    end
+    if assets.asset_total_count_kind("atlas") != 1
+        return error("asset_total_count_kind should count registered atlas assets")
+    end
+    if assets.asset_total_count_source("bundle:ui") != 1
+        return error("asset_total_count_source should count registered custom sources")
+    end
+    return success()
+end
+
+func verify_asset_lifecycle(
+    hero: assets.AssetHandle,
+    script: assets.AssetHandle,
+    font: assets.AssetHandle
+) -> result<void, core.Error>
+    assets.asset_unload_id(script.id)?
+    const unloaded_script_get: optional<assets.AssetHandle> = assets.asset_get_kind("text", "hero.txt")
+    match unloaded_script_get
+        case some(_loaded):
+            return error("asset_get_kind should return none when an asset is unloaded")
+        case none:
+    end
+    const unloaded_script_find: optional<assets.AssetHandle> = assets.asset_find_kind("text", "hero.txt")
+    match unloaded_script_find
+        case some(found):
+            if found.loaded
+                return error("asset_find_kind should preserve unloaded handles")
+            end
+            if found.id != script.id
+                return error("asset_find_kind should preserve stable ids")
+            end
+        case none:
+            return error("asset_find_kind should resolve unloaded registered assets")
+    end
+    const reloaded_script: assets.AssetHandle = assets.asset_reload_key("hero.txt")?
+    if reloaded_script.id != script.id
+        return error("asset_reload_key should preserve stable ids")
+    end
+    if assets.asset_is_loaded(reloaded_script) == false
+        return error("asset_reload_key should restore loaded state")
+    end
+    assets.asset_unload_key("ui.fnt")?
+    if assets.asset_is_loaded_key("ui.fnt")
+        return error("asset_unload_key should unload by key")
+    end
+    const reloaded_font: assets.AssetHandle = assets.asset_reload_id(font.id)?
+    if reloaded_font.id != font.id
+        return error("asset_reload_id should preserve stable ids")
+    end
+    if assets.asset_is_loaded(reloaded_font) == false
+        return error("asset_reload_id should restore loaded state")
+    end
+    const conflict_load: result<assets.AssetHandle, core.Error> = assets.asset_load_sound("hero.png")
+    match conflict_load
+        case success(_value):
+            return error("assets should reject the same key with a different kind")
+        case error(err):
+            const error_message: text = err.message
+            if error_message == ""
+                return error("asset kind conflict should report a clear error")
+            end
+    end
+    assets.asset_unload(hero)?
+    if assets.asset_is_loaded(hero)
+        return error("unloaded asset should not stay loaded")
+    end
+    if assets.asset_is_loaded_key("hero.png")
+        return error("asset_is_loaded_key should become false after unload")
+    end
+    if assets.asset_count() != 10
+        return error("loaded asset count should drop after unload")
+    end
+    if assets.asset_total_count() != 11
+        return error("total asset count should keep registered unloaded assets")
+    end
+    const maybe_unloaded_kind: optional<assets.AssetHandle> = assets.asset_find_kind("image", "hero.png")
+    match maybe_unloaded_kind
+        case some(found):
+            if found.loaded
+                return error("asset_find_kind should expose unloaded state")
+            end
+            if found.id != hero.id
+                return error("asset_find_kind should preserve stable ids after unload")
+            end
+        case none:
+            return error("asset_find_kind should keep known unloaded assets")
+    end
+    const maybe_unloaded: optional<assets.AssetHandle> = assets.asset_find("hero.png")
+    match maybe_unloaded
+        case some(found):
+            if found.loaded
+                return error("asset_find should expose unloaded state")
+            end
+            if found.id != hero.id
+                return error("asset_find should preserve stable asset ids")
+            end
+        case none:
+            return error("asset_find should keep known unloaded assets")
+    end
+    const reloaded_hero: assets.AssetHandle = assets.asset_reload(hero)?
+    if reloaded_hero.id != hero.id
+        return error("asset_reload should keep the same asset id")
+    end
+    if assets.asset_is_loaded(reloaded_hero) == false
+        return error("asset_reload should restore loaded state")
+    end
+    if assets.asset_count() != 11
+        return error("asset count should return after asset reload")
+    end
+    const maybe_reloaded_info: optional<assets.AssetInfo> = assets.asset_info_key("hero.png")
+    match maybe_reloaded_info
+        case some(info):
+            if info.loaded == false
+                return error("asset info should show loaded state after reload")
+            end
+            if info.reload_count != 1
+                return error("asset reload should increment reload count")
+            end
+            if info.loaded_stamp <= info.created_stamp
+                return error("asset reload should advance the logical loaded stamp")
+            end
+        case none:
+            return error("asset info by key should exist after reload")
+    end
+    return success()
+end
+
+func verify_events_module() -> result<void, core.Error>
+    events.reset()
+    events.on("ui.ready", "hud")?
+    events.once("ui.ready", "bootstrap")?
+    events.queue("game.started", "boot")?
+    const dispatched_ui_ready: int = events.dispatch("ui.ready", "menu")?
+    if dispatched_ui_ready != 2
+        return error("events dispatch should report routed listener deliveries")
+    end
+    if events.count() != 2
+        return error("events count should include all emitted events")
+    end
+    if events.pending_count() != 2
+        return error("events pending count should include queued events")
+    end
+    if events.count_named("ui.ready") != 1
+        return error("named event count should track emitted names")
+    end
+    if events.is_registered("ui.ready", "hud") == false
+        return error("events on should register named listeners")
+    end
+    if events.listener_count("ui.ready") != 1
+        return error("events once listener should be removed after dispatch")
+    end
+    const first_event: optional<events.EventMessage> = events.peek()
+    match first_event
+        case some(message):
+            if message.name != "game.started"
+                return error("peek should return the oldest pending event")
+            end
+        case none:
+            return error("peek should find a pending event")
+    end
+    const drained: optional<events.EventMessage> = events.poll()
+    match drained
+        case some(message):
+            if message.payload != "boot"
+                return error("poll should preserve payload")
+            end
+        case none:
+            return error("poll should return a pending event")
+    end
+    const hud_delivery: optional<events.EventMessage> = events.listener_peek("hud")
+    match hud_delivery
+        case some(delivery):
+            if delivery.name != "ui.ready"
+                return error("listener_peek should preserve routed event names")
+            end
+            if delivery.payload != "menu"
+                return error("listener_peek should preserve routed event payloads")
+            end
+        case none:
+            return error("listener_peek should find the listener delivery")
+    end
+    const bootstrap_delivery: optional<events.EventMessage> = events.listener_poll("bootstrap")
+    match bootstrap_delivery
+        case some(delivery):
+            if delivery.id <= 0
+                return error("listener_poll should preserve the source event id")
+            end
+        case none:
+            return error("listener_poll should drain once-listener deliveries")
+    end
+    if events.listener_has_pending("bootstrap")
+        return error("once listener should have no pending events after poll")
+    end
+    events.clear_listener("hud")?
+    if events.listener_has_pending("hud")
+        return error("clear_listener should remove listener deliveries")
+    end
+    events.off("ui.ready", "hud")?
+    if events.is_registered("ui.ready", "hud")
+        return error("events off should deactivate listeners")
+    end
+    events.clear_pending("ui.ready")?
+    if events.has_pending()
+        return error("clear_pending should remove matching pending events")
+    end
+    verify_events_contract_errors()?
+    return success()
+end
+
+func verify_storage_module() -> result<void, core.Error>
+    storage.write("profile:name", "")?
+    if storage.exists("profile:name") == false
+        return error("storage should keep empty text as a valid value")
+    end
+    const maybe_empty_storage: optional<text> = storage.read("profile:name")
+    match maybe_empty_storage
+        case some(present):
+            if present != ""
+                return error("storage should preserve empty text payload")
+            end
+        case none:
+            return error("storage should not treat empty text as removed")
+    end
+    storage.copy("profile:name", "profile:backup")?
+    const copied_storage: optional<text> = storage.read("profile:backup")
+    match copied_storage
+        case some(present):
+            if present != ""
+                return error("storage copy should preserve value")
+            end
+        case none:
+            return error("storage copy should create target key")
+    end
+    storage.write("profile:city", "Sao Paulo")?
+    storage.move("profile:city", "profile:last_city")?
+    if storage.exists("profile:city")
+        return error("storage move should remove source key")
+    end
+    const moved_storage: optional<text> = storage.read("profile:last_city")
+    match moved_storage
+        case some(present):
+            if present != "Sao Paulo"
+                return error("storage move should preserve source value")
+            end
+        case none:
+            return error("storage move should create target key")
+    end
+    storage.remove("profile:name")?
+    if storage.exists("profile:name")
+        return error("removed storage key should stop existing")
+    end
+    const removed_storage: optional<text> = storage.read("profile:name")
+    match removed_storage
+        case some(_present):
+            return error("removed storage key should read as none")
+        case none:
+    end
+    storage.clear()
+    if storage.exists("profile:backup")
+        return error("storage clear should remove copied keys")
+    end
+    verify_storage_contract_errors()?
+    return success()
+end
+
+func verify_services_module() -> result<void, core.Error>
+    const request: services.HttpRequest = services.HttpRequest(
+        method: "POST",
+        url: "https://api.borealis.dev/ping",
+        body: "boot"
+    )
+    const response: services.HttpResponse = services.http_send(request)?
+    if response.status != 200
+        return error("services http_send should return success status")
+    end
+    if response.body != "POST https://api.borealis.dev/ping body=boot"
+        return error("services http_send should echo a predictable stub response")
+    end
+    if services.request_count() != 1
+        return error("services should count stub requests")
+    end
+    if services.last_url() != "https://api.borealis.dev/ping"
+        return error("services should store the last request URL")
+    end
+    const cloud: services.CloudState = services.cloud_connect("borealis-cloud")
+    if services.cloud_is_connected(cloud) == false
+        return error("cloud provider should connect when provider is valid")
+    end
+    services.cloud_upload(cloud, "slot/a", "save-data")?
+    const cloud_exists: bool = services.cloud_exists(cloud, "slot/a")?
+    if cloud_exists == false
+        return error("cloud upload should create a remote entry")
+    end
+    const maybe_remote: optional<text> = services.cloud_download(cloud, "slot/a")?
+    match maybe_remote
+        case some(present):
+            if present != "save-data"
+                return error("cloud download should preserve uploaded value")
+            end
+        case none:
+            return error("cloud download should find uploaded data")
+    end
+    const remote_count: int = services.cloud_entry_count(cloud)?
+    if remote_count != 1
+        return error("cloud entry count should track uploaded items")
+    end
+    services.cloud_remove(cloud, "slot/a")?
+    const maybe_removed_remote: optional<text> = services.cloud_download(cloud, "slot/a")?
+    match maybe_removed_remote
+        case some(_present):
+            return error("cloud removed item should read as none")
+        case none:
+    end
+    const disconnected_cloud: services.CloudState = services.cloud_disconnect(cloud)
+    if services.cloud_is_connected(disconnected_cloud)
+        return error("cloud disconnect should turn connection off")
+    end
+    verify_services_contract_errors(disconnected_cloud)?
+    return success()
+end
+
+func verify_database_module() -> result<void, core.Error>
+    const connection: database.DatabaseConnection = database.open(database.DatabaseConfig(driver: "sqlite", path: "memory"))?
+    if database.is_open(connection) == false
+        return error("database open should return an open connection")
+    end
+    const exec_rows: int = database.exec(connection, "create table scores")?
+    if exec_rows != 1
+        return error("database exec should return affected rows in stub mode")
+    end
+    const query_text: text = database.query(connection, "select * from scores")?
+    if query_text != "sqlite@memory:select * from scores"
+        return error("database query should return predictable stub payload")
+    end
+    const maybe_last_sql: optional<text> = database.last_sql(connection)
+    match maybe_last_sql
+        case some(present):
+            if present != "select * from scores"
+                return error("database should track the last executed SQL")
+            end
+        case none:
+            return error("database last_sql should exist after exec/query")
+    end
+    const closed_connection: database.DatabaseConnection = database.close(connection)
+    if database.is_open(closed_connection)
+        return error("database close should mark the connection as closed")
+    end
+    verify_database_contract_errors(closed_connection)?
+    return success()
+end
+
+func verify_events_contract_errors() -> result<void, core.Error>
+    const empty_dispatch: result<int, core.Error> = events.dispatch("", "payload")
+    match empty_dispatch
+        case success(_value):
+            return error("events dispatch should reject empty names")
+        case error(err):
+            const error_message: text = err.message
+            if error_message == ""
+                return error("events dispatch empty name should return a clear error")
+            end
+    end
+    const empty_listener: result<void, core.Error> = events.on("ui.ready", "")
+    match empty_listener
+        case success():
+            return error("events on should reject empty listener names")
+        case error(err):
+            const error_message: text = err.message
+            if error_message == ""
+                return error("events on empty listener should return a clear error")
+            end
+    end
+    const clear_empty_listener: result<void, core.Error> = events.clear_listener("")
+    match clear_empty_listener
+        case success():
+            return error("events clear_listener should reject empty listener names")
+        case error(err):
+            const error_message: text = err.message
+            if error_message == ""
+                return error("events clear_listener empty listener should return a clear error")
+            end
+    end
+    return success()
+end
+
+func verify_debug_module() -> result<void, core.Error>
+    debug.clear()
+    debug.set_enabled(true)
+    if debug.is_enabled() == false
+        return error("debug should be enabled after set_enabled")
+    end
+    debug.watch("player.hp", "100")?
+    debug.watch("player.hp", "95")?
+    debug.watch("player.name", "Ayla")?
+    if debug.watch_count() != 2
+        return error("debug watch_count should count active watch names")
+    end
+    const maybe_player_hp: optional<text> = debug.watch_value("player.hp")
+    match maybe_player_hp
+        case some(hp):
+            if hp != "95"
+                return error("debug watch should update existing watch values")
+            end
+        case none:
+            return error("debug watch_value should find active watches")
+    end
+    debug.set_flag("grid", true)?
+    const hitboxes_enabled: bool = debug.toggle("hitboxes")?
+    if hitboxes_enabled == false
+        return error("debug toggle should enable disabled flags")
+    end
+    if debug.flag_enabled("grid") == false
+        return error("debug set_flag should persist named flags")
+    end
+    if debug.flag_count() != 2
+        return error("debug flag_count should count active named flags")
+    end
+    debug.log("frame ready")?
+    if debug.log_count() != 1
+        return error("debug log_count should track log calls")
+    end
+    if debug.last_log() != "frame ready"
+        return error("debug last_log should preserve the last debug message")
+    end
+    if debug.watch_entry("player.hp") == ""
+        return error("debug watch_entry should render while enabled")
+    end
+    if debug.grid_text(16, 8, 8) == ""
+        return error("debug grid_text should render while enabled")
+    end
+    if debug.bounds_text(1.0, 2.0, 3.0, 4.0) == ""
+        return error("debug bounds_text should render while enabled")
+    end
+    if debug.hitbox_text(5.0, 6.0, 7.0, 8.0) == ""
+        return error("debug hitbox_text should render while enabled")
+    end
+    if debug.fps_text(60) == ""
+        return error("debug fps_text should render while enabled")
+    end
+    if debug.overlay_summary() == ""
+        return error("debug overlay_summary should render while enabled")
+    end
+    debug.unwatch("player.name")?
+    if debug.watch_count() != 1
+        return error("debug unwatch should remove active watches")
+    end
+    const empty_log: result<void, core.Error> = debug.log("")
+    match empty_log
+        case success():
+            return error("debug log should reject empty messages")
+        case error(err):
+            const error_message: text = err.message
+            if error_message == ""
+                return error("debug log empty message should return a clear error")
+            end
+    end
+    debug.clear()
+    if debug.is_enabled()
+        return error("debug clear should disable the module")
+    end
+    if debug.overlay_summary() != ""
+        return error("debug overlay_summary should hide output when disabled")
+    end
+    return success()
+end
+
+func verify_ui_module() -> result<void, core.Error>
+    const base: game.Rect = game.rect(0.0, 0.0, 64.0, 32.0)
+    const mouse: game.Vector2 = game.vec2(8.0, 8.0)
+    const button_state: ui.ButtonState = ui.button(base, mouse, true, true)
+    if button_state.clicked == false
+        return error("ui button should click when mouse is inside and pressed")
+    end
+    if ui.click(base, game.vec2(96.0, 96.0), true)
+        return error("ui click should stay false outside the widget area")
+    end
+    const panel: ui.Widget = ui.panel("menu.panel", base)
+    if panel.kind != "panel"
+        return error("ui panel should keep panel kind")
+    end
+    const second_row: game.Rect = ui.layout_vertical(base, 1, 4.0)
+    if float_matches(second_row.y, 36.0) == false
+        return error("ui layout_vertical should offset by height plus gap")
+    end
+    const second_column: game.Rect = ui.layout_row(base, 1, 6.0)
+    if float_matches(second_column.x, 70.0) == false
+        return error("ui layout_row should offset by width plus gap")
+    end
+    var slider: ui.Widget = ui.slider("settings.volume", "Volume", base, 2.0)
+    if float_matches(slider.value, 1.0) == false
+        return error("ui slider should clamp values above one")
+    end
+    slider = ui.set_value(slider, -1.0)
+    if float_matches(slider.value, 0.0) == false
+        return error("ui set_value should clamp values below zero")
+    end
+    var input: ui.Widget = ui.text_input("name", base, "Ayla")
+    input = ui.focus(input)
+    input = ui.set_text(input, "Nara")
+    const input_state: ui.WidgetState = ui.state(input, mouse, true, true)
+    if input_state.focused == false or input_state.clicked == false
+        return error("ui state should combine focus, hover and click")
+    end
+    if input.text_value != "Nara"
+        return error("ui text input should keep edited text")
+    end
+    const hidden_input: ui.Widget = ui.hide(input)
+    const hidden_state: ui.WidgetState = ui.state(hidden_input, mouse, true, true)
+    if hidden_state.visible or hidden_state.clicked
+        return error("ui hidden widgets should not receive clicks")
+    end
+    const checkbox: ui.Widget = ui.set_checked(ui.checkbox("accept", "Accept", base), true)
+    if checkbox.checked == false
+        return error("ui checkbox should keep checked state")
+    end
+    const image_widget: ui.Widget = ui.image("portrait", "hero.png", base)
+    if image_widget.text_value != "hero.png"
+        return error("ui image should keep asset key")
+    end
+    return success()
+end
+
+func verify_hud_module() -> result<void, core.Error>
+    hud.reset()
+    const panel: hud.HudValues = hud.add_score(hud.set_health(hud.defaults(), 80), 25)
+    if panel.health != 80 or panel.score != 25
+        return error("hud values should update health and score")
+    end
+    hud.add_widget("score", "Score")?
+    if hud.widget_count() != 1
+        return error("hud add_widget should count active widgets")
+    end
+    hud.set_value("score", 120)?
+    hud.set_text("score", "Score: 120")?
+    hud.set_position("score", 12.0, 18.0)?
+    const position: hud.HudPoint = hud.position("score")
+    if float_matches(position.x, 12.0) == false or float_matches(position.y, 18.0) == false
+        return error("hud position should preserve x and y")
+    end
+    const score_widget: hud.HudWidget = hud.inspect("score")
+    if score_widget.text_value != "Score: 120" or score_widget.value != 120
+        return error("hud inspect should expose text and numeric value")
+    end
+    hud.hide("score")?
+    if hud.is_visible("score")
+        return error("hud hide should disable widget visibility")
+    end
+    hud.show("score")?
+    if hud.is_visible("score") == false
+        return error("hud show should enable widget visibility")
+    end
+    const missing_widget: result<void, core.Error> = hud.set_value("missing", 1)
+    match missing_widget
+        case success():
+            return error("hud set_value should reject missing widgets")
+        case error(err):
+            if err.message == ""
+                return error("hud missing widget error should be clear")
+            end
+    end
+    hud.remove_widget("score")?
+    if hud.widget_count() != 0
+        return error("hud remove_widget should reduce active count")
+    end
+    return success()
+end
+
+func verify_editor_module() -> result<void, core.Error>
+    editor.reset()
+    editor.set_label("entity.player", "Player")?
+    editor.set_note("entity.player", "spawn point")?
+    editor.set_group("entity.player", "actors")?
+    editor.set_locked("entity.player", true)?
+    editor.set_hidden("entity.player", true)?
+    const meta: editor.EntityMeta = editor.inspect("entity.player")
+    if meta.label != "Player" or meta.group != "actors"
+        return error("editor inspect should expose label and group")
+    end
+    if meta.locked == false or meta.hidden == false
+        return error("editor inspect should expose lock and hidden flags")
+    end
+    if editor.has_meta("entity.player") == false
+        return error("editor has_meta should detect stored metadata")
+    end
+    editor.clear("entity.player")?
+    if editor.has_meta("entity.player")
+        return error("editor clear should remove tool metadata")
+    end
+    const invalid_label: result<void, core.Error> = editor.set_label("", "Nope")
+    match invalid_label
+        case success():
+            return error("editor set_label should reject empty stable ids")
+        case error(err):
+            if err.message == ""
+                return error("editor empty stable id error should be clear")
+            end
+    end
+    return success()
+end
+
+func verify_storage_contract_errors() -> result<void, core.Error>
+    const empty_write: result<void, core.Error> = storage.write("", "value")
+    match empty_write
+        case success():
+            return error("storage write should reject empty keys")
+        case error(err):
+            const error_message: text = err.message
+            if error_message == ""
+                return error("storage write empty key should return a clear error")
+            end
+    end
+    const missing_copy: result<void, core.Error> = storage.copy("missing", "copy")
+    match missing_copy
+        case success():
+            return error("storage copy should fail when the source key is missing")
+        case error(err):
+            const error_message: text = err.message
+            if error_message == ""
+                return error("storage copy missing source should return a clear error")
+            end
+    end
+    const empty_read: optional<text> = storage.read("")
+    match empty_read
+        case some(_present):
+            return error("storage read should return none for empty keys")
+        case none:
+    end
+    return success()
+end
+
+func verify_services_contract_errors(
+    disconnected_cloud: services.CloudState
+) -> result<void, core.Error>
+    const empty_url: result<services.HttpResponse, core.Error> = services.http_send(services.HttpRequest(method: "GET", url: ""))
+    match empty_url
+        case success(_value):
+            return error("services http_send should reject empty urls")
+        case error(err):
+            const error_message: text = err.message
+            if error_message == ""
+                return error("services http_send empty url should return a clear error")
+            end
+    end
+    const default_method_response: services.HttpResponse = services.http_send(services.HttpRequest(method: "", url: "https://api.borealis.dev/default"))?
+    if default_method_response.body != "GET https://api.borealis.dev/default"
+        return error("services http_send should default empty method to GET")
+    end
+    const missing_provider: services.CloudState = services.cloud_connect("")
+    if services.cloud_is_connected(missing_provider)
+        return error("services cloud_connect should stay disconnected without provider")
+    end
+    const upload_disconnected: result<void, core.Error> = services.cloud_upload(disconnected_cloud, "slot/b", "save-data")
+    match upload_disconnected
+        case success():
+            return error("services cloud_upload should fail for disconnected states")
+        case error(err):
+            const error_message: text = err.message
+            if error_message == ""
+                return error("services cloud_upload disconnected should return a clear error")
+            end
+    end
+    return success()
+end
+
+func verify_database_contract_errors(
+    closed_connection: database.DatabaseConnection
+) -> result<void, core.Error>
+    const empty_driver: result<database.DatabaseConnection, core.Error> = database.open(database.DatabaseConfig(driver: "", path: "memory"))
+    match empty_driver
+        case success(_value):
+            return error("database open should reject empty driver names")
+        case error(err):
+            const error_message: text = err.message
+            if error_message == ""
+                return error("database empty driver should return a clear error")
+            end
+    end
+    verify_database_last_sql_before_exec()?
+    verify_database_empty_sql_error()?
+    verify_database_closed_connection_error(closed_connection)?
+    return success()
+end
+
+func verify_database_last_sql_before_exec() -> result<void, core.Error>
+    const connection: database.DatabaseConnection = database.open(database.DatabaseConfig(driver: "sqlite", path: ""))?
+    const before_exec_sql: optional<text> = database.last_sql(connection)
+    match before_exec_sql
+        case some(_sql):
+            return error("database last_sql should be none before any exec or query")
+        case none:
+    end
+    const closed_connection: database.DatabaseConnection = database.close(connection)
+    if database.is_open(closed_connection)
+        return error("database close should close verification connections")
+    end
+    return success()
+end
+
+func verify_database_empty_sql_error() -> result<void, core.Error>
+    const connection: database.DatabaseConnection = database.open(database.DatabaseConfig(driver: "sqlite", path: ""))?
+    const empty_sql: result<int, core.Error> = database.exec(connection, "")
+    match empty_sql
+        case success(_value):
+            return error("database exec should reject empty sql")
+        case error(err):
+            const error_message: text = err.message
+            if error_message == ""
+                return error("database exec empty sql should return a clear error")
+            end
+    end
+    const closed_connection: database.DatabaseConnection = database.close(connection)
+    if database.is_open(closed_connection)
+        return error("database close should close empty-sql verification connections")
+    end
+    return success()
+end
+
+func verify_database_closed_connection_error(
+    closed_connection: database.DatabaseConnection
+) -> result<void, core.Error>
+    const closed_exec: result<int, core.Error> = database.exec(closed_connection, "select 1")
+    match closed_exec
+        case success(_value):
+            return error("database exec should fail for closed connections")
+        case error(err):
+            const error_message: text = err.message
+            if error_message == ""
+                return error("database exec closed connection should return a clear error")
+            end
+    end
+    return success()
+end
+
+func verify_save_module() -> result<void, core.Error>
+    save.slot_write(2, "")?
+    if save.slot_exists(2) == false
+        return error("save should keep empty text as a valid stored value")
+    end
+    const maybe_empty_slot: optional<text> = save.slot_read(2)
+    match maybe_empty_slot
+        case some(snapshot):
+            if snapshot != ""
+                return error("save should preserve empty text payload")
+            end
+        case none:
+            return error("save should not treat empty text as deleted")
+    end
+    save.slot_delete(2)?
+    if save.slot_exists(2)
+        return error("deleted save slot should stop existing")
+    end
+    const deleted_slot: optional<text> = save.slot_read(2)
+    match deleted_slot
+        case some(_snapshot):
+            return error("deleted save slot should read as none")
+        case none:
+    end
+    save.autosave_write("world-state")?
+    const maybe_autosave: optional<text> = save.autosave_read()
+    match maybe_autosave
+        case some(snapshot):
+            if snapshot != "world-state"
+                return error("autosave should keep written snapshot")
+            end
+        case none:
+            return error("autosave should be readable after write")
+    end
+    save.autosave_delete()?
+    const deleted_autosave: optional<text> = save.autosave_read()
+    match deleted_autosave
+        case some(_snapshot):
+            return error("deleted autosave should read as none")
+        case none:
+    end
+    save.snapshot_write(4, "boss-room")?
+    const maybe_snapshot: optional<text> = save.snapshot_read(4)
+    match maybe_snapshot
+        case some(snapshot):
+            if snapshot != "boss-room"
+                return error("snapshot_read should return written snapshot")
+            end
+        case none:
+            return error("snapshot_read should find existing snapshots")
+    end
+    const maybe_restored_snapshot: optional<text> = save.snapshot_restore(4)
+    match maybe_restored_snapshot
+        case some(snapshot):
+            if snapshot != "boss-room"
+                return error("snapshot_restore should mirror slot snapshot content")
+            end
+        case none:
+            return error("snapshot_restore should restore existing snapshots")
+    end
+    save.snapshot_delete(4)?
+    const deleted_snapshot: optional<text> = save.snapshot_read(4)
+    match deleted_snapshot
+        case some(_snapshot):
+            return error("snapshot_delete should remove snapshot presence")
+        case none:
+    end
+    verify_save_fields()?
+    return success()
+end
+
+func verify_save_fields() -> result<void, core.Error>
+    save.slot_field_write(5, "player.hp", "100")?
+    save.slot_field_write(5, "world.day", "")?
+    if save.slot_field_exists(5, "player.hp") == false
+        return error("slot_field_exists should track written fields")
+    end
+    if save.slot_field_count(5) != 2
+        return error("slot_field_count should count present fields")
+    end
+    const maybe_player_hp: optional<text> = save.slot_field_read(5, "player.hp")
+    match maybe_player_hp
+        case some(hp):
+            if hp != "100"
+                return error("slot_field_read should preserve stored values")
+            end
+        case none:
+            return error("slot_field_read should find written fields")
+    end
+    const maybe_world_day: optional<text> = save.slot_field_read(5, "world.day")
+    match maybe_world_day
+        case some(day):
+            if day != ""
+                return error("slot_field_read should preserve empty text values")
+            end
+        case none:
+            return error("slot_field_read should keep empty values as valid fields")
+    end
+    save.slot_field_delete(5, "player.hp")?
+    if save.slot_field_exists(5, "player.hp")
+        return error("slot_field_delete should remove field presence")
+    end
+    if save.slot_field_count(5) != 1
+        return error("slot_field_delete should decrement field count")
+    end
+    const deleted_player_hp: optional<text> = save.slot_field_read(5, "player.hp")
+    match deleted_player_hp
+        case some(_hp):
+            return error("deleted slot field should read as none")
+        case none:
+    end
+    save.slot_field_clear(5)?
+    if save.slot_field_count(5) != 0
+        return error("slot_field_clear should clear all fields from the slot")
+    end
+    const cleared_world_day: optional<text> = save.slot_field_read(5, "world.day")
+    match cleared_world_day
+        case some(_day):
+            return error("slot_field_clear should remove all slot field values")
+        case none:
+    end
+    save.autosave_field_write("checkpoint", "v1")?
+    if save.autosave_field_exists("checkpoint") == false
+        return error("autosave_field_exists should track autosave field data")
+    end
+    if save.autosave_field_count() != 1
+        return error("autosave_field_count should count autosave fields")
+    end
+    const maybe_checkpoint: optional<text> = save.autosave_field_read("checkpoint")
+    match maybe_checkpoint
+        case some(checkpoint):
+            if checkpoint != "v1"
+                return error("autosave_field_read should preserve autosave field values")
+            end
+        case none:
+            return error("autosave_field_read should find written autosave fields")
+    end
+    save.autosave_field_delete("checkpoint")?
+    if save.autosave_field_exists("checkpoint")
+        return error("autosave_field_delete should remove autosave field presence")
+    end
+    if save.autosave_field_count() != 0
+        return error("autosave_field_delete should decrement autosave field count")
+    end
+    save.autosave_field_write("checkpoint", "v2")?
+    save.autosave_field_clear()?
+    if save.autosave_field_count() != 0
+        return error("autosave_field_clear should clear all autosave fields")
+    end
+    if save.slot_field_exists(-1, "hp")
+        return error("slot_field_exists should be false for invalid slots")
+    end
+    const invalid_slot_field_read: optional<text> = save.slot_field_read(-1, "hp")
+    match invalid_slot_field_read
+        case some(_present):
+            return error("slot_field_read should return none for invalid slots")
+        case none:
+    end
+    if save.slot_field_exists(1, "")
+        return error("slot_field_exists should be false for empty field names")
+    end
+    return success()
+end
+
+func verify_settings() -> result<void, core.Error>
+    var theme: settings.Settings = settings.defaults()
+    theme = settings.set_language(theme, "pt-BR")
+    theme = settings.set_master_volume(theme, 0.8)
+    theme = settings.set_music_volume(theme, 0.35)
+    theme = settings.set_sfx_volume(theme, 0.65)
+    theme = settings.set_dyslexia_font(theme, true)
+    theme = settings.set_high_contrast(theme, true)
+    theme = settings.set_reduce_motion(theme, true)
+    theme = settings.set_fullscreen(theme, true)
+    theme = settings.set_vsync(theme, false)
+    theme = settings.set_render_scale(theme, 3.0)
+    theme = settings.set_ui_scale(theme, 0.5)
+    if float_matches(theme.video_render_scale, 2.0) == false
+        return error("settings render scale should clamp to max")
+    end
+    if float_matches(theme.ui_scale, 0.75) == false
+        return error("settings ui scale should clamp to min")
+    end
+    const applied_theme: settings.Settings = settings.apply_state(theme)
+    if settings.current_state().language != "pt-BR"
+        return error("settings apply_state should update current state")
+    end
+    if applied_theme.video_vsync
+        return error("settings set_vsync should disable vsync when requested")
+    end
+    settings.save_profile("player-a", applied_theme)?
+    if settings.profile_exists("player-a") == false
+        return error("settings save_profile should create a named profile")
+    end
+    const serialized_master_volume: text = settings.serialize_number(applied_theme.master_volume)
+    const parsed_master_volume: float = settings.parse_number(serialized_master_volume)?
+    if float_matches(parsed_master_volume, 0.8) == false
+        const parsed_message: text = settings.serialize_number(parsed_master_volume)
+        const message: text = f"settings serialize_number should round-trip master volume: {serialized_master_volume} -> {parsed_message}"
+        return error(message)
+    end
+    const maybe_saved_master_volume: optional<text> = storage.read(settings.profile_value_key("player-a", "master_volume"))
+    match maybe_saved_master_volume
+        case some(saved_master_volume):
+            const parsed_saved_master_volume: float = settings.parse_number(saved_master_volume)?
+            if float_matches(parsed_saved_master_volume, 0.8) == false
+                return error("settings save_profile should persist master volume")
+            end
+        case none:
+            return error("settings save_profile should store master volume")
+    end
+    const maybe_loaded_theme: optional<settings.Settings> = settings.load_profile("player-a")
+    match maybe_loaded_theme
+        case some(loaded_theme):
+            verify_loaded_settings(loaded_theme)?
+            verify_setting_getters(loaded_theme)?
+            const maybe_profile_theme: optional<settings.Settings> = settings.apply_profile("player-a")
+            match maybe_profile_theme
+                case some(profile_theme):
+                    if profile_theme.video_fullscreen == false
+                        return error("settings apply_profile should return loaded state")
+                    end
+                    if settings.current_state().video_fullscreen == false
+                        return error("settings apply_profile should update current state")
+                    end
+                    const reset_theme: settings.Settings = settings.reset(loaded_theme, "video_fullscreen")
+                    if reset_theme.video_fullscreen
+                        return error("settings reset should restore fullscreen default")
+                    end
+                case none:
+                    return error("settings apply_profile should find a saved profile")
+            end
+        case none:
+            return error("settings load_profile should find a saved profile")
+    end
+    const reset_all_theme: settings.Settings = settings.reset_all()
+    if reset_all_theme.video_vsync == false
+        return error("settings reset_all should restore default vsync")
+    end
+    settings.delete_profile("player-a")?
+    if settings.profile_exists("player-a")
+        return error("settings delete_profile should remove saved profile")
+    end
+    const missing_profile: optional<settings.Settings> = settings.load_profile("player-a")
+    match missing_profile
+        case some(_value):
+            return error("settings load_profile should return none for a deleted profile")
+        case none:
+    end
+    const setting_names: list<text> = settings.list_names()
+    if len(setting_names) < 11
+        return error("settings list should expose known names")
+    end
+    return success()
+end
+
+func verify_loaded_settings(loaded_theme: settings.Settings) -> result<void, core.Error>
+    if loaded_theme.language != "pt-BR"
+        return error("settings load_profile should preserve language")
+    end
+    if float_matches(loaded_theme.master_volume, 0.8) == false
+        return error("settings load_profile should preserve master volume")
+    end
+    if float_matches(loaded_theme.music_volume, 0.35) == false
+        return error("settings load_profile should preserve music volume")
+    end
+    if float_matches(loaded_theme.sfx_volume, 0.65) == false
+        return error("settings load_profile should preserve sfx volume")
+    end
+    if loaded_theme.accessibility_dyslexia_font == false
+        return error("settings load_profile should preserve dyslexia font flag")
+    end
+    if loaded_theme.accessibility_high_contrast == false
+        return error("settings load_profile should preserve high contrast flag")
+    end
+    if loaded_theme.accessibility_reduce_motion == false
+        return error("settings load_profile should preserve reduce motion flag")
+    end
+    if loaded_theme.video_fullscreen == false
+        return error("settings load_profile should preserve fullscreen flag")
+    end
+    if loaded_theme.video_vsync
+        return error("settings load_profile should preserve vsync flag")
+    end
+    if float_matches(loaded_theme.video_render_scale, 2.0) == false
+        return error("settings load_profile should preserve render scale")
+    end
+    if float_matches(loaded_theme.ui_scale, 0.75) == false
+        return error("settings load_profile should preserve ui scale")
+    end
+    return success()
+end
+
+func verify_setting_getters(loaded_theme: settings.Settings) -> result<void, core.Error>
+    const maybe_fullscreen: optional<bool> = settings.get_flag(loaded_theme, "video_fullscreen")
+    match maybe_fullscreen
+        case some(fullscreen_flag):
+            if fullscreen_flag == false
+                return error("settings get_flag should expose fullscreen")
+            end
+        case none:
+            return error("settings get_flag should find fullscreen")
+    end
+    const maybe_render_scale: optional<float> = settings.get_number(loaded_theme, "video_render_scale")
+    match maybe_render_scale
+        case some(render_scale):
+            if float_matches(render_scale, 2.0) == false
+                return error("settings get_number should expose render scale")
+            end
+        case none:
+            return error("settings get_number should find render scale")
+    end
+    const maybe_language: optional<text> = settings.get_text(loaded_theme, "language")
+    match maybe_language
+        case some(language_value):
+            if language_value != "pt-BR"
+                return error("settings get_text should expose language")
+            end
+        case none:
+            return error("settings get_text should find language")
+    end
+    return success()
+end
+
+func float_matches(left: float, right: float, epsilon: float = 0.001) -> bool
+    var diff: float = left - right
+    if diff < 0.0
+        diff = 0.0 - diff
+    end
+    return diff <= epsilon
+end

@@ -1,0 +1,16 @@
+[project]
+name = "monomorphization-limit-error"
+kind = "app"
+version = "0.1.0"
+
+[source]
+root = "src"
+
+[app]
+entry = "app.main"
+
+[build]
+target = "native"
+output = "build"
+profile = "debug"
+monomorphization_limit = 1

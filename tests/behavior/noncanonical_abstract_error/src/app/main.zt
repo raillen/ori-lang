@@ -1,0 +1,8 @@
+namespace app.main
+
+abstract class Scoreable
+end
+
+func main() -> int
+    return 0
+end

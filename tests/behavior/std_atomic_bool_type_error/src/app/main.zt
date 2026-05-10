@@ -1,0 +1,11 @@
+namespace app.main
+
+import std.atomic as atomic
+
+public func main() -> int
+    const flag: atomic.Atomic<bool> = atomic.create(true)
+    if atomic.load(flag)
+        return 1
+    end
+    return 0
+end

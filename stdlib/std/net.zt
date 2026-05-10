@@ -1,0 +1,166 @@
+namespace std.net
+
+public enum Error
+    ConnectionRefused
+    HostUnreachable
+    Timeout
+    AddressInUse
+    AlreadyConnected
+    NotConnected
+    NetworkDown
+    Overflow
+    PeerReset
+    SystemLimit
+    Unknown
+end
+
+public struct Connection
+end
+
+extern c
+    public func zt_net_connect(
+        host: text,
+        port: int,
+        timeout_ms: int
+    ) -> result<net.Connection, core.Error>
+    public func zt_net_read_some(
+        connection: net.Connection,
+        max: int,
+        timeout_ms: int
+    ) -> result<optional<bytes>, core.Error>
+    public func zt_net_write_all(
+        connection: net.Connection,
+        data: bytes,
+        timeout_ms: int
+    ) -> result<void, core.Error>
+    public func zt_net_close(connection: net.Connection) -> result<void, core.Error>
+    public func zt_net_is_closed(connection: net.Connection) -> bool
+    public func zt_net_error_kind_index(err: core.Error) -> int
+end
+
+public func timeout_to_ms(timeout: optional<int>) -> int
+    match timeout
+        case some(timeout_ms):
+            return timeout_ms
+        case none:
+            return -1
+    end
+end
+
+public func map_core_error(err: core.Error) -> net.Error
+    const kind_index: int = net.zt_net_error_kind_index(err)
+    if kind_index == 1
+        return net.Error.ConnectionRefused
+    end
+    if kind_index == 2
+        return net.Error.HostUnreachable
+    end
+    if kind_index == 3
+        return net.Error.Timeout
+    end
+    if kind_index == 4
+        return net.Error.AddressInUse
+    end
+    if kind_index == 5
+        return net.Error.AlreadyConnected
+    end
+    if kind_index == 6
+        return net.Error.NotConnected
+    end
+    if kind_index == 7
+        return net.Error.NetworkDown
+    end
+    if kind_index == 8
+        return net.Error.Overflow
+    end
+    if kind_index == 9
+        return net.Error.PeerReset
+    end
+    if kind_index == 10
+        return net.Error.SystemLimit
+    end
+    return net.Error.Unknown
+end
+
+public func to_core_error(err: net.Error) -> core.Error
+    match err
+        case net.Error.ConnectionRefused:
+            return core.Error("net.ConnectionRefused", "connection refused")
+        case net.Error.HostUnreachable:
+            return core.Error("net.HostUnreachable", "host unreachable")
+        case net.Error.Timeout:
+            return core.Error("net.Timeout", "network operation timed out")
+        case net.Error.AddressInUse:
+            return core.Error("net.AddressInUse", "address already in use")
+        case net.Error.AlreadyConnected:
+            return core.Error("net.AlreadyConnected", "connection is already connected")
+        case net.Error.NotConnected:
+            return core.Error("net.NotConnected", "connection is not connected")
+        case net.Error.NetworkDown:
+            return core.Error("net.NetworkDown", "network is down")
+        case net.Error.Overflow:
+            return core.Error("net.Overflow", "network value is too large")
+        case net.Error.PeerReset:
+            return core.Error("net.PeerReset", "peer reset the connection")
+        case net.Error.SystemLimit:
+            return core.Error("net.SystemLimit", "system network limit reached")
+        case net.Error.Unknown:
+            return core.Error("net.Unknown", "unknown network error")
+    end
+end
+
+public func connect(
+    host: text,
+    port: int where it >= 1 and it <= 65535,
+    timeout: optional<int> = none
+) -> result<net.Connection, net.Error>
+    match net.zt_net_connect(host, port, net.timeout_to_ms(timeout))
+        case success(connection):
+            return success(connection)
+        case error(err):
+            return error(net.Error.Unknown)
+    end
+end
+
+public func read_some(
+    connection: net.Connection,
+    max: int where it > 0,
+    timeout: optional<int> = none
+) -> result<optional<bytes>, net.Error>
+    match net.zt_net_read_some(connection, max, net.timeout_to_ms(timeout))
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(net.Error.Unknown)
+    end
+end
+
+public func write_all(
+    connection: net.Connection,
+    data: bytes,
+    timeout: optional<int> = none
+) -> result<void, net.Error>
+    match net.zt_net_write_all(connection, data, net.timeout_to_ms(timeout))
+        case success():
+            return success()
+        case error(err):
+            return error(net.Error.Unknown)
+    end
+end
+
+public func close(connection: net.Connection) -> result<void, net.Error>
+    match net.zt_net_close(connection)
+        case success():
+            return success()
+        case error(err):
+            return error(net.Error.Unknown)
+    end
+end
+
+public func is_closed(connection: net.Connection) -> bool
+    return net.zt_net_is_closed(connection)
+end
+
+public func kind(err: core.Error) -> net.Error
+    return net.Error.Unknown
+end

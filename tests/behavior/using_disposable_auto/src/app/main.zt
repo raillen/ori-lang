@@ -1,0 +1,36 @@
+namespace app.main
+
+public var cleanup_log: int = 0
+
+trait Disposable
+    mut func dispose()
+end
+
+struct Resource
+    value: int
+end
+
+apply Resource
+    mut func add(delta: int)
+        self.value = self.value + delta
+    end
+end
+
+apply Disposable to Resource
+    mut func dispose()
+        cleanup_log = cleanup_log + self.value
+    end
+end
+
+func scoped_disposable_cleanup() -> int
+    cleanup_log = 0
+    using var resource = Resource(value: 5)
+        resource.add(2)
+    end
+    return cleanup_log
+end
+
+func main() -> int
+    check(scoped_disposable_cleanup() == 7, "using Disposable should auto-dispose block resource")
+    return 0
+end

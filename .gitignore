@@ -1,0 +1,34 @@
+﻿# Rust / Cargo
+target/
+Cargo.lock
+*.pdb
+
+# Ori compiler output
+*.ori.c
+*.ori.o
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+lsp.log
+
+# Test artifacts
+tests/snapshots/tmp/
+tmp/
+.ztc-tmp/
+
+# Python cache (tools)
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS
+Thumbs.db

@@ -1,0 +1,15 @@
+namespace app.main
+
+struct Point
+    x: int
+    y: int
+end
+
+extern c
+    func zt_ffi_point_sum(point: Point) -> int
+end
+
+public func main() -> int
+    const point: Point = Point(x: 20, y: 22)
+    return zt_ffi_point_sum(point)
+end

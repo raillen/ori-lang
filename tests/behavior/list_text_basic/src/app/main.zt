@@ -1,0 +1,11 @@
+namespace app.main
+
+func main() -> int
+    const first: text = "alpha"
+    const second: text = "beta"
+    const replacement: text = "zenith"
+    var names: list<text> = [first, second]
+    names[0] = replacement
+    const picked: text = names[0]
+    return 0
+end

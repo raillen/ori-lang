@@ -1,0 +1,510 @@
+--- @target: namespace
+# std.validate - Validation Predicates
+
+Small pure bool helpers for `where` and regular conditions.
+No IO, no parsing, no transforms.
+---
+
+--- @target: between
+```zt
+public func between(value: int, min: int, max: int) -> bool
+```
+
+Inclusive range check.
+---
+
+--- @target: positive
+```zt
+public func positive(value: int) -> bool
+```
+
+`true` when value is `> 0`.
+---
+
+--- @target: non_negative
+```zt
+public func non_negative(value: int) -> bool
+```
+
+`true` when value is `>= 0`.
+---
+
+--- @target: negative
+```zt
+public func negative(value: int) -> bool
+```
+
+`true` when value is `< 0`.
+---
+
+--- @target: non_zero
+```zt
+public func non_zero(value: int) -> bool
+```
+
+`true` when value is not zero.
+---
+
+--- @target: one_of
+```zt
+public func one_of(value: int, candidates: list<int>) -> bool
+```
+
+`true` when `value` is inside `candidates`.
+---
+
+--- @target: one_of_text
+```zt
+public func one_of_text(value: text, candidates: list<text>) -> bool
+```
+
+`true` when text value is inside `candidates`.
+---
+
+--- @target: between_float
+```zt
+public func between_float(value: float, min: float, max: float) -> bool
+```
+
+Inclusive float range check.
+---
+
+--- @target: positive_float
+```zt
+public func positive_float(value: float) -> bool
+```
+
+`true` when float value is `> 0.0`.
+---
+
+--- @target: non_negative_float
+```zt
+public func non_negative_float(value: float) -> bool
+```
+
+`true` when float value is `>= 0.0`.
+---
+
+--- @target: negative_float
+```zt
+public func negative_float(value: float) -> bool
+```
+
+`true` when float value is `< 0.0`.
+---
+
+--- @target: non_zero_float
+```zt
+public func non_zero_float(value: float) -> bool
+```
+
+`true` when float value is not zero.
+---
+
+--- @target: one_of_float
+```zt
+public func one_of_float(value: float, candidates: list<float>) -> bool
+```
+
+`true` when float value is inside `candidates`.
+---
+
+--- @target: is_true
+```zt
+public func is_true(value: bool) -> bool
+```
+
+Returns the bool as a predicate.
+---
+
+--- @target: is_false
+```zt
+public func is_false(value: bool) -> bool
+```
+
+`true` when value is `false`.
+---
+
+--- @target: one_of_bool
+```zt
+public func one_of_bool(value: bool, candidates: list<bool>) -> bool
+```
+
+`true` when bool value is inside `candidates`.
+---
+
+--- @target: is_some_int
+```zt
+public func is_some_int(value: optional<int>) -> bool
+```
+
+`true` when optional int has a value.
+---
+
+--- @target: is_none_int
+```zt
+public func is_none_int(value: optional<int>) -> bool
+```
+
+`true` when optional int is `none`.
+---
+
+--- @target: is_some_float
+```zt
+public func is_some_float(value: optional<float>) -> bool
+```
+
+`true` when optional float has a value.
+---
+
+--- @target: is_none_float
+```zt
+public func is_none_float(value: optional<float>) -> bool
+```
+
+`true` when optional float is `none`.
+---
+
+--- @target: is_some_bool
+```zt
+public func is_some_bool(value: optional<bool>) -> bool
+```
+
+`true` when optional bool has a value.
+---
+
+--- @target: is_none_bool
+```zt
+public func is_none_bool(value: optional<bool>) -> bool
+```
+
+`true` when optional bool is `none`.
+---
+
+--- @target: is_success_int_text
+```zt
+public func is_success_int_text(value: result<int, text>) -> bool
+```
+
+`true` when result is success.
+---
+
+--- @target: is_error_int_text
+```zt
+public func is_error_int_text(value: result<int, text>) -> bool
+```
+
+`true` when result is error.
+---
+
+--- @target: not_empty_list_int
+```zt
+public func not_empty_list_int(values: list<int>) -> bool
+```
+
+`true` when int list is not empty.
+---
+
+--- @target: min_length_list_int
+```zt
+public func min_length_list_int(values: list<int>, min: int) -> bool
+```
+
+`true` when int list length is at least `min`.
+---
+
+--- @target: max_length_list_int
+```zt
+public func max_length_list_int(values: list<int>, max: int) -> bool
+```
+
+`true` when int list length is at most `max`.
+---
+
+--- @target: length_between_list_int
+```zt
+public func length_between_list_int(values: list<int>, min: int, max: int) -> bool
+```
+
+`true` when int list length is in `[min, max]`.
+---
+
+--- @target: not_empty_list_text
+```zt
+public func not_empty_list_text(values: list<text>) -> bool
+```
+
+`true` when text list is not empty.
+---
+
+--- @target: min_length_list_text
+```zt
+public func min_length_list_text(values: list<text>, min: int) -> bool
+```
+
+`true` when text list length is at least `min`.
+---
+
+--- @target: max_length_list_text
+```zt
+public func max_length_list_text(values: list<text>, max: int) -> bool
+```
+
+`true` when text list length is at most `max`.
+---
+
+--- @target: length_between_list_text
+```zt
+public func length_between_list_text(values: list<text>, min: int, max: int) -> bool
+```
+
+`true` when text list length is in `[min, max]`.
+---
+
+--- @target: not_empty_list_float
+```zt
+public func not_empty_list_float(values: list<float>) -> bool
+```
+
+`true` when float list is not empty.
+---
+
+--- @target: min_length_list_float
+```zt
+public func min_length_list_float(values: list<float>, min: int) -> bool
+```
+
+`true` when float list length is at least `min`.
+---
+
+--- @target: max_length_list_float
+```zt
+public func max_length_list_float(values: list<float>, max: int) -> bool
+```
+
+`true` when float list length is at most `max`.
+---
+
+--- @target: length_between_list_float
+```zt
+public func length_between_list_float(values: list<float>, min: int, max: int) -> bool
+```
+
+`true` when float list length is in `[min, max]`.
+---
+
+--- @target: not_empty_list_bool
+```zt
+public func not_empty_list_bool(values: list<bool>) -> bool
+```
+
+`true` when bool list is not empty.
+---
+
+--- @target: min_length_list_bool
+```zt
+public func min_length_list_bool(values: list<bool>, min: int) -> bool
+```
+
+`true` when bool list length is at least `min`.
+---
+
+--- @target: max_length_list_bool
+```zt
+public func max_length_list_bool(values: list<bool>, max: int) -> bool
+```
+
+`true` when bool list length is at most `max`.
+---
+
+--- @target: length_between_list_bool
+```zt
+public func length_between_list_bool(values: list<bool>, min: int, max: int) -> bool
+```
+
+`true` when bool list length is in `[min, max]`.
+---
+
+--- @target: not_empty_map_text_int
+```zt
+public func not_empty_map_text_int(values: map<text, int>) -> bool
+```
+
+`true` when map is not empty.
+---
+
+--- @target: min_size_map_text_int
+```zt
+public func min_size_map_text_int(values: map<text, int>, min: int) -> bool
+```
+
+`true` when map size is at least `min`.
+---
+
+--- @target: max_size_map_text_int
+```zt
+public func max_size_map_text_int(values: map<text, int>, max: int) -> bool
+```
+
+`true` when map size is at most `max`.
+---
+
+--- @target: size_between_map_text_int
+```zt
+public func size_between_map_text_int(values: map<text, int>, min: int, max: int) -> bool
+```
+
+`true` when map size is in `[min, max]`.
+---
+
+--- @target: not_empty_map_text_text
+```zt
+public func not_empty_map_text_text(values: map<text, text>) -> bool
+```
+
+`true` when map is not empty.
+---
+
+--- @target: min_size_map_text_text
+```zt
+public func min_size_map_text_text(values: map<text, text>, min: int) -> bool
+```
+
+`true` when map size is at least `min`.
+---
+
+--- @target: max_size_map_text_text
+```zt
+public func max_size_map_text_text(values: map<text, text>, max: int) -> bool
+```
+
+`true` when map size is at most `max`.
+---
+
+--- @target: size_between_map_text_text
+```zt
+public func size_between_map_text_text(values: map<text, text>, min: int, max: int) -> bool
+```
+
+`true` when map size is in `[min, max]`.
+---
+
+--- @target: not_empty_map_int_text
+```zt
+public func not_empty_map_int_text(values: map<int, text>) -> bool
+```
+
+`true` when map is not empty.
+---
+
+--- @target: min_size_map_int_text
+```zt
+public func min_size_map_int_text(values: map<int, text>, min: int) -> bool
+```
+
+`true` when map size is at least `min`.
+---
+
+--- @target: max_size_map_int_text
+```zt
+public func max_size_map_int_text(values: map<int, text>, max: int) -> bool
+```
+
+`true` when map size is at most `max`.
+---
+
+--- @target: size_between_map_int_text
+```zt
+public func size_between_map_int_text(values: map<int, text>, min: int, max: int) -> bool
+```
+
+`true` when map size is in `[min, max]`.
+---
+
+--- @target: not_empty_map_int_int
+```zt
+public func not_empty_map_int_int(values: map<int, int>) -> bool
+```
+
+`true` when map is not empty.
+---
+
+--- @target: min_size_map_int_int
+```zt
+public func min_size_map_int_int(values: map<int, int>, min: int) -> bool
+```
+
+`true` when map size is at least `min`.
+---
+
+--- @target: max_size_map_int_int
+```zt
+public func max_size_map_int_int(values: map<int, int>, max: int) -> bool
+```
+
+`true` when map size is at most `max`.
+---
+
+--- @target: size_between_map_int_int
+```zt
+public func size_between_map_int_int(values: map<int, int>, min: int, max: int) -> bool
+```
+
+`true` when map size is in `[min, max]`.
+---
+
+--- @target: not_empty
+```zt
+public func not_empty(value: text) -> bool
+```
+
+`true` when text length is `> 0`.
+---
+
+--- @target: not_empty_text
+```zt
+public func not_empty_text(value: text) -> bool
+```
+
+Clear alias for `not_empty` when the value is text.
+---
+
+--- @target: min_length
+```zt
+public func min_length(value: text, min: int) -> bool
+```
+
+`true` when `len(value) >= min`.
+---
+
+--- @target: min_len
+```zt
+public func min_len(value: text, min: int) -> bool
+```
+
+Short alias for `min_length`.
+---
+
+--- @target: max_length
+```zt
+public func max_length(value: text, max: int) -> bool
+```
+
+`true` when `len(value) <= max`.
+---
+
+--- @target: max_len
+```zt
+public func max_len(value: text, max: int) -> bool
+```
+
+Short alias for `max_length`.
+---
+
+--- @target: length_between
+```zt
+public func length_between(value: text, min: int, max: int) -> bool
+```
+
+`true` when text length is in `[min, max]`.
+---

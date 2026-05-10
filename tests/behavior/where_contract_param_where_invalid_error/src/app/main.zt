@@ -1,0 +1,10 @@
+namespace app.main
+
+func needs_positive(value: int where missing > 0) -> int
+    return value
+end
+
+func main() -> int
+    return 0
+end
+

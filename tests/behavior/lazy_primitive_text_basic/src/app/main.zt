@@ -1,0 +1,55 @@
+namespace app.main
+
+import std.lazy as lazy
+
+public var hits: int = 0
+
+func make_text() -> text
+    hits = hits + 1
+    return "zenith"
+end
+
+func main() -> int
+    const later_int: lazy<int> = lazy.once_int(func() => 41)
+    const later_float: lazy<float> = lazy.once_float(func() => 2.5)
+    const later_bool: lazy<bool> = lazy.once_bool(func() => true)
+    const later_text: lazy<text> = lazy.once_text(make_text)
+
+    if hits != 0
+        return 1
+    end
+    if lazy.force_int(later_int) != 41
+        return 2
+    end
+    if lazy.is_consumed_int(later_int) == false
+        return 3
+    end
+    if hits != 0
+        return 4
+    end
+    if lazy.force_float(later_float) != 2.5
+        return 5
+    end
+    if lazy.is_consumed_float(later_float) == false
+        return 6
+    end
+    if lazy.force_bool(later_bool) == false
+        return 7
+    end
+    if lazy.is_consumed_bool(later_bool) == false
+        return 8
+    end
+
+    const value: text = lazy.force_text(later_text)
+    if value != "zenith"
+        return 9
+    end
+    if lazy.is_consumed_text(later_text) == false
+        return 10
+    end
+    if hits != 1
+        return 11
+    end
+
+    return 0
+end

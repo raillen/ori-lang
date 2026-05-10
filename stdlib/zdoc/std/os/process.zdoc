@@ -1,0 +1,72 @@
+--- @target: namespace
+# std.os.process — Processos Filhos
+
+Módulo de execução de processos filhos.
+Execução explícita via `program` + `args`, sem shell.
+Código de saída não-zero é resultado válido, não erro.
+---
+
+--- @target: ExitStatus
+```zt
+public struct ExitStatus
+    code: int
+end
+```
+
+Status de saída de um processo filho.
+Código 0 indica sucesso convencional; outros códigos são resultados válidos.
+---
+
+--- @target: CapturedRun
+```zt
+public struct CapturedRun
+    status: process.ExitStatus
+    stdout_text: text
+    stderr_text: text
+end
+```
+
+Resultado de execução com captura textual de stdout e stderr.
+---
+
+--- @target: Error
+```zt
+public enum Error
+    NotFound
+    PermissionDenied
+    IOFailure
+    DecodeFailed
+    Unknown
+end
+```
+
+Erro de nível de transporte (spawn, wait, captura).
+Código de saída não-zero NÃO é `process.Error`.
+---
+
+--- @target: run
+```zt
+public func run(program: text, args: list<text> = [], cwd: optional<text> = none) -> result<process.ExitStatus, process.Error>
+```
+
+Executa um programa e aguarda sua conclusão.
+Não usa shell. Argumentos são passados explicitamente.
+
+@param program — Caminho ou nome do programa.
+@param args — Argumentos do programa (padrão: `[]`).
+@param cwd — Diretório de trabalho opcional.
+@return Status de saída, ou erro de transporte.
+---
+
+--- @target: run_capture
+```zt
+public func run_capture(program: text, args: list<text> = [], cwd: optional<text> = none) -> result<process.CapturedRun, process.Error>
+```
+
+Executa um programa e captura stdout e stderr como texto (UTF-8).
+
+@param program — Caminho ou nome do programa.
+@param args — Argumentos do programa (padrão: `[]`).
+@param cwd — Diretório de trabalho opcional.
+@return Resultado capturado, ou erro de transporte.
+---

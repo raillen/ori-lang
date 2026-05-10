@@ -1,0 +1,10 @@
+namespace app.main
+
+func add(a: int, b: int) -> int
+    return a + b
+end
+
+public func main() -> int
+    const op: func(int, int) -> int = add
+    return op(10)
+end

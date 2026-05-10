@@ -1,0 +1,16 @@
+namespace app.main
+
+import std.test as test
+
+func expected_panic() -> void
+    panic("expected")
+end
+
+func main() -> int
+    test.throws(expected_panic)
+    test.throws(func() -> void
+        panic("inline expected")
+    end)
+
+    return 0
+end

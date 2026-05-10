@@ -1,0 +1,330 @@
+namespace borealis.engine.ecs
+
+import std.format as format
+import std.text as text
+
+public struct System
+    id: int
+end
+
+public struct SystemInfo
+    id: int
+    name: text
+    phase: text
+    enabled: bool
+    run_count: int
+    last_dt: float
+end
+
+public var ecs_component_values: map<text, text> = {}
+public var ecs_component_types: map<int, text> = {}
+public var ecs_component_counts: map<int, int> = {}
+
+public var ecs_system_next_id: int = 1
+public var ecs_system_alive: map<int, bool> = {}
+public var ecs_system_name: map<int, text> = {}
+public var ecs_system_phase: map<int, text> = {}
+public var ecs_system_enabled: map<int, bool> = {}
+public var ecs_system_run_count: map<int, int> = {}
+public var ecs_system_last_dt: map<int, float> = {}
+
+public func ecs_text_or(values: map<int, text>, id: int, fallback: text) -> text
+    const value: optional<text> = values.get(id)
+    match value
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func ecs_int_or(values: map<int, int>, id: int, fallback: int) -> int
+    const value: optional<int> = values.get(id)
+    match value
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func ecs_bool_or(values: map<int, bool>, id: int, fallback: bool) -> bool
+    const value: optional<bool> = values.get(id)
+    match value
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func ecs_float_or(values: map<int, float>, id: int, fallback: float) -> float
+    const value: optional<float> = values.get(id)
+    match value
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func ecs_text_key_or(values: map<text, text>, key: text, fallback: text) -> text
+    const value: optional<text> = values.get(key)
+    match value
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func ecs_text_set(values: map<int, text>, id: int, value: text) -> map<int, text>
+    var next_values: map<int, text> = values
+    next_values[id] = value
+    return next_values
+end
+
+public func ecs_int_set(values: map<int, int>, id: int, value: int) -> map<int, int>
+    var next_values: map<int, int> = values
+    next_values[id] = value
+    return next_values
+end
+
+public func ecs_bool_set(values: map<int, bool>, id: int, value: bool) -> map<int, bool>
+    var next_values: map<int, bool> = values
+    next_values[id] = value
+    return next_values
+end
+
+public func ecs_float_set(values: map<int, float>, id: int, value: float) -> map<int, float>
+    var next_values: map<int, float> = values
+    next_values[id] = value
+    return next_values
+end
+
+public func ecs_text_key_set(values: map<text, text>, key: text, value: text) -> map<text, text>
+    var next_values: map<text, text> = values
+    next_values[key] = value
+    return next_values
+end
+
+public func ecs_component_key(entity_id: int, component_type: text) -> text
+    return text.join(["e-", format.hex(entity_id), ":", component_type])
+end
+
+public func ecs_component_token(component_type: text) -> text
+    return text.join(["|", component_type, "|"])
+end
+
+public func ecs_component_has(entity_id: int, component_type: text) -> bool
+    const value: text = ecs.ecs_text_key_or(
+        ecs_component_values,
+        ecs.ecs_component_key(entity_id, component_type),
+        ""
+    )
+    return value != ""
+end
+
+public func ecs_component_get(entity_id: int, component_type: text) -> optional<text>
+    const value: text = ecs.ecs_text_key_or(
+        ecs_component_values,
+        ecs.ecs_component_key(entity_id, component_type),
+        ""
+    )
+    if value == ""
+        return none
+    end
+    return value
+end
+
+public func ecs_component_set(entity_id: int, component_type: text, payload: text) -> result<void, core.Error>
+    if entity_id <= 0
+        return error("ecs: entity id must be positive")
+    end
+    if component_type == ""
+        return error("ecs: component type cannot be empty")
+    end
+
+    const key: text = ecs.ecs_component_key(entity_id, component_type)
+    const was_present: bool = ecs.ecs_component_has(entity_id, component_type)
+
+    ecs_component_values = ecs.ecs_text_key_set(ecs_component_values, key, payload)
+
+    if was_present == false
+        const token: text = ecs.ecs_component_token(component_type)
+        const current_types: text = ecs.ecs_text_or(ecs_component_types, entity_id, "|")
+        if text.contains(current_types, token) == false
+            ecs_component_types = ecs.ecs_text_set(
+                ecs_component_types,
+                entity_id,
+                text.join([current_types, component_type, "|"])
+            )
+        end
+        ecs_component_counts = ecs.ecs_int_set(
+            ecs_component_counts,
+            entity_id,
+            ecs.ecs_int_or(ecs_component_counts, entity_id, 0) + 1
+        )
+    end
+
+    return success()
+end
+
+public func ecs_component_remove(entity_id: int, component_type: text) -> result<void, core.Error>
+    if entity_id <= 0
+        return error("ecs: entity id must be positive")
+    end
+    if component_type == ""
+        return error("ecs: component type cannot be empty")
+    end
+
+    if ecs.ecs_component_has(entity_id, component_type) == false
+        return success()
+    end
+
+    const key: text = ecs.ecs_component_key(entity_id, component_type)
+    ecs_component_values = ecs.ecs_text_key_set(ecs_component_values, key, "")
+
+    const token: text = ecs.ecs_component_token(component_type)
+    const current_types: text = ecs.ecs_text_or(ecs_component_types, entity_id, "|")
+    ecs_component_types = ecs.ecs_text_set(
+        ecs_component_types,
+        entity_id,
+        text.replace_all(current_types, token, "|")
+    )
+
+    const current_count: int = ecs.ecs_int_or(ecs_component_counts, entity_id, 0)
+    if current_count > 0
+        ecs_component_counts = ecs.ecs_int_set(ecs_component_counts, entity_id, current_count - 1)
+    end
+
+    return success()
+end
+
+public func ecs_component_list_blob(entity_id: int) -> text
+    return ecs.ecs_text_or(ecs_component_types, entity_id, "|")
+end
+
+public func ecs_component_count(entity_id: int) -> int
+    return ecs.ecs_int_or(ecs_component_counts, entity_id, 0)
+end
+
+public func ecs_phase_is_valid(phase: text) -> bool
+    if phase == "update"
+        return true
+    end
+    if phase == "draw"
+        return true
+    end
+    return false
+end
+
+public func ecs_system_exists(system: ecs.System) -> bool
+    return ecs.ecs_bool_or(ecs_system_alive, system.id, false)
+end
+
+public func ecs_system_require_exists(system: ecs.System) -> result<void, core.Error>
+    if ecs.ecs_system_exists(system) == false
+        return error("ecs: system not found")
+    end
+    return success()
+end
+
+public func ecs_system_register(name: text, phase: text = "update") -> result<ecs.System, core.Error>
+    if name == ""
+        return error("ecs: system name cannot be empty")
+    end
+    if ecs.ecs_phase_is_valid(phase) == false
+        return error("ecs: phase must be 'update' or 'draw'")
+    end
+
+    const id: int = ecs_system_next_id
+    ecs_system_next_id = ecs_system_next_id + 1
+
+    ecs_system_alive = ecs.ecs_bool_set(ecs_system_alive, id, true)
+    ecs_system_name = ecs.ecs_text_set(ecs_system_name, id, name)
+    ecs_system_phase = ecs.ecs_text_set(ecs_system_phase, id, phase)
+    ecs_system_enabled = ecs.ecs_bool_set(ecs_system_enabled, id, true)
+    ecs_system_run_count = ecs.ecs_int_set(ecs_system_run_count, id, 0)
+    ecs_system_last_dt = ecs.ecs_float_set(ecs_system_last_dt, id, 0.0)
+
+    return success(ecs.System(id: id))
+end
+
+public func ecs_system_destroy(system: ecs.System) -> result<void, core.Error>
+    ecs.ecs_system_require_exists(system)?
+    ecs_system_alive = ecs.ecs_bool_set(ecs_system_alive, system.id, false)
+    ecs_system_enabled = ecs.ecs_bool_set(ecs_system_enabled, system.id, false)
+    return success()
+end
+
+public func ecs_system_enable(system: ecs.System, enabled: bool) -> result<void, core.Error>
+    ecs.ecs_system_require_exists(system)?
+    ecs_system_enabled = ecs.ecs_bool_set(ecs_system_enabled, system.id, enabled)
+    return success()
+end
+
+public func ecs_system_is_enabled(system: ecs.System) -> bool
+    if ecs.ecs_system_exists(system) == false
+        return false
+    end
+    return ecs.ecs_bool_or(ecs_system_enabled, system.id, false)
+end
+
+public func ecs_system_mark_run(system: ecs.System, dt: float) -> result<void, core.Error>
+    ecs.ecs_system_require_exists(system)?
+    if ecs.ecs_system_is_enabled(system) == false
+        return success()
+    end
+    ecs_system_run_count = ecs.ecs_int_set(
+        ecs_system_run_count,
+        system.id,
+        ecs.ecs_int_or(ecs_system_run_count, system.id, 0) + 1
+    )
+    ecs_system_last_dt = ecs.ecs_float_set(ecs_system_last_dt, system.id, dt)
+    return success()
+end
+
+public func ecs_system_info(system: ecs.System) -> ecs.SystemInfo
+    return ecs.SystemInfo(
+        id: system.id,
+        name: ecs.ecs_text_or(ecs_system_name, system.id, ""),
+        phase: ecs.ecs_text_or(ecs_system_phase, system.id, "update"),
+        enabled: ecs.ecs_bool_or(ecs_system_enabled, system.id, false),
+        run_count: ecs.ecs_int_or(ecs_system_run_count, system.id, 0),
+        last_dt: ecs.ecs_float_or(ecs_system_last_dt, system.id, 0.0)
+    )
+end
+
+public func ecs_system_count() -> int
+    var total: int = 0
+    var probe: int = 1
+    while probe < ecs_system_next_id
+        if ecs.ecs_bool_or(ecs_system_alive, probe, false)
+            total = total + 1
+        end
+        probe = probe + 1
+    end
+    return total
+end
+
+public func ecs_system_at(index: int) -> optional<ecs.System>
+    if index < 0
+        return none
+    end
+
+    var probe: int = 1
+    var cursor: int = 0
+    while probe < ecs_system_next_id
+        if ecs.ecs_bool_or(ecs_system_alive, probe, false)
+            if cursor == index
+                return ecs.System(id: probe)
+            end
+            cursor = cursor + 1
+        end
+        probe = probe + 1
+    end
+    return none
+end
+
+

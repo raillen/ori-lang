@@ -1,0 +1,10 @@
+namespace app.main
+
+import std.mem as mem
+
+func main() -> int
+    const key: tuple<int, text> = (1, "one")
+    const values: map<tuple<int, text>, int> = {key: 1}
+    const copied: map<tuple<int, text>, int> = mem.edit(values)
+    return len(copied)
+end

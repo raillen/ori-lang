@@ -1,0 +1,114 @@
+namespace app.main
+
+public var cleanup_log: int = 0
+
+func record_cleanup(value: int) -> void
+    cleanup_log = (cleanup_log * 10) + value
+end
+
+func using_block_scope() -> int
+    var total: int = 0
+
+    using x = 10
+        total = total + x
+    end
+
+    return total
+end
+
+func using_flat_scope() -> int
+    using value = 14
+    return value + 1
+end
+
+func using_flat_cleanup() -> int
+    cleanup_log = 0
+    using value = 5 then record_cleanup(value)
+    check(cleanup_log == 0, "flat using cleanup should wait for scope exit")
+    return value
+end
+
+func using_early_return() -> int
+    cleanup_log = 0
+    using value = 3 then record_cleanup(value)
+    return 7
+end
+
+func using_lifo_cleanup() -> int
+    cleanup_log = 0
+    using first = 1 then record_cleanup(first)
+    using second = 2 then record_cleanup(second)
+    return 0
+end
+
+func always_fail() -> result<int, core.Error>
+    return error("using cleanup propagation")
+end
+
+func using_error_propagation() -> result<int, core.Error>
+    cleanup_log = 0
+    using value = 4 then record_cleanup(value)
+    const never: int = always_fail()?
+    return success(never)
+end
+
+func using_loop_cleanup() -> int
+    cleanup_log = 0
+    for item in range(1, 4)
+        using current = item then record_cleanup(current)
+    end
+    return cleanup_log
+end
+
+func using_loop_control_cleanup() -> int
+    cleanup_log = 0
+    var index: int = 0
+
+    while index < 4
+        index = index + 1
+        using current = index then record_cleanup(current)
+
+        if index == 1
+            continue
+        end
+
+        if index == 2
+            break
+        end
+    end
+
+    return cleanup_log
+end
+
+func main() -> int
+    check(using_block_scope() == 10, "using block basic")
+    check(using_flat_scope() == 15, "using flat binding should live to scope end")
+
+    const flat_value: int = using_flat_cleanup()
+    check(flat_value == 5, "flat using should return the bound value")
+    check(cleanup_log == 5, "flat using should clean up on function exit")
+
+    const early_value: int = using_early_return()
+    check(early_value == 7, "using early return should keep return value")
+    check(cleanup_log == 3, "using early return should run cleanup")
+
+    using_lifo_cleanup()
+    check(cleanup_log == 21, "using cleanup should be LIFO")
+
+    const failed: result<int, core.Error> = using_error_propagation()
+    var propagated: bool = false
+    match failed
+        case success(value) ->
+            check(value == 0, "using error propagation should not succeed")
+        case error(err) ->
+            const message: text = err.message
+            propagated = message == "using cleanup propagation"
+    end
+    check(propagated, "using error propagation should run cleanup before propagating")
+    check(cleanup_log == 4, "using error propagation should clean up")
+
+    check(using_loop_cleanup() == 1234, "using loop cleanup should run once per iteration")
+    check(using_loop_control_cleanup() == 12, "using loop cleanup should run before continue and break")
+
+    return 0
+end

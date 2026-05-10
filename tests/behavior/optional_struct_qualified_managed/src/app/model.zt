@@ -1,0 +1,51 @@
+namespace app.model
+
+import app.math as math
+
+public struct Profile
+    name: text
+    pos: math.Point
+    tags: list<text>
+end
+
+public struct Slot
+    profile: optional<model.Profile>
+end
+
+public func empty_profile() -> model.Profile
+    return model.Profile(name: "", pos: math.Point(x: 0, y: 0), tags: [])
+end
+
+public func empty_slot() -> model.Slot
+    return model.Slot(profile: none)
+end
+
+public func make_profile() -> model.Profile
+    const pos: math.Point = math.Point(x: 3, y: 4)
+    const tags: list<text> = ["wind", "light"]
+    return model.Profile(name: "Lina", pos: pos, tags: tags)
+end
+
+public func find_profile(id: int) -> optional<model.Profile>
+    if id == 1
+        return model.make_profile()
+    end
+    return none
+end
+
+public func return_optional_profile() -> optional<model.Profile>
+    return model.make_profile()
+end
+
+public func unwrap_name(sample: optional<model.Profile>) -> text
+    match sample
+        case value profile ->
+            return profile.name
+        case none ->
+            return "missing"
+    end
+end
+
+public func slot_name(slot: model.Slot) -> text
+    return model.unwrap_name(slot.profile)
+end

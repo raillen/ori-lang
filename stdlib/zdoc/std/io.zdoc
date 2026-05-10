@@ -1,0 +1,128 @@
+--- @target: namespace
+# std.io - Entrada e saida padrao
+
+Modulo textual sincrono para streams padrao de entrada, saida e erro.
+Usa handles tipados (`io.Input`, `io.Output`) e funcoes livres com parametros opcionais `to:` e `from:`.
+As funcoes publicas retornam `result` com erro tipado `io.Error`.
+Use `io.to_core_error(err)` ao integrar com APIs antigas que ainda esperam `core.Error`.
+---
+
+--- @target: Input
+```zt
+public struct Input
+    handle: int
+end
+```
+
+Handle tipado para streams de entrada.
+O handle padrao `io.input` representa stdin.
+---
+
+--- @target: Output
+```zt
+public struct Output
+    handle: int
+end
+```
+
+Handle tipado para streams de saida.
+Os handles padrao sao `io.output` (stdout) e `io.stderr` (stderr).
+---
+
+--- @target: Error
+```zt
+public enum Error
+    ReadFailed
+    WriteFailed
+    Unknown
+end
+```
+
+Erro tipado para operacoes de I/O.
+---
+
+--- @target: input
+```zt
+public const input: io.Input
+```
+
+Handle padrao de entrada.
+---
+
+--- @target: output
+```zt
+public const output: io.Output
+```
+
+Handle padrao de saida.
+---
+
+--- @target: stderr
+```zt
+public const stderr: io.Output
+```
+
+Handle padrao de erro.
+---
+
+--- @target: read_line
+```zt
+public func read_line(from: io.Input = io.input) -> result<optional<text>, io.Error>
+```
+
+Le uma unica linha da entrada.
+Retorna `none` ao atingir EOF sem conteudo.
+Terminadores de linha (`\n`, `\r\n`) sao removidos.
+
+@param from - Handle de entrada. Padrao: `io.input`.
+@return Linha lida como `optional<text>`, ou erro de I/O.
+---
+
+--- @target: read_all
+```zt
+public func read_all(from: io.Input = io.input) -> result<text, io.Error>
+```
+
+Le todo o conteudo disponivel na entrada ate EOF.
+
+@param from - Handle de entrada. Padrao: `io.input`.
+@return Texto lido, ou erro de I/O.
+---
+
+--- @target: write
+```zt
+public func write(value: text, to: io.Output = io.output) -> result<void, io.Error>
+```
+
+Escreve texto bruto no stream de saida especificado.
+Nao adiciona quebra de linha.
+
+@param value - Texto a ser escrito.
+@param to - Handle de saida. Padrao: `io.output`.
+@return `void` em sucesso, ou erro de I/O.
+---
+
+--- @target: print
+```zt
+public func print(value: text, to: io.Output = io.output) -> result<void, io.Error>
+```
+
+Imprime texto no stream de saida especificado.
+Nao adiciona quebra de linha. Equivale a `write`.
+
+@param value - Texto a ser impresso.
+@param to - Handle de saida. Padrao: `io.output`.
+@return `void` em sucesso, ou erro de I/O.
+---
+
+--- @target: to_core_error
+```zt
+public func to_core_error(err: io.Error) -> core.Error
+```
+
+Converte `io.Error` para `core.Error`.
+Use em fronteiras com APIs antigas que ainda esperam erro generico.
+
+@param err - Erro tipado de I/O.
+@return `core.Error` com codigo estavel: `io.read_failed`, `io.write_failed` ou `io.unknown`.
+---

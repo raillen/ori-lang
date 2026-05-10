@@ -1,0 +1,33 @@
+namespace app.main
+
+import std.console as console
+
+func main() -> result<void, core.Error>
+    console.write_line("Hello from std.console")?
+    console.error_line("console stderr ok")?
+    const size: console.Size = console.size()
+    const columns: int = console.columns()
+    const rows: int = console.rows()
+    const key: optional<text> = console.read_key()?
+
+    if size.columns < 0 or size.rows < 0 or columns < 0 or rows < 0
+        return error("console size helpers must not return negative values")
+    end
+    if console.is_terminal("stdout") and columns < 0
+        return error("console terminal detection returned invalid size")
+    end
+
+    match key
+        case some(value):
+            if value == ""
+                return error("console key helper returned an empty key")
+            end
+        case none:
+            const no_key: bool = true
+            if no_key == false
+                return error("console key helper failed")
+            end
+    end
+
+    return success()
+end

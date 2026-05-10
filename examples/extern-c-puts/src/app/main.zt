@@ -1,0 +1,11 @@
+namespace app.main
+
+extern c
+    func puts(message: text) -> int
+end
+
+func main() -> int
+    puts("hello from extern c")
+    return 0
+end
+

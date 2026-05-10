@@ -1,0 +1,8 @@
+namespace app.main
+
+func main() -> int
+    if true && false
+        return 1
+    end
+    return 0
+end

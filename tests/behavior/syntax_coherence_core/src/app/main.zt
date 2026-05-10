@@ -1,0 +1,149 @@
+namespace app.main
+
+import std.collections as collections
+
+type maybe_int = optional<int>
+type printable = any<TextRepresentable>
+
+struct Point
+    x: int
+    y: int
+end
+
+enum Mode
+    Slow
+    Fast
+end
+
+func present_value() -> maybe_int
+    return 42
+end
+
+func absent_value() -> maybe_int
+    return none
+end
+
+func value_or_zero(input: maybe_int) -> int
+    match input
+        case some(value):
+            return value
+        case none:
+            return 0
+        case else:
+            return -1
+    end
+end
+
+func capture_total() -> int
+    const compute: func() -> int = func() -> int
+        capture total: int = 2
+        total = total + 3
+        return total
+    end
+    return compute()
+end
+
+func inferred_closure_return() -> int
+    const compute: func() -> int = func()
+        const base: int = 6
+        return base + 3
+    end
+    return compute()
+end
+
+func choose_inline(flag: bool) -> int
+    const value: int = if flag then 10 else 20
+    return value
+end
+
+func choose_multiline(flag: bool) -> int
+    const value: int = if flag
+        30
+    else
+        40
+    end
+    return value
+end
+
+func make_point() -> Point
+    return {x: 3, y: 4}
+end
+
+func point_identity(point: Point) -> Point
+    return {x: point.x, y: point.y}
+end
+
+func point_score(point: Point) -> int
+    return point.x + point.y
+end
+
+func default_mode() -> Mode
+    return .Fast
+end
+
+func mode_identity(mode: Mode) -> Mode
+    return mode
+end
+
+func mode_score(mode: Mode) -> int
+    match mode
+        case Mode.Slow:
+            return 1
+        case Mode.Fast:
+            return 2
+    end
+end
+
+func main()
+    const factor: int = 2
+    const boxed: printable = "hello"
+    const values: list<int> = [2, 4, 6]
+    const scaled: list<int> = collections.map_int(values, func(value: int) value * factor)
+    if value_or_zero(present_value()) != 42
+        panic("some(value) match failed")
+    end
+    if value_or_zero(absent_value()) != 0
+        panic("none match failed")
+    end
+    if scaled[2] != 12
+        panic("single-expression closure failed")
+    end
+    if capture_total() != 5
+        panic("capture keyword statement failed")
+    end
+    if inferred_closure_return() != 9
+        panic("closure return inference failed")
+    end
+    if choose_inline(true) != 10
+        panic("inline if expression then branch failed")
+    end
+    if choose_inline(false) != 20
+        panic("inline if expression else branch failed")
+    end
+    if choose_multiline(true) != 30
+        panic("multiline if expression then branch failed")
+    end
+    if choose_multiline(false) != 40
+        panic("multiline if expression else branch failed")
+    end
+    const literal_point: Point = {x: 3, y: 4}
+    if point_score(literal_point) != 7
+        panic("struct literal declaration expected type failed")
+    end
+    if point_score(point_identity({x: literal_point.x, y: literal_point.y})) != 7
+        panic("struct literal parameter expected type failed")
+    end
+    if point_score(make_point()) != 7
+        panic("struct literal return expected type failed")
+    end
+    const mode: Mode = .Slow
+    if mode_score(mode) != 1
+        panic("enum dot declaration expected type failed")
+    end
+    if mode_score(mode_identity(.Fast)) != 2
+        panic("enum dot parameter expected type failed")
+    end
+    if mode_score(default_mode()) != 2
+        panic("enum dot return expected type failed")
+    end
+end

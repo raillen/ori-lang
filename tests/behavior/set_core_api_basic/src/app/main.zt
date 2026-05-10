@@ -1,0 +1,44 @@
+namespace app.main
+
+import std.set as set
+
+func main() -> int
+    var values: set<int> = set.empty()
+    if set.is_empty(values) == false
+        return 1
+    end
+
+    set.add(values, 10)
+    set.add(values, 20)
+    set.add(values, 10)
+
+    if set.len(values) != 2
+        return 2
+    end
+    if set.has(values, 10) == false
+        return 3
+    end
+
+    set.remove(values, 10)
+    if set.has(values, 10)
+        return 4
+    end
+    if set.len(values) != 1
+        return 5
+    end
+
+    const words: set<text> = set.of("zen", "lang", "zen")
+    if set.len(words) != 2
+        return 6
+    end
+    if set.has(words, "lang") == false
+        return 7
+    end
+
+    const numbers: set<int> = set.of(1, 2, 2, 3)
+    if set.len(numbers) != 3
+        return 8
+    end
+
+    return 0
+end

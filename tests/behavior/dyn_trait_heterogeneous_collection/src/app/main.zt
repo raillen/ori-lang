@@ -1,0 +1,59 @@
+namespace app.main
+
+import std.list as list
+
+trait Drawable
+    func describe() -> text
+end
+
+struct Circle
+    radius: int
+end
+
+apply Drawable to Circle
+    func describe() -> text
+        return "circle"
+    end
+end
+
+struct Rectangle
+    width: int
+    height: int
+end
+
+apply Drawable to Rectangle
+    func describe() -> text
+        return "rectangle"
+    end
+end
+
+func main() -> int
+    const shapes: list<any<Drawable>> = [Circle(radius: 10), Rectangle(width: 5, height: 3)]
+    const tail: list<any<Drawable>> = shapes[1..1]
+    const extended: list<any<Drawable>> = list.append(shapes, Circle(radius: 1))
+    var working: list<any<Drawable>> = shapes
+    var total: int = 0
+
+    for shape, index in shapes
+        total = total + len(shape.describe()) + index
+    end
+
+    if total != 16
+        return 1
+    end
+
+    if len(tail) != 1 or len(tail[0].describe()) != 9
+        return 2
+    end
+
+    if len(extended) != 3 or len(extended[2].describe()) != 6
+        return 3
+    end
+
+    working[0] = Rectangle(width: 2, height: 2)
+    if len(working[0].describe()) != 9
+        return 4
+    end
+
+    return 0
+end

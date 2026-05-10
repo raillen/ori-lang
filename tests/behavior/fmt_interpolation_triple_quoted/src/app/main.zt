@@ -1,0 +1,11 @@
+namespace app.main
+
+public func main() -> int
+    const name: text = "Ada"
+    const msg: text = f"""Hello {name}
+world"""
+    if len(msg) > 0
+        return 0
+    end
+    return 1
+end

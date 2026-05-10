@@ -1,0 +1,6 @@
+namespace app.messages
+
+public func ready() -> text
+    return "multifile import ok\n"
+end
+

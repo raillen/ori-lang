@@ -1,0 +1,78 @@
+namespace app.main
+
+import std.fs as fs
+import std.fs.path as path
+
+func expect_not_found(err: fs.Error) -> result<void, fs.Error>
+    match err
+        case fs.Error.NotFound ->
+            return success()
+        case fs.Error.PermissionDenied ->
+            return error(err)
+        case fs.Error.AlreadyExists ->
+            return error(err)
+        case fs.Error.NotADirectory ->
+            return error(err)
+        case fs.Error.IsADirectory ->
+            return error(err)
+        case fs.Error.IOError ->
+            return error(err)
+        case fs.Error.InvalidPath ->
+            return error(err)
+        case fs.Error.Unknown ->
+            return error(err)
+    end
+end
+
+func main() -> result<void, fs.Error>
+    const root: text = ".ztc-tmp/std_fs_aliases_basic"
+    const source_file: text = path.join([root, "source.txt"])
+    const copied_file: text = path.join([root, "copied.txt"])
+    const renamed_file: text = path.join([root, "renamed.txt"])
+    const missing_file: text = path.join([root, "missing.txt"])
+
+    fs.remove_dir_all(root)
+    const create_result: result<void, fs.Error> = fs.create_dir_all(root)
+    create_result?
+    const write_result: result<void, fs.Error> = fs.write_text(source_file, "alias")
+    write_result?
+
+    const copy_result: result<void, fs.Error> = fs.copy(source_file, copied_file)
+    copy_result?
+    const size_result: result<int, fs.Error> = fs.file_size(copied_file)
+    const copied_size: int = size_result?
+    if copied_size != 5
+        return error(fs.Error.IOError)
+    end
+
+    const rename_result: result<void, fs.Error> = fs.rename(copied_file, renamed_file)
+    rename_result?
+    const copied_exists_result: result<bool, fs.Error> = fs.exists(copied_file)
+    const copied_exists: bool = copied_exists_result?
+    if copied_exists
+        return error(fs.Error.IOError)
+    end
+    const renamed_file_result: result<bool, fs.Error> = fs.is_file(renamed_file)
+    const renamed_is_file: bool = renamed_file_result?
+    if renamed_is_file == false
+        return error(fs.Error.NotFound)
+    end
+    const root_dir_result: result<bool, fs.Error> = fs.is_dir(root)
+    const root_is_dir: bool = root_dir_result?
+    if root_is_dir == false
+        return error(fs.Error.NotADirectory)
+    end
+
+    const missing_read_result: result<text, fs.Error> = fs.read_text(missing_file)
+    match missing_read_result
+        case success(_value) ->
+            return error(fs.Error.IOError)
+        case error(err) ->
+            const expect_missing_result: result<void, fs.Error> = expect_not_found(err)
+            expect_missing_result?
+    end
+
+    const remove_result: result<void, fs.Error> = fs.remove_dir_all(root)
+    remove_result?
+    return success()
+end

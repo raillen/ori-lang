@@ -1,0 +1,47 @@
+namespace app.main
+
+import app.left as left
+import app.right as right
+import std.map as map
+import std.set as set
+
+func main() -> int
+    var left_values: list<left.Flag> = [left.make(1)]
+    var right_values: list<right.Flag> = [right.make(2)]
+
+    left_values[0] = left.make(3)
+    right_values[0] = right.make(4)
+
+    if left_values[0].value != 3
+        return 1
+    end
+    if right_values[0].value != 4
+        return 2
+    end
+
+    var left_set: set<left.Flag> = set.empty()
+    var right_set: set<right.Flag> = set.empty()
+    set.add(left_set, left.make(3))
+    set.add(right_set, right.make(4))
+
+    if set.has(left_set, left.make(3)) == false
+        return 3
+    end
+    if set.has(right_set, right.make(4)) == false
+        return 4
+    end
+
+    var left_scores: map<left.Flag, int> = {}
+    var right_scores: map<right.Flag, int> = {}
+    left_scores = map.set(left_scores, left.make(3), 30)
+    right_scores = map.set(right_scores, right.make(4), 40)
+
+    if map.has_key(left_scores, left.make(3)) == false
+        return 5
+    end
+    if map.has_key(right_scores, right.make(4)) == false
+        return 6
+    end
+
+    return 0
+end

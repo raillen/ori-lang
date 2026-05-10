@@ -1,0 +1,30 @@
+namespace app.main
+
+trait Printable
+    func render() -> int
+end
+
+trait Debuggable
+    func render() -> int
+end
+
+struct Item
+    value: int
+end
+
+apply Printable to Item
+    func render() -> int
+        return 1
+    end
+end
+
+apply Debuggable to Item
+    func render() -> int
+        return 2
+    end
+end
+
+func main() -> int
+    const item: Item = Item(value: 0)
+    return item.render()
+end

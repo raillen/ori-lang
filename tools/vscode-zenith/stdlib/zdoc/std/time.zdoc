@@ -1,0 +1,174 @@
+--- @target: namespace
+# std.time — Tempo e Duração
+
+Módulo temporal centrado em `Instant` e `Duration`.
+Usa `time.now()` como ponto de entrada do relógio do sistema.
+Comparação usa operadores ordinários (`==`, `<`, `>`).
+---
+
+--- @target: Instant
+```zt
+public struct Instant
+    millis: int
+end
+```
+
+Representa um momento absoluto (timestamp em milissegundos desde epoch).
+---
+
+--- @target: Duration
+```zt
+public struct Duration
+    millis: int
+end
+```
+
+Representa um intervalo de tempo em milissegundos.
+---
+
+--- @target: now
+```zt
+public func now() -> time.Instant
+```
+
+Retorna o instante atual do relógio do sistema.
+---
+
+--- @target: now_ms
+```zt
+public func now_ms() -> int
+```
+
+Retorna o timestamp Unix atual em milissegundos.
+---
+
+--- @target: sleep
+```zt
+public func sleep(duration: time.Duration) -> result<void, core.Error>
+```
+
+Suspende a execução pelo período especificado.
+
+@param duration — Duração do sleep.
+@return `void` em sucesso, ou erro de host.
+---
+
+--- @target: sleep_ms
+```zt
+public func sleep_ms(ms: int) -> result<void, core.Error>
+```
+
+Suspende a execução por `ms` milissegundos.
+---
+
+--- @target: since
+```zt
+public func since(start: time.Instant) -> time.Duration
+```
+
+Retorna a duração desde `start` até o momento atual.
+---
+
+--- @target: until
+```zt
+public func until(target: time.Instant) -> time.Duration
+```
+
+Retorna a duração do momento atual até `target`.
+---
+
+--- @target: diff
+```zt
+public func diff(a: time.Instant, b: time.Instant) -> time.Duration
+```
+
+Retorna a diferença temporal entre dois instantes (`b - a`).
+---
+
+--- @target: elapsed
+```zt
+public func elapsed(start: time.Instant, finish: time.Instant) -> int
+```
+
+Retorna a diferença em milissegundos entre `start` e `finish`.
+---
+
+--- @target: add
+```zt
+public func add(at: time.Instant, duration: time.Duration) -> time.Instant
+```
+
+Avança um instante pela duração especificada.
+---
+
+--- @target: sub
+```zt
+public func sub(at: time.Instant, duration: time.Duration) -> time.Instant
+```
+
+Retrocede um instante pela duração especificada.
+---
+
+--- @target: from_unix
+```zt
+public func from_unix(ts: int) -> time.Instant
+```
+
+Cria um `Instant` a partir de timestamp Unix em segundos.
+---
+
+--- @target: from_unix_ms
+```zt
+public func from_unix_ms(ts: int) -> time.Instant
+```
+
+Cria um `Instant` a partir de timestamp Unix em milissegundos.
+---
+
+--- @target: to_unix
+```zt
+public func to_unix(at: time.Instant) -> int
+```
+
+Converte um `Instant` para timestamp Unix em segundos.
+---
+
+--- @target: to_unix_ms
+```zt
+public func to_unix_ms(at: time.Instant) -> int
+```
+
+Converte um `Instant` para timestamp Unix em milissegundos.
+---
+
+--- @target: milliseconds
+```zt
+public func milliseconds(n: int) -> time.Duration
+```
+
+Cria uma duração de `n` milissegundos.
+---
+
+--- @target: seconds
+```zt
+public func seconds(n: int) -> time.Duration
+```
+
+Cria uma duração de `n` segundos.
+---
+
+--- @target: minutes
+```zt
+public func minutes(n: int) -> time.Duration
+```
+
+Cria uma duração de `n` minutos.
+---
+
+--- @target: hours
+```zt
+public func hours(n: int) -> time.Duration
+```
+
+Cria uma duração de `n` horas.
+---

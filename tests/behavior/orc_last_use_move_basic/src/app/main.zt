@@ -1,0 +1,10 @@
+namespace app.main
+
+func main() -> int 
+    const original: text = "zenith"
+    const moved: text = original
+    if len(moved) == 6 
+        return 0
+    end
+    return 1
+end

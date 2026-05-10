@@ -1,0 +1,8 @@
+namespace app.main
+
+import std.test as test
+
+func main() -> int
+    test.equal_int(2, 3)
+    return 0
+end

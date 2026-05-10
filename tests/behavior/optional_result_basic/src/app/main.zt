@@ -1,0 +1,17 @@
+namespace app.main
+
+func maybe_name() -> optional<text> 
+    return none
+end
+
+func score_ok() -> result<int, text> 
+    return success(7)
+end
+
+func score_fail() -> result<int, text> 
+    return error("bad")
+end
+
+func main() -> int 
+    return 0
+end

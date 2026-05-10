@@ -1,0 +1,49 @@
+namespace app.main
+
+import std.io as io
+
+func parse_score(ok: bool) -> result<int, core.Error>
+    if ok
+        return success(10)
+    else
+        return error("score is invalid")
+    end
+end
+
+func bonus(enabled: bool) -> optional<int>
+    if enabled
+        return 2
+    else
+        return none
+    end
+end
+
+func final_score(ok: bool, use_bonus: bool) -> result<int, core.Error>
+    const base: int = parse_score(ok)?
+    match bonus(use_bonus)
+        case value extra ->
+            return success(base + extra)
+        case none ->
+            return success(base)
+    end
+end
+
+func write_status() -> result<void, io.Error>
+    io.write("optional/result flow ok\n")?
+    return success()
+end
+
+func main() -> result<void, core.Error>
+    const score: int = final_score(true, true)?
+    if score != 12
+        return error("unexpected score")
+    end
+
+    match write_status()
+        case success() ->
+            return success()
+        case error(err) ->
+            const core_err: core.Error = io.to_core_error(err)
+            return error(core_err)
+    end
+end

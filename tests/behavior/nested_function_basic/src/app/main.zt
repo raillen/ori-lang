@@ -1,0 +1,15 @@
+namespace app.main
+
+func main() -> int 
+    const base: int = 4
+    func add(value: int) -> int 
+        return value + base
+    end
+    if add(6) != 10
+        return 1
+    end
+    if add(0) != 4
+        return 2
+    end
+    return 0
+end

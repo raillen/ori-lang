@@ -1,0 +1,10 @@
+namespace app.main
+
+func identity<T>(x: T) -> T
+    return x
+end
+
+public func main() -> int
+    const op: func(int) -> int = identity
+    return op(42)
+end

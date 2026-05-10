@@ -1,0 +1,166 @@
+--- @target: namespace
+# std.json - JSON (subset v1)
+
+Este modulo cobre o subset estavel de JSON no runtime atual.
+
+Escopo atual:
+- objeto JSON com chaves `text` e valores `text`
+- representacao em Zenith: `map<text,text>`
+
+Fora do escopo por enquanto:
+- arrays gerais
+- numeros tipados
+- bool/null com modelo rico
+- arvore JSON tipada (`Value/Object/Array`)
+---
+
+--- @target: parse
+```zt
+public func parse(input: text) -> result<map<text,text>, core.Error>
+```
+
+Converte texto JSON para `map<text,text>`.
+
+@param input Texto JSON.
+@return Mapa em sucesso, ou erro em `core.Error`.
+---
+
+--- @target: stringify
+```zt
+public func stringify(value: map<text,text>) -> text
+```
+
+Converte `map<text,text>` para JSON compacto.
+---
+
+--- @target: pretty
+```zt
+public func pretty(value: map<text,text>, indent: int = 2) -> text
+```
+
+Converte `map<text,text>` para JSON formatado.
+
+@param indent Espacos por nivel (padrao: 2).
+---
+
+--- @target: read
+```zt
+public func read(file_path: text) -> result<map<text,text>, core.Error>
+```
+
+Le o arquivo e faz parse em uma unica chamada.
+---
+
+--- @target: write
+```zt
+public func write(file_path: text, value: map<text,text>) -> result<void, core.Error>
+```
+
+Serializa e escreve em arquivo.
+---
+
+--- @target: Kind
+```zt
+public enum Kind
+```
+
+Enumeracao publica `Kind`.
+---
+--- @target: Value
+```zt
+public struct Value
+```
+
+Tipo publico `Value`.
+---
+--- @target: parse_value
+```zt
+public func parse_value(input: text) -> result<json.Value, core.Error>
+```
+
+Funcao publica `parse_value`.
+---
+--- @target: stringify_value
+```zt
+public func stringify_value(value: json.Value) -> text
+```
+
+Funcao publica `stringify_value`.
+---
+--- @target: pretty_value
+```zt
+public func pretty_value(value: json.Value, indent: int = 2) -> text
+```
+
+Funcao publica `pretty_value`.
+---
+--- @target: read_value
+```zt
+public func read_value(file_path: text) -> result<json.Value, core.Error>
+```
+
+Funcao publica `read_value`.
+---
+--- @target: write_value
+```zt
+public func write_value(file_path: text, value: json.Value) -> result<void, core.Error>
+```
+
+Funcao publica `write_value`.
+---
+--- @target: kind
+```zt
+public func kind(value: json.Value) -> json.Kind
+```
+
+Funcao publica `kind`.
+---
+--- @target: as_text
+```zt
+public func as_text(value: json.Value) -> optional<text>
+```
+
+Funcao publica `as_text`.
+---
+--- @target: as_int
+```zt
+public func as_int(value: json.Value) -> optional<int>
+```
+
+Funcao publica `as_int`.
+---
+--- @target: as_float
+```zt
+public func as_float(value: json.Value) -> optional<float>
+```
+
+Funcao publica `as_float`.
+---
+--- @target: as_bool
+```zt
+public func as_bool(value: json.Value) -> optional<bool>
+```
+
+Funcao publica `as_bool`.
+---
+--- @target: get
+```zt
+public func get(value: json.Value, key: text) -> optional<json.Value>
+```
+
+Funcao publica `get`.
+---
+--- @target: at
+```zt
+public func at(value: json.Value, index: int) -> optional<json.Value>
+```
+
+Funcao publica `at`.
+---
+--- @target: len
+```zt
+public func len(value: json.Value) -> int
+```
+
+Funcao publica `len`.
+---

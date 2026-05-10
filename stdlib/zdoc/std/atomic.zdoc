@@ -1,0 +1,7 @@
+--- @target: Atomic
+```zt
+public struct Atomic<T>
+```
+
+Tipo publico `Atomic`.
+---

@@ -1,0 +1,12 @@
+namespace app.main
+
+struct Plain
+    value: int
+end
+
+func main() -> int
+    const left: Plain = Plain(value: 3)
+    const right: Plain = Plain(value: 1)
+    const diff: Plain = left - right
+    return diff.value
+end

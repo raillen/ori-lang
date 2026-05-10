@@ -1,0 +1,51 @@
+namespace app.main
+
+func build_numbers(ok: bool) -> result<list<int>, text>
+    if ok
+        const numbers: list<int> = [1, 2, 3]
+        return success(numbers)
+    else
+        return error("bad")
+    end
+end
+
+func maybe_numbers(ok: bool) -> optional<list<int>>
+    if ok
+        const numbers: list<int> = [4, 5, 6]
+        return numbers
+    end
+    return none
+end
+
+func optional_payload_samples() -> int
+    const present: optional<list<int>> = maybe_numbers(true)
+    const absent: optional<list<int>> = maybe_numbers(false)
+    const copy_present: optional<list<int>> = present
+    const copy_absent: optional<list<int>> = absent
+    return 0
+end
+
+func verify_result_payload() -> result<list<int>, text>
+    const first: result<list<int>, text> = build_numbers(true)
+    const second: result<list<int>, text> = first
+
+    const left: list<int> = first?
+    var right: list<int> = second?
+    right[1] = 9
+
+    if left[1] == 2 and right[1] == 9
+        return success(left)
+    end
+
+    const crash: int = left[99]
+    if crash == 0
+        return error("bad")
+    end
+    return error("bad")
+end
+
+func main() -> int
+    const sample: int = optional_payload_samples()
+    const checked: result<list<int>, text> = verify_result_payload()
+    return sample
+end

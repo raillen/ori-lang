@@ -1,0 +1,142 @@
+namespace app.main
+
+import std.text as text
+
+func verify_search_helpers() -> int
+    const source: text = "banana"
+
+    if text.index_of(source, "na").or(-1) != 2
+        return 10
+    end
+    if text.last_index_of(source, "na").or(-1) != 4
+        return 11
+    end
+    if text.index_of(source, "zz").is_some()
+        return 31
+    end
+    if text.last_index_of(source, "zz").is_some()
+        return 32
+    end
+    if text.index_of(source, "").or(-1) != 0
+        return 33
+    end
+    if text.last_index_of(source, "").or(-1) != len(source)
+        return 34
+    end
+    if text.index_of_or_minus_one(source, "zz") != -1
+        return 35
+    end
+    if text.last_index_of_or_minus_one(source, "zz") != -1
+        return 36
+    end
+
+    return 0
+end
+
+func main() -> int
+    const spaced: text = " \tHello \n"
+    const trimmed: text = text.trim(spaced)
+    const trimmed_start: text = text.trim_start(spaced)
+    const trimmed_end: text = text.trim_end(spaced)
+    const utf8: bytes = text.to_utf8("Ae")
+    const decoded: result<text, text> = text.from_utf8(utf8)
+    const search_status: int = verify_search_helpers()
+
+    if trimmed != "Hello"
+        return 1
+    end
+    if trimmed_start != "Hello \n"
+        return 2
+    end
+    if trimmed_end != " \tHello"
+        return 3
+    end
+    if text.contains("zenith", "nit") == false
+        return 4
+    end
+    if text.starts_with("zenith", "zen") == false
+        return 5
+    end
+    if text.ends_with("zenith", "ith") == false
+        return 6
+    end
+    if text.has_prefix("zenith", "zen") == false
+        return 7
+    end
+    if text.has_suffix("zenith", "ith") == false
+        return 8
+    end
+    if text.has_whitespace("zen ith") == false
+        return 9
+    end
+    if search_status != 0
+        return search_status
+    end
+    if text.is_empty("") == false
+        return 12
+    end
+    if text.is_digits("12345") == false or text.is_digits("12a")
+        return 13
+    end
+
+    match decoded
+        case success(value) ->
+            const decoded_text: text = value
+            if decoded_text != "Ae"
+                return 14
+            end
+        case error(err) ->
+            const err_text: text = err
+            if err_text == "bad"
+                return 15
+            end
+            return 16
+    end
+
+    if text.limit("abcdef", 4) != "abcd"
+        return 17
+    end
+    if len(utf8) == 0
+        return 18
+    end
+    if text.concat("ze", "n") != "zen"
+        return 19
+    end
+    if text.to_lower("Az") != "az"
+        return 20
+    end
+    if text.to_upper("Az") != "AZ"
+        return 21
+    end
+    if text.capitalize("zen lang") != "Zen Lang"
+        return 22
+    end
+    if text.repeat_text("ab", 2) != "abab"
+        return 23
+    end
+    if text.pad_left("7", 3, "0") != "007"
+        return 24
+    end
+    if text.pad_right("7", 3, "0") != "700"
+        return 25
+    end
+
+    const parts: list<text> = text.split("a,b,c", ",")
+    if len(parts) != 3 or parts[1] != "b"
+        return 26
+    end
+    const chars: list<text> = text.chars("az")
+    if len(chars) != 2 or chars[0] != "a" or chars[1] != "z"
+        return 27
+    end
+    if text.slice("abcdef", 2, 4) != "cde"
+        return 28
+    end
+    if text.get("abc", 1).is_some() == false
+        return 29
+    end
+    if text.replace("a-b-a", "a", "z") != "z-b-z"
+        return 30
+    end
+    return 0
+end

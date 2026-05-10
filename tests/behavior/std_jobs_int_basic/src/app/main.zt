@@ -1,0 +1,16 @@
+namespace app.main
+
+import std.jobs as jobs
+
+func compute() -> int
+    return 40 + 2
+end
+
+public func main() -> int
+    const handle: jobs.Job<int> = jobs.spawn(compute)
+    const value: int = jobs.join(handle)
+    if value != 42
+        return 1
+    end
+    return 0
+end

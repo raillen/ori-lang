@@ -1,0 +1,18 @@
+namespace app.main
+
+struct Counter
+    value: int
+end
+
+apply Counter
+    mut func bump()
+        self.value = self.value + 4
+        return
+    end
+end
+
+func main() -> int
+    var counter: Counter = Counter(value: 2)
+    counter.bump()
+    return counter.value
+end

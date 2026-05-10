@@ -1,0 +1,43 @@
+namespace app.main
+
+import std.list as list
+
+func main() -> int
+    const values: list<int> = [4, 8, 15]
+    const skip_one: list<int> = list.skip(values, 1)
+    if len(skip_one) != 2
+        return 1
+    end
+    const first_after_one: optional<int> = list.first(skip_one)
+    if first_after_one.or(0) != 8
+        return 2
+    end
+
+    const skip_zero: list<int> = list.skip(values, 0)
+    if len(skip_zero) != 3
+        return 3
+    end
+
+    const skip_all: list<int> = list.skip(values, 99)
+    if list.is_empty(skip_all) == false
+        return 4
+    end
+
+    const skip_negative: list<int> = list.skip(values, -2)
+    if len(skip_negative) != 3
+        return 5
+    end
+
+    const words: list<text> = ["zen", "lang", "docs"]
+    const rest_words: list<text> = list.skip(words, 2)
+    if len(rest_words) != 1
+        return 6
+    end
+    const last_word: optional<text> = list.last(rest_words)
+    var fallback: text = ""
+    if len(last_word.or(fallback)) != 4
+        return 7
+    end
+
+    return 0
+end

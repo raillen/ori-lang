@@ -1,0 +1,25 @@
+namespace app.main
+
+import std.os.process as process
+
+func main() -> result<void, process.Error>
+    const no_profile: text = "-NoProfile"
+    const flag: text = "-Command"
+    const command: text = "[Console]::Out.Write('alpha'); [Console]::Error.Write('beta'); exit 7"
+    const args: list<text> = [no_profile, flag, command]
+    const run: process.CapturedRun = process.run_capture(program: "powershell", args: args)?
+
+    if run.status.code != 7
+        panic("std.os.process.run_capture returned wrong exit code")
+    end
+
+    if run.stdout_text != "alpha"
+        panic("std.os.process.run_capture returned wrong stdout")
+    end
+
+    if run.stderr_text != "beta"
+        panic("std.os.process.run_capture returned wrong stderr")
+    end
+
+    return success()
+end

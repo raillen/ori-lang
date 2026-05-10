@@ -1,0 +1,30 @@
+namespace app.main
+
+import std.fs.path as path
+
+func compile_probe() -> void
+    const joined: text = path.join(["docs", "guide.md"])
+    const normalized: text = path.normalize("./docs/../docs//guide.md")
+    const abs_from_rel: text = path.absolute("guide.md", base: "/docs")
+    const abs_passthrough: text = path.absolute("/etc/config", base: "/docs")
+    const rel_from_docs: text = path.relative("/docs/guide.md", from: "/docs")
+    const rel_from_nested: text = path.relative("/docs/a/b.txt", from: "/docs/x")
+
+    const file_name: text = path.base_name(joined)
+    const directory: optional<text> = path.parent(joined)
+    const ext_val: optional<text> = path.extension(joined)
+    const stem: text = path.name_without_extension(joined)
+    const has_plain: bool = path.has_extension(joined, "md")
+    const has_dot: bool = path.has_extension(joined, ".md")
+    const changed: text = path.change_extension(joined, "txt")
+    const abs_flag: bool = path.is_absolute(abs_from_rel)
+    const rel_flag: bool = path.is_relative("docs/guide.md")
+    const windows_parent: optional<text> = path.parent("docs\\guide.md")
+
+    const _touch_bool: bool = has_plain or has_dot or abs_flag or rel_flag or directory.is_some() or ext_val.is_some() or windows_parent.is_some()
+    return
+end
+
+func main() -> result<void, text>
+    return success()
+end

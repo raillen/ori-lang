@@ -1,0 +1,12 @@
+namespace app.main
+
+extern c
+    func zt_ffi_apply_i64(value: int, callback: func(int) -> int) -> int
+end
+
+public func main() -> int
+    const bump: func(int) -> int = func(value: int) -> int
+        return value + 1
+    end
+    return zt_ffi_apply_i64(14, bump)
+end

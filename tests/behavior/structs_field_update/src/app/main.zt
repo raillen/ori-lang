@@ -1,0 +1,11 @@
+namespace app.main
+
+struct Counter
+    value: int
+end
+
+func main() -> int
+    var counter: Counter = Counter(value: 4)
+    counter.value = counter.value + 8
+    return counter.value
+end

@@ -1,0 +1,6 @@
+namespace app.main
+
+func main() -> int
+    let value: int = 1
+    return value
+end

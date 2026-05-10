@@ -1,0 +1,6 @@
+namespace app.main
+import app.util
+
+func main() -> int
+    return util.value()
+end

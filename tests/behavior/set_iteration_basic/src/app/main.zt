@@ -1,0 +1,31 @@
+namespace app.main
+
+func main() -> int
+    const values: set<int> = {2, 3, 5}
+    var total: int = 0
+    var index_total: int = 0
+
+    for item, index in values
+        total = total + item
+        index_total = index_total + index
+    end
+
+    if total != 10
+        return 1
+    end
+    if index_total != 3
+        return 2
+    end
+
+    const words: set<text> = {"a", "bb", "ccc"}
+    var chars: int = 0
+    for word in words
+        chars = chars + len(word)
+    end
+
+    if chars != 6
+        return 3
+    end
+
+    return 0
+end

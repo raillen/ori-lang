@@ -1,0 +1,20 @@
+namespace app.main
+
+trait Mutable
+    mut func reset()
+end
+
+struct Counter
+    value: int
+end
+
+apply Mutable to Counter
+    mut func reset()
+        self.value = 0
+    end
+end
+
+func main() -> int
+    const c: any<Mutable> = Counter(value: 5)
+    return 0
+end

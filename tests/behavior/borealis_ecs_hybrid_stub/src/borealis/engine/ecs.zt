@@ -1,0 +1,106 @@
+namespace borealis.engine.ecs
+
+public var ecs_component_transform: text = ""
+public var ecs_component_health: text = ""
+
+public func ecs_component_has(entity_id: int, component_type: text) -> bool
+    if entity_id <= 0
+        return false
+    end
+
+    if component_type == "transform"
+        return ecs_component_transform != ""
+    end
+
+    if component_type == "health"
+        return ecs_component_health != ""
+    end
+
+    return false
+end
+
+public func ecs_component_get(entity_id: int, component_type: text) -> optional<text>
+    if entity_id <= 0
+        return none
+    end
+    if component_type == "transform"
+        if ecs_component_transform == ""
+            return none
+        end
+        return ecs_component_transform
+    end
+    if component_type == "health"
+        if ecs_component_health == ""
+            return none
+        end
+        return ecs_component_health
+    end
+    return none
+end
+
+public func ecs_component_set(entity_id: int, component_type: text, payload: text) -> result<void, core.Error>
+    if entity_id <= 0
+        return error("ecs: entity id must be positive")
+    end
+    if component_type == ""
+        return error("ecs: component type cannot be empty")
+    end
+
+    if component_type == "transform"
+        ecs_component_transform = payload
+        return success()
+    end
+
+    if component_type == "health"
+        ecs_component_health = payload
+        return success()
+    end
+
+    return error("ecs: unsupported component type in stub")
+end
+
+public func ecs_component_remove(entity_id: int, component_type: text) -> result<void, core.Error>
+    if entity_id <= 0
+        return error("ecs: entity id must be positive")
+    end
+    if component_type == ""
+        return error("ecs: component type cannot be empty")
+    end
+
+    if component_type == "transform"
+        ecs_component_transform = ""
+        return success()
+    end
+
+    if component_type == "health"
+        ecs_component_health = ""
+        return success()
+    end
+
+    return success()
+end
+
+public func ecs_component_list_blob(entity_id: int) -> text
+    if entity_id <= 0
+        return "|"
+    end
+    if ecs.ecs_component_count(entity_id) == 0
+        return "|"
+    end
+    return "|components|"
+end
+
+public func ecs_component_count(entity_id: int) -> int
+    if entity_id <= 0
+        return 0
+    end
+
+    var total: int = 0
+    if ecs.ecs_component_has(entity_id, "transform")
+        total = total + 1
+    end
+    if ecs.ecs_component_has(entity_id, "health")
+        total = total + 1
+    end
+    return total
+end

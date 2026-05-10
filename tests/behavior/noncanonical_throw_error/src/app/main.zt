@@ -1,0 +1,6 @@
+namespace app.main
+
+func main() -> int
+    throw error("bad")
+    return 0
+end

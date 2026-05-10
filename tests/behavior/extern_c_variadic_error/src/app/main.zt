@@ -1,0 +1,9 @@
+namespace app.main
+
+extern c
+    func printf(format: text, ...) -> int
+end
+
+public func main() -> int
+    return 0
+end

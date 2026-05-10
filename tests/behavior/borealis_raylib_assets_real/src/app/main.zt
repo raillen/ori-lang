@@ -1,0 +1,10 @@
+namespace app.main
+
+import borealis.raylib
+
+func main() -> result<void, core.Error>
+    return raylib.real_assets_smoke(
+        "tests/behavior/borealis_raylib_assets_real/assets/pixel.png",
+        "tests/behavior/borealis_raylib_assets_real/assets/tone.wav"
+    )
+end

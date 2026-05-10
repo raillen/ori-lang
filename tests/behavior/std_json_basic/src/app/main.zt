@@ -1,0 +1,21 @@
+namespace app.main
+
+import std.json as json
+
+func main() -> result<void, core.Error>
+    const source: text = "{\"name\":\"Zenith\",\"mode\":\"debug\",\"version\":\"2\"}"
+    const parsed: map<text,text> = json.parse(source)?
+
+    const compact: text = json.stringify(parsed)
+    if len(compact) == 0
+        return error("std_json_basic: compact payload empty")
+    end
+
+    const parsed_again: map<text,text> = json.parse(compact)?
+    const pretty_text: text = json.pretty(parsed_again, indent: 2)
+    if len(pretty_text) == 0
+        return error("std_json_basic: pretty payload empty")
+    end
+
+    return success()
+end

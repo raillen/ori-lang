@@ -1,0 +1,212 @@
+namespace borealis.game.contracts
+
+extern c
+    func zt_math_sqrt(value: float) -> float
+end
+
+public struct FrameContext
+    dt: float = 1.0 / 60.0
+    frame: int = 0
+end
+
+public struct ActionInput
+    up: bool = false
+    down: bool = false
+    left: bool = false
+    right: bool = false
+    jump: bool = false
+    dash: bool = false
+    primary: bool = false
+    secondary: bool = false
+end
+
+public struct Body2D
+    position: game.Vector2
+    velocity: game.Vector2
+end
+
+public struct MouseState
+    x: float = 0.0
+    y: float = 0.0
+    dx: float = 0.0
+    dy: float = 0.0
+    left_pressed: bool = false
+    left_down: bool = false
+    left_released: bool = false
+    right_pressed: bool = false
+    right_down: bool = false
+    right_released: bool = false
+end
+
+public struct GamepadState
+    left_x: float = 0.0
+    left_y: float = 0.0
+    right_x: float = 0.0
+    right_y: float = 0.0
+    south_pressed: bool = false
+    south_down: bool = false
+    south_released: bool = false
+    east_pressed: bool = false
+    east_down: bool = false
+    east_released: bool = false
+end
+
+public func frame_context(dt: float = 1.0 / 60.0, frame: int = 0) -> contracts.FrameContext
+    return contracts.FrameContext(dt: dt, frame: frame)
+end
+
+public func action_input() -> contracts.ActionInput
+    return contracts.ActionInput()
+end
+
+public func action_input_from_axis(
+    axis: game.Vector2,
+    jump: bool = false,
+    dash: bool = false,
+    primary: bool = false,
+    secondary: bool = false
+) -> contracts.ActionInput
+    return contracts.ActionInput(
+        up: axis.y < 0.0,
+        down: axis.y > 0.0,
+        left: axis.x < 0.0,
+        right: axis.x > 0.0,
+        jump: jump,
+        dash: dash,
+        primary: primary,
+        secondary: secondary
+    )
+end
+
+public func body2d(
+    position: game.Vector2 = game.vec2(0.0, 0.0),
+    velocity: game.Vector2 = game.vec2(0.0, 0.0)
+) -> contracts.Body2D
+    return contracts.Body2D(position: position, velocity: velocity)
+end
+
+public func mouse_state(
+    position: game.Vector2 = game.vec2(0.0, 0.0),
+    delta: game.Vector2 = game.vec2(0.0, 0.0),
+    left_pressed: bool = false,
+    left_down: bool = false,
+    left_released: bool = false,
+    right_pressed: bool = false,
+    right_down: bool = false,
+    right_released: bool = false
+) -> contracts.MouseState
+    return contracts.MouseState(
+        x: position.x,
+        y: position.y,
+        dx: delta.x,
+        dy: delta.y,
+        left_pressed: left_pressed,
+        left_down: left_down,
+        left_released: left_released,
+        right_pressed: right_pressed,
+        right_down: right_down,
+        right_released: right_released
+    )
+end
+
+public func mouse_position(state: contracts.MouseState) -> game.Vector2
+    return game.vec2(state.x, state.y)
+end
+
+public func mouse_delta(state: contracts.MouseState) -> game.Vector2
+    return game.vec2(state.dx, state.dy)
+end
+
+public func gamepad_state(
+    left_axis: game.Vector2 = game.vec2(0.0, 0.0),
+    right_axis: game.Vector2 = game.vec2(0.0, 0.0),
+    south_pressed: bool = false,
+    south_down: bool = false,
+    south_released: bool = false,
+    east_pressed: bool = false,
+    east_down: bool = false,
+    east_released: bool = false
+) -> contracts.GamepadState
+    return contracts.GamepadState(
+        left_x: left_axis.x,
+        left_y: left_axis.y,
+        right_x: right_axis.x,
+        right_y: right_axis.y,
+        south_pressed: south_pressed,
+        south_down: south_down,
+        south_released: south_released,
+        east_pressed: east_pressed,
+        east_down: east_down,
+        east_released: east_released
+    )
+end
+
+public func gamepad_left_axis(state: contracts.GamepadState) -> game.Vector2
+    return game.vec2(state.left_x, state.left_y)
+end
+
+public func gamepad_right_axis(state: contracts.GamepadState) -> game.Vector2
+    return game.vec2(state.right_x, state.right_y)
+end
+
+public func action_axis(actions: contracts.ActionInput) -> game.Vector2
+    var x: float = 0.0
+    var y: float = 0.0
+
+    if actions.left
+        x = x - 1.0
+    end
+    if actions.right
+        x = x + 1.0
+    end
+    if actions.up
+        y = y - 1.0
+    end
+    if actions.down
+        y = y + 1.0
+    end
+
+    return game.vec2(x, y)
+end
+
+public func action_input_any(actions: contracts.ActionInput) -> bool
+    return actions.up or
+           actions.down or
+           actions.left or
+           actions.right or
+           actions.jump or
+           actions.dash or
+           actions.primary or
+           actions.secondary
+end
+
+public func body_set_velocity(body: contracts.Body2D, velocity: game.Vector2) -> contracts.Body2D
+    return contracts.Body2D(position: body.position, velocity: velocity)
+end
+
+public func body_set_position(body: contracts.Body2D, position: game.Vector2) -> contracts.Body2D
+    return contracts.Body2D(position: position, velocity: body.velocity)
+end
+
+public func body_translate(body: contracts.Body2D, delta: game.Vector2) -> contracts.Body2D
+    return contracts.Body2D(
+        position: game.vec2(body.position.x + delta.x, body.position.y + delta.y),
+        velocity: body.velocity
+    )
+end
+
+public func body_stop(body: contracts.Body2D) -> contracts.Body2D
+    return contracts.Body2D(position: body.position, velocity: game.vec2(0.0, 0.0))
+end
+
+public func body_speed(body: contracts.Body2D) -> float
+    return contracts.zt_math_sqrt((body.velocity.x * body.velocity.x) + (body.velocity.y * body.velocity.y))
+end
+
+public func body_integrate(body: contracts.Body2D, dt: float = 1.0 / 60.0) -> contracts.Body2D
+    const next_position: game.Vector2 = game.vec2(
+        body.position.x + (body.velocity.x * dt),
+        body.position.y + (body.velocity.y * dt)
+    )
+    return contracts.Body2D(position: next_position, velocity: body.velocity)
+end

@@ -1,0 +1,9 @@
+-- Ori project file
+-- This file defines the project structure and dependencies.
+
+name = "my-project"
+version = "0.1.0"
+entry = "src/main.ori"
+
+[dependencies]
+-- ori add <package> to add dependencies

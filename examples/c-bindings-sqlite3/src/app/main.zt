@@ -1,0 +1,15 @@
+namespace app.main
+
+extern c
+    func zt_sqlite3_memory_exec(sql: text) -> int
+end
+
+func main() -> int
+    const sql: text = "create table items(id integer primary key, name text); insert into items(name) values('zenith');"
+    const rc: int = zt_sqlite3_memory_exec(sql)
+    if rc != 0
+        return rc
+    end
+
+    return 0
+end

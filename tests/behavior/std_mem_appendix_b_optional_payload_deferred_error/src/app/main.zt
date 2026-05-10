@@ -1,0 +1,11 @@
+namespace app.main
+
+import std.map as map
+import std.mem as mem
+
+func main() -> int
+    const names: map<text, text> = {"id": "Ada"}
+    const maybe_name: optional<text> = map.get(names, "id")
+    const copied: optional<text> = mem.edit(maybe_name)
+    return 0
+end

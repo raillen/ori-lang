@@ -1,0 +1,7 @@
+--- @target: Channel
+```zt
+public struct Channel<T>
+```
+
+Tipo publico `Channel`.
+---

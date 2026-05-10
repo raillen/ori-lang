@@ -1,0 +1,12 @@
+namespace app.config
+
+public var COUNTER: int = 1
+
+public func inc() -> int
+    COUNTER = COUNTER + 1
+    return COUNTER
+end
+
+public func current() -> int
+    return COUNTER
+end

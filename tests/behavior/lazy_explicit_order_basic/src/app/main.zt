@@ -1,0 +1,28 @@
+namespace app.main
+
+import std.lazy as lazy
+
+public var hits: int = 0
+
+func tick() -> int 
+    hits = hits + 1
+    return 41
+end
+
+public func main() -> int 
+    const later: lazy<int> = lazy.once_int(func() => tick())
+    if hits != 0 
+        panic("lazy evaluated too early")
+    end
+    const value: int = lazy.force_int(later)
+    if value != 41 
+        panic("lazy returned wrong value")
+    end
+    if hits != 1 
+        panic("lazy thunk should run exactly once")
+    end
+    if lazy.is_consumed_int(later) == false 
+        panic("lazy should be marked consumed after force")
+    end
+    return 0
+end

@@ -1,0 +1,9 @@
+namespace app.main
+
+import std.collections as collections
+
+func main() -> int
+    const _nested_grid: grid2d<list<text>> = collections.grid2d_int_new(1, 1)
+    const _nested_buffer: circbuf<map<text, text>> = collections.circbuf_int_new(2)
+    return 0
+end

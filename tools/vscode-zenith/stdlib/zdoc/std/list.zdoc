@@ -1,0 +1,37 @@
+--- @target: namespace
+# std.list - List Helpers
+
+Small helpers for built-in `list<T>` values.
+
+Compiler-known helpers:
+
+- `list.is_empty(items)` returns `true` when the list has no items.
+- `list.first(items)` returns `optional<T>` for the first item.
+- `list.last(items)` returns `optional<T>` for the last item.
+- `list.rest(items)` returns a new list without the first item.
+- `list.skip(items, count)` returns a new list after skipping `count` items.
+- `list.append(items, value)` returns a new list with `value` at the end.
+- `list.prepend(items, value)` returns a new list with `value` at the start.
+- `list.contains(items, value)` returns `true` when `value` exists in the list.
+- `list.reverse(items)` returns a new list in reverse order.
+- `list.concat(left, right)` returns a new list with both inputs.
+- `list.index_of(items, value)` returns `optional<int>` with the first index.
+- `list.set(items, index, value)` returns `result<list<T>, core.Error>`.
+- `list.remove_first(items)` returns `result<list<T>, core.Error>`.
+- `list.remove_last(items)` returns `result<list<T>, core.Error>`.
+- `list.remove_at(items, index)` returns `result<list<T>, core.Error>`.
+- `list.slice(items, start, end)` returns `result<list<T>, core.Error>`.
+- `list.map(items, mapper)` maps `list<int>` with `func(int) -> int`.
+- `list.filter(items, predicate)` filters `list<int>` with `func(int) -> bool`.
+- `list.reduce(items, initial, reducer)` reduces `list<int>` with `func(int, int) -> int`.
+- `list.find(items, predicate)` returns `optional<int>` from the first matching item.
+- `list.any(items, predicate)` returns `true` when any item matches.
+- `list.all(items, predicate)` returns `true` when all items match.
+- `list.count(items, predicate)` counts matching items.
+
+Backend note:
+
+- Basic value helpers execute for primitive lists and `list<text>` in the current C backend.
+- Selected `list<any<Trait>>` operations are supported where the trait-object runtime has explicit coverage.
+- Higher-order helpers execute for same-type primitive and `text` lists. Generic `reduce<T>` and cross-type `map<T,U>` remain future work.
+---

@@ -1,0 +1,8 @@
+namespace app.main
+
+import std.random as random
+
+func main() -> int
+    random.draw_count = 0
+    return random.draw_count
+end

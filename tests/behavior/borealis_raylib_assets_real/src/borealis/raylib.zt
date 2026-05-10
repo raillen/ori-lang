@@ -1,0 +1,463 @@
+namespace borealis.raylib
+
+extern c
+    func zt_borealis_open_window(title: text, width: int, height: int, target_fps: int, backend_id: int) -> result<int, core.Error>
+    func zt_borealis_close_window(window_id: int) -> result<void, core.Error>
+    func zt_borealis_window_should_close(window_id: int) -> bool
+    func zt_borealis_begin_frame(window_id: int, clear_r: int, clear_g: int, clear_b: int, clear_a: int) -> result<void, core.Error>
+    func zt_borealis_end_frame(window_id: int) -> result<void, core.Error>
+    func zt_borealis_draw_rect(window_id: int, x: float, y: float, width: float, height: float, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_draw_line(window_id: int, x1: float, y1: float, x2: float, y2: float, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_draw_rect_outline(window_id: int, x: float, y: float, width: float, height: float, thickness: float, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_draw_circle(window_id: int, x: float, y: float, radius: float, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_draw_circle_outline(window_id: int, x: float, y: float, radius: float, thickness: float, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_draw_text(window_id: int, value: text, x: int, y: int, size: int, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_is_key_down(window_id: int, input_code: int) -> bool
+    func zt_borealis_is_key_pressed(window_id: int, input_code: int) -> bool
+    func zt_borealis_is_key_released(window_id: int, input_code: int) -> bool
+    func zt_borealis_raylib_available() -> bool
+    func zt_borealis_raylib_loaded_path() -> text
+    func zt_borealis_raylib_draw_triangle(window_id: int, x1: float, y1: float, x2: float, y2: float, x3: float, y3: float, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_raylib_draw_ellipse(window_id: int, x: float, y: float, radius_h: float, radius_v: float, color_r: int, color_g: int, color_b: int, color_a: int) -> result<void, core.Error>
+    func zt_borealis_raylib_measure_text(value: text, font_size: int) -> int
+    func zt_borealis_raylib_load_texture(path: text) -> result<int, core.Error>
+    func zt_borealis_raylib_unload_texture(texture_handle: int) -> result<void, core.Error>
+    func zt_borealis_raylib_texture_width(texture_handle: int) -> int
+    func zt_borealis_raylib_texture_height(texture_handle: int) -> int
+    func zt_borealis_raylib_draw_texture(window_id: int, texture_handle: int, x: float, y: float, tint_r: int, tint_g: int, tint_b: int, tint_a: int) -> result<void, core.Error>
+    func zt_borealis_raylib_draw_texture_ex(window_id: int, texture_handle: int, x: float, y: float, rotation: float, scale: float, tint_r: int, tint_g: int, tint_b: int, tint_a: int) -> result<void, core.Error>
+    func zt_borealis_raylib_init_audio_device() -> result<void, core.Error>
+    func zt_borealis_raylib_close_audio_device() -> result<void, core.Error>
+    func zt_borealis_raylib_is_audio_device_ready() -> bool
+    func zt_borealis_raylib_set_master_volume(volume: float) -> result<void, core.Error>
+    func zt_borealis_raylib_load_sound(path: text) -> result<int, core.Error>
+    func zt_borealis_raylib_unload_sound(sound_handle: int) -> result<void, core.Error>
+    func zt_borealis_raylib_play_sound(sound_handle: int) -> result<void, core.Error>
+    func zt_borealis_raylib_stop_sound(sound_handle: int) -> result<void, core.Error>
+    func zt_borealis_raylib_set_sound_volume(sound_handle: int, volume: float) -> result<void, core.Error>
+    func zt_borealis_raylib_vector2_length(x: float, y: float) -> float
+    func zt_borealis_raylib_vector2_distance(ax: float, ay: float, bx: float, by: float) -> float
+    func zt_borealis_raylib_lerp(start: float, finish: float, amount: float) -> float
+    func zt_borealis_raylib_ease_linear(t: float, b: float, c: float, d: float) -> float
+    func zt_borealis_raylib_ease_sine_in(t: float, b: float, c: float, d: float) -> float
+    func zt_borealis_raylib_ease_sine_out(t: float, b: float, c: float, d: float) -> float
+    func zt_borealis_raylib_ease_sine_in_out(t: float, b: float, c: float, d: float) -> float
+    func zt_borealis_raylib_ease_quad_in(t: float, b: float, c: float, d: float) -> float
+    func zt_borealis_raylib_ease_quad_out(t: float, b: float, c: float, d: float) -> float
+    func zt_borealis_raylib_ease_quad_in_out(t: float, b: float, c: float, d: float) -> float
+end
+
+public struct Window
+    id: int
+end
+
+public struct Color
+    r: int = 0
+    g: int = 0
+    b: int = 0
+    a: int = 255
+end
+
+public struct Rect
+    x: float
+    y: float
+    width: float
+    height: float
+end
+
+public struct Vector2
+    x: float
+    y: float
+end
+
+public struct Texture
+    id: int
+    width: int
+    height: int
+end
+
+public struct Sound
+    id: int
+end
+
+public func expect(condition: bool, message: text) -> result<void, core.Error>
+    if condition == false
+        return error(message)
+    end
+    return success()
+end
+
+public func require_available() -> result<void, core.Error>
+    if raylib.available() == false
+        return error("Raylib native library not found")
+    end
+    return success()
+end
+
+public func available() -> bool
+    return raylib.zt_borealis_raylib_available()
+end
+
+public func loaded_path() -> text
+    return raylib.zt_borealis_raylib_loaded_path()
+end
+
+public func open_window(
+    title: text = "Borealis Raylib",
+    width: int = 960,
+    height: int = 540,
+    target_fps: int = 60
+) -> result<raylib.Window, core.Error>
+    const window_id: int = raylib.zt_borealis_open_window(title, width, height, target_fps, 1)?
+    return success(raylib.Window(id: window_id))
+end
+
+public func open_window_required(
+    title: text = "Borealis Raylib",
+    width: int = 960,
+    height: int = 540,
+    target_fps: int = 60
+) -> result<raylib.Window, core.Error>
+    raylib.require_available()?
+    return raylib.open_window(title, width, height, target_fps)
+end
+
+public func close_window(window: raylib.Window) -> result<void, core.Error>
+    return raylib.zt_borealis_close_window(window.id)
+end
+
+public func window_should_close(window: raylib.Window) -> bool
+    return raylib.zt_borealis_window_should_close(window.id)
+end
+
+public func begin_drawing(
+    window: raylib.Window,
+    clear: raylib.Color = raylib.rgb(24, 28, 36)
+) -> result<void, core.Error>
+    return raylib.zt_borealis_begin_frame(window.id, clear.r, clear.g, clear.b, clear.a)
+end
+
+public func end_drawing(window: raylib.Window) -> result<void, core.Error>
+    return raylib.zt_borealis_end_frame(window.id)
+end
+
+public func draw_rectangle(
+    window: raylib.Window,
+    area: raylib.Rect,
+    color: raylib.Color
+) -> result<void, core.Error>
+    return raylib.zt_borealis_draw_rect(window.id, area.x, area.y, area.width, area.height, color.r, color.g, color.b, color.a)
+end
+
+public func draw_rectangle_lines(
+    window: raylib.Window,
+    area: raylib.Rect,
+    color: raylib.Color,
+    thickness: float = 1.0
+) -> result<void, core.Error>
+    return raylib.zt_borealis_draw_rect_outline(window.id, area.x, area.y, area.width, area.height, thickness, color.r, color.g, color.b, color.a)
+end
+
+public func draw_line(
+    window: raylib.Window,
+    start: raylib.Vector2,
+    finish: raylib.Vector2,
+    color: raylib.Color
+) -> result<void, core.Error>
+    return raylib.zt_borealis_draw_line(window.id, start.x, start.y, finish.x, finish.y, color.r, color.g, color.b, color.a)
+end
+
+public func draw_triangle(
+    window: raylib.Window,
+    p1: raylib.Vector2,
+    p2: raylib.Vector2,
+    p3: raylib.Vector2,
+    color: raylib.Color
+) -> result<void, core.Error>
+    return raylib.zt_borealis_raylib_draw_triangle(window.id, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, color.r, color.g, color.b, color.a)
+end
+
+public func draw_circle(
+    window: raylib.Window,
+    center: raylib.Vector2,
+    radius: float,
+    color: raylib.Color
+) -> result<void, core.Error>
+    return raylib.zt_borealis_draw_circle(window.id, center.x, center.y, radius, color.r, color.g, color.b, color.a)
+end
+
+public func draw_circle_lines(
+    window: raylib.Window,
+    center: raylib.Vector2,
+    radius: float,
+    color: raylib.Color,
+    thickness: float = 1.0
+) -> result<void, core.Error>
+    return raylib.zt_borealis_draw_circle_outline(window.id, center.x, center.y, radius, thickness, color.r, color.g, color.b, color.a)
+end
+
+public func draw_ellipse(
+    window: raylib.Window,
+    center: raylib.Vector2,
+    radius_h: float,
+    radius_v: float,
+    color: raylib.Color
+) -> result<void, core.Error>
+    return raylib.zt_borealis_raylib_draw_ellipse(window.id, center.x, center.y, radius_h, radius_v, color.r, color.g, color.b, color.a)
+end
+
+public func draw_text(
+    window: raylib.Window,
+    value: text,
+    x: int,
+    y: int,
+    size: int,
+    color: raylib.Color
+) -> result<void, core.Error>
+    return raylib.zt_borealis_draw_text(window.id, value, x, y, size, color.r, color.g, color.b, color.a)
+end
+
+public func measure_text(value: text, font_size: int) -> int
+    return raylib.zt_borealis_raylib_measure_text(value, font_size)
+end
+
+public func load_texture(path: text) -> result<raylib.Texture, core.Error>
+    if path == ""
+        return error("raylib: texture path cannot be empty")
+    end
+    const handle: int = raylib.zt_borealis_raylib_load_texture(path)?
+    return success(raylib.Texture(
+        id: handle,
+        width: raylib.zt_borealis_raylib_texture_width(handle),
+        height: raylib.zt_borealis_raylib_texture_height(handle)
+    ))
+end
+
+public func unload_texture(asset: raylib.Texture) -> result<void, core.Error>
+    return raylib.zt_borealis_raylib_unload_texture(asset.id)
+end
+
+public func draw_texture(
+    window: raylib.Window,
+    asset: raylib.Texture,
+    position: raylib.Vector2,
+    tint: raylib.Color = raylib.white()
+) -> result<void, core.Error>
+    return raylib.zt_borealis_raylib_draw_texture(window.id, asset.id, position.x, position.y, tint.r, tint.g, tint.b, tint.a)
+end
+
+public func draw_texture_ex(
+    window: raylib.Window,
+    asset: raylib.Texture,
+    position: raylib.Vector2,
+    rotation: float = 0.0,
+    scale_amount: float = 1.0,
+    tint: raylib.Color = raylib.white()
+) -> result<void, core.Error>
+    return raylib.zt_borealis_raylib_draw_texture_ex(window.id, asset.id, position.x, position.y, rotation, scale_amount, tint.r, tint.g, tint.b, tint.a)
+end
+
+public func init_audio_device() -> result<void, core.Error>
+    return raylib.zt_borealis_raylib_init_audio_device()
+end
+
+public func close_audio_device() -> result<void, core.Error>
+    return raylib.zt_borealis_raylib_close_audio_device()
+end
+
+public func audio_device_ready() -> bool
+    return raylib.zt_borealis_raylib_is_audio_device_ready()
+end
+
+public func set_master_volume(volume: float) -> result<void, core.Error>
+    return raylib.zt_borealis_raylib_set_master_volume(volume)
+end
+
+public func load_sound(path: text) -> result<raylib.Sound, core.Error>
+    if path == ""
+        return error("raylib: sound path cannot be empty")
+    end
+    const handle: int = raylib.zt_borealis_raylib_load_sound(path)?
+    return success(raylib.Sound(id: handle))
+end
+
+public func unload_sound(asset: raylib.Sound) -> result<void, core.Error>
+    return raylib.zt_borealis_raylib_unload_sound(asset.id)
+end
+
+public func play_sound(asset: raylib.Sound) -> result<void, core.Error>
+    return raylib.zt_borealis_raylib_play_sound(asset.id)
+end
+
+public func stop_sound(asset: raylib.Sound) -> result<void, core.Error>
+    return raylib.zt_borealis_raylib_stop_sound(asset.id)
+end
+
+public func set_sound_volume(asset: raylib.Sound, volume: float) -> result<void, core.Error>
+    return raylib.zt_borealis_raylib_set_sound_volume(asset.id, volume)
+end
+
+public func is_key_down(window: raylib.Window, input_code: int) -> bool
+    return raylib.zt_borealis_is_key_down(window.id, input_code)
+end
+
+public func is_key_pressed(window: raylib.Window, input_code: int) -> bool
+    return raylib.zt_borealis_is_key_pressed(window.id, input_code)
+end
+
+public func is_key_released(window: raylib.Window, input_code: int) -> bool
+    return raylib.zt_borealis_is_key_released(window.id, input_code)
+end
+
+public func vector_length(value: raylib.Vector2) -> float
+    return raylib.zt_borealis_raylib_vector2_length(value.x, value.y)
+end
+
+public func vector_distance(a: raylib.Vector2, b: raylib.Vector2) -> float
+    return raylib.zt_borealis_raylib_vector2_distance(a.x, a.y, b.x, b.y)
+end
+
+public func lerp(start: float, finish: float, amount: float) -> float
+    return raylib.zt_borealis_raylib_lerp(start, finish, amount)
+end
+
+public func ease_linear(t: float, b: float, c: float, d: float) -> float
+    return raylib.zt_borealis_raylib_ease_linear(t, b, c, d)
+end
+
+public func ease_sine_in(t: float, b: float, c: float, d: float) -> float
+    return raylib.zt_borealis_raylib_ease_sine_in(t, b, c, d)
+end
+
+public func ease_sine_out(t: float, b: float, c: float, d: float) -> float
+    return raylib.zt_borealis_raylib_ease_sine_out(t, b, c, d)
+end
+
+public func ease_sine_in_out(t: float, b: float, c: float, d: float) -> float
+    return raylib.zt_borealis_raylib_ease_sine_in_out(t, b, c, d)
+end
+
+public func ease_quad_in(t: float, b: float, c: float, d: float) -> float
+    return raylib.zt_borealis_raylib_ease_quad_in(t, b, c, d)
+end
+
+public func ease_quad_out(t: float, b: float, c: float, d: float) -> float
+    return raylib.zt_borealis_raylib_ease_quad_out(t, b, c, d)
+end
+
+public func ease_quad_in_out(t: float, b: float, c: float, d: float) -> float
+    return raylib.zt_borealis_raylib_ease_quad_in_out(t, b, c, d)
+end
+
+public func rgb(r: int, g: int, b: int) -> raylib.Color
+    return raylib.Color(r: r, g: g, b: b, a: 255)
+end
+
+public func rgba(r: int, g: int, b: int, a: int) -> raylib.Color
+    return raylib.Color(r: r, g: g, b: b, a: a)
+end
+
+public func white() -> raylib.Color
+    return raylib.rgb(255, 255, 255)
+end
+
+public func black() -> raylib.Color
+    return raylib.rgb(0, 0, 0)
+end
+
+public func red() -> raylib.Color
+    return raylib.rgb(230, 41, 55)
+end
+
+public func green() -> raylib.Color
+    return raylib.rgb(0, 228, 48)
+end
+
+public func blue() -> raylib.Color
+    return raylib.rgb(0, 121, 241)
+end
+
+public func yellow() -> raylib.Color
+    return raylib.rgb(253, 249, 0)
+end
+
+public func rect(x: float, y: float, width: float, height: float) -> raylib.Rect
+    return raylib.Rect(x: x, y: y, width: width, height: height)
+end
+
+public func vec2(x: float, y: float) -> raylib.Vector2
+    return raylib.Vector2(x: x, y: y)
+end
+
+public func key_left() -> int
+    return 263
+end
+
+public func key_right() -> int
+    return 262
+end
+
+public func key_up() -> int
+    return 265
+end
+
+public func key_down() -> int
+    return 264
+end
+
+public func key_space() -> int
+    return 32
+end
+
+public func key_escape() -> int
+    return 256
+end
+
+public func real_assets_smoke(texture_path: text, sound_path: text) -> result<void, core.Error>
+    if raylib.available() == false
+        return success()
+    end
+
+    raylib.require_available()?
+
+    const window: raylib.Window = raylib.open_window_required(
+        "borealis-raylib-assets-real",
+        640,
+        360,
+        60
+    )?
+    const texture: raylib.Texture = raylib.load_texture(texture_path)?
+
+    raylib.expect(texture.id > 0, "load_texture should return a live texture handle")?
+    raylib.expect(texture.width == 1 and texture.height == 1, "load_texture should preserve the real PNG dimensions")?
+    raylib.expect(raylib.measure_text("raylib assets real", 20) > 0, "measure_text should stay positive with native Raylib")?
+
+    raylib.begin_drawing(window, clear: raylib.rgb(20, 24, 32))?
+    raylib.draw_texture(window, texture, raylib.vec2(32.0, 40.0))?
+    raylib.draw_texture_ex(
+        window,
+        texture,
+        raylib.vec2(96.0, 48.0),
+        rotation: 12.0,
+        scale_amount: 12.0,
+        tint: raylib.white()
+    )?
+    raylib.draw_text(window, "real texture ok", 24, 92, 18, raylib.white())?
+    raylib.end_drawing(window)?
+
+    raylib.init_audio_device()?
+    raylib.expect(raylib.audio_device_ready(), "audio_device_ready should be true after init_audio_device")?
+    raylib.set_master_volume(0.2)?
+
+    const sound: raylib.Sound = raylib.load_sound(sound_path)?
+    raylib.expect(sound.id > 0, "load_sound should return a live sound handle")?
+    raylib.set_sound_volume(sound, 0.25)?
+    raylib.play_sound(sound)?
+    raylib.stop_sound(sound)?
+    raylib.unload_sound(sound)?
+    raylib.close_audio_device()?
+
+    raylib.unload_texture(texture)?
+    raylib.close_window(window)?
+    return success()
+end

@@ -1,0 +1,26 @@
+namespace app.main
+
+-- Exercises FFI 1.0 boundary:
+--  - extern c function that returns an int (primitive return);
+--  - managed text argument that requires retain/release shielding around the call;
+--  - roundtrip from a local managed value into C and back into a primitive int.
+
+extern c
+    func zt_text_len(value: text) -> int
+end
+
+func main() -> int
+    const greeting: text = "hello"
+    const length: int = zt_text_len(greeting)
+    if length != 5
+        return 1
+    end
+
+    const empty: text = ""
+    const empty_len: int = zt_text_len(empty)
+    if empty_len != 0
+        return 2
+    end
+
+    return 0
+end

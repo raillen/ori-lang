@@ -1,0 +1,7 @@
+namespace app.main
+
+func main() -> int
+    const message: text = "state machine reached impossible branch"
+    unreachable(message)
+    return 0
+end

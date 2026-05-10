@@ -1,0 +1,17 @@
+namespace app.main
+
+func id<U>(values: list<U>) -> U
+    return values[0]
+end
+
+func first<T>(items: list<T>) -> T
+    return id(items)
+end
+
+func main() -> int
+    const values: list<int> = [9, 12]
+    if first(values) != 9
+        return 1
+    end
+    return 0
+end

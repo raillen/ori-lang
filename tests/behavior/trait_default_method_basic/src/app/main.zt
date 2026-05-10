@@ -1,0 +1,36 @@
+namespace app.main
+
+trait Scoreable
+    func score() -> int
+        return 11
+    end
+end
+
+struct Player
+    hp: int
+end
+
+struct Boss
+    hp: int
+end
+
+apply Scoreable to Player
+end
+
+apply Scoreable to Boss
+    func score() -> int
+        return self.hp + 1
+    end
+end
+
+func main() -> int
+    const player: Player = Player(hp: 5)
+    const boss: Boss = Boss(hp: 20)
+    if player.score() != 11
+        return 1
+    end
+    if boss.score() != 21
+        return 2
+    end
+    return 0
+end

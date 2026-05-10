@@ -1,0 +1,15 @@
+namespace app.main
+
+struct Pair
+    left: int
+    right: int
+end
+
+func sum(pair: Pair) -> int
+    return pair.left + pair.right
+end
+
+func main() -> int
+    const pair: Pair = Pair(left: 5, right: 6)
+    return sum(pair)
+end

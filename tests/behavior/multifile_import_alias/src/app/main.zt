@@ -1,0 +1,6 @@
+namespace app.main
+import app.math as math
+
+func main() -> int
+    return math.add(19, 23)
+end

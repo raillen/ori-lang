@@ -1,0 +1,23 @@
+namespace app.main
+
+func identity<T>(value: T) -> T
+    return value
+end
+
+func main() -> int
+    const number: int = identity(10)
+    const flag: bool = identity(true)
+    const label: text = identity("ok")
+
+    if number != 10
+        return 1
+    end
+    if flag == false
+        return 2
+    end
+    if label != "ok"
+        return 3
+    end
+
+    return 0
+end

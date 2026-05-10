@@ -1,0 +1,144 @@
+--- @target: namespace
+# std.console - Terminal interativo
+
+Helpers pequenos para programas que conversam com uma pessoa no terminal.
+
+`std.console` nao substitui `std.io`.
+Use `std.io` para streams, pipes e automacao.
+Use `std.console` para prompts, confirmacoes e pausas manuais.
+---
+
+--- @target: write_line
+```zt
+public func write_line(value: text = "") -> result<void, core.Error>
+```
+
+Escreve texto em stdout e adiciona quebra de linha.
+---
+
+--- @target: error_line
+```zt
+public func error_line(value: text) -> result<void, core.Error>
+```
+
+Escreve texto em stderr e adiciona quebra de linha.
+---
+
+--- @target: pause
+```zt
+public func pause(message: text = "Pressione Enter para continuar...") -> result<void, core.Error>
+```
+
+Mostra uma mensagem e espera uma linha da entrada padrao.
+Use apenas em programas interativos.
+Nao use em testes automatizados.
+---
+
+--- @target: prompt
+```zt
+public func prompt(message: text) -> result<text, core.Error>
+```
+
+Mostra uma mensagem e retorna a linha digitada.
+Retorna texto vazio se a entrada chegar ao fim.
+---
+
+--- @target: confirm
+```zt
+public func confirm(message: text, default_value: bool = false) -> result<bool, core.Error>
+```
+
+Pergunta sim/nao.
+Aceita `y`, `yes`, `s`, `sim`, `n`, `no` e `nao`.
+Se a resposta estiver vazia ou nao for reconhecida, retorna o valor de `default_value`.
+---
+
+--- @target: Size
+```zt
+public struct Size
+    columns: int
+    rows: int
+end
+```
+
+Tamanho conhecido do terminal.
+Quando o host nao souber o tamanho, os campos podem ser `0`.
+---
+
+--- @target: is_terminal
+```zt
+public func is_terminal(stream: text = "stdout") -> bool
+```
+
+Retorna se `stdin`, `stdout` ou `stderr` esta ligado a um terminal interativo.
+---
+
+--- @target: size
+```zt
+public func size() -> console.Size
+```
+
+Retorna colunas e linhas conhecidas do terminal.
+---
+
+--- @target: columns
+```zt
+public func columns() -> int
+```
+
+Retorna a largura conhecida do terminal em colunas.
+Retorna `0` quando o host nao souber.
+---
+
+--- @target: rows
+```zt
+public func rows() -> int
+```
+
+Retorna a altura conhecida do terminal em linhas.
+Retorna `0` quando o host nao souber.
+---
+
+--- @target: clear
+```zt
+public func clear() -> result<void, core.Error>
+```
+
+Limpa a tela usando sequencias ANSI.
+Use apenas em programas interativos.
+---
+
+--- @target: color
+```zt
+public func color(name: text) -> result<void, core.Error>
+```
+
+Aplica cor de primeiro plano por nome.
+Nomes aceitos: `default`, `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white` e variantes `bright_*`.
+---
+
+--- @target: style
+```zt
+public func style(name: text) -> result<void, core.Error>
+```
+
+Aplica estilo ANSI por nome.
+Nomes aceitos: `reset`, `bold`, `dim`, `italic`, `underline` e `reverse`.
+---
+
+--- @target: reset_style
+```zt
+public func reset_style() -> result<void, core.Error>
+```
+
+Restaura cor e estilo do terminal.
+---
+
+--- @target: read_key
+```zt
+public func read_key() -> result<optional<text>, core.Error>
+```
+
+Le uma tecla sem bloquear quando o host permite.
+Retorna `none` quando nao ha tecla disponivel ou quando a entrada nao e um terminal interativo.
+---

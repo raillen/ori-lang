@@ -1,0 +1,13 @@
+namespace app.main
+
+import std.mem as mem
+
+struct Bag
+    values: list<text>
+end
+
+func main() -> int
+    const bag: Bag = Bag(values: ["one", "two"])
+    const copied: Bag = mem.edit(bag)
+    return len(copied.values)
+end

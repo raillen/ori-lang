@@ -1,0 +1,21 @@
+namespace app.main
+
+trait Disposable
+    mut func dispose()
+end
+
+struct Resource
+    value: int
+end
+
+apply Disposable to Resource
+    mut func dispose()
+        return
+    end
+end
+
+func main() -> int
+    using resource = Resource(value: 1)
+        return resource.value
+    end
+end

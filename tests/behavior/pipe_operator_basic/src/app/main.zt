@@ -1,0 +1,17 @@
+namespace app.main
+
+func inc(value: int) -> int 
+    return value + 1
+end
+
+func add(value: int, amount: int) -> int 
+    return value + amount
+end
+
+func main() -> int 
+    const outcome: int = 3 |> inc |> add(3)
+    if outcome == 7 
+        return 7
+    end
+    return 0
+end

@@ -1,0 +1,74 @@
+--- @target: namespace
+# std.http - Blocking HTTP client
+
+Small HTTP-only blocking client for v1.
+
+Scope:
+
+- Supports `http://` URLs.
+- Does not support TLS/HTTPS in v1.
+- Supports blocking `GET` and `POST` with text bodies.
+- Does not support redirects, chunked transfer decoding, custom request headers,
+  timeout options, bytes bodies, streaming, or auth in v1.
+---
+
+--- @target: ErrorKind
+```zt
+public enum ErrorKind
+    UnsupportedScheme
+    InvalidUrl
+    Network
+    InvalidResponse
+end
+```
+
+Coarse error category for HTTP operations.
+---
+
+--- @target: Error
+```zt
+public struct Error
+    kind: http.ErrorKind
+    message: text
+end
+```
+
+Typed HTTP error with a short readable message.
+---
+
+--- @target: Response
+```zt
+public struct Response
+    status: int
+    body: text
+    headers: map<text,text>
+end
+```
+
+HTTP response.
+For v1, `status` and `body` are stable. `headers` is present in the type but minimal.
+---
+
+--- @target: get
+```zt
+public func get(url: text) -> result<http.Response, http.Error>
+```
+
+Runs a blocking HTTP GET request.
+
+@param url HTTP URL.
+@return HTTP response or `http.Error`.
+---
+
+--- @target: post
+```zt
+public func post(url: text, body: text, content_type: text = "text/plain") -> result<http.Response, http.Error>
+```
+
+Runs a blocking HTTP POST request.
+
+@param url HTTP URL.
+@param body Request body.
+@param content_type Value for the `Content-Type` header.
+@return HTTP response or `http.Error`.
+---

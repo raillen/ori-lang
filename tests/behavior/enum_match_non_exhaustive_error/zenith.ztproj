@@ -1,0 +1,14 @@
+[project]
+name = "test_lang"
+version = "0.1.0"
+kind = "app"
+lang = "es"
+
+[source]
+root = "src"
+
+[app]
+entry = "app.main"
+
+[build]
+target = "native"

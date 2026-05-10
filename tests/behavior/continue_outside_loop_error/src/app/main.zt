@@ -1,0 +1,6 @@
+namespace app.main
+
+func main() -> int
+    continue
+    return 0
+end

@@ -1,0 +1,7 @@
+namespace app.main
+
+func main() -> int
+    const message: text = "score must be positive"
+    check(false, message)
+    return 0
+end

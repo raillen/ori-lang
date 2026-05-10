@@ -1,0 +1,9 @@
+namespace std.bool
+
+extern c
+    public func zt_bool_to_text(value: bool) -> text
+end
+
+public func to_text(value: bool) -> text
+    return bool.zt_bool_to_text(value)
+end

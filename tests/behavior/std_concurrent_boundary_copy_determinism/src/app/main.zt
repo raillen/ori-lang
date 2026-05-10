@@ -1,0 +1,65 @@
+namespace app.main
+
+import std.concurrent as concurrent
+
+func main() -> result<void, core.Error>
+    -- Determinism: repeated calls with identical input produce identical output.
+    const a1: int = concurrent.copy_int(42)
+    const a2: int = concurrent.copy_int(42)
+    const a3: int = concurrent.copy_int(42)
+    if a1 != a2
+        return error("copy_int: first/second mismatch")
+    end
+    if a2 != a3
+        return error("copy_int: second/third mismatch")
+    end
+    if a1 != 42
+        return error("copy_int: value mismatch")
+    end
+
+    const b1: text = concurrent.copy_text("determinism")
+    const b2: text = concurrent.copy_text("determinism")
+    if b1 != b2
+        return error("copy_text: repeated call mismatch")
+    end
+    if b1 != "determinism"
+        return error("copy_text: value mismatch")
+    end
+
+    const c1: list<int> = concurrent.copy_list_int([1, 2, 3])
+    const c2: list<int> = concurrent.copy_list_int([1, 2, 3])
+    if len(c1) != len(c2)
+        return error("copy_list_int: length mismatch on repeat")
+    end
+    if c1[0] != c2[0]
+        return error("copy_list_int: index 0 mismatch on repeat")
+    end
+    if c1[2] != c2[2]
+        return error("copy_list_int: index 2 mismatch on repeat")
+    end
+
+    -- Boundary isolation: mutating a copy must not affect source.
+    const source_ids: list<int> = [10, 20, 30]
+    var copy_ids: list<int> = concurrent.copy_list_int(source_ids)
+    copy_ids[0] = 99
+    if source_ids[0] != 10
+        return error("copy_list_int: source mutated through copy (boundary isolation broken)")
+    end
+    if copy_ids[0] != 99
+        return error("copy_list_int: copy mutation not observed locally")
+    end
+
+    -- Order: same sequence of copy calls on same inputs yields same intermediate values.
+    const seq1_a: int = concurrent.copy_int(1)
+    const seq1_b: int = concurrent.copy_int(2)
+    const seq2_a: int = concurrent.copy_int(1)
+    const seq2_b: int = concurrent.copy_int(2)
+    if seq1_a != seq2_a
+        return error("order: seq[0] changed across repeated runs")
+    end
+    if seq1_b != seq2_b
+        return error("order: seq[1] changed across repeated runs")
+    end
+
+    return success()
+end

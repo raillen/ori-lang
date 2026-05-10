@@ -1,0 +1,271 @@
+namespace borealis.game.render3d
+
+public enum QualityProfile
+    Low
+    Medium
+    High
+end
+
+public struct LightId
+    id: int
+end
+
+public struct AmbientLightState
+    color: game.Color
+    intensity: float
+end
+
+public struct DirectionalLightState
+    direction: game.Vector3
+    color: game.Color
+    intensity: float
+end
+
+public struct PointLightState
+    position: game.Vector3
+    color: game.Color
+    intensity: float
+    range: float
+    enabled: bool
+end
+
+public var render3d_quality: render3d.QualityProfile = render3d.QualityProfile.Medium
+public var ambient_light: render3d.AmbientLightState = render3d.AmbientLightState(color: game.rgb(180, 180, 180), intensity: 1.0)
+public var directional_light: render3d.DirectionalLightState = render3d.DirectionalLightState(direction: game.vec3(0.0, -1.0, 0.0), color: game.rgb(255, 255, 255), intensity: 1.0)
+public var render3d_light_next_id: int = 1
+public var render3d_mode_open: bool = false
+public var render3d_active_camera_id: int = 0
+public var render3d_light_enabled: map<int, bool> = {}
+public var render3d_light_x: map<int, float> = {}
+public var render3d_light_y: map<int, float> = {}
+public var render3d_light_z: map<int, float> = {}
+public var render3d_light_intensity: map<int, float> = {}
+public var render3d_light_range: map<int, float> = {}
+
+public func render3d_begin(camera: camera3d.Camera3D) -> result<void, core.Error>
+    if render3d_mode_open
+        return error("render3d: render3d_begin called twice without render3d_end")
+    end
+    const window_id: int = game.active_window_id()
+    if window_id <= 0
+        return error("render3d: frame_begin is required before render3d_begin")
+    end
+    const position: game.Vector3 = camera3d.camera3d_get_position(camera)
+    const target: game.Vector3 = camera3d.camera3d_get_target(camera)
+    raylib.begin_mode3d(
+        raylib.Window(id: window_id),
+        raylib.vec3(position.x, position.y, position.z),
+        raylib.vec3(target.x, target.y, target.z),
+        fov_y: camera3d.camera3d_get_fov(camera),
+        up: raylib.vec3(0.0, 1.0, 0.0),
+        projection: raylib.camera_perspective()
+    )?
+    render3d_mode_open = true
+    render3d_active_camera_id = camera.id
+    return success()
+end
+
+public func render3d_end() -> result<void, core.Error>
+    const window_id: int = game.active_window_id()
+    if window_id <= 0
+        return error("render3d: frame_begin is required before render3d_end")
+    end
+    if render3d_mode_open == false
+        return success()
+    end
+    raylib.end_mode3d(raylib.Window(id: window_id))?
+    render3d_mode_open = false
+    render3d_active_camera_id = 0
+    return success()
+end
+
+public func draw_mesh(_mesh: assets3d.MeshId, _material: assets3d.MaterialHandle, _transform: game.Transform3D) -> result<void, core.Error>
+    return error("render3d: mesh drawing is not implemented yet")
+end
+
+public func draw_model(model: assets3d.ModelHandle, transform: game.Transform3D) -> result<void, core.Error>
+    const window_id: int = render3d.require_active_window()?
+    const scale: game.Vector3 = render3d.normalize_scale(transform.scale)
+    const native: optional<int> = assets3d.model_native_handle(model)
+    match native
+        case value native_id ->
+            return raylib.draw_model(
+                raylib.Window(id: window_id),
+                raylib.Model(id: native_id),
+                raylib.vec3(transform.position.x, transform.position.y, transform.position.z),
+                raylib.vec3(transform.rotation.x, transform.rotation.y, transform.rotation.z),
+                raylib.vec3(scale.x, scale.y, scale.z),
+                raylib.white()
+            )
+        case none ->
+            return error("render3d: model has no native Raylib handle")
+    end
+end
+
+public func draw_cube(position: game.Vector3, size: game.Vector3, color: game.Color) -> result<void, core.Error>
+    const window_id: int = render3d.require_active_window()?
+    return raylib.draw_cube(
+        raylib.Window(id: window_id),
+        raylib.vec3(position.x, position.y, position.z),
+        raylib.vec3(size.x, size.y, size.z),
+        raylib.rgba(color.r, color.g, color.b, color.a)
+    )
+end
+
+public func draw_grid(slices: int = 20, spacing: float = 1.0) -> result<void, core.Error>
+    const window_id: int = render3d.require_active_window()?
+    return raylib.draw_grid(raylib.Window(id: window_id), slices, spacing)
+end
+
+public func draw_billboard(texture: assets3d.TextureId, position: game.Vector3, size: game.Vector2, tint: game.Color) -> result<void, core.Error>
+    const window_id: int = render3d.require_active_window()?
+    const camera: camera3d.Camera3D = render3d.require_active_camera()
+    const camera_position: game.Vector3 = camera3d.camera3d_get_position(camera)
+    const camera_target: game.Vector3 = camera3d.camera3d_get_target(camera)
+    const native: optional<int> = assets3d.texture_native_handle(texture)
+    match native
+        case value native_id ->
+            return raylib.draw_billboard(
+                raylib.Window(id: window_id),
+                raylib.Texture(id: native_id, width: 0, height: 0),
+                raylib.vec3(camera_position.x, camera_position.y, camera_position.z),
+                raylib.vec3(camera_target.x, camera_target.y, camera_target.z),
+                raylib.vec3(position.x, position.y, position.z),
+                raylib.vec2(size.x, size.y),
+                raylib.rgba(tint.r, tint.g, tint.b, tint.a),
+                up: raylib.vec3(0.0, 1.0, 0.0),
+                fov_y: camera3d.camera3d_get_fov(camera),
+                projection: raylib.camera_perspective()
+            )
+        case none ->
+            return error("render3d: texture has no native Raylib handle")
+    end
+end
+
+public func render3d_set_quality_profile(level: render3d.QualityProfile) -> result<void, core.Error>
+    render3d_quality = level
+    return success()
+end
+
+public func render3d_get_quality_profile() -> render3d.QualityProfile
+    return render3d_quality
+end
+
+public func set_ambient_light(color: game.Color, intensity: float) -> result<void, core.Error>
+    ambient_light = render3d.AmbientLightState(color: color, intensity: intensity)
+    return success()
+end
+
+public func get_ambient_light() -> render3d.AmbientLightState
+    return ambient_light
+end
+
+public func set_directional_light(direction: game.Vector3, color: game.Color, intensity: float) -> result<void, core.Error>
+    directional_light = render3d.DirectionalLightState(direction: direction, color: color, intensity: intensity)
+    return success()
+end
+
+public func get_directional_light() -> render3d.DirectionalLightState
+    return directional_light
+end
+
+public func point_light_create(position: game.Vector3, color: game.Color, intensity: float, range: float) -> result<render3d.LightId, core.Error>
+    const id: int = render3d_light_next_id
+    render3d_light_next_id = render3d_light_next_id + 1
+    render3d_light_enabled = render3d.set_bool(render3d_light_enabled, id, true)
+    render3d_light_x = render3d.set_float(render3d_light_x, id, position.x)
+    render3d_light_y = render3d.set_float(render3d_light_y, id, position.y)
+    render3d_light_z = render3d.set_float(render3d_light_z, id, position.z)
+    render3d_light_intensity = render3d.set_float(render3d_light_intensity, id, intensity)
+    render3d_light_range = render3d.set_float(render3d_light_range, id, range)
+    return success(render3d.LightId(id: id))
+end
+
+public func point_light_set_enabled(id: render3d.LightId, enabled: bool) -> result<void, core.Error>
+    render3d_light_enabled = render3d.set_bool(render3d_light_enabled, id.id, enabled)
+    return success()
+end
+
+public func point_light_is_enabled(id: render3d.LightId) -> bool
+    return render3d.bool_or(render3d_light_enabled, id.id, false)
+end
+
+public func point_light_toggle(id: render3d.LightId) -> result<bool, core.Error>
+    const next: bool = render3d.point_light_is_enabled(id) == false
+    render3d_light_enabled = render3d.set_bool(render3d_light_enabled, id.id, next)
+    return success(next)
+end
+
+public func point_light_get(id: render3d.LightId) -> optional<render3d.PointLightState>
+    if render3d.point_light_is_enabled(id) == false and render3d.float_or(render3d_light_intensity, id.id, -1.0) < 0.0
+        return none
+    end
+    return render3d.PointLightState(
+        position: game.vec3(render3d.float_or(render3d_light_x, id.id, 0.0), render3d.float_or(render3d_light_y, id.id, 0.0), render3d.float_or(render3d_light_z, id.id, 0.0)),
+        color: game.rgb(255, 255, 255),
+        intensity: render3d.float_or(render3d_light_intensity, id.id, 1.0),
+        range: render3d.float_or(render3d_light_range, id.id, 4.0),
+        enabled: render3d.point_light_is_enabled(id)
+    )
+end
+
+public func lights_update_effects(_dt: float) -> result<void, core.Error>
+    return success()
+end
+
+public func bool_or(values: map<int, bool>, id: int, fallback: bool) -> bool
+    const maybe: optional<bool> = values.get(id)
+    match maybe
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func float_or(values: map<int, float>, id: int, fallback: float) -> float
+    const maybe: optional<float> = values.get(id)
+    match maybe
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func set_bool(values: map<int, bool>, id: int, value: bool) -> map<int, bool>
+    var next: map<int, bool> = values
+    next[id] = value
+    return next
+end
+
+public func set_float(values: map<int, float>, id: int, value: float) -> map<int, float>
+    var next: map<int, float> = values
+    next[id] = value
+    return next
+end
+
+public func require_active_window() -> result<int, core.Error>
+    if render3d_mode_open == false
+        return error("render3d: render3d_begin is required before drawing 3d")
+    end
+    const window_id: int = game.active_window_id()
+    if window_id <= 0
+        return error("render3d: frame_begin is required before drawing 3d")
+    end
+    return success(window_id)
+end
+
+public func require_active_camera() -> camera3d.Camera3D
+    if render3d_active_camera_id <= 0
+        panic("render3d: active camera is not available")
+    end
+    return camera3d.Camera3D(id: render3d_active_camera_id)
+end
+
+public func normalize_scale(value: game.Vector3) -> game.Vector3
+    if value.x == 0.0 and value.y == 0.0 and value.z == 0.0
+        return game.vec3(1.0, 1.0, 1.0)
+    end
+    return value
+end

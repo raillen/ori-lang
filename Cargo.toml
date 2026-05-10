@@ -1,0 +1,24 @@
+[workspace]
+resolver = "2"
+members = [
+    "compiler/crates/ori-lexer",
+    "compiler/crates/ori-ast",
+    "compiler/crates/ori-parser",
+    "compiler/crates/ori-types",
+    "compiler/crates/ori-hir",
+    "compiler/crates/ori-codegen",
+    "compiler/crates/ori-runtime",
+    "compiler/crates/ori-diagnostics",
+    "compiler/crates/ori-lsp",
+    "compiler/crates/ori-driver",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Ori Language Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ori-lang/ori"
+
+[workspace.dependencies]
+# Shared dependencies across crates (pinned here, referenced with { workspace = true })

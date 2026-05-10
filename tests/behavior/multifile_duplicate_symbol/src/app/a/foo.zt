@@ -1,0 +1,5 @@
+namespace app.a.foo
+
+func value() -> int
+    return 1
+end

@@ -1,0 +1,7 @@
+namespace app.main
+
+import std.set as set
+
+func main() -> int
+    return set.empty()
+end

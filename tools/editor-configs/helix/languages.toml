@@ -1,0 +1,10 @@
+[[language]]
+name = "zenith"
+scope = "source.zenith"
+file-types = ["zt"]
+comment-token = "--"
+language-servers = ["zt-lsp"]
+indent = { tab-width = 4, unit = "    " }
+
+[language-server.zt-lsp]
+command = "zt-lsp"

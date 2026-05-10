@@ -1,0 +1,21 @@
+namespace borealis.game
+
+public struct Rect
+    x: float
+    y: float
+    width: float
+    height: float
+end
+
+public struct Vector2
+    x: float
+    y: float
+end
+
+public func rect(x: float, y: float, width: float, height: float) -> game.Rect
+    return game.Rect(x: x, y: y, width: width, height: height)
+end
+
+public func vec2(x: float, y: float) -> game.Vector2
+    return game.Vector2(x: x, y: y)
+end

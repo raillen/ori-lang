@@ -1,0 +1,106 @@
+namespace app.main
+
+import std.collections as collections
+
+func check_generic_list_backed_helpers() -> result<void, core.Error>
+    const flags: list<bool> = [true, false]
+    const queue_flags: list<bool> = collections.queue_values(flags)
+    const stack_flags: list<bool> = collections.stack_values(flags)
+
+    if len(queue_flags) != 2 or queue_flags[0] == false or queue_flags[1]
+        return error("queue_values<T> should preserve list-backed queue order")
+    end
+
+    if len(stack_flags) != 2 or stack_flags[0] == false or stack_flags[1]
+        return error("stack_values<T> should preserve list-backed stack storage order")
+    end
+
+    return success()
+end
+
+func check_grid_values() -> result<void, core.Error>
+    const grid: grid2d<int> = collections.grid2d_int_new(2, 2)
+    const grid_a: grid2d<int> = collections.grid2d_int_set(grid, 0, 1, 7)
+    const grid_b: grid2d<int> = collections.grid2d_int_set(grid_a, 1, 0, 9)
+    const grid_values: list<int> = collections.grid2d_int_values(grid_b)
+
+    if len(grid_values) != 4 or grid_values[0] != 0 or grid_values[1] != 7 or grid_values[2] != 9 or grid_values[3] != 0
+        return error("grid2d values should be row-major")
+    end
+
+    const cube: grid3d<int> = collections.grid3d_int_new(2, 1, 2)
+    const cube_a: grid3d<int> = collections.grid3d_int_set(cube, 0, 0, 1, 5)
+    const cube_b: grid3d<int> = collections.grid3d_int_set(cube_a, 1, 0, 0, 8)
+    const cube_values: list<int> = collections.grid3d_int_values(cube_b)
+
+    if len(cube_values) != 4 or cube_values[0] != 0 or cube_values[1] != 5 or cube_values[2] != 8 or cube_values[3] != 0
+        return error("grid3d values should be layer-row-col order")
+    end
+
+    return success()
+end
+
+func check_priority_and_circular_values() -> result<void, core.Error>
+    const heap0: pqueue<int> = collections.pqueue_int_new()
+    const heap1: pqueue<int> = collections.pqueue_int_push(heap0, 3)
+    const heap2: pqueue<int> = collections.pqueue_int_push(heap1, 1)
+    const heap3: pqueue<int> = collections.pqueue_int_push(heap2, 2)
+    const ordered: list<int> = collections.pqueue_int_values(heap3)
+
+    if len(ordered) != 3 or ordered[0] != 1 or ordered[1] != 2 or ordered[2] != 3
+        return error("pqueue values should use stable pop order")
+    end
+
+    if collections.pqueue_int_len(heap3) != 3
+        return error("pqueue values should not mutate the source heap")
+    end
+
+    const buf0: circbuf<int> = collections.circbuf_int_new(3)
+    const buf1: circbuf<int> = collections.circbuf_int_push(buf0, 1)
+    const buf2: circbuf<int> = collections.circbuf_int_push(buf1, 2)
+    const buf3: circbuf<int> = collections.circbuf_int_push(buf2, 3)
+    const buf4: circbuf<int> = collections.circbuf_int_push(buf3, 4)
+    const buf_values: list<int> = collections.circbuf_int_values(buf4)
+
+    if len(buf_values) != 3 or buf_values[0] != 2 or buf_values[1] != 3 or buf_values[2] != 4
+        return error("circbuf values should be oldest to newest")
+    end
+
+    return success()
+end
+
+func check_tree_values() -> result<void, core.Error>
+    const map0: btreemap<text,text> = collections.btreemap_text_new()
+    const map1: btreemap<text,text> = collections.btreemap_text_set(map0, "bb", "twenty")
+    const map2: btreemap<text,text> = collections.btreemap_text_set(map1, "a", "one")
+    const keys: list<text> = collections.btreemap_text_keys(map2)
+    const values: list<text> = collections.btreemap_text_values(map2)
+
+    if len(keys) != 2 or len(keys[0]) != 1 or len(keys[1]) != 2
+        return error("btreemap keys should be sorted by key")
+    end
+
+    if len(values) != 2 or len(values[0]) != 3 or len(values[1]) != 6
+        return error("btreemap values should follow sorted key order")
+    end
+
+    const set0: btreeset<text> = collections.btreeset_text_new()
+    const set1: btreeset<text> = collections.btreeset_text_insert(set0, "ccc")
+    const set2: btreeset<text> = collections.btreeset_text_insert(set1, "a")
+    const set3: btreeset<text> = collections.btreeset_text_insert(set2, "bb")
+    const set_values: list<text> = collections.btreeset_text_values(set3)
+
+    if len(set_values) != 3 or len(set_values[0]) != 1 or len(set_values[1]) != 2 or len(set_values[2]) != 3
+        return error("btreeset values should be sorted")
+    end
+
+    return success()
+end
+
+func main() -> result<void, core.Error>
+    check_generic_list_backed_helpers()?
+    check_grid_values()?
+    check_priority_and_circular_values()?
+    check_tree_values()?
+    return success()
+end

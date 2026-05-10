@@ -1,0 +1,20 @@
+[project]
+name = "enum-match"
+kind = "app"
+version = "0.1.0"
+
+[source]
+root = "src"
+
+[app]
+entry = "app.main"
+
+[build]
+target = "native"
+output = "build"
+
+[test]
+root = "tests"
+
+[zdoc]
+root = "zdoc"

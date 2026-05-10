@@ -1,0 +1,12 @@
+namespace app.main
+
+func main() -> int
+    const first: text = "alpha"
+    const second: text = "beta"
+    const names: list<text> = [first, second]
+    const picked: text = names[1]
+    if len(names) == 2 and len(picked) == 4
+        return 0
+    end
+    return 1
+end

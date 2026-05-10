@@ -1,0 +1,7 @@
+namespace app.main
+
+func main() -> int
+    const name: text = "Zenith"
+    const value: text = fmt"hello {name}"
+    return 0
+end

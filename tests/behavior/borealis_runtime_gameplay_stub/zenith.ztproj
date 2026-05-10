@@ -1,0 +1,18 @@
+[project]
+name = "borealis_runtime_gameplay_stub"
+version = "0.1.0"
+kind = "app"
+
+[source]
+root = "src"
+
+[app]
+entry = "app.main"
+
+[build]
+target = "native"
+output = "build"
+profile = "debug"
+
+[dependencies]
+borealis = { path = "../../../packages/borealis" }

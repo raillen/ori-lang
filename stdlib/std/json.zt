@@ -1,0 +1,138 @@
+namespace std.json
+
+-- Zenith Standard Library - JSON Module
+-- v1 runtime subset: object JSON as map<text,text>.
+public enum Kind
+    Null
+    Bool
+    Number
+    Text
+    Array
+    Object
+end
+
+public struct Value
+    raw: text
+end
+
+extern c
+    public func zt_json_parse_map_text_text(input: text) -> result<map<text, text>, core.Error>
+    public func zt_json_stringify_map_text_text(value: map<text, text>) -> text
+    public func zt_json_pretty_map_text_text(value: map<text, text>, indent: int) -> text
+    public func zt_json_validate_full(input: text) -> result<text, core.Error>
+    public func zt_json_pretty_full(input: text, indent: int) -> text
+    public func zt_json_kind_index(input: text) -> int
+    public func zt_json_as_text(input: text) -> optional<text>
+    public func zt_json_as_int(input: text) -> optional<int>
+    public func zt_json_as_float(input: text) -> optional<float>
+    public func zt_json_as_bool(input: text) -> optional<bool>
+    public func zt_json_get_raw(input: text, key: text) -> optional<text>
+    public func zt_json_at_raw(input: text, index: int) -> optional<text>
+    public func zt_json_len(input: text) -> int
+    public func zt_host_read_file(file_path: text) -> result<text, core.Error>
+    public func zt_host_write_file(file_path: text, content: text) -> result<void, core.Error>
+end
+
+public func parse(input: text) -> result<map<text, text>, core.Error>
+    return json.zt_json_parse_map_text_text(input)
+end
+
+public func stringify(value: map<text, text>) -> text
+    return json.zt_json_stringify_map_text_text(value)
+end
+
+public func pretty(value: map<text, text>, indent: int = 2) -> text
+    return json.zt_json_pretty_map_text_text(value, indent)
+end
+
+public func read(file_path: text) -> result<map<text, text>, core.Error>
+    const raw: text = json.zt_host_read_file(file_path)?
+    return json.parse(raw)
+end
+
+public func write(file_path: text, value: map<text, text>) -> result<void, core.Error>
+    const raw: text = json.stringify(value)
+    return json.zt_host_write_file(file_path, raw)
+end
+
+public func parse_value(input: text) -> result<json.Value, core.Error>
+    const raw: text = json.zt_json_validate_full(input)?
+    return success(json.Value(raw: raw))
+end
+
+public func stringify_value(value: json.Value) -> text
+    return value.raw
+end
+
+public func pretty_value(value: json.Value, indent: int = 2) -> text
+    return json.zt_json_pretty_full(value.raw, indent)
+end
+
+public func read_value(file_path: text) -> result<json.Value, core.Error>
+    const raw: text = json.zt_host_read_file(file_path)?
+    return json.parse_value(raw)
+end
+
+public func write_value(file_path: text, value: json.Value) -> result<void, core.Error>
+    return json.zt_host_write_file(file_path, value.raw)
+end
+
+public func kind(value: json.Value) -> json.Kind
+    const index: int = json.zt_json_kind_index(value.raw)
+    if index == 1
+        return json.Kind.Bool
+    end
+    if index == 2
+        return json.Kind.Number
+    end
+    if index == 3
+        return json.Kind.Text
+    end
+    if index == 4
+        return json.Kind.Array
+    end
+    if index == 5
+        return json.Kind.Object
+    end
+    return json.Kind.Null
+end
+
+public func as_text(value: json.Value) -> optional<text>
+    return json.zt_json_as_text(value.raw)
+end
+
+public func as_int(value: json.Value) -> optional<int>
+    return json.zt_json_as_int(value.raw)
+end
+
+public func as_float(value: json.Value) -> optional<float>
+    return json.zt_json_as_float(value.raw)
+end
+
+public func as_bool(value: json.Value) -> optional<bool>
+    return json.zt_json_as_bool(value.raw)
+end
+
+public func get(value: json.Value, key: text) -> optional<json.Value>
+    const raw: optional<text> = json.zt_json_get_raw(value.raw, key)
+    match raw
+        case some(child):
+            return json.Value(raw: child)
+        case none:
+            return none
+    end
+end
+
+public func at(value: json.Value, index: int) -> optional<json.Value>
+    const raw: optional<text> = json.zt_json_at_raw(value.raw, index)
+    match raw
+        case some(child):
+            return json.Value(raw: child)
+        case none:
+            return none
+    end
+end
+
+public func len(value: json.Value) -> int
+    return json.zt_json_len(value.raw)
+end

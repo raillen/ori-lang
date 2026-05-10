@@ -1,0 +1,33 @@
+namespace app.main
+
+func maybe_score() -> optional<int>
+    return 7
+end
+
+func parse_score() -> result<int, text>
+    return success(11)
+end
+
+func main() -> int
+    const maybe: optional<int> = maybe_score()
+    if maybe.is_some() == false
+        return 1
+    end
+    if maybe.is_none()
+        return 2
+    end
+    if maybe.or(0) != 7
+        return 3
+    end
+
+    const parsed: result<int, text> = parse_score()
+    if parsed.is_success() == false
+        return 4
+    end
+    if parsed.is_error()
+        return 5
+    end
+
+    return 0
+end
+

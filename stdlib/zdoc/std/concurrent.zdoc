@@ -1,0 +1,73 @@
+--- @target: namespace
+# std.concurrent - helpers de copia de fronteira do alpha atual
+
+Modulo pequeno para tornar explicita a copia entre isolates.
+Ele nao cria threads.
+Ele nao expoe `jobs` ainda.
+---
+
+--- @target: copy_int
+```zt
+public func copy_int(value: int) -> int
+```
+
+Retorna o mesmo `int`.
+Escalares ja sao naturalmente transferiveis.
+---
+
+--- @target: copy_bool
+```zt
+public func copy_bool(value: bool) -> bool
+```
+
+Retorna o mesmo `bool`.
+---
+
+--- @target: copy_float
+```zt
+public func copy_float(value: float) -> float
+```
+
+Retorna o mesmo `float`.
+---
+
+--- @target: copy_text
+```zt
+public func copy_text(value: text) -> text
+```
+
+Cria uma copia segura de `text` para fronteiras de isolate.
+---
+
+--- @target: copy_bytes
+```zt
+public func copy_bytes(value: bytes) -> bytes
+```
+
+Cria uma copia segura de `bytes` para fronteiras de isolate.
+---
+
+--- @target: copy_list_int
+```zt
+public func copy_list_int(value: list<int>) -> list<int>
+```
+
+Cria uma copia segura de `list<int>`.
+---
+
+--- @target: copy_list_text
+```zt
+public func copy_list_text(value: list<text>) -> list<text>
+```
+
+Cria uma copia segura de `list<text>`.
+---
+
+--- @target: copy_map_text_text
+```zt
+public func copy_map_text_text(value: map<text,text>) -> map<text,text>
+```
+
+Cria uma copia segura de `map<text,text>`.
+No alpha atual, este e o bloco publico inicial para mapas transferiveis.
+---

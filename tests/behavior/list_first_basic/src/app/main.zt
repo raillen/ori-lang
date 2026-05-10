@@ -1,0 +1,31 @@
+namespace app.main
+
+import std.list as list
+
+func main() -> int
+    const values: list<int> = [4, 8]
+    const first_value: optional<int> = list.first(values)
+    if first_value.is_none()
+        return 1
+    end
+    if first_value.or(0) != 4
+        return 2
+    end
+
+    const empty_values: list<int> = []
+    if list.first(empty_values).is_some()
+        return 3
+    end
+
+    const words: list<text> = ["zen", "lang"]
+    const first_word: optional<text> = list.first(words)
+    if first_word.is_none()
+        return 4
+    end
+    var fallback: text = ""
+    if len(first_word.or(fallback)) != 3
+        return 5
+    end
+
+    return 0
+end

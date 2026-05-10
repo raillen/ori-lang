@@ -1,0 +1,23 @@
+namespace app.main
+
+struct Point
+    x: int
+    y: int
+end
+
+func accept_transferable<T>(value: T) -> T
+where T is Transferable
+    return value
+end
+
+func main() -> int
+    const p: Point = Point(x: 3, y: 4)
+    const copied: Point = accept_transferable(p)
+    if copied.x != 3
+        return 1
+    end
+    if copied.y != 4
+        return 2
+    end
+    return 0
+end

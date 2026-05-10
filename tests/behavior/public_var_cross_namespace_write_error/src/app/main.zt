@@ -1,0 +1,7 @@
+namespace app.main
+import app.config as cfg
+
+func main() -> int
+    cfg.COUNTER = 2
+    return cfg.COUNTER
+end

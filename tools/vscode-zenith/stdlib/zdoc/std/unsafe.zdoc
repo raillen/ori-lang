@@ -1,0 +1,28 @@
+--- @target: heap_kind_text
+```zt
+public func heap_kind_text(value: text) -> int
+```
+
+Funcao publica `heap_kind_text`.
+---
+--- @target: heap_kind_list_text
+```zt
+public func heap_kind_list_text(value: list<text>) -> int
+```
+
+Funcao publica `heap_kind_list_text`.
+---
+--- @target: retain_text
+```zt
+public func retain_text(value: text) -> text
+```
+
+Funcao publica `retain_text`.
+---
+--- @target: retain_list_text
+```zt
+public func retain_list_text(value: list<text>) -> list<text>
+```
+
+Funcao publica `retain_list_text`.
+---

@@ -1,0 +1,40 @@
+namespace app.main
+
+struct Flag
+    enabled: bool
+    weight: int
+end
+
+func expect_empty(flags: map<int, Flag>) -> int
+    return len(flags)
+end
+
+func main() -> int
+    const seed: map<int, Flag> = {}
+    const empty_score: int = expect_empty({})
+
+    var working: map<int, Flag> = seed
+    working[1] = Flag(enabled: true, weight: 3)
+
+    if empty_score != 0
+        return 1
+    end
+
+    if len(seed) != 0
+        return 2
+    end
+
+    if len(working) != 1
+        return 3
+    end
+
+    if working[1].enabled != true
+        return 4
+    end
+
+    if working[1].weight != 3
+        return 5
+    end
+
+    return 0
+end

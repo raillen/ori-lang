@@ -1,0 +1,22 @@
+namespace app.main
+
+attr deprecated("use current_value instead")
+public func old_value() -> int
+    return 1
+end
+
+attr todo("replace this stub before release")
+public func pending_value() -> int
+    return 2
+end
+
+public func current_value() -> int
+    return old_value() + pending_value()
+end
+
+func main() -> int
+    if current_value() != 3
+        return 1
+    end
+    return 0
+end

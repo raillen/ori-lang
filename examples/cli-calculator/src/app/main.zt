@@ -1,0 +1,30 @@
+namespace app.main
+
+enum Operation
+    Add
+    Subtract
+    Multiply
+    Divide
+end
+
+func calculate(left: int, op: Operation, right: int) -> result<int, core.Error>
+    match op
+        case Operation.Add:
+            return success(left + right)
+        case Operation.Subtract:
+            return success(left - right)
+        case Operation.Multiply:
+            return success(left * right)
+        case Operation.Divide:
+            if right == 0
+                return error("division by zero")
+            end
+            return success(left / right)
+    end
+end
+
+func main() -> result<void, core.Error>
+    const value: int = calculate(21, .Multiply, 2)?
+    print(to_text(value))
+    return success()
+end

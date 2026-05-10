@@ -1,0 +1,347 @@
+namespace std.text
+
+-- Zenith Standard Library - std.text
+extern c
+    public func zt_text_to_utf8_bytes(value: text) -> bytes
+    public func zt_text_from_utf8_bytes(value: bytes) -> result<text, text>
+    public func zt_text_eq(a: text, b: text) -> bool
+    public func zt_text_concat(a: text, b: text) -> text
+    public func zt_text_split(value: text, separator: text) -> list<text>
+    public func zt_text_chars(value: text) -> list<text>
+    public func zt_text_to_lower_ascii(value: text) -> text
+    public func zt_text_to_upper_ascii(value: text) -> text
+    public func zt_text_capitalize_ascii(value: text) -> text
+end
+
+public func _eq(a: text, b: text) -> bool
+    return text.zt_text_eq(a, b)
+end
+
+public func _slice_from(value: text, start: int) -> text
+    if len(value) == 0
+        return ""
+    end
+    if start <= 0
+        return value
+    end
+    if start >= len(value)
+        return ""
+    end
+    return value[start..(len(value) - 1)]
+end
+
+public func _slice_to(value: text, finish: int) -> text
+    if len(value) == 0
+        return ""
+    end
+    if finish < 0
+        return ""
+    end
+    if finish >= len(value)
+        return value
+    end
+    return value[0..finish]
+end
+
+public func _is_whitespace_char(ch: text) -> bool
+    if ch == " " or ch == "\t" or ch == "\n" or ch == "\r"
+        return true
+    end
+    return false
+end
+
+public func _is_ascii_digit_char(ch: text) -> bool
+    if ch == "0" or ch == "1" or ch == "2" or ch == "3" or ch == "4"
+        return true
+    end
+    if ch == "5" or ch == "6" or ch == "7" or ch == "8" or ch == "9"
+        return true
+    end
+    return false
+end
+
+public func _starts_at(value: text, needle: text, start: int) -> bool
+    var offset: int = 0
+    if len(needle) == 0
+        return true
+    end
+    if start < 0
+        return false
+    end
+    if start + len(needle) > len(value)
+        return false
+    end
+    while offset < len(needle)
+        if text._eq(value[start + offset], needle[offset]) == false
+            return false
+        end
+        offset = offset + 1
+    end
+    return true
+end
+
+public func to_utf8(value: text) -> bytes
+    return text.zt_text_to_utf8_bytes(value)
+end
+
+public func from_utf8(value: bytes) -> result<text, text>
+    return text.zt_text_from_utf8_bytes(value)
+end
+
+public func trim(value: text) -> text
+    return text.trim_end(text.trim_start(value))
+end
+
+public func trim_start(value: text) -> text
+    var index: int = 0
+    while index < len(value)
+        if text._is_whitespace_char(value[index]) == false
+            return text._slice_from(value, index)
+        end
+        index = index + 1
+    end
+    return ""
+end
+
+public func trim_end(value: text) -> text
+    var index: int = len(value) - 1
+    while index >= 0
+        if text._is_whitespace_char(value[index]) == false
+            return text._slice_to(value, index)
+        end
+        index = index - 1
+    end
+    return ""
+end
+
+public func contains(value: text, needle: text) -> bool
+    return text.index_of(value, needle).is_some()
+end
+
+public func concat(left: text, right: text) -> text
+    return text.zt_text_concat(left, right)
+end
+
+public func get(value: text, index: int) -> optional<text>
+    if index < 0 or index >= len(value)
+        return none
+    end
+    const ch: text = value[index]
+    return ch
+end
+
+public func slice(value: text, start: int, finish: int) -> text
+    if len(value) == 0
+        return ""
+    end
+    var safe_start: int = start
+    var safe_finish: int = finish
+    if safe_start < 0
+        safe_start = 0
+    end
+    if safe_finish < safe_start
+        return ""
+    end
+    if safe_start >= len(value)
+        return ""
+    end
+    if safe_finish >= len(value)
+        safe_finish = len(value) - 1
+    end
+    return value[safe_start..safe_finish]
+end
+
+public func split(value: text, separator: text) -> list<text>
+    return text.zt_text_split(value, separator)
+end
+
+public func chars(value: text) -> list<text>
+    return text.zt_text_chars(value)
+end
+
+public func to_lower(value: text) -> text
+    return text.zt_text_to_lower_ascii(value)
+end
+
+public func to_upper(value: text) -> text
+    return text.zt_text_to_upper_ascii(value)
+end
+
+public func repeat_text(value: text, count: int) -> text
+    var out: text = ""
+    var index: int = 0
+    while index < count
+        out = text.zt_text_concat(out, value)
+        index = index + 1
+    end
+    return out
+end
+
+public func pad_left(value: text, width: int, fill: text) -> text
+    if len(value) >= width
+        return value
+    end
+    return text.zt_text_concat(text.repeat_text(fill, width - len(value)), value)
+end
+
+public func pad_right(value: text, width: int, fill: text) -> text
+    if len(value) >= width
+        return value
+    end
+    return text.zt_text_concat(value, text.repeat_text(fill, width - len(value)))
+end
+
+public func capitalize(value: text) -> text
+    return text.zt_text_capitalize_ascii(value)
+end
+
+public func join(parts: list<text>, separator: text = "") -> text
+    var joined: text = ""
+    var index: int = 0
+    while index < len(parts)
+        if index > 0
+            joined = text.zt_text_concat(joined, separator)
+        end
+        joined = text.zt_text_concat(joined, parts[index])
+        index = index + 1
+    end
+    return joined
+end
+
+public func replace_all(value: text, needle: text, replacement: text) -> text
+    var replaced: text = ""
+    var index: int = 0
+    if len(needle) == 0
+        return value
+    end
+    while index < len(value)
+        if text._starts_at(value, needle, index)
+            replaced = text.zt_text_concat(replaced, replacement)
+            index = index + len(needle)
+        else
+            replaced = text.zt_text_concat(replaced, value[index])
+            index = index + 1
+        end
+    end
+    return replaced
+end
+
+public func replace(value: text, needle: text, replacement: text) -> text
+    return text.replace_all(value, needle, replacement)
+end
+
+public func starts_with(value: text, prefix: text) -> bool
+    return text._starts_at(value, prefix, 0)
+end
+
+public func ends_with(value: text, suffix: text) -> bool
+    if len(suffix) == 0
+        return true
+    end
+    if len(suffix) > len(value)
+        return false
+    end
+    return text._starts_at(value, suffix, len(value) - len(suffix))
+end
+
+public func has_prefix(value: text, prefix: text) -> bool
+    return text.starts_with(value, prefix)
+end
+
+public func has_suffix(value: text, suffix: text) -> bool
+    return text.ends_with(value, suffix)
+end
+
+public func has_whitespace(value: text) -> bool
+    var index: int = 0
+    while index < len(value)
+        if text._is_whitespace_char(value[index])
+            return true
+        end
+        index = index + 1
+    end
+    return false
+end
+
+public func index_of(value: text, needle: text) -> optional<int>
+    const found: int = text.index_of_or_minus_one(value, needle)
+    if found < 0
+        return none
+    end
+    return found
+end
+
+public func index_of_or_minus_one(value: text, needle: text) -> int
+    var index: int = 0
+    const max_index: int = len(value) - len(needle)
+    if len(needle) == 0
+        return 0
+    end
+    if len(needle) > len(value)
+        return -1
+    end
+    while index <= max_index
+        if text._starts_at(value, needle, index)
+            return index
+        end
+        index = index + 1
+    end
+    return -1
+end
+
+public func last_index_of(value: text, needle: text) -> optional<int>
+    const found: int = text.last_index_of_or_minus_one(value, needle)
+    if found < 0
+        return none
+    end
+    return found
+end
+
+public func last_index_of_or_minus_one(value: text, needle: text) -> int
+    var index: int = len(value) - len(needle)
+    if len(needle) == 0
+        return len(value)
+    end
+    if len(needle) > len(value)
+        return -1
+    end
+    while index >= 0
+        if text._starts_at(value, needle, index)
+            return index
+        end
+        index = index - 1
+    end
+    return -1
+end
+
+public func is_empty(value: text) -> bool
+    return len(value) == 0
+end
+
+public func is_blank(value: text) -> bool
+    return len(text.trim(value)) == 0
+end
+
+public func is_digits(value: text) -> bool
+    var index: int = 0
+    if len(value) == 0
+        return false
+    end
+    while index < len(value)
+        if text._is_ascii_digit_char(value[index]) == false
+            return false
+        end
+        index = index + 1
+    end
+    return true
+end
+
+public func limit(value: text, max_len: int) -> text
+    if max_len <= 0
+        return ""
+    end
+    if len(value) <= max_len
+        return value
+    end
+    return value[0..(max_len - 1)]
+end

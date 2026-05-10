@@ -1,0 +1,18 @@
+namespace app.main
+
+extern c
+    attr target("windows")
+    attr name("zt_ffi_selected_windows")
+    const SELECTED: int
+
+    attr target("unix")
+    attr name("zt_ffi_selected_unix")
+    const SELECTED: int
+end
+
+public func main() -> int
+    if SELECTED != 42
+        return 1
+    end
+    return 0
+end

@@ -1,0 +1,13 @@
+--- @target: namespace
+# std.bool
+
+Conversoes explicitas para valores `bool`.
+---
+
+--- @target: to_text
+```zt
+public func to_text(value: bool) -> text
+```
+
+Retorna `"true"` quando `value` e verdadeiro. Retorna `"false"` quando e falso.
+---

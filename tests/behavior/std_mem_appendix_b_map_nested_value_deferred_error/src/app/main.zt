@@ -1,0 +1,9 @@
+namespace app.main
+
+import std.mem as mem
+
+func main() -> int
+    const values: map<text, list<list<int>>> = {"one": [[1]]}
+    const copied: map<text, list<list<int>>> = mem.edit(values)
+    return len(copied)
+end

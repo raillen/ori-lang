@@ -1,0 +1,9 @@
+namespace app.main
+
+virtual func area() -> int
+    return 0
+end
+
+func main() -> int
+    return 0
+end

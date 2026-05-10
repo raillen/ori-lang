@@ -1,0 +1,35 @@
+namespace app.main
+
+func is_ready() -> bool
+    return true
+end
+
+func scale() -> float
+    return 2.5
+end
+
+func label() -> text
+    return "zenith"
+end
+
+func announce()
+    const message: text = label()
+    return
+end
+
+func recursive_sum(n: int) -> int
+    if n == 0
+        return 0
+    end
+    return n + recursive_sum(n - 1)
+end
+
+func main() -> int
+    announce()
+    if is_ready()
+        if scale() > 2.0
+            return recursive_sum(3)
+        end
+    end
+    return 0
+end

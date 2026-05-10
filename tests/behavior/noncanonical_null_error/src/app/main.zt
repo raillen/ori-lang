@@ -1,0 +1,6 @@
+namespace app.main
+
+func main() -> int
+    const maybe_name: optional<text> = null
+    return 0
+end

@@ -1,0 +1,6 @@
+namespace app.math
+
+public func add(left: int, right: int) -> int
+    return left + right
+end
+

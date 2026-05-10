@@ -1,0 +1,1868 @@
+{
+  "suite": "quick",
+  "generated_at_utc": "2026-04-21T14:59:39.684421+00:00",
+  "platform_key": "windows-AMD64",
+  "host": {
+    "host": "RAILLEN-REDE",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "system": "windows",
+    "release": "11",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+    "python_version": "3.12.0",
+    "cpu_count": 12
+  },
+  "status": "fail",
+  "benchmark_count": 10,
+  "scenarios": {
+    "micro_frontend": {
+      "status": "fail",
+      "count": 1
+    },
+    "micro_lowering_backend": {
+      "status": "fail",
+      "count": 1
+    },
+    "micro_runtime": {
+      "status": "pass",
+      "count": 1
+    },
+    "micro_stdlib": {
+      "status": "warn",
+      "count": 1
+    },
+    "macro_small": {
+      "status": "fail",
+      "count": 5
+    },
+    "macro_medium": {
+      "status": "warn",
+      "count": 1
+    }
+  },
+  "benchmarks": [
+    {
+      "benchmark_id": "micro_frontend_small_check",
+      "scenario": "micro_frontend",
+      "category": "frontend",
+      "kind": "cmd",
+      "suite": "quick",
+      "status": "fail",
+      "generated_at_utc": "2026-04-21T14:59:28.970615+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 11.456,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 3.496250790495967
+          },
+          "base_report": {
+            "status": "fail",
+            "pct": 30.448644955590975
+          },
+          "status": "fail"
+        },
+        "lat_p95_ms": {
+          "value": 11.533,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 2.8263195435092743
+          },
+          "base_report": {
+            "status": "fail",
+            "pct": 30.804128388340697
+          },
+          "status": "fail"
+        },
+        "lat_std_ms": {
+          "value": 0.166,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 87.2936,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 3.3730053309246806
+          },
+          "base_report": {
+            "status": "fail",
+            "pct": 23.343151047017894
+          },
+          "status": "fail"
+        },
+        "peak_ws": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 228271,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 11.456,
+        "lat_p95_ms": 11.533,
+        "lat_std_ms": 0.166,
+        "throughput_ops_per_sec": 87.2936,
+        "peak_ws": 0,
+        "alloc_proxy": 0,
+        "binary_size": 228271
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 3000,
+          "lat_p95_ms": 5000,
+          "peak_ws": 420000000
+        },
+        "fail": {
+          "lat_median_ms": 7000,
+          "lat_p95_ms": 11000,
+          "peak_ws": 700000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 3,
+        "retries": 0,
+        "outliers": 0
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "check ok\n",
+          "stderr": "",
+          "ms": 11.155699998198543,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "check ok\n",
+          "stderr": "",
+          "ms": 11.455600000772392,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "check ok\n",
+          "stderr": "",
+          "ms": 11.541899999429006,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 0,
+        "alloc": 0,
+        "stdout": "check ok\n",
+        "stderr": "",
+        "ms": 11.541899999429006,
+        "timeout": false
+      }
+    },
+    {
+      "benchmark_id": "micro_lowering_small_emit_c",
+      "scenario": "micro_lowering_backend",
+      "category": "lowering_backend",
+      "kind": "cmd",
+      "suite": "quick",
+      "status": "fail",
+      "generated_at_utc": "2026-04-21T14:59:29.031519+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 11.933,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -3.0704248233287315
+          },
+          "base_report": {
+            "status": "fail",
+            "pct": 33.58334266203963
+          },
+          "status": "fail"
+        },
+        "lat_p95_ms": {
+          "value": 12.373,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -8.639149376061434
+          },
+          "base_report": {
+            "status": "fail",
+            "pct": 35.31277340332458
+          },
+          "status": "fail"
+        },
+        "lat_std_ms": {
+          "value": 0.378,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 83.804,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -3.167763951604564
+          },
+          "base_report": {
+            "status": "fail",
+            "pct": 25.134559293189618
+          },
+          "status": "fail"
+        },
+        "peak_ws": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 228271,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 11.933,
+        "lat_p95_ms": 12.373,
+        "lat_std_ms": 0.378,
+        "throughput_ops_per_sec": 83.804,
+        "peak_ws": 0,
+        "alloc_proxy": 0,
+        "binary_size": 228271
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 3500,
+          "lat_p95_ms": 6000,
+          "peak_ws": 460000000
+        },
+        "fail": {
+          "lat_median_ms": 9000,
+          "lat_p95_ms": 14000,
+          "peak_ws": 760000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 3,
+        "retries": 0,
+        "outliers": 0
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "#include \"runtime/c/zenith_rt.h\"\n#include <stdio.h>\n\nstatic zt_int zt_app_main__main(void);\n\nstatic zt_int zt_app_main__main(void) {\n    zt_int a;\n    zt_int b;\n    goto zt_block_entry;\n\nzt_block_entry:\n    a = 40;\n    b = 2;\n    return zt_add_i64(a, b);\n}\n\nint main(void) {\n    return (int)zt_app_main__main();\n}\n",
+          "stderr": "",
+          "ms": 11.495499999000458,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "#include \"runtime/c/zenith_rt.h\"\n#include <stdio.h>\n\nstatic zt_int zt_app_main__main(void);\n\nstatic zt_int zt_app_main__main(void) {\n    zt_int a;\n    zt_int b;\n    goto zt_block_entry;\n\nzt_block_entry:\n    a = 40;\n    b = 2;\n    return zt_add_i64(a, b);\n}\n\nint main(void) {\n    return (int)zt_app_main__main();\n}\n",
+          "stderr": "",
+          "ms": 11.932599998544902,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "#include \"runtime/c/zenith_rt.h\"\n#include <stdio.h>\n\nstatic zt_int zt_app_main__main(void);\n\nstatic zt_int zt_app_main__main(void) {\n    zt_int a;\n    zt_int b;\n    goto zt_block_entry;\n\nzt_block_entry:\n    a = 40;\n    b = 2;\n    return zt_add_i64(a, b);\n}\n\nint main(void) {\n    return (int)zt_app_main__main();\n}\n",
+          "stderr": "",
+          "ms": 12.421399998856941,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 0,
+        "alloc": 0,
+        "stdout": "#include \"runtime/c/zenith_rt.h\"\n#include <stdio.h>\n\nstatic zt_int zt_app_main__main(void);\n\nstatic zt_int zt_app_main__main(void) {\n    zt_int a;\n    zt_int b;\n    goto zt_block_entry;\n\nzt_block_entry:\n    a = 40;\n    b = 2;\n    return zt_add_i64(a, b);\n}\n\nint main(void) {\n    return (int)zt_app_main__main();\n}\n",
+        "stderr": "",
+        "ms": 12.421399998856941,
+        "timeout": false
+      }
+    },
+    {
+      "benchmark_id": "micro_runtime_core",
+      "scenario": "micro_runtime",
+      "category": "runtime",
+      "kind": "bin",
+      "suite": "quick",
+      "status": "pass",
+      "generated_at_utc": "2026-04-21T14:59:32.100587+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 74.797,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -14.321878579610539
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 7.185131049109376
+          },
+          "status": "pass"
+        },
+        "lat_p95_ms": {
+          "value": 83.6,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -13.340036695726088
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -10.235899197921254
+          },
+          "status": "pass"
+        },
+        "lat_std_ms": {
+          "value": 4.726,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 13.3696,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -16.71613646680867
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 6.703325843323886
+          },
+          "status": "pass"
+        },
+        "peak_ws": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 248172,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "startup_ms": {
+          "value": 74.797,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -14.321878579610539
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 7.185131049109376
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 74.797,
+        "lat_p95_ms": 83.6,
+        "lat_std_ms": 4.726,
+        "throughput_ops_per_sec": 13.3696,
+        "peak_ws": 0,
+        "alloc_proxy": 0,
+        "binary_size": 248172,
+        "startup_ms": 74.797
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 2200,
+          "lat_p95_ms": 3500,
+          "startup_ms": 2200,
+          "peak_ws": 260000000
+        },
+        "fail": {
+          "lat_median_ms": 5000,
+          "lat_p95_ms": 8000,
+          "startup_ms": 5000,
+          "peak_ws": 520000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 3,
+        "retries": 0,
+        "outliers": 0
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "m36-runtime-core-ok\n",
+          "stderr": "",
+          "ms": 74.32430000000001,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "m36-runtime-core-ok\n",
+          "stderr": "",
+          "ms": 84.57780000000001,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "m36-runtime-core-ok\n",
+          "stderr": "",
+          "ms": 74.7968,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 0,
+        "alloc": 0,
+        "stdout": "m36-runtime-core-ok\n",
+        "stderr": "",
+        "ms": 74.7968,
+        "timeout": false
+      }
+    },
+    {
+      "benchmark_id": "micro_stdlib_core",
+      "scenario": "micro_stdlib",
+      "category": "stdlib",
+      "kind": "bin",
+      "suite": "quick",
+      "status": "warn",
+      "generated_at_utc": "2026-04-21T14:59:35.228075+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 85.169,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 5.319846167163358
+          },
+          "base_report": {
+            "status": "warn",
+            "pct": 15.252104251806545
+          },
+          "status": "warn"
+        },
+        "lat_p95_ms": {
+          "value": 85.556,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -4.717569493941558
+          },
+          "base_report": {
+            "status": "warn",
+            "pct": 12.775492987451218
+          },
+          "status": "warn"
+        },
+        "lat_std_ms": {
+          "value": 1.005,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 11.7414,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 5.0509461426491935
+          },
+          "base_report": {
+            "status": "warn",
+            "pct": 13.233620549504138
+          },
+          "status": "warn"
+        },
+        "peak_ws": {
+          "value": 4485120,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 790528,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 240291,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "startup_ms": {
+          "value": 85.169,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 5.319846167163358
+          },
+          "base_report": {
+            "status": "warn",
+            "pct": 15.252104251806545
+          },
+          "status": "warn"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 85.169,
+        "lat_p95_ms": 85.556,
+        "lat_std_ms": 1.005,
+        "throughput_ops_per_sec": 11.7414,
+        "peak_ws": 4485120,
+        "alloc_proxy": 790528,
+        "binary_size": 240291,
+        "startup_ms": 85.169
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 2400,
+          "lat_p95_ms": 3800,
+          "peak_ws": 280000000
+        },
+        "fail": {
+          "lat_median_ms": 5600,
+          "lat_p95_ms": 8500,
+          "peak_ws": 560000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 3,
+        "retries": 0,
+        "outliers": 0
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 4485120,
+          "alloc": 790528,
+          "stdout": "m36-stdlib-core-ok\n",
+          "stderr": "",
+          "ms": 85.16850000000001,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "m36-stdlib-core-ok\n",
+          "stderr": "",
+          "ms": 83.2847,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "m36-stdlib-core-ok\n",
+          "stderr": "",
+          "ms": 85.599,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 0,
+        "alloc": 0,
+        "stdout": "m36-stdlib-core-ok\n",
+        "stderr": "",
+        "ms": 85.599,
+        "timeout": false
+      }
+    },
+    {
+      "benchmark_id": "macro_small_check",
+      "scenario": "macro_small",
+      "category": "macro",
+      "kind": "cmd",
+      "suite": "quick",
+      "status": "fail",
+      "generated_at_utc": "2026-04-21T14:59:35.299170+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 11.377,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 4.57762662009377
+          },
+          "base_report": {
+            "status": "fail",
+            "pct": 29.65242165242166
+          },
+          "status": "fail"
+        },
+        "lat_p95_ms": {
+          "value": 12.213,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -1.5953589557650503
+          },
+          "base_report": {
+            "status": "fail",
+            "pct": 36.59545912090368
+          },
+          "status": "fail"
+        },
+        "lat_std_ms": {
+          "value": 0.881,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 87.8974,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 4.377341002229076
+          },
+          "base_report": {
+            "status": "fail",
+            "pct": 22.87090190187203
+          },
+          "status": "fail"
+        },
+        "peak_ws": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 228271,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 11.377,
+        "lat_p95_ms": 12.213,
+        "lat_std_ms": 0.881,
+        "throughput_ops_per_sec": 87.8974,
+        "peak_ws": 0,
+        "alloc_proxy": 0,
+        "binary_size": 228271
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 4200,
+          "lat_p95_ms": 7000,
+          "peak_ws": 520000000,
+          "binary_size": 22000000
+        },
+        "fail": {
+          "lat_median_ms": 9800,
+          "lat_p95_ms": 16000,
+          "peak_ws": 800000000,
+          "binary_size": 44000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 4,
+        "retries": 1,
+        "outliers": 1
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "check ok\n",
+          "stderr": "",
+          "ms": 10.153800001717173,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "check ok\n",
+          "stderr": "",
+          "ms": 21.44899999984773,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "check ok\n",
+          "stderr": "",
+          "ms": 11.376899998140289,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "check ok\n",
+          "stderr": "",
+          "ms": 12.306299999181647,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 0,
+        "alloc": 0,
+        "stdout": "check ok\n",
+        "stderr": "",
+        "ms": 12.306299999181647,
+        "timeout": false
+      }
+    },
+    {
+      "benchmark_id": "macro_small_build_cold",
+      "scenario": "macro_small",
+      "category": "macro",
+      "kind": "cmd",
+      "suite": "quick",
+      "status": "pass",
+      "generated_at_utc": "2026-04-21T14:59:36.342615+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 251.24,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -85.66347512934772
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -85.44396092974644
+          },
+          "status": "pass"
+        },
+        "lat_p95_ms": {
+          "value": 258.332,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -85.62322260374987
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -88.0448233509407
+          },
+          "status": "pass"
+        },
+        "lat_std_ms": {
+          "value": 6.039,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 3.9803,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -597.5639677532422
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -586.9692785640317
+          },
+          "status": "pass"
+        },
+        "peak_ws": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 228271,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 251.24,
+        "lat_p95_ms": 258.332,
+        "lat_std_ms": 6.039,
+        "throughput_ops_per_sec": 3.9803,
+        "peak_ws": 0,
+        "alloc_proxy": 0,
+        "binary_size": 228271
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 4200,
+          "lat_p95_ms": 7000,
+          "peak_ws": 520000000,
+          "binary_size": 22000000
+        },
+        "fail": {
+          "lat_median_ms": 9800,
+          "lat_p95_ms": 16000,
+          "peak_ws": 800000000,
+          "binary_size": 44000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 3,
+        "retries": 0,
+        "outliers": 0
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "build ok\n",
+          "stderr": "",
+          "ms": 259.12029999744846,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "build ok\n",
+          "stderr": "",
+          "ms": 251.23960000200896,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "build ok\n",
+          "stderr": "",
+          "ms": 244.33760000101756,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 0,
+        "alloc": 0,
+        "stdout": "build ok\n",
+        "stderr": "",
+        "ms": 244.33760000101756,
+        "timeout": false
+      }
+    },
+    {
+      "benchmark_id": "macro_small_build_warm",
+      "scenario": "macro_small",
+      "category": "macro",
+      "kind": "cmd",
+      "suite": "quick",
+      "status": "pass",
+      "generated_at_utc": "2026-04-21T14:59:37.344788+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 251.017,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -85.81774379540063
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -85.60759913169818
+          },
+          "status": "pass"
+        },
+        "lat_p95_ms": {
+          "value": 259.311,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -85.3726185681456
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -85.34330150031201
+          },
+          "status": "pass"
+        },
+        "lat_std_ms": {
+          "value": 14.67,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 3.9838,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -605.0973451327434
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -594.7680502267178
+          },
+          "status": "pass"
+        },
+        "peak_ws": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 228271,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 251.017,
+        "lat_p95_ms": 259.311,
+        "lat_std_ms": 14.67,
+        "throughput_ops_per_sec": 3.9838,
+        "peak_ws": 0,
+        "alloc_proxy": 0,
+        "binary_size": 228271
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 4200,
+          "lat_p95_ms": 7000,
+          "peak_ws": 520000000,
+          "binary_size": 22000000
+        },
+        "fail": {
+          "lat_median_ms": 9800,
+          "lat_p95_ms": 16000,
+          "peak_ws": 800000000,
+          "binary_size": 44000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 3,
+        "retries": 0,
+        "outliers": 0
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "build ok\n",
+          "stderr": "",
+          "ms": 260.23239999994985,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "build ok\n",
+          "stderr": "",
+          "ms": 251.0167000000365,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "build ok\n",
+          "stderr": "",
+          "ms": 225.5446999988635,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 0,
+        "alloc": 0,
+        "stdout": "build ok\n",
+        "stderr": "",
+        "ms": 225.5446999988635,
+        "timeout": false
+      }
+    },
+    {
+      "benchmark_id": "macro_small_run",
+      "scenario": "macro_small",
+      "category": "macro",
+      "kind": "cmd",
+      "suite": "quick",
+      "status": "pass",
+      "generated_at_utc": "2026-04-21T14:59:38.464414+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 277.281,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -84.56181903519511
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -84.2473131107922
+          },
+          "status": "pass"
+        },
+        "lat_p95_ms": {
+          "value": 284.114,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -84.26904204792474
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -83.90635443927087
+          },
+          "status": "pass"
+        },
+        "lat_std_ms": {
+          "value": 5.541,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 3.6065,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -547.7191091954023
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -534.8354162999473
+          },
+          "status": "pass"
+        },
+        "peak_ws": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 230594,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 277.281,
+        "lat_p95_ms": 284.114,
+        "lat_std_ms": 5.541,
+        "throughput_ops_per_sec": 3.6065,
+        "peak_ws": 0,
+        "alloc_proxy": 0,
+        "binary_size": 230594
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 4200,
+          "lat_p95_ms": 7000,
+          "peak_ws": 520000000,
+          "binary_size": 22000000
+        },
+        "fail": {
+          "lat_median_ms": 9800,
+          "lat_p95_ms": 16000,
+          "peak_ws": 800000000,
+          "binary_size": 44000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 3,
+        "retries": 0,
+        "outliers": 0
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "Hello from std.io!\n",
+          "stderr": "C:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c: In function 'zt_app_main__io_read_line':\nC:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c:100:92: warning: unused parameter 'from' [-Wunused-parameter]\n  100 | static zt_outcome_optional_text_core_error zt_app_main__io_read_line(zt_app_main__io_Input from) {\n      |                                                                      ~~~~~~~~~~~~~~~~~~~~~~^~~~\nC:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c: In function 'zt_app_main__io_read_all':\nC:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c:107:82: warning: unused parameter 'from' [-Wunused-parameter]\n  107 | static zt_outcome_text_core_error zt_app_main__io_read_all(zt_app_main__io_Input from) {\n      |                                                            ~~~~~~~~~~~~~~~~~~~~~~^~~~\nStderr outputs correctly.\n",
+          "ms": 284.8732000020391,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "Hello from std.io!\n",
+          "stderr": "C:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c: In function 'zt_app_main__io_read_line':\nC:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c:100:92: warning: unused parameter 'from' [-Wunused-parameter]\n  100 | static zt_outcome_optional_text_core_error zt_app_main__io_read_line(zt_app_main__io_Input from) {\n      |                                                                      ~~~~~~~~~~~~~~~~~~~~~~^~~~\nC:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c: In function 'zt_app_main__io_read_all':\nC:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c:107:82: warning: unused parameter 'from' [-Wunused-parameter]\n  107 | static zt_outcome_text_core_error zt_app_main__io_read_all(zt_app_main__io_Input from) {\n      |                                                            ~~~~~~~~~~~~~~~~~~~~~~^~~~\nStderr outputs correctly.\n",
+          "ms": 271.3344000003417,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "Hello from std.io!\n",
+          "stderr": "C:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c: In function 'zt_app_main__io_read_line':\nC:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c:100:92: warning: unused parameter 'from' [-Wunused-parameter]\n  100 | static zt_outcome_optional_text_core_error zt_app_main__io_read_line(zt_app_main__io_Input from) {\n      |                                                                      ~~~~~~~~~~~~~~~~~~~~~~^~~~\nC:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c: In function 'zt_app_main__io_read_all':\nC:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c:107:82: warning: unused parameter 'from' [-Wunused-parameter]\n  107 | static zt_outcome_text_core_error zt_app_main__io_read_all(zt_app_main__io_Input from) {\n      |                                                            ~~~~~~~~~~~~~~~~~~~~~~^~~~\nStderr outputs correctly.\n",
+          "ms": 277.28080000088084,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 0,
+        "alloc": 0,
+        "stdout": "Hello from std.io!\n",
+        "stderr": "C:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c: In function 'zt_app_main__io_read_line':\nC:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c:100:92: warning: unused parameter 'from' [-Wunused-parameter]\n  100 | static zt_outcome_optional_text_core_error zt_app_main__io_read_line(zt_app_main__io_Input from) {\n      |                                                                      ~~~~~~~~~~~~~~~~~~~~~~^~~~\nC:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c: In function 'zt_app_main__io_read_all':\nC:\\Users\\raillen.DESKTOP-99RJ5M6\\Documents\\Projetos\\zenith-lang-v2\\tests\\behavior\\std_io_basic/build/std-io-basic.c:107:82: warning: unused parameter 'from' [-Wunused-parameter]\n  107 | static zt_outcome_text_core_error zt_app_main__io_read_all(zt_app_main__io_Input from) {\n      |                                                            ~~~~~~~~~~~~~~~~~~~~~~^~~~\nStderr outputs correctly.\n",
+        "ms": 277.28080000088084,
+        "timeout": false
+      }
+    },
+    {
+      "benchmark_id": "macro_small_test",
+      "scenario": "macro_small",
+      "category": "macro",
+      "kind": "cmd",
+      "suite": "quick",
+      "status": "pass",
+      "generated_at_utc": "2026-04-21T14:59:39.598120+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 285.168,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -84.08485754293302
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -85.72182472724722
+          },
+          "status": "pass"
+        },
+        "lat_p95_ms": {
+          "value": 287.43,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -84.42215140478667
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -85.66147859922178
+          },
+          "status": "pass"
+        },
+        "lat_std_ms": {
+          "value": 1.549,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 3.5067,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -528.3282565848414
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -600.3594967046134
+          },
+          "status": "pass"
+        },
+        "peak_ws": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 229071,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 285.168,
+        "lat_p95_ms": 287.43,
+        "lat_std_ms": 1.549,
+        "throughput_ops_per_sec": 3.5067,
+        "peak_ws": 0,
+        "alloc_proxy": 0,
+        "binary_size": 229071
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 4200,
+          "lat_p95_ms": 7000,
+          "peak_ws": 520000000,
+          "binary_size": 22000000
+        },
+        "fail": {
+          "lat_median_ms": 9800,
+          "lat_p95_ms": 16000,
+          "peak_ws": 800000000,
+          "binary_size": 44000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 3,
+        "retries": 0,
+        "outliers": 0
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "test skipped\n",
+          "stderr": "skip[test.skip]\nplaceholder\n\ncode\n  test.skip\n\nhelp\n  Skip marks the current test as not executed.\n\n",
+          "ms": 287.6816999996663,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "test skipped\n",
+          "stderr": "skip[test.skip]\nplaceholder\n\ncode\n  test.skip\n\nhelp\n  Skip marks the current test as not executed.\n\n",
+          "ms": 283.9641999999003,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "test skipped\n",
+          "stderr": "skip[test.skip]\nplaceholder\n\ncode\n  test.skip\n\nhelp\n  Skip marks the current test as not executed.\n\n",
+          "ms": 285.16750000198954,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 0,
+        "alloc": 0,
+        "stdout": "test skipped\n",
+        "stderr": "skip[test.skip]\nplaceholder\n\ncode\n  test.skip\n\nhelp\n  Skip marks the current test as not executed.\n\n",
+        "ms": 285.16750000198954,
+        "timeout": false
+      }
+    },
+    {
+      "benchmark_id": "macro_medium_check",
+      "scenario": "macro_medium",
+      "category": "macro",
+      "kind": "cmd",
+      "suite": "quick",
+      "status": "warn",
+      "generated_at_utc": "2026-04-21T14:59:39.681167+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 16.515,
+          "budget": "pass",
+          "baseline": {
+            "status": "warn",
+            "pct": 18.599640933572708
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -16.780045351473916
+          },
+          "status": "warn"
+        },
+        "lat_p95_ms": {
+          "value": 16.605,
+          "budget": "pass",
+          "baseline": {
+            "status": "warn",
+            "pct": 15.45682102628286
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -16.804449120697427
+          },
+          "status": "warn"
+        },
+        "lat_std_ms": {
+          "value": 0.072,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 60.5506,
+          "budget": "pass",
+          "baseline": {
+            "status": "warn",
+            "pct": 15.680840871618907
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": -20.16082141163257
+          },
+          "status": "warn"
+        },
+        "peak_ws": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 239793,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 4.018583345262418
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 4.018583345262418
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 16.515,
+        "lat_p95_ms": 16.605,
+        "lat_std_ms": 0.072,
+        "throughput_ops_per_sec": 60.5506,
+        "peak_ws": 0,
+        "alloc_proxy": 0,
+        "binary_size": 239793
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 4200,
+          "lat_p95_ms": 7000,
+          "peak_ws": 520000000,
+          "binary_size": 22000000
+        },
+        "fail": {
+          "lat_median_ms": 9800,
+          "lat_p95_ms": 16000,
+          "peak_ws": 800000000,
+          "binary_size": 44000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 3,
+        "retries": 0,
+        "outliers": 0
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "check ok\n",
+          "stderr": "",
+          "ms": 16.51510000010603,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "check ok\n",
+          "stderr": "",
+          "ms": 16.615200001979247,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "check ok\n",
+          "stderr": "",
+          "ms": 16.439600000012433,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 0,
+        "alloc": 0,
+        "stdout": "check ok\n",
+        "stderr": "",
+        "ms": 16.439600000012433,
+        "timeout": false
+      }
+    }
+  ],
+  "release_gate": false,
+  "override_file": ""
+}

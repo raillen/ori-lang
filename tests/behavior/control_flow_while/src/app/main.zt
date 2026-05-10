@@ -1,0 +1,11 @@
+namespace app.main
+
+func main() -> int
+    var current: int = 3
+    var total: int = 0
+    while current > 0
+        total = total + current
+        current = current - 1
+    end
+    return total
+end

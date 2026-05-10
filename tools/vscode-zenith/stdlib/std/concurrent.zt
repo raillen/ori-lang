@@ -1,0 +1,43 @@
+namespace std.concurrent
+
+-- Zenith Standard Library — Concurrent Boundary Helpers
+-- Alpha-safe transfer helpers for isolate / worker boundaries.
+extern c
+    public func zt_thread_boundary_copy_text(value: text) -> text
+    public func zt_thread_boundary_copy_bytes(value: bytes) -> bytes
+    public func zt_thread_boundary_copy_list_i64(value: list<int>) -> list<int>
+    public func zt_thread_boundary_copy_list_text(value: list<text>) -> list<text>
+    public func zt_thread_boundary_copy_map_text_text(value: map<text, text>) -> map<text, text>
+end
+
+public func copy_int(value: int) -> int
+    return value
+end
+
+public func copy_bool(value: bool) -> bool
+    return value
+end
+
+public func copy_float(value: float) -> float
+    return value
+end
+
+public func copy_text(value: text) -> text
+    return concurrent.zt_thread_boundary_copy_text(value)
+end
+
+public func copy_bytes(value: bytes) -> bytes
+    return concurrent.zt_thread_boundary_copy_bytes(value)
+end
+
+public func copy_list_int(value: list<int>) -> list<int>
+    return concurrent.zt_thread_boundary_copy_list_i64(value)
+end
+
+public func copy_list_text(value: list<text>) -> list<text>
+    return concurrent.zt_thread_boundary_copy_list_text(value)
+end
+
+public func copy_map_text_text(value: map<text, text>) -> map<text, text>
+    return concurrent.zt_thread_boundary_copy_map_text_text(value)
+end

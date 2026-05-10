@@ -1,0 +1,24 @@
+namespace app.main
+
+import std.concurrent as concurrent
+
+trait Shape
+    func area() -> int
+end
+
+struct Circle
+    radius: int
+end
+
+apply Shape to Circle
+    func area() -> int
+        return self.radius * self.radius
+    end
+end
+
+func main() -> int
+    const circle: Circle = Circle(radius: 4)
+    const value: any Shape = circle
+    const copied: text = concurrent.copy_text(value)
+    return len(copied)
+end

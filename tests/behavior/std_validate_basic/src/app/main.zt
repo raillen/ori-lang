@@ -1,0 +1,21 @@
+namespace app.main
+
+import std.validate as validate
+
+func main() -> int
+    const role_viewer: text = "viewer"
+    const role_admin: text = "admin"
+    const age_ok: bool = validate.between(18, min: 0, max: 130)
+    const status_ok: bool = validate.one_of(200, [200, 201, 204])
+    const role_ok: bool = validate.one_of_text(role_admin, [role_viewer, role_admin])
+    const name_ok: bool = validate.length_between("Zenith", min: 3, max: 20)
+    const utf8_name_ok: bool = validate.length_between("Aé中🙂B", min: 5, max: 5)
+    const positive_ok: bool = validate.positive(42)
+    const non_neg_ok: bool = validate.non_negative(0)
+
+    if age_ok and status_ok and role_ok and name_ok and utf8_name_ok and positive_ok and non_neg_ok
+        return 42
+    end
+
+    return 0
+end

@@ -1,0 +1,30 @@
+namespace app.main
+
+import std.list as list
+
+func main() -> int
+    const words: list<text> = ["ze", "ni", "th"]
+    const joined: text = list.reduce(words, "", func(acc: text, value: text) => acc + value)
+
+    const flags: list<bool> = [true, false, true]
+    const any_flag: bool = list.reduce(flags, false, func(acc: bool, value: bool) => acc or value)
+    const all_flag: bool = list.reduce(flags, true, func(acc: bool, value: bool) => acc and value)
+
+    const nums: list<float> = [1.5, 2.5]
+    const sum: float = list.reduce(nums, 0.0, func(acc: float, value: float) => acc + value)
+
+    if joined != "zenith"
+        return 1
+    end
+    if any_flag == false
+        return 2
+    end
+    if all_flag
+        return 3
+    end
+    if sum != 4.0
+        return 4
+    end
+
+    return 0
+end

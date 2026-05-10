@@ -1,0 +1,95 @@
+namespace std.time
+
+-- Zenith Standard Library — Time Module
+-- Instant, Duration, system clock, unix conversion, sleep (Decision 063).
+-- 🏗️ TYPES
+-- 🏗️ EXTERN C
+-- ⏱️ CLOCK AND SLEEP
+-- ⏳ TEMPORAL ARITHMETIC
+-- 🔄 UNIX CONVERSION
+-- 🏗️ DURATION CONSTRUCTORS
+public struct Instant
+    millis: int
+end
+
+public struct Duration
+    millis: int
+end
+
+extern c
+    public func zt_host_time_now_unix_ms() -> int
+    public func zt_host_time_sleep_ms(duration_ms: int) -> result<void, core.Error>
+end
+
+public func now() -> time.Instant
+    return time.Instant(millis: time.now_ms())
+end
+
+public func now_ms() -> int
+    return time.zt_host_time_now_unix_ms()
+end
+
+public func sleep(duration: time.Duration) -> result<void, core.Error>
+    return time.zt_host_time_sleep_ms(duration.millis)
+end
+
+public func sleep_ms(ms: int) -> result<void, core.Error>
+    return time.zt_host_time_sleep_ms(ms)
+end
+
+public func since(start: time.Instant) -> time.Duration
+    return time.diff(start, time.now())
+end
+
+public func until(target: time.Instant) -> time.Duration
+    return time.diff(time.now(), target)
+end
+
+public func elapsed(start: time.Instant, finish: time.Instant) -> int
+    const span: time.Duration = time.diff(start, finish)
+    return span.millis
+end
+
+public func diff(a: time.Instant, b: time.Instant) -> time.Duration
+    return time.Duration(millis: b.millis - a.millis)
+end
+
+public func add(at: time.Instant, duration: time.Duration) -> time.Instant
+    return time.Instant(millis: at.millis + duration.millis)
+end
+
+public func sub(at: time.Instant, duration: time.Duration) -> time.Instant
+    return time.Instant(millis: at.millis - duration.millis)
+end
+
+public func from_unix(ts: int) -> time.Instant
+    return time.Instant(millis: ts * 1000)
+end
+
+public func from_unix_ms(ts: int) -> time.Instant
+    return time.Instant(millis: ts)
+end
+
+public func to_unix(at: time.Instant) -> int
+    return at.millis / 1000
+end
+
+public func to_unix_ms(at: time.Instant) -> int
+    return at.millis
+end
+
+public func milliseconds(n: int) -> time.Duration
+    return time.Duration(millis: n)
+end
+
+public func seconds(n: int) -> time.Duration
+    return time.Duration(millis: n * 1000)
+end
+
+public func minutes(n: int) -> time.Duration
+    return time.Duration(millis: n * 60000)
+end
+
+public func hours(n: int) -> time.Duration
+    return time.Duration(millis: n * 3600000)
+end

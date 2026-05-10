@@ -1,0 +1,21 @@
+namespace app.main
+
+func main() -> int
+    const ready: bool = true
+
+    if ready
+        if ready
+            if ready
+                if ready
+                    if ready
+                        if ready
+                            return 0
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return 1
+end

@@ -1,0 +1,9 @@
+namespace app.main
+
+func total(base: int, bonus: int, extra: int) -> int
+    return base + bonus + extra
+end
+
+func main() -> int
+    return total(1, bonus: 2, extra: 3)
+end

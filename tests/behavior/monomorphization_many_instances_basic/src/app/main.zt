@@ -1,0 +1,54 @@
+namespace app.main
+
+func identity<T>(value: T) -> T
+    return value
+end
+
+func choose<T>(left: T, right: T) -> T
+    return left
+end
+
+func count_items<T>(items: list<T>) -> int
+    return len(items)
+end
+
+func main() -> int
+    const number: int = identity(10)
+    const decimal: float = identity(2.5)
+    const flag: bool = identity(true)
+
+    const chosen_number: int = choose(number, 2)
+    const chosen_decimal: float = choose(decimal, 1.0)
+    const chosen_flag: bool = choose(flag, false)
+
+    const numbers: list<int> = [1, 2, 3]
+    const decimals: list<float> = [1.0, 2.0]
+    const flags: list<bool> = [true, false]
+
+    if chosen_number != 10
+        return 1
+    end
+    if decimal != 2.5
+        return 2
+    end
+    if flag == false
+        return 3
+    end
+    if chosen_decimal != 2.5
+        return 4
+    end
+    if chosen_flag == false
+        return 5
+    end
+    if count_items(numbers) != 3
+        return 6
+    end
+    if count_items(decimals) != 2
+        return 7
+    end
+    if count_items(flags) != 2
+        return 8
+    end
+
+    return 0
+end

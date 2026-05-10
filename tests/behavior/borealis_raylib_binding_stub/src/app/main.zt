@@ -1,0 +1,7 @@
+namespace app.main
+
+import borealis.raylib
+
+func main() -> result<void, core.Error>
+    return raylib.binding_stub_smoke()
+end

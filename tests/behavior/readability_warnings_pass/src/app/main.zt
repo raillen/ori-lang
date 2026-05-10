@@ -1,0 +1,13 @@
+namespace app.main
+
+func main() -> int
+    const customer_total: int = 1
+    const customer_t0tal: int = 2
+    const I1: int = 0
+
+    if customer_total + customer_t0tal + I1 != 3
+        return 1
+    end
+
+    return 0
+end

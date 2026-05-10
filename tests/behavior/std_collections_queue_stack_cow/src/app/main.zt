@@ -1,0 +1,197 @@
+namespace app.main
+
+import std.collections as collections
+
+func verify_queue_int() -> int
+    const base: list<int> = collections.queue_int_new()
+    const first: list<int> = collections.queue_int_enqueue(base, 10)
+    const second: list<int> = collections.queue_int_enqueue(first, 20)
+    const shared: list<int> = second
+    const step: collections.QueueNumberDequeueResult = collections.queue_int_dequeue(shared)
+
+    if len(second) != 2
+        return 1
+    end
+
+    if len(step.queue) != 1
+        return 2
+    end
+
+    match step.value
+        case value item ->
+            if item != 10
+                return 3
+            end
+        case none ->
+            return 4
+    end
+
+    match collections.queue_int_peek(second)
+        case value item ->
+            if item != 10
+                return 5
+            end
+        case none ->
+            return 6
+    end
+
+    match collections.queue_int_peek(step.queue)
+        case value item ->
+            if item != 20
+                return 7
+            end
+        case none ->
+            return 8
+    end
+
+    const empty_step: collections.QueueNumberDequeueResult = collections.queue_int_dequeue(collections.queue_int_new())
+    if len(empty_step.queue) != 0
+        return 9
+    end
+
+    match empty_step.value
+        case value unexpected_item ->
+            if unexpected_item != 0
+                return 10
+            end
+            return 10
+        case none ->
+            return 0
+    end
+end
+
+func verify_queue_text() -> int
+    const base: list<text> = collections.queue_text_new()
+    const first: list<text> = collections.queue_text_enqueue(base, "alpha")
+    const second: list<text> = collections.queue_text_enqueue(first, "beta")
+    const step: collections.QueueTextDequeueResult = collections.queue_text_dequeue(second)
+
+    match step.value
+        case value item ->
+            if item != "alpha"
+                return 11
+            end
+        case none ->
+            return 12
+    end
+
+    match collections.queue_text_peek(step.queue)
+        case value item ->
+            if item != "beta"
+                return 13
+            end
+        case none ->
+            return 14
+    end
+
+    return 0
+end
+
+func verify_stack_int() -> int
+    const base: list<int> = collections.stack_int_new()
+    const first: list<int> = collections.stack_int_push(base, 7)
+    const second: list<int> = collections.stack_int_push(first, 9)
+    const shared: list<int> = second
+    const step: collections.StackNumberPopResult = collections.stack_int_pop(shared)
+
+    if len(second) != 2
+        return 15
+    end
+
+    if len(step.stack) != 1
+        return 16
+    end
+
+    match step.value
+        case value item ->
+            if item != 9
+                return 17
+            end
+        case none ->
+            return 18
+    end
+
+    match collections.stack_int_peek(second)
+        case value item ->
+            if item != 9
+                return 19
+            end
+        case none ->
+            return 20
+    end
+
+    match collections.stack_int_peek(step.stack)
+        case value item ->
+            if item != 7
+                return 21
+            end
+        case none ->
+            return 22
+    end
+
+    return 0
+end
+
+func verify_stack_text() -> int
+    const base: list<text> = collections.stack_text_new()
+    const first: list<text> = collections.stack_text_push(base, "left")
+    const second: list<text> = collections.stack_text_push(first, "right")
+    const step: collections.StackTextPopResult = collections.stack_text_pop(second)
+
+    match step.value
+        case value item ->
+            if item != "right"
+                return 23
+            end
+        case none ->
+            return 24
+    end
+
+    match collections.stack_text_peek(step.stack)
+        case value item ->
+            if item != "left"
+                return 25
+            end
+        case none ->
+            return 26
+    end
+
+    const empty_step: collections.StackTextPopResult = collections.stack_text_pop(collections.stack_text_new())
+    if len(empty_step.stack) != 0
+        return 27
+    end
+
+    match empty_step.value
+        case value unexpected_item ->
+            if unexpected_item != ""
+                return 28
+            end
+            return 28
+        case none ->
+            return 0
+    end
+end
+
+func main() -> int
+    const queue_int_score: int = verify_queue_int()
+    if queue_int_score != 0
+        return queue_int_score
+    end
+
+    const queue_text_score: int = verify_queue_text()
+    if queue_text_score != 0
+        return queue_text_score
+    end
+
+    const stack_int_score: int = verify_stack_int()
+    if stack_int_score != 0
+        return stack_int_score
+    end
+
+    const stack_text_score: int = verify_stack_text()
+    if stack_text_score != 0
+        return stack_text_score
+    end
+
+    return 0
+end

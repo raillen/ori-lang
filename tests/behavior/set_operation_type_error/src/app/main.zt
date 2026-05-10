@@ -1,0 +1,10 @@
+namespace app.main
+
+import std.set as set
+
+func main() -> int
+    const ints: set<int> = {1, 2}
+    const words: set<text> = {"one", "two"}
+    const mixed: set<int> = set.union(ints, words)
+    return set.len(mixed)
+end

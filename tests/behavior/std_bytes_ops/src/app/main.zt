@@ -1,0 +1,30 @@
+namespace app.main
+
+import std.bytes as bytes
+
+func main() -> int
+    const source: list<int> = [1, 2, 3]
+    const data_result: result<bytes, core.Error> = bytes.from_list(source)
+    var data: bytes = bytes.empty()
+    match data_result
+        case success(value) ->
+            data = value
+        case error(_err) ->
+            return 99
+    end
+    const roundtrip: list<int> = bytes.to_list(data)
+    const joined: bytes = bytes.concat(data, hex bytes "04 05")
+
+    const has_prefix: bool = bytes.starts_with(joined, hex bytes "01 02")
+    const has_suffix: bool = bytes.ends_with(joined, hex bytes "04 05")
+    const has_middle: bool = bytes.contains(joined, hex bytes "02 03 04")
+    const slice: bytes = bytes.slice(joined, 1, 3)
+    const found: optional<int> = bytes.index_of(joined, hex bytes "03 04")
+    const second: optional<int> = bytes.get(joined, 1)
+
+    if has_prefix and has_suffix and has_middle and bytes.len(slice) == 3 and bytes.is_empty(bytes.empty()) and found.is_some() and second.is_some()
+        return len(joined) + roundtrip[1]
+    end
+
+    return 0
+end

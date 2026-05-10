@@ -1,0 +1,470 @@
+namespace borealis.game.entities
+
+import borealis.game as game
+import std.format as format
+import std.text as text
+
+public struct Entity
+    id: int
+end
+
+public struct EntitySnapshot
+    stable_id: text
+    name: text
+    active: bool
+    visible: bool
+    position: game.Vector2
+    rotation: float
+    scale: game.Vector2
+    layer: text
+    tags_blob: text
+    parent_id: int
+end
+
+public struct EntityInfo
+    id: int
+    stable_id: text
+    name: text
+    exists: bool
+    active: bool
+    visible: bool
+    layer: text
+    parent_id: int
+    child_count: int
+    tags_blob: text
+    dirty: bool
+end
+
+public var entities_next_id: int = 1
+public var entities_alive: map<int, bool> = {}
+public var entities_active: map<int, bool> = {}
+public var entities_visible: map<int, bool> = {}
+public var entities_name: map<int, text> = {}
+public var entities_stable_id: map<int, text> = {}
+public var entities_x: map<int, float> = {}
+public var entities_y: map<int, float> = {}
+public var entities_rotation: map<int, float> = {}
+public var entities_scale_x: map<int, float> = {}
+public var entities_scale_y: map<int, float> = {}
+public var entities_layer: map<int, text> = {}
+public var entities_parent_id: map<int, int> = {}
+public var entities_tags_blob: map<int, text> = {}
+public var entities_dirty: map<int, bool> = {}
+
+public func entities_bool_or(values: map<int, bool>, id: int, fallback: bool) -> bool
+    const value: optional<bool> = values.get(id)
+    match value
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func entities_text_or(values: map<int, text>, id: int, fallback: text) -> text
+    const value: optional<text> = values.get(id)
+    match value
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func entities_float_or(values: map<int, float>, id: int, fallback: float) -> float
+    const value: optional<float> = values.get(id)
+    match value
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func entities_int_or(values: map<int, int>, id: int, fallback: int) -> int
+    const value: optional<int> = values.get(id)
+    match value
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func entities_bool_set(values: map<int, bool>, id: int, value: bool) -> map<int, bool>
+    var next_values: map<int, bool> = values
+    next_values[id] = value
+    return next_values
+end
+
+public func entities_text_set(values: map<int, text>, id: int, value: text) -> map<int, text>
+    var next_values: map<int, text> = values
+    next_values[id] = value
+    return next_values
+end
+
+public func entities_float_set(values: map<int, float>, id: int, value: float) -> map<int, float>
+    var next_values: map<int, float> = values
+    next_values[id] = value
+    return next_values
+end
+
+public func entities_int_set(values: map<int, int>, id: int, value: int) -> map<int, int>
+    var next_values: map<int, int> = values
+    next_values[id] = value
+    return next_values
+end
+
+public func entities_tag_token(tag: text) -> text
+    return text.join(["|", tag, "|"])
+end
+
+public func entities_require_exists(entity: entities.Entity) -> result<void, core.Error>
+    if entities.entity_exists(entity) == false
+        return error("entities: entity not found")
+    end
+    return success()
+end
+
+public func entity_create(name: text = "") -> result<entities.Entity, core.Error>
+    const entity_id: int = entities_next_id
+    entities_next_id = entities_next_id + 1
+
+    entities_alive = entities.entities_bool_set(entities_alive, entity_id, true)
+    entities_active = entities.entities_bool_set(entities_active, entity_id, true)
+    entities_visible = entities.entities_bool_set(entities_visible, entity_id, true)
+    entities_name = entities.entities_text_set(entities_name, entity_id, name)
+    entities_stable_id = entities.entities_text_set(entities_stable_id, entity_id, text.join(["e-", format.hex(entity_id)]))
+    entities_x = entities.entities_float_set(entities_x, entity_id, 0.0)
+    entities_y = entities.entities_float_set(entities_y, entity_id, 0.0)
+    entities_rotation = entities.entities_float_set(entities_rotation, entity_id, 0.0)
+    entities_scale_x = entities.entities_float_set(entities_scale_x, entity_id, 1.0)
+    entities_scale_y = entities.entities_float_set(entities_scale_y, entity_id, 1.0)
+    entities_layer = entities.entities_text_set(entities_layer, entity_id, "default")
+    entities_parent_id = entities.entities_int_set(entities_parent_id, entity_id, 0)
+    entities_tags_blob = entities.entities_text_set(entities_tags_blob, entity_id, "|")
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity_id, false)
+
+    return success(entities.Entity(id: entity_id))
+end
+
+public func entity_destroy(entity: entities.Entity) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    entities_alive = entities.entities_bool_set(entities_alive, entity.id, false)
+    entities_active = entities.entities_bool_set(entities_active, entity.id, false)
+    entities_visible = entities.entities_bool_set(entities_visible, entity.id, false)
+    entities_parent_id = entities.entities_int_set(entities_parent_id, entity.id, 0)
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_exists(entity: entities.Entity) -> bool
+    return entities.entities_bool_or(entities_alive, entity.id, false)
+end
+
+public func entity_set_active(entity: entities.Entity, value: bool) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    entities_active = entities.entities_bool_set(entities_active, entity.id, value)
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_is_active(entity: entities.Entity) -> bool
+    if entities.entity_exists(entity) == false
+        return false
+    end
+    return entities.entities_bool_or(entities_active, entity.id, true)
+end
+
+public func entity_set_name(entity: entities.Entity, name: text) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    entities_name = entities.entities_text_set(entities_name, entity.id, name)
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_get_name(entity: entities.Entity) -> text
+    return entities.entities_text_or(entities_name, entity.id, "")
+end
+
+public func entity_set_id(entity: entities.Entity, stable_id: text) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    entities_stable_id = entities.entities_text_set(entities_stable_id, entity.id, stable_id)
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_get_id(entity: entities.Entity) -> text
+    return entities.entities_text_or(entities_stable_id, entity.id, "")
+end
+
+public func entity_set_position(entity: entities.Entity, position: game.Vector2) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    entities_x = entities.entities_float_set(entities_x, entity.id, position.x)
+    entities_y = entities.entities_float_set(entities_y, entity.id, position.y)
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_get_position(entity: entities.Entity) -> game.Vector2
+    return game.vec2(
+        entities.entities_float_or(entities_x, entity.id, 0.0),
+        entities.entities_float_or(entities_y, entity.id, 0.0)
+    )
+end
+
+public func entity_set_rotation(entity: entities.Entity, angle: float) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    entities_rotation = entities.entities_float_set(entities_rotation, entity.id, angle)
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_get_rotation(entity: entities.Entity) -> float
+    return entities.entities_float_or(entities_rotation, entity.id, 0.0)
+end
+
+public func entity_set_scale(entity: entities.Entity, scale: game.Vector2) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    entities_scale_x = entities.entities_float_set(entities_scale_x, entity.id, scale.x)
+    entities_scale_y = entities.entities_float_set(entities_scale_y, entity.id, scale.y)
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_get_scale(entity: entities.Entity) -> game.Vector2
+    return game.vec2(
+        entities.entities_float_or(entities_scale_x, entity.id, 1.0),
+        entities.entities_float_or(entities_scale_y, entity.id, 1.0)
+    )
+end
+
+public func entity_add_tag(entity: entities.Entity, tag: text) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+
+    const current: text = entities.entities_text_or(entities_tags_blob, entity.id, "|")
+    const token: text = entities.entities_tag_token(tag)
+    if text.contains(current, token) == false
+        entities_tags_blob = entities.entities_text_set(entities_tags_blob, entity.id, text.join([current, tag, "|"]))
+        entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    end
+    return success()
+end
+
+public func entity_remove_tag(entity: entities.Entity, tag: text) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    const current: text = entities.entities_text_or(entities_tags_blob, entity.id, "|")
+    const token: text = entities.entities_tag_token(tag)
+    entities_tags_blob = entities.entities_text_set(entities_tags_blob, entity.id, text.replace_all(current, token, "|"))
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_has_tag(entity: entities.Entity, tag: text) -> bool
+    const current: text = entities.entities_text_or(entities_tags_blob, entity.id, "|")
+    return text.contains(current, entities.entities_tag_token(tag))
+end
+
+public func entity_set_parent(entity: entities.Entity, parent: entities.Entity) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    entities.entities_require_exists(parent)?
+    entities_parent_id = entities.entities_int_set(entities_parent_id, entity.id, parent.id)
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_remove_parent(entity: entities.Entity) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    entities_parent_id = entities.entities_int_set(entities_parent_id, entity.id, 0)
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_has_parent(entity: entities.Entity) -> bool
+    return entities.entities_int_or(entities_parent_id, entity.id, 0) > 0
+end
+
+public func entity_parent(entity: entities.Entity) -> optional<entities.Entity>
+    const parent_id: int = entities.entities_int_or(entities_parent_id, entity.id, 0)
+    if parent_id <= 0
+        return none
+    end
+    return entities.Entity(id: parent_id)
+end
+
+public func entity_set_visible(entity: entities.Entity, value: bool) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    entities_visible = entities.entities_bool_set(entities_visible, entity.id, value)
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_is_visible(entity: entities.Entity) -> bool
+    if entities.entity_exists(entity) == false
+        return false
+    end
+    return entities.entities_bool_or(entities_visible, entity.id, true)
+end
+
+public func entity_set_layer(entity: entities.Entity, layer: text) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    entities_layer = entities.entities_text_set(entities_layer, entity.id, layer)
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_get_layer(entity: entities.Entity) -> text
+    return entities.entities_text_or(entities_layer, entity.id, "default")
+end
+
+public func entity_count() -> int
+    var total: int = 0
+    var probe: int = 1
+    while probe < entities_next_id
+        if entities.entities_bool_or(entities_alive, probe, false)
+            total = total + 1
+        end
+        probe = probe + 1
+    end
+    return total
+end
+
+public func entity_at(index: int) -> optional<entities.Entity>
+    if index < 0
+        return none
+    end
+
+    var probe: int = 1
+    var cursor: int = 0
+    while probe < entities_next_id
+        if entities.entities_bool_or(entities_alive, probe, false)
+            if cursor == index
+                return entities.Entity(id: probe)
+            end
+            cursor = cursor + 1
+        end
+        probe = probe + 1
+    end
+    return none
+end
+
+public func entity_find(name: text) -> optional<entities.Entity>
+    var probe: int = 1
+    while probe < entities_next_id
+        if entities.entities_bool_or(entities_alive, probe, false)
+            if entities.entities_text_or(entities_name, probe, "") == name
+                return entities.Entity(id: probe)
+            end
+        end
+        probe = probe + 1
+    end
+    return none
+end
+
+public func entity_child_count(parent: entities.Entity) -> int
+    var total: int = 0
+    var probe: int = 1
+    while probe < entities_next_id
+        if entities.entities_bool_or(entities_alive, probe, false)
+            if entities.entities_int_or(entities_parent_id, probe, 0) == parent.id
+                total = total + 1
+            end
+        end
+        probe = probe + 1
+    end
+    return total
+end
+
+public func entity_child_at(parent: entities.Entity, index: int) -> optional<entities.Entity>
+    if index < 0
+        return none
+    end
+
+    var probe: int = 1
+    var cursor: int = 0
+    while probe < entities_next_id
+        if entities.entities_bool_or(entities_alive, probe, false)
+            if entities.entities_int_or(entities_parent_id, probe, 0) == parent.id
+                if cursor == index
+                    return entities.Entity(id: probe)
+                end
+                cursor = cursor + 1
+            end
+        end
+        probe = probe + 1
+    end
+    return none
+end
+
+public func entity_snapshot(entity: entities.Entity) -> entities.EntitySnapshot
+    return entities.EntitySnapshot(
+        stable_id: entities.entity_get_id(entity),
+        name: entities.entity_get_name(entity),
+        active: entities.entity_is_active(entity),
+        visible: entities.entity_is_visible(entity),
+        position: entities.entity_get_position(entity),
+        rotation: entities.entity_get_rotation(entity),
+        scale: entities.entity_get_scale(entity),
+        layer: entities.entity_get_layer(entity),
+        tags_blob: entities.entities_text_or(entities_tags_blob, entity.id, "|"),
+        parent_id: entities.entities_int_or(entities_parent_id, entity.id, 0)
+    )
+end
+
+public func entity_restore_snapshot(entity: entities.Entity, snapshot: entities.EntitySnapshot) -> result<void, core.Error>
+    entities.entity_set_id(entity, snapshot.stable_id)?
+    entities.entity_set_name(entity, snapshot.name)?
+    entities.entity_set_active(entity, snapshot.active)?
+    entities.entity_set_visible(entity, snapshot.visible)?
+    entities.entity_set_position(entity, snapshot.position)?
+    entities.entity_set_rotation(entity, snapshot.rotation)?
+    entities.entity_set_scale(entity, snapshot.scale)?
+    entities.entity_set_layer(entity, snapshot.layer)?
+    entities_tags_blob = entities.entities_text_set(entities_tags_blob, entity.id, snapshot.tags_blob)
+    if snapshot.parent_id > 0
+        entities_parent_id = entities.entities_int_set(entities_parent_id, entity.id, snapshot.parent_id)
+    else
+        entities_parent_id = entities.entities_int_set(entities_parent_id, entity.id, 0)
+    end
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_clone(entity: entities.Entity) -> result<entities.Entity, core.Error>
+    const clone_entity: entities.Entity = entities.entity_create(entities.entity_get_name(entity))?
+    const snapshot: entities.EntitySnapshot = entities.entity_snapshot(entity)
+    entities.entity_restore_snapshot(clone_entity, snapshot)?
+    return success(clone_entity)
+end
+
+public func entity_mark_dirty(entity: entities.Entity) -> result<void, core.Error>
+    entities.entities_require_exists(entity)?
+    entities_dirty = entities.entities_bool_set(entities_dirty, entity.id, true)
+    return success()
+end
+
+public func entity_is_dirty(entity: entities.Entity) -> bool
+    return entities.entities_bool_or(entities_dirty, entity.id, false)
+end
+
+public func entity_inspect(entity: entities.Entity) -> entities.EntityInfo
+    return entities.EntityInfo(
+        id: entity.id,
+        stable_id: entities.entity_get_id(entity),
+        name: entities.entity_get_name(entity),
+        exists: entities.entity_exists(entity),
+        active: entities.entity_is_active(entity),
+        visible: entities.entity_is_visible(entity),
+        layer: entities.entity_get_layer(entity),
+        parent_id: entities.entities_int_or(entities_parent_id, entity.id, 0),
+        child_count: entities.entity_child_count(entity),
+        tags_blob: entities.entities_text_or(entities_tags_blob, entity.id, "|"),
+        dirty: entities.entity_is_dirty(entity)
+    )
+end
+
+
+
+
+
+

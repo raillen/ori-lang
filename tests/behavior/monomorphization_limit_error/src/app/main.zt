@@ -1,0 +1,7 @@
+namespace app.main
+
+func main() -> int
+    const xs: list<int> = [1, 2]
+    const ys: list<text> = ["a", "b"]
+    return len(xs) + len(ys)
+end

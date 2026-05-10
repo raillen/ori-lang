@@ -1,0 +1,20 @@
+namespace app.main
+
+attr repr("c")
+struct Point
+    x: int
+    y: int
+end
+
+extern c
+    attr name("zt_ffi_point_sum")
+    func point_sum(point: Point) -> int
+end
+
+public func main() -> int
+    const point: Point = Point(x: 20, y: 22)
+    if point_sum(point) != 42
+        return 1
+    end
+    return 0
+end

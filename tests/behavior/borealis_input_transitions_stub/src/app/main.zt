@@ -1,0 +1,84 @@
+namespace app.main
+
+extern c
+    func zt_borealis_open_window(title: text, width: int, height: int, target_fps: int, backend_id: int) -> result<int, core.Error>
+    func zt_borealis_close_window(window_id: int) -> result<void, core.Error>
+    func zt_borealis_begin_frame(window_id: int, clear_r: int, clear_g: int, clear_b: int, clear_a: int) -> result<void, core.Error>
+    func zt_borealis_end_frame(window_id: int) -> result<void, core.Error>
+    func zt_borealis_is_key_down(window_id: int, input_code: int) -> bool
+    func zt_borealis_is_key_pressed(window_id: int, input_code: int) -> bool
+    func zt_borealis_is_key_released(window_id: int, input_code: int) -> bool
+    func zt_borealis_stub_set_key_down(window_id: int, input_code: int, is_down: bool) -> result<void, core.Error>
+    func zt_borealis_stub_reset_input(window_id: int) -> result<void, core.Error>
+end
+
+func expect(value: bool, message: text) -> result<void, core.Error>
+    if value == false
+        return error(message)
+    end
+    return success()
+end
+
+func expect_not(value: bool, message: text) -> result<void, core.Error>
+    if value
+        return error(message)
+    end
+    return success()
+end
+
+func main() -> result<void, core.Error>
+    const window_id: int = zt_borealis_open_window(
+        "borealis-input-transitions-stub",
+        320,
+        180,
+        60,
+        0
+    )?
+    const key_code: int = 32
+
+    zt_borealis_stub_reset_input(window_id)?
+
+    -- Frame 0: baseline all false
+    zt_borealis_begin_frame(window_id, 0, 0, 0, 255)?
+    expect_not(zt_borealis_is_key_down(window_id, key_code), "frame0: key_down should be false")?
+    expect_not(zt_borealis_is_key_pressed(window_id, key_code), "frame0: key_pressed should be false")?
+    expect_not(zt_borealis_is_key_released(window_id, key_code), "frame0: key_released should be false")?
+    zt_borealis_end_frame(window_id)?
+
+    -- Input changed between frames should only appear on next frame snapshot
+    zt_borealis_stub_set_key_down(window_id, key_code, true)?
+    expect_not(zt_borealis_is_key_pressed(window_id, key_code), "pre-frame: key_pressed should still be false")?
+
+    -- Frame 1: press transition
+    zt_borealis_begin_frame(window_id, 0, 0, 0, 255)?
+    expect(zt_borealis_is_key_down(window_id, key_code), "frame1: key_down should be true")?
+    expect(zt_borealis_is_key_pressed(window_id, key_code), "frame1: key_pressed should be true")?
+    expect_not(zt_borealis_is_key_released(window_id, key_code), "frame1: key_released should be false")?
+    zt_borealis_end_frame(window_id)?
+
+    -- Frame 2: held key
+    zt_borealis_begin_frame(window_id, 0, 0, 0, 255)?
+    expect(zt_borealis_is_key_down(window_id, key_code), "frame2: key_down should remain true")?
+    expect_not(zt_borealis_is_key_pressed(window_id, key_code), "frame2: key_pressed should be false")?
+    expect_not(zt_borealis_is_key_released(window_id, key_code), "frame2: key_released should be false")?
+    zt_borealis_end_frame(window_id)?
+
+    zt_borealis_stub_set_key_down(window_id, key_code, false)?
+
+    -- Frame 3: release transition
+    zt_borealis_begin_frame(window_id, 0, 0, 0, 255)?
+    expect_not(zt_borealis_is_key_down(window_id, key_code), "frame3: key_down should be false")?
+    expect_not(zt_borealis_is_key_pressed(window_id, key_code), "frame3: key_pressed should be false")?
+    expect(zt_borealis_is_key_released(window_id, key_code), "frame3: key_released should be true")?
+    zt_borealis_end_frame(window_id)?
+
+    -- Frame 4: stable released state
+    zt_borealis_begin_frame(window_id, 0, 0, 0, 255)?
+    expect_not(zt_borealis_is_key_down(window_id, key_code), "frame4: key_down should remain false")?
+    expect_not(zt_borealis_is_key_pressed(window_id, key_code), "frame4: key_pressed should remain false")?
+    expect_not(zt_borealis_is_key_released(window_id, key_code), "frame4: key_released should reset to false")?
+    zt_borealis_end_frame(window_id)?
+
+    zt_borealis_close_window(window_id)?
+    return success()
+end

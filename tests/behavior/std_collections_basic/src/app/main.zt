@@ -1,0 +1,57 @@
+namespace app.main
+
+import std.collections as collections
+
+func main() -> int
+    var score: int = 0
+
+    const grid: grid2d<int> = collections.grid2d_int_new(3, 3)
+    const g_set: grid2d<int> = collections.grid2d_int_set(grid, 1, 1, 42)
+    const g_val: int = collections.grid2d_int_get(g_set, 1, 1)
+    const g_rows: int = collections.grid2d_int_rows(grid)
+    const g_cols: int = collections.grid2d_int_cols(grid)
+    if g_val == 42
+        score = score + 1
+    end
+    if g_rows == 3
+        score = score + 1
+    end
+    if g_cols == 3
+        score = score + 1
+    end
+
+    const bmap: btreemap<text,text> = collections.btreemap_text_new()
+    const bmap1: btreemap<text,text> = collections.btreemap_text_set(bmap, "key", "val")
+    const bmap_has: bool = collections.btreemap_text_contains(bmap1, "key")
+    const bmap_len: int = collections.btreemap_text_len(bmap1)
+    if bmap_has
+        score = score + 1
+    end
+    if bmap_len == 1
+        score = score + 1
+    end
+
+    const bset: btreeset<text> = collections.btreeset_text_new()
+    const bset1: btreeset<text> = collections.btreeset_text_insert(bset, "hello")
+    const bset_has: bool = collections.btreeset_text_contains(bset1, "hello")
+    const bset_len: int = collections.btreeset_text_len(bset1)
+    if bset_has
+        score = score + 1
+    end
+    if bset_len == 1
+        score = score + 1
+    end
+
+    const g3: grid3d<int> = collections.grid3d_int_new(2, 3, 4)
+    const g3_set: grid3d<int> = collections.grid3d_int_set(g3, 0, 1, 2, 99)
+    const g3_val: int = collections.grid3d_int_get(g3_set, 0, 1, 2)
+    const g3_depth: int = collections.grid3d_int_depth(g3)
+    if g3_val == 99
+        score = score + 1
+    end
+    if g3_depth == 2
+        score = score + 1
+    end
+
+    return score
+end

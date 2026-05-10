@@ -1,0 +1,30 @@
+namespace app.main
+
+public var resource_freed: int = 0
+
+trait Disposable
+    mut func dispose()
+end
+
+struct NativeResource
+    handle: int
+end
+
+apply Disposable to NativeResource
+    mut func dispose()
+        resource_freed = resource_freed + self.handle
+    end
+end
+
+func scoped_native_resource() -> int
+    resource_freed = 0
+    using var resource = NativeResource(handle: 42)
+        resource.handle = resource.handle + 1
+    end
+    return resource_freed
+end
+
+public func main() -> int
+    check(scoped_native_resource() == 43, "Disposable native resource should be freed after using block")
+    return 0
+end

@@ -1,0 +1,178 @@
+namespace app.main
+
+import std.fs as fs
+import std.fs.path as path
+
+func list_contains(items: list<text>, expected: text) -> bool
+    for item in items
+        if item == expected
+            return true
+        end
+    end
+
+    return false
+end
+
+func main() -> result<void, fs.Error>
+    const root: text = ".ztc-tmp/std_fs_ops_basic"
+    const alpha_dir: text = "alpha"
+    const beta_dir: text = "beta"
+    const note_name: text = "note.txt"
+    const copied_name: text = "copied.txt"
+    const moved_name: text = "moved.txt"
+    const nested: text = path.join([root, alpha_dir, beta_dir])
+    const source_file: text = path.join([nested, note_name])
+    const copied_file: text = path.join([root, copied_name])
+    const moved_file: text = path.join([root, moved_name])
+
+    fs.remove_dir_all(root)
+
+    const create_dir_all_result: result<void, fs.Error> = fs.create_dir_all(nested)
+    match create_dir_all_result
+        case success() ->
+        case error(err) ->
+            return error(err)
+    end
+    const write_text_result: result<void, fs.Error> = fs.write_text(source_file, "alpha")
+    match write_text_result
+        case success() ->
+        case error(err) ->
+            return error(err)
+    end
+    const append_text_result: result<void, fs.Error> = fs.append_text(source_file, "-beta")
+    match append_text_result
+        case success() ->
+        case error(err) ->
+            return error(err)
+    end
+
+    const is_file_result: result<bool, fs.Error> = fs.is_file(source_file)
+    const source_is_file: bool = is_file_result?
+    if source_is_file == false
+        return error(fs.Error.NotFound)
+    end
+
+    const is_dir_result: result<bool, fs.Error> = fs.is_dir(nested)
+    const nested_is_dir: bool = is_dir_result?
+    if nested_is_dir == false
+        return error(fs.Error.NotADirectory)
+    end
+
+    const read_source_result: result<text, fs.Error> = fs.read_text(source_file)
+    const source_content: text = read_source_result?
+    if source_content != "alpha-beta"
+        return error(fs.Error.IOError)
+    end
+    const write_bytes_result: result<void, fs.Error> = fs.write_bytes(path.join([nested, "data.bin"]), hex bytes "01 02 03")
+    write_bytes_result?
+    const read_bytes_result: result<bytes, fs.Error> = fs.read_bytes(path.join([nested, "data.bin"]))
+    const byte_content: bytes = read_bytes_result?
+    if byte_content[2] != 3
+        return error(fs.Error.IOError)
+    end
+
+    const list_dir_result: result<list<text>, fs.Error> = fs.list_dir(nested)
+    const listing: list<text> = list_dir_result?
+    if list_contains(listing, "note.txt") == false
+        return error(fs.Error.NotFound)
+    end
+    const walk_result: result<list<text>, fs.Error> = fs.walk_dir(root)
+    const _walked: list<text> = walk_result?
+
+    const size_result: result<int, fs.Error> = fs.size(source_file)
+    const bytes_written: int = size_result?
+    if bytes_written != 10
+        return error(fs.Error.IOError)
+    end
+
+    const copy_result: result<void, fs.Error> = fs.copy_file(source_file, copied_file)
+    match copy_result
+        case success() ->
+        case error(err) ->
+            return error(err)
+    end
+    const copied_read_result: result<text, fs.Error> = fs.read_text(copied_file)
+    const copied_content: text = copied_read_result?
+    if copied_content != "alpha-beta"
+        return error(fs.Error.IOError)
+    end
+
+    const move_result: result<void, fs.Error> = fs.move(copied_file, moved_file)
+    match move_result
+        case success() ->
+        case error(err) ->
+            return error(err)
+    end
+    const copied_exists_result: result<bool, fs.Error> = fs.exists(copied_file)
+    const copied_exists: bool = copied_exists_result?
+    if copied_exists == true
+        return error(fs.Error.IOError)
+    end
+    const moved_exists_result: result<bool, fs.Error> = fs.exists(moved_file)
+    const moved_exists: bool = moved_exists_result?
+    if moved_exists == false
+        return error(fs.Error.NotFound)
+    end
+
+    const metadata_result: result<fs.Metadata, fs.Error> = fs.metadata(source_file)
+    const meta: fs.Metadata = metadata_result?
+    if meta.size_bytes != bytes_written
+        return error(fs.Error.IOError)
+    end
+    if meta.is_file == false or meta.is_dir == true
+        return error(fs.Error.IOError)
+    end
+
+    const modified_result: result<int, fs.Error> = fs.modified_at(source_file)
+    const modified_ms: int = modified_result?
+    if modified_ms <= 0
+        return error(fs.Error.IOError)
+    end
+    if meta.modified_at_ms != modified_ms
+        return error(fs.Error.IOError)
+    end
+
+    const created_result: result<optional<int>, fs.Error> = fs.created_at(source_file)
+    const created_optional: optional<int> = created_result?
+    match created_optional
+        case value value ->
+            if value <= 0
+                return error(fs.Error.IOError)
+            end
+            match meta.created_at_ms
+                case value meta_value ->
+                    if meta_value != value
+                        return error(fs.Error.IOError)
+                    end
+                case none ->
+                    return error(fs.Error.IOError)
+            end
+        case none ->
+            match meta.created_at_ms
+                case value _ ->
+                    return error(fs.Error.IOError)
+                case none ->
+            end
+    end
+
+    const remove_file_result: result<void, fs.Error> = fs.remove_file(moved_file)
+    match remove_file_result
+        case success() ->
+        case error(err) ->
+            return error(err)
+    end
+    const remove_dir_all_result: result<void, fs.Error> = fs.remove_dir_all(root)
+    match remove_dir_all_result
+        case success() ->
+        case error(err) ->
+            return error(err)
+    end
+
+    const root_exists_result: result<bool, fs.Error> = fs.exists(root)
+    const root_exists: bool = root_exists_result?
+    if root_exists == true
+        return error(fs.Error.IOError)
+    end
+
+    return success()
+end

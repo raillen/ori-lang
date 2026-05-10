@@ -1,0 +1,12 @@
+namespace app.main
+
+func main() -> int
+    const values: list<int> = [4, 7, 9]
+    const strict_value: int = values[1]
+
+    const first: optional<int> = values.get(0)
+    const missing: optional<int> = values.get(99)
+    const keep_missing: optional<int> = missing
+
+    return strict_value + 20
+end

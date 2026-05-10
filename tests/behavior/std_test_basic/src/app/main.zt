@@ -1,0 +1,8 @@
+namespace app.main
+
+import std.test as test
+
+func main() -> int
+    test.skip("placeholder")
+    return 0
+end

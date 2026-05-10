@@ -1,0 +1,55 @@
+namespace app.main
+
+import std.mem as mem
+import std.orc as orc
+import std.unsafe as unsafe
+
+func main() -> int
+    const base: text = "alpha"
+    const owned: text = mem.own_text(base)
+    const viewed: text = mem.view_text(base)
+    const edited: text = mem.edit_text(base)
+    const retained: text = unsafe.retain_text(base)
+
+    if len(owned) != 5 or len(viewed) != 5 or len(edited) != 5 or len(retained) != 5
+        return 1
+    end
+
+    const text_kind: int = unsafe.heap_kind_text(base)
+    if text_kind < 1
+        return 2
+    end
+
+    if orc.ref_count_text(base) < 1
+        return 3
+    end
+
+    if orc.collect_cycles() != 0
+        return 4
+    end
+
+    const names: list<text> = [base, owned]
+    const owned_names: list<text> = mem.own_list_text(names)
+    const viewed_names: list<text> = mem.view_list_text(names)
+    const editable_names: list<text> = mem.edit_list_text(names)
+    const retained_names: list<text> = unsafe.retain_list_text(names)
+
+    if len(owned_names) != 2 or len(viewed_names) != 2 or len(editable_names) != 2 or len(retained_names) != 2
+        return 5
+    end
+
+    const list_kind: int = unsafe.heap_kind_list_text(names)
+    if list_kind < 1
+        return 6
+    end
+
+    if orc.ref_count_list_text(names) < 1
+        return 7
+    end
+
+    if len(owned_names[0]) != 5
+        return 8
+    end
+
+    return 0
+end

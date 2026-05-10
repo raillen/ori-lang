@@ -1,0 +1,84 @@
+--- @target: once_int
+```zt
+public func once_int(thunk: func() -> int) -> lazy<int>
+```
+
+Funcao publica `once_int`.
+---
+--- @target: force_int
+```zt
+public func force_int(value: lazy<int>) -> int
+```
+
+Funcao publica `force_int`.
+---
+--- @target: is_consumed_int
+```zt
+public func is_consumed_int(value: lazy<int>) -> bool
+```
+
+Funcao publica `is_consumed_int`.
+---
+--- @target: once_float
+```zt
+public func once_float(thunk: func() -> float) -> lazy<float>
+```
+
+Funcao publica `once_float`.
+---
+--- @target: force_float
+```zt
+public func force_float(value: lazy<float>) -> float
+```
+
+Funcao publica `force_float`.
+---
+--- @target: is_consumed_float
+```zt
+public func is_consumed_float(value: lazy<float>) -> bool
+```
+
+Funcao publica `is_consumed_float`.
+---
+--- @target: once_bool
+```zt
+public func once_bool(thunk: func() -> bool) -> lazy<bool>
+```
+
+Funcao publica `once_bool`.
+---
+--- @target: force_bool
+```zt
+public func force_bool(value: lazy<bool>) -> bool
+```
+
+Funcao publica `force_bool`.
+---
+--- @target: is_consumed_bool
+```zt
+public func is_consumed_bool(value: lazy<bool>) -> bool
+```
+
+Funcao publica `is_consumed_bool`.
+---
+--- @target: once_text
+```zt
+public func once_text(thunk: func() -> text) -> lazy<text>
+```
+
+Funcao publica `once_text`.
+---
+--- @target: force_text
+```zt
+public func force_text(value: lazy<text>) -> text
+```
+
+Funcao publica `force_text`.
+---
+--- @target: is_consumed_text
+```zt
+public func is_consumed_text(value: lazy<text>) -> bool
+```
+
+Funcao publica `is_consumed_text`.
+---

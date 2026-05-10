@@ -1,0 +1,647 @@
+namespace std.collections
+
+-- Biblioteca Padrão Zenith — Módulo Collections
+-- Estruturas de dados avançadas: queue, stack, grid, pqueue, circbuf, btreemap, btreeset.
+-- 🏗️ EXTERN C (MONOMORFIZADAS)
+-- 🔗 QUEUE
+-- 📚 STACK
+-- 📊 GRID2D / GRID3D
+-- 🏔️ PRIORITY QUEUE
+-- 🔁 CIRCULAR BUFFER
+-- 🌳 BTREE MAP / SET
+public struct QueueNumberDequeueResult
+    queue: list<int>
+    value: optional<int>
+end
+
+public struct QueueTextDequeueResult
+    queue: list<text>
+    value: optional<text>
+end
+
+public struct StackNumberPopResult
+    stack: list<int>
+    value: optional<int>
+end
+
+public struct StackTextPopResult
+    stack: list<text>
+    value: optional<text>
+end
+
+func optional_number(value: int) -> optional<int>
+    return value
+end
+
+func optional_text_value(value: text) -> optional<text>
+    return value
+end
+
+extern c
+    public func zt_queue_i64_new() -> list<int>
+    public func zt_queue_i64_enqueue(queue: list<int>, value: int) -> list<int>
+    public func zt_queue_i64_dequeue(queue: list<int>) -> optional<int>
+    public func zt_queue_i64_peek(queue: list<int>) -> optional<int>
+    public func zt_queue_text_new() -> list<text>
+    public func zt_queue_text_enqueue(queue: list<text>, value: text) -> list<text>
+    public func zt_queue_text_dequeue(queue: list<text>) -> optional<text>
+    public func zt_queue_text_peek(queue: list<text>) -> optional<text>
+    public func zt_stack_i64_new() -> list<int>
+    public func zt_stack_i64_push(stack: list<int>, value: int) -> list<int>
+    public func zt_stack_i64_pop(stack: list<int>) -> optional<int>
+    public func zt_stack_i64_peek(stack: list<int>) -> optional<int>
+    public func zt_stack_text_new() -> list<text>
+    public func zt_stack_text_push(stack: list<text>, value: text) -> list<text>
+    public func zt_stack_text_pop(stack: list<text>) -> optional<text>
+    public func zt_stack_text_peek(stack: list<text>) -> optional<text>
+    public func zt_grid2d_i64_new(rows: int, cols: int) -> grid2d<int>
+    public func zt_grid2d_i64_get(grid: grid2d<int>, row: int, col: int) -> int
+    public func zt_grid2d_i64_set_owned(
+        grid: grid2d<int>,
+        row: int,
+        col: int,
+        value: int
+    ) -> grid2d<int>
+    public func zt_grid2d_i64_fill_owned(grid: grid2d<int>, value: int) -> grid2d<int>
+    public func zt_grid2d_i64_rows(grid: grid2d<int>) -> int
+    public func zt_grid2d_i64_cols(grid: grid2d<int>) -> int
+    public func zt_grid2d_i64_values(grid: grid2d<int>) -> list<int>
+    public func zt_grid2d_text_new(rows: int, cols: int) -> grid2d<text>
+    public func zt_grid2d_text_get(grid: grid2d<text>, row: int, col: int) -> text
+    public func zt_grid2d_text_set_owned(
+        grid: grid2d<text>,
+        row: int,
+        col: int,
+        value: text
+    ) -> grid2d<text>
+    public func zt_grid2d_text_fill_owned(grid: grid2d<text>, value: text) -> grid2d<text>
+    public func zt_grid2d_text_rows(grid: grid2d<text>) -> int
+    public func zt_grid2d_text_cols(grid: grid2d<text>) -> int
+    public func zt_grid2d_text_values(grid: grid2d<text>) -> list<text>
+    public func zt_pqueue_i64_new() -> pqueue<int>
+    public func zt_pqueue_i64_push_owned(heap: pqueue<int>, value: int) -> pqueue<int>
+    public func zt_pqueue_i64_pop(heap: pqueue<int>) -> optional<int>
+    public func zt_pqueue_i64_peek(heap: pqueue<int>) -> optional<int>
+    public func zt_pqueue_i64_len(heap: pqueue<int>) -> int
+    public func zt_pqueue_i64_values(heap: pqueue<int>) -> list<int>
+    public func zt_pqueue_text_new() -> pqueue<text>
+    public func zt_pqueue_text_push_owned(heap: pqueue<text>, value: text) -> pqueue<text>
+    public func zt_pqueue_text_pop(heap: pqueue<text>) -> optional<text>
+    public func zt_pqueue_text_peek(heap: pqueue<text>) -> optional<text>
+    public func zt_pqueue_text_len(heap: pqueue<text>) -> int
+    public func zt_pqueue_text_values(heap: pqueue<text>) -> list<text>
+    public func zt_circbuf_i64_new(capacity: int) -> circbuf<int>
+    public func zt_circbuf_i64_push_owned(buf: circbuf<int>, value: int) -> circbuf<int>
+    public func zt_circbuf_i64_pop(buf: circbuf<int>) -> optional<int>
+    public func zt_circbuf_i64_peek(buf: circbuf<int>) -> optional<int>
+    public func zt_circbuf_i64_len(buf: circbuf<int>) -> int
+    public func zt_circbuf_i64_capacity(buf: circbuf<int>) -> int
+    public func zt_circbuf_i64_is_full(buf: circbuf<int>) -> bool
+    public func zt_circbuf_i64_values(buf: circbuf<int>) -> list<int>
+    public func zt_circbuf_text_new(capacity: int) -> circbuf<text>
+    public func zt_circbuf_text_push_owned(buf: circbuf<text>, value: text) -> circbuf<text>
+    public func zt_circbuf_text_pop(buf: circbuf<text>) -> optional<text>
+    public func zt_circbuf_text_peek(buf: circbuf<text>) -> optional<text>
+    public func zt_circbuf_text_len(buf: circbuf<text>) -> int
+    public func zt_circbuf_text_capacity(buf: circbuf<text>) -> int
+    public func zt_circbuf_text_is_full(buf: circbuf<text>) -> bool
+    public func zt_circbuf_text_values(buf: circbuf<text>) -> list<text>
+    public func zt_btreemap_text_text_new() -> btreemap<text, text>
+    public func zt_btreemap_text_text_set_owned(
+        self_map: btreemap<text, text>,
+        key: text,
+        value: text
+    ) -> btreemap<text, text>
+    public func zt_btreemap_text_text_get(self_map: btreemap<text, text>, key: text) -> text
+    public func zt_btreemap_text_text_get_optional(
+        self_map: btreemap<text, text>,
+        key: text
+    ) -> optional<text>
+    public func zt_btreemap_text_text_contains(self_map: btreemap<text, text>, key: text) -> bool
+    public func zt_btreemap_text_text_remove_owned(
+        self_map: btreemap<text, text>,
+        key: text
+    ) -> btreemap<text, text>
+    public func zt_btreemap_text_text_len(self_map: btreemap<text, text>) -> int
+    public func zt_btreemap_text_text_keys(self_map: btreemap<text, text>) -> list<text>
+    public func zt_btreemap_text_text_values(self_map: btreemap<text, text>) -> list<text>
+    public func zt_btreeset_text_new() -> btreeset<text>
+    public func zt_btreeset_text_insert_owned(self_set: btreeset<text>, value: text) -> btreeset<text>
+    public func zt_btreeset_text_contains(self_set: btreeset<text>, value: text) -> bool
+    public func zt_btreeset_text_remove_owned(self_set: btreeset<text>, value: text) -> btreeset<text>
+    public func zt_btreeset_text_len(self_set: btreeset<text>) -> int
+    public func zt_btreeset_text_values(self_set: btreeset<text>) -> list<text>
+    public func zt_grid3d_i64_new(depth: int, rows: int, cols: int) -> grid3d<int>
+    public func zt_grid3d_i64_get(grid: grid3d<int>, layer: int, row: int, col: int) -> int
+    public func zt_grid3d_i64_set_owned(
+        grid: grid3d<int>,
+        layer: int,
+        row: int,
+        col: int,
+        value: int
+    ) -> grid3d<int>
+    public func zt_grid3d_i64_fill_owned(grid: grid3d<int>, value: int) -> grid3d<int>
+    public func zt_grid3d_i64_depth(grid: grid3d<int>) -> int
+    public func zt_grid3d_i64_rows(grid: grid3d<int>) -> int
+    public func zt_grid3d_i64_cols(grid: grid3d<int>) -> int
+    public func zt_grid3d_i64_values(grid: grid3d<int>) -> list<int>
+    public func zt_grid3d_text_new(depth: int, rows: int, cols: int) -> grid3d<text>
+    public func zt_grid3d_text_get(grid: grid3d<text>, layer: int, row: int, col: int) -> text
+    public func zt_grid3d_text_set_owned(
+        grid: grid3d<text>,
+        layer: int,
+        row: int,
+        col: int,
+        value: text
+    ) -> grid3d<text>
+    public func zt_grid3d_text_fill_owned(grid: grid3d<text>, value: text) -> grid3d<text>
+    public func zt_grid3d_text_depth(grid: grid3d<text>) -> int
+    public func zt_grid3d_text_rows(grid: grid3d<text>) -> int
+    public func zt_grid3d_text_cols(grid: grid3d<text>) -> int
+    public func zt_grid3d_text_values(grid: grid3d<text>) -> list<text>
+end
+
+public func queue_int_new() -> list<int>
+    return collections.zt_queue_i64_new()
+end
+
+public func queue_int_enqueue(queue: list<int>, value: int) -> list<int>
+    return collections.zt_queue_i64_enqueue(queue, value)
+end
+
+public func queue_int_dequeue(queue: list<int>) -> collections.QueueNumberDequeueResult
+    if len(queue) == 0
+        return collections.QueueNumberDequeueResult(queue: queue, value: none)
+    end
+    return collections.QueueNumberDequeueResult(
+        queue: queue[1..],
+        value: collections.optional_number(queue[0])
+    )
+end
+
+public func queue_int_peek(queue: list<int>) -> optional<int>
+    return collections.zt_queue_i64_peek(queue)
+end
+
+public func map_int(values: list<int>, mapper: func(int) -> int) -> list<int>
+    var out: list<int> = collections.queue_int_new()
+    var index: int = 0
+    while index < len(values)
+        const value: int = values[index]
+        out = collections.queue_int_enqueue(out, mapper(value))
+        index = index + 1
+    end
+    return out
+end
+
+public func filter_int(values: list<int>, predicate: func(int) -> bool) -> list<int>
+    var out: list<int> = collections.queue_int_new()
+    var index: int = 0
+    while index < len(values)
+        const value: int = values[index]
+        if predicate(value)
+            out = collections.queue_int_enqueue(out, value)
+        end
+        index = index + 1
+    end
+    return out
+end
+
+public func reduce_int(values: list<int>, initial: int, reducer: func(int, int) -> int) -> int
+    var acc: int = initial
+    var index: int = 0
+    while index < len(values)
+        const value: int = values[index]
+        acc = reducer(acc, value)
+        index = index + 1
+    end
+    return acc
+end
+
+public func queue_text_new() -> list<text>
+    return collections.zt_queue_text_new()
+end
+
+public func queue_text_enqueue(queue: list<text>, value: text) -> list<text>
+    return collections.zt_queue_text_enqueue(queue, value)
+end
+
+public func queue_text_dequeue(queue: list<text>) -> collections.QueueTextDequeueResult
+    if len(queue) == 0
+        return collections.QueueTextDequeueResult(queue: queue, value: none)
+    end
+    return collections.QueueTextDequeueResult(
+        queue: queue[1..],
+        value: collections.optional_text_value(queue[0])
+    )
+end
+
+public func queue_text_peek(queue: list<text>) -> optional<text>
+    return collections.zt_queue_text_peek(queue)
+end
+
+public func stack_int_new() -> list<int>
+    return collections.zt_stack_i64_new()
+end
+
+public func stack_int_push(stack: list<int>, value: int) -> list<int>
+    return collections.zt_stack_i64_push(stack, value)
+end
+
+public func stack_int_pop(stack: list<int>) -> collections.StackNumberPopResult
+    const size: int = len(stack)
+    if size == 0
+        return collections.StackNumberPopResult(stack: stack, value: none)
+    end
+    if size == 1
+        return collections.StackNumberPopResult(
+            stack: collections.zt_stack_i64_new(),
+            value: collections.optional_number(stack[0])
+        )
+    end
+    return collections.StackNumberPopResult(
+        stack: stack[0..(size - 2)],
+        value: collections.optional_number(stack[size - 1])
+    )
+end
+
+public func stack_int_peek(stack: list<int>) -> optional<int>
+    return collections.zt_stack_i64_peek(stack)
+end
+
+public func stack_text_new() -> list<text>
+    return collections.zt_stack_text_new()
+end
+
+public func stack_text_push(stack: list<text>, value: text) -> list<text>
+    return collections.zt_stack_text_push(stack, value)
+end
+
+public func stack_text_pop(stack: list<text>) -> collections.StackTextPopResult
+    const size: int = len(stack)
+    if size == 0
+        return collections.StackTextPopResult(stack: stack, value: none)
+    end
+    if size == 1
+        return collections.StackTextPopResult(
+            stack: collections.zt_stack_text_new(),
+            value: collections.optional_text_value(stack[0])
+        )
+    end
+    return collections.StackTextPopResult(
+        stack: stack[0..(size - 2)],
+        value: collections.optional_text_value(stack[size - 1])
+    )
+end
+
+public func stack_text_peek(stack: list<text>) -> optional<text>
+    return collections.zt_stack_text_peek(stack)
+end
+
+public func grid2d_int_new(rows: int, cols: int) -> grid2d<int>
+    return collections.zt_grid2d_i64_new(rows, cols)
+end
+
+public func grid2d_int_get(grid: grid2d<int>, row: int, col: int) -> int
+    return collections.zt_grid2d_i64_get(grid, row, col)
+end
+
+public func grid2d_int_set(grid: grid2d<int>, row: int, col: int, value: int) -> grid2d<int>
+    return collections.zt_grid2d_i64_set_owned(grid, row, col, value)
+end
+
+public func grid2d_int_fill(grid: grid2d<int>, value: int) -> grid2d<int>
+    return collections.zt_grid2d_i64_fill_owned(grid, value)
+end
+
+public func grid2d_int_rows(grid: grid2d<int>) -> int
+    return collections.zt_grid2d_i64_rows(grid)
+end
+
+public func grid2d_int_cols(grid: grid2d<int>) -> int
+    return collections.zt_grid2d_i64_cols(grid)
+end
+
+public func grid2d_int_values(grid: grid2d<int>) -> list<int>
+    return collections.zt_grid2d_i64_values(grid)
+end
+
+public func grid2d_text_new(rows: int, cols: int) -> grid2d<text>
+    return collections.zt_grid2d_text_new(rows, cols)
+end
+
+public func grid2d_text_get(grid: grid2d<text>, row: int, col: int) -> text
+    return collections.zt_grid2d_text_get(grid, row, col)
+end
+
+public func grid2d_text_set(grid: grid2d<text>, row: int, col: int, value: text) -> grid2d<text>
+    return collections.zt_grid2d_text_set_owned(grid, row, col, value)
+end
+
+public func grid2d_text_fill(grid: grid2d<text>, value: text) -> grid2d<text>
+    return collections.zt_grid2d_text_fill_owned(grid, value)
+end
+
+public func grid2d_text_rows(grid: grid2d<text>) -> int
+    return collections.zt_grid2d_text_rows(grid)
+end
+
+public func grid2d_text_cols(grid: grid2d<text>) -> int
+    return collections.zt_grid2d_text_cols(grid)
+end
+
+public func grid2d_text_values(grid: grid2d<text>) -> list<text>
+    return collections.zt_grid2d_text_values(grid)
+end
+
+public func pqueue_int_new() -> pqueue<int>
+    return collections.zt_pqueue_i64_new()
+end
+
+public func pqueue_int_push(heap: pqueue<int>, value: int) -> pqueue<int>
+    return collections.zt_pqueue_i64_push_owned(heap, value)
+end
+
+public func pqueue_int_pop(heap: pqueue<int>) -> optional<int>
+    return collections.zt_pqueue_i64_pop(heap)
+end
+
+public func pqueue_int_peek(heap: pqueue<int>) -> optional<int>
+    return collections.zt_pqueue_i64_peek(heap)
+end
+
+public func pqueue_int_len(heap: pqueue<int>) -> int
+    return collections.zt_pqueue_i64_len(heap)
+end
+
+public func pqueue_int_values(heap: pqueue<int>) -> list<int>
+    return collections.zt_pqueue_i64_values(heap)
+end
+
+public func pqueue_text_new() -> pqueue<text>
+    return collections.zt_pqueue_text_new()
+end
+
+public func pqueue_text_push(heap: pqueue<text>, value: text) -> pqueue<text>
+    return collections.zt_pqueue_text_push_owned(heap, value)
+end
+
+public func pqueue_text_pop(heap: pqueue<text>) -> optional<text>
+    return collections.zt_pqueue_text_pop(heap)
+end
+
+public func pqueue_text_peek(heap: pqueue<text>) -> optional<text>
+    return collections.zt_pqueue_text_peek(heap)
+end
+
+public func pqueue_text_len(heap: pqueue<text>) -> int
+    return collections.zt_pqueue_text_len(heap)
+end
+
+public func pqueue_text_values(heap: pqueue<text>) -> list<text>
+    return collections.zt_pqueue_text_values(heap)
+end
+
+public func circbuf_int_new(capacity: int) -> circbuf<int>
+    return collections.zt_circbuf_i64_new(capacity)
+end
+
+public func circbuf_int_push(buf: circbuf<int>, value: int) -> circbuf<int>
+    return collections.zt_circbuf_i64_push_owned(buf, value)
+end
+
+public func circbuf_int_pop(buf: circbuf<int>) -> optional<int>
+    return collections.zt_circbuf_i64_pop(buf)
+end
+
+public func circbuf_int_peek(buf: circbuf<int>) -> optional<int>
+    return collections.zt_circbuf_i64_peek(buf)
+end
+
+public func circbuf_int_len(buf: circbuf<int>) -> int
+    return collections.zt_circbuf_i64_len(buf)
+end
+
+public func circbuf_int_capacity(buf: circbuf<int>) -> int
+    return collections.zt_circbuf_i64_capacity(buf)
+end
+
+public func circbuf_int_is_full(buf: circbuf<int>) -> bool
+    return collections.zt_circbuf_i64_is_full(buf)
+end
+
+public func circbuf_int_values(buf: circbuf<int>) -> list<int>
+    return collections.zt_circbuf_i64_values(buf)
+end
+
+public func circbuf_text_new(capacity: int) -> circbuf<text>
+    return collections.zt_circbuf_text_new(capacity)
+end
+
+public func circbuf_text_push(buf: circbuf<text>, value: text) -> circbuf<text>
+    return collections.zt_circbuf_text_push_owned(buf, value)
+end
+
+public func circbuf_text_pop(buf: circbuf<text>) -> optional<text>
+    return collections.zt_circbuf_text_pop(buf)
+end
+
+public func circbuf_text_peek(buf: circbuf<text>) -> optional<text>
+    return collections.zt_circbuf_text_peek(buf)
+end
+
+public func circbuf_text_len(buf: circbuf<text>) -> int
+    return collections.zt_circbuf_text_len(buf)
+end
+
+public func circbuf_text_capacity(buf: circbuf<text>) -> int
+    return collections.zt_circbuf_text_capacity(buf)
+end
+
+public func circbuf_text_is_full(buf: circbuf<text>) -> bool
+    return collections.zt_circbuf_text_is_full(buf)
+end
+
+public func circbuf_text_values(buf: circbuf<text>) -> list<text>
+    return collections.zt_circbuf_text_values(buf)
+end
+
+public func btreemap_text_new() -> btreemap<text, text>
+    return collections.zt_btreemap_text_text_new()
+end
+
+public func btreemap_text_set(
+    self_map: btreemap<text, text>,
+    key: text,
+    value: text
+) -> btreemap<text, text>
+    return collections.zt_btreemap_text_text_set_owned(self_map, key, value)
+end
+
+public func btreemap_text_get(self_map: btreemap<text, text>, key: text) -> text
+    return collections.zt_btreemap_text_text_get(self_map, key)
+end
+
+public func btreemap_text_get_optional(self_map: btreemap<text, text>, key: text) -> optional<text>
+    return collections.zt_btreemap_text_text_get_optional(self_map, key)
+end
+
+public func btreemap_text_contains(self_map: btreemap<text, text>, key: text) -> bool
+    return collections.zt_btreemap_text_text_contains(self_map, key)
+end
+
+public func btreemap_text_remove(self_map: btreemap<text, text>, key: text) -> btreemap<text, text>
+    return collections.zt_btreemap_text_text_remove_owned(self_map, key)
+end
+
+public func btreemap_text_len(self_map: btreemap<text, text>) -> int
+    return collections.zt_btreemap_text_text_len(self_map)
+end
+
+public func btreemap_text_keys(self_map: btreemap<text, text>) -> list<text>
+    return collections.zt_btreemap_text_text_keys(self_map)
+end
+
+public func btreemap_text_values(self_map: btreemap<text, text>) -> list<text>
+    return collections.zt_btreemap_text_text_values(self_map)
+end
+
+public func btreeset_text_new() -> btreeset<text>
+    return collections.zt_btreeset_text_new()
+end
+
+public func btreeset_text_insert(self_set: btreeset<text>, value: text) -> btreeset<text>
+    return collections.zt_btreeset_text_insert_owned(self_set, value)
+end
+
+public func btreeset_text_contains(self_set: btreeset<text>, value: text) -> bool
+    return collections.zt_btreeset_text_contains(self_set, value)
+end
+
+public func btreeset_text_remove(self_set: btreeset<text>, value: text) -> btreeset<text>
+    return collections.zt_btreeset_text_remove_owned(self_set, value)
+end
+
+public func btreeset_text_len(self_set: btreeset<text>) -> int
+    return collections.zt_btreeset_text_len(self_set)
+end
+
+public func btreeset_text_values(self_set: btreeset<text>) -> list<text>
+    return collections.zt_btreeset_text_values(self_set)
+end
+
+public func grid3d_int_new(depth: int, rows: int, cols: int) -> grid3d<int>
+    return collections.zt_grid3d_i64_new(depth, rows, cols)
+end
+
+public func grid3d_int_get(grid: grid3d<int>, layer: int, row: int, col: int) -> int
+    return collections.zt_grid3d_i64_get(grid, layer, row, col)
+end
+
+public func grid3d_int_set(
+    grid: grid3d<int>,
+    layer: int,
+    row: int,
+    col: int,
+    value: int
+) -> grid3d<int>
+    return collections.zt_grid3d_i64_set_owned(grid, layer, row, col, value)
+end
+
+public func grid3d_int_fill(grid: grid3d<int>, value: int) -> grid3d<int>
+    return collections.zt_grid3d_i64_fill_owned(grid, value)
+end
+
+public func grid3d_int_depth(grid: grid3d<int>) -> int
+    return collections.zt_grid3d_i64_depth(grid)
+end
+
+public func grid3d_int_rows(grid: grid3d<int>) -> int
+    return collections.zt_grid3d_i64_rows(grid)
+end
+
+public func grid3d_int_cols(grid: grid3d<int>) -> int
+    return collections.zt_grid3d_i64_cols(grid)
+end
+
+public func grid3d_int_values(grid: grid3d<int>) -> list<int>
+    return collections.zt_grid3d_i64_values(grid)
+end
+
+public func grid3d_text_new(depth: int, rows: int, cols: int) -> grid3d<text>
+    return collections.zt_grid3d_text_new(depth, rows, cols)
+end
+
+public func grid3d_text_get(grid: grid3d<text>, layer: int, row: int, col: int) -> text
+    return collections.zt_grid3d_text_get(grid, layer, row, col)
+end
+
+public func grid3d_text_set(
+    grid: grid3d<text>,
+    layer: int,
+    row: int,
+    col: int,
+    value: text
+) -> grid3d<text>
+    return collections.zt_grid3d_text_set_owned(grid, layer, row, col, value)
+end
+
+public func grid3d_text_fill(grid: grid3d<text>, value: text) -> grid3d<text>
+    return collections.zt_grid3d_text_fill_owned(grid, value)
+end
+
+public func grid3d_text_depth(grid: grid3d<text>) -> int
+    return collections.zt_grid3d_text_depth(grid)
+end
+
+public func grid3d_text_rows(grid: grid3d<text>) -> int
+    return collections.zt_grid3d_text_rows(grid)
+end
+
+public func grid3d_text_cols(grid: grid3d<text>) -> int
+    return collections.zt_grid3d_text_cols(grid)
+end
+
+public func grid3d_text_values(grid: grid3d<text>) -> list<text>
+    return collections.zt_grid3d_text_values(grid)
+end
+
+public func pqueue_int_is_empty(heap: pqueue<int>) -> bool
+    return collections.zt_pqueue_i64_len(heap) == 0
+end
+
+public func pqueue_text_is_empty(heap: pqueue<text>) -> bool
+    return collections.zt_pqueue_text_len(heap) == 0
+end
+
+public func circbuf_int_is_empty(buf: circbuf<int>) -> bool
+    return collections.zt_circbuf_i64_len(buf) == 0
+end
+
+public func circbuf_text_is_empty(buf: circbuf<text>) -> bool
+    return collections.zt_circbuf_text_len(buf) == 0
+end
+
+public func btreemap_text_is_empty(self_map: btreemap<text, text>) -> bool
+    return collections.zt_btreemap_text_text_len(self_map) == 0
+end
+
+public func btreeset_text_is_empty(self_set: btreeset<text>) -> bool
+    return collections.zt_btreeset_text_len(self_set) == 0
+end
+
+public func grid2d_int_size(grid: grid2d<int>) -> int
+    return collections.zt_grid2d_i64_rows(grid) * collections.zt_grid2d_i64_cols(grid)
+end
+
+public func grid2d_text_size(grid: grid2d<text>) -> int
+    return collections.zt_grid2d_text_rows(grid) * collections.zt_grid2d_text_cols(grid)
+end
+
+public func grid3d_int_size(grid: grid3d<int>) -> int
+    return collections.zt_grid3d_i64_depth(grid) * collections.zt_grid3d_i64_rows(grid) * collections.zt_grid3d_i64_cols(grid)
+end
+
+public func grid3d_text_size(grid: grid3d<text>) -> int
+    return collections.zt_grid3d_text_depth(grid) * collections.zt_grid3d_text_rows(grid) * collections.zt_grid3d_text_cols(grid)
+end

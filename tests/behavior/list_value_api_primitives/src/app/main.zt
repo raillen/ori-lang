@@ -1,0 +1,99 @@
+namespace app.main
+
+import std.list as list
+
+func approx(left: float, right: float, epsilon: float = 0.001) -> bool
+    var diff: float = left - right
+    if diff < 0.0
+        diff = 0.0 - diff
+    end
+    return diff < epsilon
+end
+
+func check_float_lists() -> result<void, core.Error>
+    const values: list<float> = [1.5, 2.25, 3.75]
+    const appended: list<float> = list.append(values, 4.5)
+    const prepended: list<float> = list.prepend(values, 0.5)
+    const reversed: list<float> = list.reverse(values)
+    const joined: list<float> = list.concat(prepended, appended)
+    const changed: list<float> = list.set(values, 1, 8.5)?
+    const removed: list<float> = list.remove_at(values, 1)?
+    const sliced: list<float> = list.slice(values, 1, 2)?
+
+    if len(values) != 3 or len(appended) != 4 or len(joined) != 8
+        return error("float list helpers should preserve value-style copies")
+    end
+    if approx(appended[3], 4.5) == false or approx(prepended[0], 0.5) == false
+        return error("float append/prepend should add values")
+    end
+    if list.contains(values, 2.25) == false or list.index_of(values, 3.75).or(-1) != 2
+        return error("float contains/index_of should use element equality")
+    end
+    if approx(values.get(1).or(0.0), 2.25) == false or approx(list.first(values).or(0.0), 1.5) == false
+        return error("float get/first should return optional values")
+    end
+    if approx(list.last(values).or(0.0), 3.75) == false or approx(reversed[0], 3.75) == false
+        return error("float last/reverse should work")
+    end
+    if approx(changed[1], 8.5) == false or approx(removed[1], 3.75) == false
+        return error("float set/remove_at should return changed copies")
+    end
+    if len(sliced) != 2 or approx(sliced[0], 2.25) == false
+        return error("float slice should return selected range")
+    end
+
+    return success()
+end
+
+func check_bool_lists() -> result<void, core.Error>
+    const flags: list<bool> = [true, false, true]
+    const changed: list<bool> = list.set(flags, 1, true)?
+    const tail: list<bool> = list.rest(flags)
+    const skipped: list<bool> = list.skip(flags, 2)
+
+    if list.contains(flags, false) == false or list.index_of(flags, false).or(-1) != 1
+        return error("bool contains/index_of should work")
+    end
+    if list.first(flags).or(false) == false or list.last(flags).or(false) == false
+        return error("bool first/last should return optional values")
+    end
+    if changed[1] == false or len(tail) != 2 or tail[0] != false
+        return error("bool set/rest should return expected copies")
+    end
+    if len(skipped) != 1 or skipped[0] == false
+        return error("bool skip should return the requested tail")
+    end
+
+    return success()
+end
+
+func check_small_integer_lists() -> result<void, core.Error>
+    const signed_values: list<int8> = [1, 2, 3]
+    const signed_more: list<int8> = list.append(signed_values, 4)
+    const signed_changed: list<int8> = list.set(signed_values, 1, 9)?
+    const unsigned_values: list<u8> = [1, 2, 3]
+    const unsigned_less: list<u8> = list.remove_first(unsigned_values)?
+    const unsigned_reversed: list<u8> = list.reverse(unsigned_values)
+
+    if len(signed_more) != 4 or signed_more[3] != 4
+        return error("int8 append should work")
+    end
+    if signed_changed[1] != 9 or signed_values[1] != 2
+        return error("int8 set should return a changed copy")
+    end
+    if list.contains(unsigned_values, 2) == false or list.index_of(unsigned_values, 3).or(-1) != 2
+        return error("u8 contains/index_of should work")
+    end
+    if len(unsigned_less) != 2 or unsigned_less[0] != 2 or unsigned_reversed[0] != 3
+        return error("u8 remove_first/reverse should work")
+    end
+
+    return success()
+end
+
+func main() -> result<void, core.Error>
+    check_float_lists()?
+    check_bool_lists()?
+    check_small_integer_lists()?
+    return success()
+end

@@ -1,0 +1,10 @@
+namespace app.main
+
+attr skip("no test attr")
+public func foo() -> int
+    return 0
+end
+
+public func main() -> int
+    return 0
+end

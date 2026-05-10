@@ -1,0 +1,8 @@
+namespace app.main
+
+import std.test as test
+
+func main() -> int
+    test.not_equal_text("same", "same")
+    return 0
+end

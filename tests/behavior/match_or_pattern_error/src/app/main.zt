@@ -1,0 +1,11 @@
+namespace app.main
+
+func main() -> int
+    const value: int = 1
+    match value
+        case 1 | 2 ->
+            return 0
+        case else ->
+            return 1
+    end
+end

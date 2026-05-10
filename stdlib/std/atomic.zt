@@ -1,0 +1,12 @@
+namespace std.atomic
+
+public struct Atomic<T>
+    handle: int
+end
+
+extern c
+    public func zt_atomic_i64_create(value: int) -> int
+    public func zt_atomic_i64_load(handle: int) -> int
+    public func zt_atomic_i64_store(handle: int, value: int) -> int
+    public func zt_atomic_i64_add(handle: int, delta: int) -> int
+end

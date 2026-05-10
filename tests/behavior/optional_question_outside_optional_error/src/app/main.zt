@@ -1,0 +1,15 @@
+namespace app.main
+
+func parse_score() -> optional<int>
+    return 7
+end
+
+func bad() -> int
+    const value: int = parse_score()?
+    return value
+end
+
+func main() -> int
+    return bad()
+end
+

@@ -1,0 +1,17 @@
+namespace app.main
+
+public var cleaned_up: bool = false
+
+func record_cleanup()
+    cleaned_up = true
+end
+
+func do_work()
+    using _handle = 1 then record_cleanup()
+    panic("expected failure")
+end
+
+func main() -> int
+    do_work()
+    return 0
+end

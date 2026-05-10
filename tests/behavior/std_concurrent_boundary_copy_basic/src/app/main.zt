@@ -1,0 +1,43 @@
+namespace app.main
+
+import std.concurrent as concurrent
+import std.json as json
+
+func main() -> result<void, core.Error>
+    const count: int = concurrent.copy_int(7)
+    const enabled: bool = concurrent.copy_bool(true)
+    const ratio: float = concurrent.copy_float(2.5)
+    const label: text = concurrent.copy_text("ready")
+    const raw: bytes = concurrent.copy_bytes(hex bytes "41 42")
+    const ids: list<int> = concurrent.copy_list_int([1, 2, 3])
+    const names: list<text> = concurrent.copy_list_text(["ada", "bob"])
+    const seed_tags: map<text,text> = json.parse("{\"role\":\"engine\"}")?
+    const tags: map<text,text> = concurrent.copy_map_text_text(seed_tags)
+
+    if count != 7
+        return error("std_concurrent_boundary_copy_basic: count copy mismatch")
+    end
+    if enabled == false
+        return error("std_concurrent_boundary_copy_basic: bool copy mismatch")
+    end
+    if ratio != 2.5
+        return error("std_concurrent_boundary_copy_basic: float copy mismatch")
+    end
+    if label != "ready"
+        return error("std_concurrent_boundary_copy_basic: text copy mismatch")
+    end
+    if len(raw) != 2
+        return error("std_concurrent_boundary_copy_basic: bytes copy mismatch")
+    end
+    if len(ids) != 3
+        return error("std_concurrent_boundary_copy_basic: list<int> copy mismatch")
+    end
+    if names[1] != "bob"
+        return error("std_concurrent_boundary_copy_basic: list<text> copy mismatch")
+    end
+    if tags["role"] != "engine"
+        return error("std_concurrent_boundary_copy_basic: map copy mismatch")
+    end
+
+    return success()
+end

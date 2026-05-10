@@ -1,0 +1,23 @@
+namespace app.main
+
+import std.fs as fs
+import std.text as text
+
+func main() -> result<void, fs.Error>
+    const input_path: text = ".ztc-tmp/examples/file-processor/input.txt"
+    const output_path: text = ".ztc-tmp/examples/file-processor/summary.txt"
+
+    fs.create_dir_all(".ztc-tmp/examples/file-processor")?
+    fs.write_text(input_path, "  Zenith file processor  \n")?
+
+    const raw: text = fs.read_text(input_path)?
+    const cleaned: text = text.trim(raw)
+
+    if cleaned != "Zenith file processor"
+        return error(fs.Error.IOError)
+    end
+
+    fs.write_text(output_path, cleaned)?
+    print("processed")
+    return success()
+end

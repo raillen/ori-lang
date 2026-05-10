@@ -1,0 +1,13 @@
+namespace app.main
+
+extern c
+    attr name("zt_ffi_answer")
+    const ANSWER: int
+end
+
+public func main() -> int
+    if ANSWER != 42
+        return 1
+    end
+    return 0
+end

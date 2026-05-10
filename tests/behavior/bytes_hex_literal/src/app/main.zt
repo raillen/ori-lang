@@ -1,0 +1,13 @@
+namespace app.main
+
+func main() -> int
+    const data: bytes = hex bytes "DE AD_be ef"
+    const window: bytes = data[1..2]
+    const third: uint8 = data[2]
+
+    if third == 190
+        return len(data) + len(window) + 3
+    end
+
+    return 1
+end

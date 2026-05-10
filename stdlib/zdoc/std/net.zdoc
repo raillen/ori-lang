@@ -1,0 +1,144 @@
+--- @target: namespace
+# std.net - Blocking TCP client
+
+Small blocking TCP client API for v1.
+Public functions return `net.Error`.
+Timeouts use `optional<int>`:
+
+- `none` means no timeout.
+- A value means timeout in milliseconds.
+
+The runtime bridge still uses `core.Error` internally. Use `net.to_core_error(err)` when older code still returns `core.Error`.
+---
+
+--- @target: Error
+```zt
+public enum Error
+    ConnectionRefused
+    HostUnreachable
+    Timeout
+    AddressInUse
+    AlreadyConnected
+    NotConnected
+    NetworkDown
+    Overflow
+    PeerReset
+    SystemLimit
+    Unknown
+end
+```
+
+Typed network errors.
+---
+
+--- @target: Connection
+```zt
+public struct Connection
+end
+```
+
+Opaque handle for an open TCP connection.
+---
+
+--- @target: connect
+```zt
+public func connect(
+    host: text,
+    port: int where it >= 1 and it <= 65535,
+    timeout: optional<int> = none
+) -> result<net.Connection, net.Error>
+```
+
+Opens a TCP connection.
+
+@param host Host name or IP address.
+@param port TCP port from 1 to 65535.
+@param timeout Optional timeout in milliseconds. `none` means no timeout.
+@return Open connection, or `net.Error`.
+---
+
+--- @target: read_some
+```zt
+public func read_some(
+    connection: net.Connection,
+    max: int where it > 0,
+    timeout: optional<int> = none
+) -> result<optional<bytes>, net.Error>
+```
+
+Reads up to `max` bytes.
+Returns `none` when the peer closes the connection.
+
+@param connection Open TCP connection.
+@param max Maximum bytes to read.
+@param timeout Optional timeout in milliseconds. `none` means no timeout.
+@return Bytes read, EOF as `none`, or `net.Error`.
+---
+
+--- @target: write_all
+```zt
+public func write_all(
+    connection: net.Connection,
+    data: bytes,
+    timeout: optional<int> = none
+) -> result<void, net.Error>
+```
+
+Writes all bytes in `data`.
+
+@param connection Open TCP connection.
+@param data Bytes to send.
+@param timeout Optional timeout in milliseconds. `none` means no timeout.
+@return `void` on success, or `net.Error`.
+---
+
+--- @target: close
+```zt
+public func close(connection: net.Connection) -> result<void, net.Error>
+```
+
+Closes a TCP connection.
+
+@param connection Connection to close.
+@return `void` on success, or `net.Error`.
+---
+
+--- @target: is_closed
+```zt
+public func is_closed(connection: net.Connection) -> bool
+```
+
+Returns `true` when the connection is closed.
+---
+
+--- @target: kind
+```zt
+public func kind(err: core.Error) -> net.Error
+```
+
+Maps a runtime bridge `core.Error` to `net.Error`.
+---
+
+--- @target: to_core_error
+```zt
+public func to_core_error(err: net.Error) -> core.Error
+```
+
+Converts `net.Error` to `core.Error`.
+Use this at old API boundaries that still return `core.Error`.
+---
+
+--- @target: timeout_to_ms
+```zt
+public func timeout_to_ms(timeout: optional<int>) -> int
+```
+
+Funcao publica `timeout_to_ms`.
+---
+--- @target: map_core_error
+```zt
+public func map_core_error(err: core.Error) -> net.Error
+```
+
+Funcao publica `map_core_error`.
+---

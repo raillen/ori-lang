@@ -1,0 +1,10 @@
+namespace app.main
+
+struct Player
+    hp: int where it >= 0
+end
+
+func main() -> int
+    const p: Player = Player(hp: -1)
+    return 0
+end

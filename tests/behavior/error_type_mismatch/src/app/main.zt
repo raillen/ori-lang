@@ -1,0 +1,6 @@
+namespace app.main
+
+func main() -> int
+    const value: int = "oops"
+    return value
+end

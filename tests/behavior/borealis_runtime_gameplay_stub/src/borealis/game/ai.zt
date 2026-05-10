@@ -1,0 +1,288 @@
+namespace borealis.game.ai
+
+extern c
+    func zt_math_sqrt(value: float) -> float
+    func zt_math_atan2(y: float, x: float) -> float
+end
+
+public struct PatrolRoute
+    point_a: game.Vector2
+    point_b: game.Vector2
+end
+
+public struct PatrolState
+    index: int = 0
+    loop: bool = true
+end
+
+public struct PatrolStep
+    position: game.Vector2
+    state: ai.PatrolState
+    reached: bool = false
+end
+
+public struct SensorHit
+    detected: bool = false
+    distance: float = 0.0
+    angle: float = 0.0
+end
+
+public struct FiniteStateMachine
+    state: text = "idle"
+    ticks: int = 0
+    time_in_state: float = 0.0
+end
+
+public struct BehaviorTree
+    current_task: text = ""
+    running: bool = false
+    succeeded: bool = false
+end
+
+public func distance(a: game.Vector2, b: game.Vector2) -> float
+    const dx: float = b.x - a.x
+    const dy: float = b.y - a.y
+    return ai.zt_math_sqrt((dx * dx) + (dy * dy))
+end
+
+public func look_at(position: game.Vector2, target: game.Vector2) -> float
+    return ai.zt_math_atan2(target.y - position.y, target.x - position.x)
+end
+
+public func face_target(position: game.Vector2, target: game.Vector2) -> float
+    return ai.look_at(position, target)
+end
+
+public func seek(position: game.Vector2, target: game.Vector2, speed: float, dt: float = 1.0 / 60.0) -> game.Vector2
+    const offset: game.Vector2 = game.vec2(target.x - position.x, target.y - position.y)
+    const direction: game.Vector2 = movement.normalize(offset)
+    return game.vec2(
+        position.x + (direction.x * speed * dt),
+        position.y + (direction.y * speed * dt)
+    )
+end
+
+public func move_to_point(position: game.Vector2, target: game.Vector2, speed: float, dt: float = 1.0 / 60.0) -> game.Vector2
+    return ai.seek(position, target, speed, dt)
+end
+
+public func evade(position: game.Vector2, threat: game.Vector2, speed: float, dt: float = 1.0 / 60.0) -> game.Vector2
+    const offset: game.Vector2 = game.vec2(position.x - threat.x, position.y - threat.y)
+    const direction: game.Vector2 = movement.normalize(offset)
+    return game.vec2(
+        position.x + (direction.x * speed * dt),
+        position.y + (direction.y * speed * dt)
+    )
+end
+
+public func run_away(position: game.Vector2, threat: game.Vector2, speed: float, dt: float = 1.0 / 60.0) -> game.Vector2
+    return ai.evade(position, threat, speed, dt)
+end
+
+public func move_randomly(position: game.Vector2, step: float, tick: int) -> game.Vector2
+    const phase: int = tick % 4
+    if phase == 0
+        return game.vec2(position.x + step, position.y)
+    end
+    if phase == 1
+        return game.vec2(position.x - step, position.y)
+    end
+    if phase == 2
+        return game.vec2(position.x, position.y + step)
+    end
+    return game.vec2(position.x, position.y - step)
+end
+
+public func patrol_route(point_a: game.Vector2, point_b: game.Vector2) -> ai.PatrolRoute
+    return ai.PatrolRoute(point_a: point_a, point_b: point_b)
+end
+
+public func patrol_state(index: int = 0, loop: bool = true) -> ai.PatrolState
+    return ai.PatrolState(index: index, loop: loop)
+end
+
+public func patrol(
+    position: game.Vector2,
+    route: ai.PatrolRoute,
+    state: ai.PatrolState = ai.PatrolState(),
+    speed: float = 60.0,
+    dt: float = 1.0 / 60.0
+) -> ai.PatrolStep
+    var index: int = state.index
+    if index < 0
+        index = 0
+    end
+    if index > 1
+        index = 1
+    end
+
+    var target: game.Vector2 = route.point_a
+    if index == 1
+        target = route.point_b
+    end
+    const next_position: game.Vector2 = ai.seek(position, target, speed, dt)
+    const reached: bool = ai.distance(next_position, target) <= 0.1
+
+    var next_state: ai.PatrolState = state
+    next_state.index = index
+    if reached
+        if next_state.index == 0
+            next_state.index = 1
+        else
+            next_state.index = 0
+        end
+        if next_state.loop == false and next_state.index == 0
+            next_state.index = 1
+        end
+    end
+
+    return ai.PatrolStep(
+        position: next_position,
+        state: next_state,
+        reached: reached
+    )
+end
+
+public func can_see(origin: game.Vector2, target: game.Vector2, radius: float) -> bool
+    return ai.distance(origin, target) <= radius
+end
+
+public func has_line_of_sight(origin: game.Vector2, target: game.Vector2, radius: float = 999999.0) -> bool
+    return ai.can_see(origin, target, radius)
+end
+
+public func hearing_sensor(origin: game.Vector2, event_position: game.Vector2, radius: float) -> ai.SensorHit
+    const sensed_distance: float = ai.distance(origin, event_position)
+    return ai.SensorHit(
+        detected: sensed_distance <= radius,
+        distance: sensed_distance,
+        angle: ai.look_at(origin, event_position)
+    )
+end
+
+public func vision_sensor(
+    origin: game.Vector2,
+    facing: float,
+    target: game.Vector2,
+    fov_degrees: float,
+    radius: float
+) -> ai.SensorHit
+    const sensed_distance: float = ai.distance(origin, target)
+    const target_angle: float = ai.look_at(origin, target)
+    var delta_degrees: float = (target_angle - facing) * (180.0 / 3.141592653589793)
+
+    while delta_degrees > 180.0
+        delta_degrees = delta_degrees - 360.0
+    end
+    while delta_degrees < -180.0
+        delta_degrees = delta_degrees + 360.0
+    end
+
+    var abs_delta: float = delta_degrees
+    if abs_delta < 0.0
+        abs_delta = 0.0 - abs_delta
+    end
+
+    return ai.SensorHit(
+        detected: sensed_distance <= radius and abs_delta <= (fov_degrees * 0.5),
+        distance: sensed_distance,
+        angle: target_angle
+    )
+end
+
+public func fsm_create(initial_state: text = "idle") -> ai.FiniteStateMachine
+    return ai.FiniteStateMachine(state: initial_state, ticks: 0, time_in_state: 0.0)
+end
+
+public func fsm_set_state(machine: ai.FiniteStateMachine, state: text) -> ai.FiniteStateMachine
+    if machine.state == state
+        return machine
+    end
+
+    var next: ai.FiniteStateMachine = machine
+    next.state = state
+    next.ticks = 0
+    next.time_in_state = 0.0
+    return next
+end
+
+public func fsm_update(machine: ai.FiniteStateMachine, dt: float = 1.0 / 60.0) -> ai.FiniteStateMachine
+    var next: ai.FiniteStateMachine = machine
+    next.ticks = next.ticks + 1
+    next.time_in_state = next.time_in_state + dt
+    return next
+end
+
+public func bt_create(task: text = "idle") -> ai.BehaviorTree
+    return ai.BehaviorTree(current_task: task, running: false, succeeded: false)
+end
+
+public func bt_start(tree: ai.BehaviorTree, task: text) -> ai.BehaviorTree
+    var next: ai.BehaviorTree = tree
+    next.current_task = task
+    next.running = true
+    next.succeeded = false
+    return next
+end
+
+public func bt_stop(tree: ai.BehaviorTree) -> ai.BehaviorTree
+    var next: ai.BehaviorTree = tree
+    next.running = false
+    return next
+end
+
+public func bt_succeed(tree: ai.BehaviorTree) -> ai.BehaviorTree
+    var next: ai.BehaviorTree = tree
+    next.running = false
+    next.succeeded = true
+    return next
+end
+
+public func bt_fail(tree: ai.BehaviorTree) -> ai.BehaviorTree
+    var next: ai.BehaviorTree = tree
+    next.running = false
+    next.succeeded = false
+    return next
+end
+
+public func seek_body(
+    body: contracts.Body2D,
+    target: game.Vector2,
+    speed: float,
+    dt: float = 1.0 / 60.0
+) -> contracts.Body2D
+    const next_position: game.Vector2 = ai.seek(body.position, target, speed, dt)
+    const direction: game.Vector2 = movement.normalize(game.vec2(target.x - body.position.x, target.y - body.position.y))
+    const next_velocity: game.Vector2 = game.vec2(direction.x * speed, direction.y * speed)
+    return contracts.Body2D(position: next_position, velocity: next_velocity)
+end
+
+public func chase_target(
+    body: contracts.Body2D,
+    target: game.Vector2,
+    speed: float,
+    dt: float = 1.0 / 60.0
+) -> contracts.Body2D
+    return ai.seek_body(body, target, speed, dt)
+end
+
+public func evade_body(
+    body: contracts.Body2D,
+    threat: game.Vector2,
+    speed: float,
+    dt: float = 1.0 / 60.0
+) -> contracts.Body2D
+    const next_position: game.Vector2 = ai.evade(body.position, threat, speed, dt)
+    const direction: game.Vector2 = movement.normalize(game.vec2(body.position.x - threat.x, body.position.y - threat.y))
+    const next_velocity: game.Vector2 = game.vec2(direction.x * speed, direction.y * speed)
+    return contracts.Body2D(position: next_position, velocity: next_velocity)
+end
+
+public func run_away_body(
+    body: contracts.Body2D,
+    threat: game.Vector2,
+    speed: float,
+    dt: float = 1.0 / 60.0
+) -> contracts.Body2D
+    return ai.evade_body(body, threat, speed, dt)
+end

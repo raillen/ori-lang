@@ -1,0 +1,30 @@
+namespace app.main
+
+func close_to(left: float, right: float, epsilon: float = 0.001) -> bool
+    var diff: float = left - right
+    if diff < 0.0
+        diff = 0.0 - diff
+    end
+    return diff <= epsilon
+end
+
+func decimal_accumulation() -> float
+    var whole: float = 0.0
+    var fraction: float = 0.0
+    var digit: float = 8.0
+    var place: float = 0.1
+    fraction = fraction + digit * place
+    return whole + fraction
+end
+
+func main() -> result<void, core.Error>
+    const parsed_like: float = decimal_accumulation()
+    if close_to(parsed_like, 0.8) == false
+        return error("nested float arithmetic should preserve decimal fractions")
+    end
+    const nested: float = 0.1 + 0.2 * 3.0
+    if close_to(nested, 0.7) == false
+        return error("nested float arithmetic should emit float operations")
+    end
+    return success()
+end

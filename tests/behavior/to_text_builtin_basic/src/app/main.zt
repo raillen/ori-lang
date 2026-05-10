@@ -1,0 +1,16 @@
+namespace app.main
+
+public func main() -> int
+    const count: int = 42
+    const enabled: bool = true
+    const label: text = to_text(count)
+    const flag: text = to_text(enabled)
+
+    if label != "42"
+        panic("to_text int failed")
+    end
+    if flag != "true"
+        panic("to_text bool failed")
+    end
+    return 0
+end

@@ -1,0 +1,8 @@
+namespace app.main
+import app.config as cfg
+
+func main() -> int
+    const after_inc: int = cfg.inc()
+    const current: int = cfg.current()
+    return after_inc + current
+end

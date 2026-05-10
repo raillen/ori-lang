@@ -1,0 +1,141 @@
+namespace std.regex
+
+-- Zenith Standard Library - Regex Module
+-- Basic portable matching helpers for Phase 4D.
+public enum Error
+    InvalidPattern
+end
+
+public struct Regex
+    pattern: text
+end
+
+extern c
+    public func zt_regex_validate_core(pattern: text) -> result<void, core.Error>
+    public func zt_regex_is_match_core(pattern: text, input: text) -> bool
+    public func zt_regex_full_match_core(pattern: text, input: text) -> bool
+    public func zt_regex_first_core(pattern: text, input: text) -> optional<text>
+    public func zt_regex_count_core(pattern: text, input: text) -> int
+    public func zt_regex_find_all_core(pattern: text, input: text) -> list<text>
+    public func zt_regex_split_core(pattern: text, input: text) -> list<text>
+    public func zt_regex_replace_all_core(pattern: text, input: text, replacement: text) -> text
+    public func zt_regex_escape_core(input: text) -> text
+end
+
+func map_core_error(err: core.Error) -> regex.Error
+    if err.code == "regex.invalid_pattern"
+        return regex.Error.InvalidPattern
+    end
+    return regex.Error.InvalidPattern
+end
+
+public func compile(pattern: text) -> result<regex.Regex, regex.Error>
+    match regex.zt_regex_validate_core(pattern)
+        case success():
+            return success(regex.Regex(pattern: pattern))
+        case error(err):
+            return error(regex.map_core_error(err))
+    end
+end
+
+public func is_valid(pattern: text) -> bool
+    match regex.zt_regex_validate_core(pattern)
+        case success():
+            return true
+        case error(_err):
+            return false
+    end
+end
+
+public func is_match(pattern: text, input: text) -> bool
+    return regex.zt_regex_is_match_core(pattern, input)
+end
+
+public func contains(pattern: text, input: text) -> bool
+    return regex.is_match(pattern, input)
+end
+
+public func matches(pattern: text, input: text) -> result<bool, regex.Error>
+    match regex.zt_regex_validate_core(pattern)
+        case success():
+            return success(regex.zt_regex_is_match_core(pattern, input))
+        case error(err):
+            return error(regex.map_core_error(err))
+    end
+end
+
+public func full_match(pattern: text, input: text) -> result<bool, regex.Error>
+    match regex.zt_regex_validate_core(pattern)
+        case success():
+            return success(regex.zt_regex_full_match_core(pattern, input))
+        case error(err):
+            return error(regex.map_core_error(err))
+    end
+end
+
+public func first(pattern: text, input: text) -> optional<text>
+    return regex.zt_regex_first_core(pattern, input)
+end
+
+public func try_first(pattern: text, input: text) -> result<optional<text>, regex.Error>
+    match regex.zt_regex_validate_core(pattern)
+        case success():
+            return success(regex.zt_regex_first_core(pattern, input))
+        case error(err):
+            return error(regex.map_core_error(err))
+    end
+end
+
+public func count(pattern: text, input: text) -> int
+    return regex.zt_regex_count_core(pattern, input)
+end
+
+public func find_all(pattern: text, input: text) -> list<text>
+    return regex.zt_regex_find_all_core(pattern, input)
+end
+
+public func try_find_all(pattern: text, input: text) -> result<list<text>, regex.Error>
+    match regex.zt_regex_validate_core(pattern)
+        case success():
+            const values: list<text> = regex.zt_regex_find_all_core(pattern, input)
+            return success(values)
+        case error(err):
+            return error(regex.map_core_error(err))
+    end
+end
+
+public func split(pattern: text, input: text) -> list<text>
+    return regex.zt_regex_split_core(pattern, input)
+end
+
+public func try_split(pattern: text, input: text) -> result<list<text>, regex.Error>
+    match regex.zt_regex_validate_core(pattern)
+        case success():
+            const values: list<text> = regex.zt_regex_split_core(pattern, input)
+            return success(values)
+        case error(err):
+            return error(regex.map_core_error(err))
+    end
+end
+
+public func replace_all(pattern: text, input: text, replacement: text) -> text
+    return regex.zt_regex_replace_all_core(pattern, input, replacement)
+end
+
+public func try_replace_all(
+    pattern: text,
+    input: text,
+    replacement: text
+) -> result<text, regex.Error>
+    match regex.zt_regex_validate_core(pattern)
+        case success():
+            const value: text = regex.zt_regex_replace_all_core(pattern, input, replacement)
+            return success(value)
+        case error(err):
+            return error(regex.map_core_error(err))
+    end
+end
+
+public func escape(input: text) -> text
+    return regex.zt_regex_escape_core(input)
+end

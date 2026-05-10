@@ -1,0 +1,11 @@
+namespace app.main
+
+func add(a: int, b: int) -> int
+    return a + b
+end
+
+public var OP: func(int, int) -> int = add
+
+public func main() -> int
+    return OP(40, 2)
+end

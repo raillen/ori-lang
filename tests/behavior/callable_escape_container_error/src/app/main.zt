@@ -1,0 +1,10 @@
+namespace app.main
+
+func add(a: int, b: int) -> int
+    return a + b
+end
+
+public func main() -> int
+    const ops: list<func(int, int) -> int> = []
+    return len(ops)
+end

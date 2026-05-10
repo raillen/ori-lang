@@ -1,0 +1,12 @@
+namespace app.main
+
+func main() -> int
+    var count: int = 0
+
+    func bump() -> int
+        count = count + 1
+        return count
+    end
+
+    return bump()
+end

@@ -1,0 +1,10 @@
+namespace app.main
+
+attr deprecated("old")
+struct OldStruct
+    value: int
+end
+
+public func main() -> int
+    return 0
+end

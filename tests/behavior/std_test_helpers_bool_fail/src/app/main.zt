@@ -1,0 +1,8 @@
+namespace app.main
+
+import std.test as test
+
+func main() -> int
+    test.is_true(false)
+    return 0
+end

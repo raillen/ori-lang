@@ -1,0 +1,40 @@
+namespace app.main
+
+func parse_score(ok: bool) -> optional<int>
+    if ok
+        return 9
+    else
+        return none
+    end
+end
+
+func add_one(ok: bool) -> optional<int>
+    const value: int = parse_score(ok)?
+    return value + 1
+end
+
+func main() -> int
+    const first: optional<int> = add_one(true)
+    const second: optional<int> = add_one(false)
+
+    match first
+        case value x ->
+            if x != 10
+                return 1
+            end
+        case none ->
+            return 2
+    end
+
+    match second
+        case value value2 ->
+            if value2 == 10
+                return 3
+            end
+            return 3
+        case none ->
+    end
+
+    return 0
+end
+

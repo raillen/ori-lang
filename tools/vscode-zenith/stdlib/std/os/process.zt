@@ -1,0 +1,79 @@
+namespace std.os.process
+
+-- Zenith Standard Library — OS.Process Module
+-- Child-process execution and typed results (Decision 068).
+-- 🏗️ TYPES
+-- 🏗️ EXTERN C
+-- 🚀 EXECUTION
+public struct ExitStatus
+    code: int
+end
+
+public struct CapturedRun
+    status: process.ExitStatus
+    stdout_text: text
+    stderr_text: text
+end
+
+public enum Error
+    NotFound
+    PermissionDenied
+    IOFailure
+    DecodeFailed
+    Unknown
+end
+
+extern c
+    public func zt_host_process_run_core(
+        program: text,
+        args: list<text>,
+        cwd: optional<text>
+    ) -> result<int, core.Error>
+    public func zt_host_process_run_capture_core(
+        program: text,
+        args: list<text>,
+        cwd: optional<text>
+    ) -> result<process.CapturedRun, core.Error>
+end
+
+func map_host_error(err: core.Error) -> process.Error
+    if err.code == "process.decode"
+        return process.Error.DecodeFailed
+    end
+    if err.message == "No such file or directory" or err.message == "The system cannot find the file specified" or err.message == "The system cannot find the path specified"
+        return process.Error.NotFound
+    end
+    if err.message == "Permission denied"
+        return process.Error.PermissionDenied
+    end
+    if err.message == "Input/output error"
+        return process.Error.IOFailure
+    end
+    return process.Error.Unknown
+end
+
+public func run(
+    program: text,
+    args: list<text> = [],
+    cwd: optional<text> = none
+) -> result<process.ExitStatus, process.Error>
+    match process.zt_host_process_run_core(program, args, cwd)
+        case success(value):
+            return success(process.ExitStatus(code: value))
+        case error(err):
+            return error(process.map_host_error(err))
+    end
+end
+
+public func run_capture(
+    program: text,
+    args: list<text> = [],
+    cwd: optional<text> = none
+) -> result<process.CapturedRun, process.Error>
+    match process.zt_host_process_run_capture_core(program, args, cwd)
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(process.map_host_error(err))
+    end
+end

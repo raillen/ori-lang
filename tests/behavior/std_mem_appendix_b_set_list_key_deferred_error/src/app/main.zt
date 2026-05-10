@@ -1,0 +1,10 @@
+namespace app.main
+
+import std.mem as mem
+import std.set as set
+
+func main() -> int
+    const nested_keys: set<list<int>> = set.empty()
+    const copied: set<list<int>> = mem.edit(nested_keys)
+    return set.len(copied)
+end

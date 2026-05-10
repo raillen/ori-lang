@@ -1,0 +1,167 @@
+namespace borealis.game.editor
+
+public struct EntityMeta
+    stable_id: text
+    label: text = ""
+    note: text = ""
+    group: text = ""
+    locked: bool = false
+    hidden: bool = false
+end
+
+public var meta_label: map<text, text> = {}
+
+public var meta_note: map<text, text> = {}
+
+public var meta_group: map<text, text> = {}
+
+public var meta_locked: map<text, bool> = {}
+
+public var meta_hidden: map<text, bool> = {}
+
+public func set_label(stable_id: text, value: text) -> result<void, core.Error>
+    if stable_id == ""
+        return error("editor: stable_id cannot be empty")
+    end
+    var next: map<text, text> = meta_label
+    next[stable_id] = value
+    meta_label = next
+    return success()
+end
+
+public func get_label(stable_id: text) -> text
+    const maybe: optional<text> = meta_label.get(stable_id)
+    match maybe
+        case some(value):
+            return value
+        case none:
+            return ""
+    end
+end
+
+public func set_note(stable_id: text, value: text) -> result<void, core.Error>
+    if stable_id == ""
+        return error("editor: stable_id cannot be empty")
+    end
+    var next: map<text, text> = meta_note
+    next[stable_id] = value
+    meta_note = next
+    return success()
+end
+
+public func get_note(stable_id: text) -> text
+    const maybe: optional<text> = meta_note.get(stable_id)
+    match maybe
+        case some(value):
+            return value
+        case none:
+            return ""
+    end
+end
+
+public func set_group(stable_id: text, value: text) -> result<void, core.Error>
+    if stable_id == ""
+        return error("editor: stable_id cannot be empty")
+    end
+    var next: map<text, text> = meta_group
+    next[stable_id] = value
+    meta_group = next
+    return success()
+end
+
+public func get_group(stable_id: text) -> text
+    const maybe: optional<text> = meta_group.get(stable_id)
+    match maybe
+        case some(value):
+            return value
+        case none:
+            return ""
+    end
+end
+
+public func set_locked(stable_id: text, value: bool) -> result<void, core.Error>
+    if stable_id == ""
+        return error("editor: stable_id cannot be empty")
+    end
+    var next: map<text, bool> = meta_locked
+    next[stable_id] = value
+    meta_locked = next
+    return success()
+end
+
+public func is_locked(stable_id: text) -> bool
+    const maybe: optional<bool> = meta_locked.get(stable_id)
+    match maybe
+        case some(value):
+            return value
+        case none:
+            return false
+    end
+end
+
+public func set_hidden(stable_id: text, value: bool) -> result<void, core.Error>
+    if stable_id == ""
+        return error("editor: stable_id cannot be empty")
+    end
+    var next: map<text, bool> = meta_hidden
+    next[stable_id] = value
+    meta_hidden = next
+    return success()
+end
+
+public func is_hidden(stable_id: text) -> bool
+    const maybe: optional<bool> = meta_hidden.get(stable_id)
+    match maybe
+        case some(value):
+            return value
+        case none:
+            return false
+    end
+end
+
+public func inspect(stable_id: text) -> editor.EntityMeta
+    return editor.EntityMeta(
+        stable_id: stable_id,
+        label: editor.get_label(stable_id),
+        note: editor.get_note(stable_id),
+        group: editor.get_group(stable_id),
+        locked: editor.is_locked(stable_id),
+        hidden: editor.is_hidden(stable_id)
+    )
+end
+
+public func has_meta(stable_id: text) -> bool
+    return editor.get_label(stable_id) != "" or editor.get_note(stable_id) != "" or editor.get_group(stable_id) != "" or editor.is_locked(stable_id) or editor.is_hidden(stable_id)
+end
+
+public func clear(stable_id: text) -> result<void, core.Error>
+    if stable_id == ""
+        return error("editor: stable_id cannot be empty")
+    end
+    meta_label = editor.text_set(meta_label, stable_id, "")
+    meta_note = editor.text_set(meta_note, stable_id, "")
+    meta_group = editor.text_set(meta_group, stable_id, "")
+    meta_locked = editor.bool_set(meta_locked, stable_id, false)
+    meta_hidden = editor.bool_set(meta_hidden, stable_id, false)
+    return success()
+end
+
+public func reset() -> void
+    meta_label = {}
+    meta_note = {}
+    meta_group = {}
+    meta_locked = {}
+    meta_hidden = {}
+end
+
+public func text_set(values: map<text, text>, stable_id: text, value: text) -> map<text, text>
+    var next: map<text, text> = values
+    next[stable_id] = value
+    return next
+end
+
+public func bool_set(values: map<text, bool>, stable_id: text, value: bool) -> map<text, bool>
+    var next: map<text, bool> = values
+    next[stable_id] = value
+    return next
+end

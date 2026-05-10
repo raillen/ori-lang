@@ -1,0 +1,10 @@
+namespace app.main
+
+func main() -> int 
+    const left: int = 2
+    const right: int = 3
+    if left < right 
+        return 0
+    end
+    return 1
+end

@@ -1,0 +1,13 @@
+namespace app.main
+
+trait Renderable
+    func render() -> text
+end
+
+func accept(value: dyn<Renderable>) -> int
+    return 0
+end
+
+func main() -> int
+    return 0
+end

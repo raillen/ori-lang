@@ -1,0 +1,10 @@
+namespace app.main
+
+attr unknown
+public func foo() -> int
+    return 0
+end
+
+public func main() -> int
+    return 0
+end

@@ -1,0 +1,14 @@
+namespace app.tests
+
+import std.test as test
+
+attr test
+public func pass_case() -> void
+    return
+end
+
+attr test
+public func skip_case() -> void
+    test.skip("skip")
+    return
+end

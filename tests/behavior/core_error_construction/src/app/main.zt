@@ -1,0 +1,13 @@
+namespace app.main
+
+func build_error() -> core.Error
+    return core.Error("E.IO", "io failed")
+end
+
+func main() -> int
+    const err: core.Error = build_error()
+    if len(err.code) == 4 and len(err.message) == 9
+        return 0
+    end
+    return 1
+end

@@ -1,0 +1,6 @@
+namespace app.main
+
+func main() -> int
+    const value = 42
+    return value
+end

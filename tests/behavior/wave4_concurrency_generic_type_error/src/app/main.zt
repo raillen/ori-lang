@@ -1,0 +1,13 @@
+namespace app.main
+
+import std.jobs as jobs
+
+func produce_names() -> list<text>
+    return ["ok"]
+end
+
+public func main() -> int
+    const handle: jobs.Job<list<text>> = jobs.spawn(produce_names)
+    const value: list<text> = jobs.join(handle)
+    return len(value)
+end

@@ -1,0 +1,17 @@
+namespace app.main
+
+func main() -> int
+    var total: int = 0
+
+    for i in range(1, 5)
+        total = total + i
+    end
+
+    for j in range(10, 6, -1)
+        total = total + j
+    end
+
+    check(total == 55, "range sum mismatch")
+
+    return 0
+end

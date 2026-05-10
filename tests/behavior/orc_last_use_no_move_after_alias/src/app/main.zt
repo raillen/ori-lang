@@ -1,0 +1,10 @@
+namespace app.main
+
+func main() -> int 
+    const original: text = "zenith"
+    const alias: text = original
+    if len(alias) == 6 and len(original) == 6
+        return 0
+    end
+    return 1
+end

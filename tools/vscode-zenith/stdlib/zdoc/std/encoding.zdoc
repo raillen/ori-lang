@@ -1,0 +1,28 @@
+--- @target: hex_encode
+```zt
+public func hex_encode(data: bytes) -> text
+```
+
+Funcao publica `hex_encode`.
+---
+--- @target: hex_decode
+```zt
+public func hex_decode(text_value: text) -> result<bytes, core.Error>
+```
+
+Funcao publica `hex_decode`.
+---
+--- @target: base64_encode
+```zt
+public func base64_encode(data: bytes) -> text
+```
+
+Funcao publica `base64_encode`.
+---
+--- @target: base64_decode
+```zt
+public func base64_decode(text_value: text) -> result<bytes, core.Error>
+```
+
+Funcao publica `base64_decode`.
+---

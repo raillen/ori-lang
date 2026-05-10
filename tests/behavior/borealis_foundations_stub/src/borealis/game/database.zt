@@ -1,0 +1,131 @@
+namespace borealis.game.database
+
+public struct DatabaseConfig
+    driver: text = "sqlite"
+    path: text = ""
+end
+
+public struct DatabaseConnection
+    id: int = 0
+    open: bool
+    driver: text
+    path: text
+end
+
+public var next_connection_id: int = 1
+
+public var open_connections: map<int, bool> = {}
+
+public var last_sql_by_connection: map<int, text> = {}
+
+public func open(config: database.DatabaseConfig) -> result<database.DatabaseConnection, core.Error>
+    const driver_name: text = config.driver
+    const target_path: text = config.path
+    if driver_name == ""
+        return error("database: driver cannot be empty")
+    end
+    const connection_id: int = next_connection_id
+    next_connection_id = next_connection_id + 1
+    var next_open: map<int, bool> = open_connections
+    var next_sql: map<int, text> = last_sql_by_connection
+    const initial_sql: text = ""
+    next_open[connection_id] = true
+    next_sql[connection_id] = initial_sql
+    open_connections = next_open
+    last_sql_by_connection = next_sql
+    return success(database.DatabaseConnection(
+        id: connection_id,
+        open: true,
+        driver: driver_name,
+        path: target_path
+    ))
+end
+
+public func close(connection: database.DatabaseConnection) -> database.DatabaseConnection
+    if connection.id > 0
+        var next_open: map<int, bool> = open_connections
+        next_open[connection.id] = false
+        open_connections = next_open
+    end
+    return database.DatabaseConnection(
+        id: connection.id,
+        open: false,
+        driver: connection.driver,
+        path: connection.path
+    )
+end
+
+public func is_open(connection: database.DatabaseConnection) -> bool
+    if connection.id <= 0
+        return false
+    end
+    const maybe: optional<bool> = open_connections.get(connection.id)
+    match maybe
+        case some(present):
+            return present
+        case none:
+            return connection.open
+    end
+end
+
+public func exec(connection: database.DatabaseConnection, sql: text) -> result<int, core.Error>
+    database.require_open(connection)?
+    if sql == ""
+        return error("database: sql cannot be empty")
+    end
+    database.record_sql(connection.id, sql)
+    return success(1)
+end
+
+public func query(connection: database.DatabaseConnection, sql: text) -> result<text, core.Error>
+    database.require_open(connection)?
+    if sql == ""
+        return error("database: sql cannot be empty")
+    end
+    database.record_sql(connection.id, sql)
+    if connection.path == ""
+        const payload: text = f"{connection.driver}:{sql}"
+        return success(payload)
+    end
+    const payload: text = f"{connection.driver}@{connection.path}:{sql}"
+    return success(payload)
+end
+
+public func last_sql(connection: database.DatabaseConnection) -> optional<text>
+    if connection.id <= 0
+        return none
+    end
+    const maybe: optional<text> = last_sql_by_connection.get(connection.id)
+    match maybe
+        case some(present):
+            if present == ""
+                return none
+            end
+            return maybe
+        case none:
+            return none
+    end
+end
+
+public func reset() -> void
+    next_connection_id = 1
+    open_connections = {}
+    last_sql_by_connection = {}
+end
+
+public func require_open(connection: database.DatabaseConnection) -> result<void, core.Error>
+    if database.is_open(connection) == false
+        return error("database: connection is closed")
+    end
+    return success()
+end
+
+public func record_sql(connection_id: int, sql: text) -> void
+    if connection_id <= 0
+        return
+    end
+    var next_sql: map<int, text> = last_sql_by_connection
+    const recorded_sql: text = sql
+    next_sql[connection_id] = recorded_sql
+    last_sql_by_connection = next_sql
+end

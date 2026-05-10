@@ -1,0 +1,35 @@
+namespace app.main
+
+import std.encoding as encoding
+import std.hash as hash
+
+func main() -> result<void, core.Error>
+    const payload: bytes = hex bytes "48 69"
+    if encoding.hex_encode(payload) != "4869"
+        return error("hex encode should produce lowercase compact text")
+    end
+
+    const from_hex: bytes = encoding.hex_decode("48_69")?
+    if len(from_hex) != 2 or from_hex[0] != 72 or from_hex[1] != 105
+        return error("hex decode should accept whitespace and underscores")
+    end
+
+    if encoding.base64_encode(payload) != "SGk="
+        return error("base64 encode should match RFC 4648 output")
+    end
+
+    const from_b64: bytes = encoding.base64_decode("SGk=")?
+    if len(from_b64) != 2 or from_b64[0] != 72 or from_b64[1] != 105
+        return error("base64 decode should roundtrip bytes")
+    end
+
+    if hash.sha256("abc") != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        return error("sha256 should match known abc digest")
+    end
+
+    if hash.md5("abc") != "900150983cd24fb0d6963f7d28e17f72"
+        return error("md5 should match known abc digest")
+    end
+
+    return success()
+end

@@ -1,0 +1,18 @@
+namespace app.main
+
+func parse_score(ok: bool) -> result<int, text>
+    if ok
+        return success(9)
+    else
+        return error("bad")
+    end
+end
+
+func add_one(ok: bool) -> result<int, text>
+    const value: int = parse_score(ok)?
+    return success(value + 1)
+end
+
+func main() -> int
+    return 0
+end

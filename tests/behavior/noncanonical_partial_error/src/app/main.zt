@@ -1,0 +1,8 @@
+namespace app.main
+
+partial struct Player
+end
+
+func main() -> int
+    return 0
+end

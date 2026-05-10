@@ -1,0 +1,24 @@
+namespace app.main
+
+import std.collections as collections
+
+public func main() -> int 
+    const factor: int = 3
+    const values: list<int> = [1, 2, 3, 4]
+    const scaled: list<int> = collections.map_int(values, func(value: int) => value * factor)
+    const large: list<int> = collections.filter_int(scaled, func(value: int) => value > 6)
+    const total: int = collections.reduce_int(large, 0, func(acc: int, value: int) => acc + value)
+    if len(scaled) != 4 
+        panic("map_int returned wrong length")
+    end
+    if scaled[0] != 3 
+        panic("map_int did not use lambda capture")
+    end
+    if len(large) != 2 
+        panic("filter_int returned wrong length")
+    end
+    if total != 21 
+        panic("reduce_int returned wrong sum")
+    end
+    return 0
+end

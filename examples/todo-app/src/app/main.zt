@@ -1,0 +1,39 @@
+namespace app.main
+
+struct Todo
+    title: text
+    done: bool
+end
+
+func item_score(item: Todo) -> int
+    if item.done
+        return 0
+    end
+
+    if len(item.title) == 0
+        return 0
+    end
+
+    return 1
+end
+
+func open_count(first: Todo, second: Todo, third: Todo) -> int
+    var count: int = 0
+    count = count + item_score(first)
+    count = count + item_score(second)
+    count = count + item_score(third)
+    return count
+end
+
+func main() -> result<void, core.Error>
+    const first: Todo = {title: "Write docs", done: true}
+    const second: Todo = {title: "Run examples", done: false}
+    const third: Todo = {title: "Commit lockfile", done: false}
+    const remaining: int = open_count(first, second, third)
+    if remaining != 2
+        return error("todo count failed")
+    end
+
+    print(to_text(remaining))
+    return success()
+end

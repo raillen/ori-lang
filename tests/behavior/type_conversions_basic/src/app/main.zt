@@ -1,0 +1,44 @@
+namespace app.main
+
+import std.bool as bool
+import std.float as float
+import std.int as int
+import std.math as math
+
+func main() -> int
+    const int_to_float_ok: bool = math.approx_equal(int.to_float(42), 42.0, epsilon: 0.0001)
+    const int_to_text_ok: bool = int.to_text(-42) == "-42"
+
+    const parsed_int: optional<int> = int.parse("123")
+    const parsed_int_spaced: optional<int> = int.parse("  -7  ")
+    const invalid_int: optional<int> = int.parse("12x")
+    const int_parse_ok: bool =
+        parsed_int.is_some() and parsed_int.or(0) == 123 and
+        parsed_int_spaced.is_some() and parsed_int_spaced.or(0) == -7 and
+        invalid_int.is_none()
+
+    const trunc_ok: bool = float.to_int(-2.9) == -2
+    const round_ok: bool = float.round(2.5) == 3 and float.round(-2.5) == -3
+    const float_text_ok: bool = float.to_text(1.5) == "1.5"
+
+    const parsed_float: optional<float> = float.parse("3.25")
+    const invalid_float: optional<float> = float.parse("3.25x")
+    const float_parse_ok: bool =
+        parsed_float.is_some() and
+        math.approx_equal(parsed_float.or(0.0), 3.25, epsilon: 0.0001) and
+        invalid_float.is_none()
+
+    const bool_text_ok: bool = bool.to_text(true) == "true" and bool.to_text(false) == "false"
+
+    if int_to_float_ok == false or int_to_text_ok == false or int_parse_ok == false
+        return 1
+    end
+    if trunc_ok == false or round_ok == false or float_text_ok == false or float_parse_ok == false
+        return 2
+    end
+    if bool_text_ok == false
+        return 3
+    end
+
+    return 0
+end

@@ -1,0 +1,15 @@
+namespace app.main
+
+func main() -> int
+    const key_a: int = 1
+    const key_b: int = 2
+    const value_a: text = "red"
+    const value_b: text = "blue"
+    const value_c: text = "green"
+
+    var cfg: map<int, text> = { key_a: value_a, key_b: value_b }
+    cfg[key_b] = value_c
+
+    const picked: text = cfg[key_b]
+    return len(picked) + len(cfg)
+end

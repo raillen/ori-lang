@@ -1,0 +1,24 @@
+namespace std.float
+
+extern c
+    public func zt_float_to_int(value: float) -> int
+    public func zt_float_round_to_int(value: float) -> int
+    public func zt_float_to_text(value: float) -> text
+    public func zt_float_parse(value: text) -> optional<float>
+end
+
+public func to_int(value: float) -> int
+    return float.zt_float_to_int(value)
+end
+
+public func round(value: float) -> int
+    return float.zt_float_round_to_int(value)
+end
+
+public func to_text(value: float) -> text
+    return float.zt_float_to_text(value)
+end
+
+public func parse(value: text) -> optional<float>
+    return float.zt_float_parse(value)
+end

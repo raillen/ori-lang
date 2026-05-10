@@ -1,0 +1,16 @@
+namespace app.main
+
+func consume_pair(left: text, right: text) -> int 
+    const owned_left: text = left
+    const owned_right: text = right
+    return len(owned_left) + len(owned_right) - 5
+end
+
+func main() -> int 
+    const original: text = "zenith"
+    const score: int = consume_pair(original, original)
+    if score == 7
+        return 0
+    end
+    return 1
+end

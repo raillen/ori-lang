@@ -1,0 +1,7 @@
+namespace app.main
+import app.constants as constants
+
+func main() -> int
+    const base: int = constants.OFFSET
+    return base + 2
+end

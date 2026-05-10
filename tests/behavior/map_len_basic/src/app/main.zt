@@ -1,0 +1,11 @@
+namespace app.main
+
+func main() -> int
+    const key_a: text = "left"
+    const value_a: text = "red"
+    const key_b: text = "right"
+    const value_b: text = "blue"
+
+    var labels: map<text, text> = { key_a: value_a, key_b: value_b }
+    return len(labels)
+end

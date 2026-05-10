@@ -1,0 +1,7 @@
+namespace app.main
+
+func main() -> int
+    var xs: list<int> = [4, 7, 9]
+    xs[1] = 5
+    return xs[0] + xs[1] + xs[2]
+end

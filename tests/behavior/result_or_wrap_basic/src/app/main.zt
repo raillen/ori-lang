@@ -1,0 +1,48 @@
+namespace app.main
+
+func base_score(ok: bool) -> result<int, core.Error>
+    if ok
+        return success(13)
+    end
+
+    const err: core.Error = core.Error("E.BASE", "base failed")
+    return error(err)
+end
+
+func load_score(ok: bool) -> result<int, core.Error>
+    const score: int = base_score(ok).or_wrap("load score")?
+    return success(score + 1)
+end
+
+func main() -> int
+    const loaded: result<int, core.Error> = load_score(true)
+    if loaded.is_error()
+        return 1
+    end
+
+    const failed: result<int, core.Error> = load_score(false)
+    match failed
+        case success(_value) ->
+            return 2
+        case error(err) ->
+            const context: optional<text> = err.context
+            const empty_context: text = ""
+            if context.is_none()
+                return 3
+            end
+            const context_text: text = context.or(empty_context)
+            if context_text != "load score"
+                return 4
+            end
+            const code: text = err.code
+            if code != "E.BASE"
+                return 5
+            end
+            const message: text = err.message
+            if message != "base failed"
+                return 6
+            end
+    end
+
+    return 0
+end

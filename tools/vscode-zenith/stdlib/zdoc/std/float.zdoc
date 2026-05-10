@@ -1,0 +1,37 @@
+--- @target: namespace
+# std.float
+
+Conversoes explicitas para valores `float`.
+---
+
+--- @target: to_int
+```zt
+public func to_int(value: float) -> int
+```
+
+Converte truncando a parte decimal.
+---
+
+--- @target: round
+```zt
+public func round(value: float) -> int
+```
+
+Arredonda para o inteiro mais proximo.
+---
+
+--- @target: to_text
+```zt
+public func to_text(value: float) -> text
+```
+
+Formata o numero em texto.
+---
+
+--- @target: parse
+```zt
+public func parse(value: text) -> optional<float>
+```
+
+Le texto como ponto flutuante. Retorna `none` quando o texto nao e valido.
+---

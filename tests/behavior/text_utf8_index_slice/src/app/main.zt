@@ -1,0 +1,22 @@
+namespace app.main
+
+func main() -> int
+    const word: text = "Aé中🙂B"
+    const second: text = word[1]
+    const third: text = word[2]
+    const fourth: text = word[3]
+    const middle: text = word[1..3]
+    const length_ok: bool = len(word) == 5 and len(middle) == 3
+
+    if length_ok and second == "é"
+        if third == "中"
+            if fourth == "🙂"
+                if middle == "é中🙂"
+                    return 21
+                end
+            end
+        end
+    end
+
+    return 0
+end

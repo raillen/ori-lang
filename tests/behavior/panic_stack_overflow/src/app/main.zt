@@ -1,0 +1,10 @@
+namespace app.main
+
+func recurse(n: int) -> int
+    return recurse(n + 1)
+end
+
+func main() -> int
+    recurse(1)
+    return 0
+end

@@ -1,0 +1,28 @@
+--- @target: sha256
+```zt
+public func sha256(value: text) -> text
+```
+
+Funcao publica `sha256`.
+---
+--- @target: sha256_bytes
+```zt
+public func sha256_bytes(value: bytes) -> text
+```
+
+Funcao publica `sha256_bytes`.
+---
+--- @target: md5
+```zt
+public func md5(value: text) -> text
+```
+
+Funcao publica `md5`.
+---
+--- @target: md5_bytes
+```zt
+public func md5_bytes(value: bytes) -> text
+```
+
+Funcao publica `md5_bytes`.
+---

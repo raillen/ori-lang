@@ -1,0 +1,6 @@
+namespace app.main
+import app.secrets as secrets
+
+func main() -> int
+    return secrets.HIDDEN
+end

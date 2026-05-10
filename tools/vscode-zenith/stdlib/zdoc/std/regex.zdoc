@@ -1,0 +1,174 @@
+--- @target: namespace
+# std.regex - Expressoes regulares basicas
+
+Modulo de regex portavel para validacao e buscas simples.
+
+Suporte atual:
+
+- literais ASCII;
+- `.`, `^`, `$`;
+- quantificadores `*`, `+`, `?`;
+- classes como `[abc]`, `[a-z]`, `[^0-9]`;
+- escapes `\d`, `\w`, `\s`.
+
+Grupos, capturas, flags e Unicode completo ficam para uma fase futura.
+---
+
+--- @target: Error
+```zt
+public enum Error
+    InvalidPattern
+end
+```
+
+Erro retornado por `compile` quando o padrao nao e valido.
+---
+
+--- @target: Regex
+```zt
+public struct Regex
+    pattern: text
+end
+```
+
+Regex compilada no nivel da API.
+No corte atual ela guarda o padrao validado.
+---
+
+--- @target: compile
+```zt
+public func compile(pattern: text) -> result<regex.Regex, regex.Error>
+```
+
+Valida um padrao.
+Retorna `success(Regex)` quando o padrao e aceito.
+Retorna `error(regex.Error.InvalidPattern)` quando o padrao e invalido.
+---
+
+--- @target: is_match
+```zt
+public func is_match(pattern: text, input: text) -> bool
+```
+
+Retorna `true` quando o padrao encontra pelo menos uma ocorrencia em `input`.
+Se o padrao for invalido, retorna `false`.
+---
+
+--- @target: is_valid
+```zt
+public func is_valid(pattern: text) -> bool
+```
+
+Retorna `true` quando o padrao e aceito pelo motor basico.
+Use quando voce quer validar sem criar um `Regex`.
+---
+
+--- @target: contains
+```zt
+public func contains(pattern: text, input: text) -> bool
+```
+
+Alias legivel de `is_match`.
+Retorna `false` quando o padrao e invalido.
+---
+
+--- @target: matches
+```zt
+public func matches(pattern: text, input: text) -> result<bool, regex.Error>
+```
+
+Versao com erro explicito de `is_match`.
+Retorna `error(regex.Error.InvalidPattern)` quando o padrao e invalido.
+---
+
+--- @target: full_match
+```zt
+public func full_match(pattern: text, input: text) -> result<bool, regex.Error>
+```
+
+Retorna `true` quando o padrao cobre o texto inteiro.
+Retorna erro quando o padrao e invalido.
+---
+
+--- @target: first
+```zt
+public func first(pattern: text, input: text) -> optional<text>
+```
+
+Retorna a primeira ocorrencia encontrada.
+Retorna `none` quando nao ha ocorrencia ou quando o padrao e invalido.
+---
+
+--- @target: count
+```zt
+public func count(pattern: text, input: text) -> int
+```
+
+Conta ocorrencias nao vazias.
+Retorna `0` quando o padrao e invalido.
+---
+
+--- @target: find_all
+```zt
+public func find_all(pattern: text, input: text) -> list<text>
+```
+
+Retorna todas as ocorrencias nao vazias encontradas em `input`.
+Se o padrao for invalido, retorna lista vazia.
+---
+
+--- @target: split
+```zt
+public func split(pattern: text, input: text) -> list<text>
+```
+
+Divide `input` usando ocorrencias nao vazias do padrao como separador.
+Se o padrao for invalido, retorna uma lista com o texto original.
+---
+
+--- @target: replace_all
+```zt
+public func replace_all(pattern: text, input: text, replacement: text) -> text
+```
+
+Troca todas as ocorrencias nao vazias por `replacement`.
+Se o padrao for invalido, retorna o texto original.
+---
+
+--- @target: escape
+```zt
+public func escape(input: text) -> text
+```
+
+Escapa caracteres especiais do motor basico.
+Use para transformar texto literal em padrao seguro.
+---
+
+--- @target: try_first
+```zt
+public func try_first(pattern: text, input: text) -> result<optional<text>, regex.Error>
+```
+
+Funcao publica `try_first`.
+---
+--- @target: try_find_all
+```zt
+public func try_find_all(pattern: text, input: text) -> result<list<text>, regex.Error>
+```
+
+Funcao publica `try_find_all`.
+---
+--- @target: try_split
+```zt
+public func try_split(pattern: text, input: text) -> result<list<text>, regex.Error>
+```
+
+Funcao publica `try_split`.
+---
+--- @target: try_replace_all
+```zt
+public func try_replace_all(
+```
+
+Funcao publica `try_replace_all`.
+---

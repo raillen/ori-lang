@@ -1,0 +1,11 @@
+namespace app.main
+
+extern c
+    attr target("wasm")
+    attr name("zt_ffi_value")
+    const VALUE: int
+end
+
+public func main() -> int
+    return 0
+end

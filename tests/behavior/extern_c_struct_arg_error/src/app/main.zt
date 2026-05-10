@@ -1,0 +1,19 @@
+namespace app.main
+
+-- FFI negative: passing a user-defined struct where the extern declaration
+-- expects a primitive (here, text). The FFI boundary must reject this call
+-- with a type.mismatch diagnostic at call site.
+
+extern c
+    func zt_text_len(value: text) -> int
+end
+
+struct Snapshot
+    title: text
+end
+
+func main() -> int
+    const snapshot: Snapshot = Snapshot(title: "alpha")
+    const length: int = zt_text_len(snapshot)
+    return length
+end

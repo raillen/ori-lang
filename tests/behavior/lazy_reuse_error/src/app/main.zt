@@ -1,0 +1,12 @@
+namespace app.main
+
+import std.lazy as lazy
+
+public func main() -> int 
+    const later: lazy<int> = lazy.once_int(func() => 7)
+    const first: int = lazy.force_int(later)
+    if first != 7 
+        panic("first force returned wrong value")
+    end
+    return lazy.force_int(later)
+end

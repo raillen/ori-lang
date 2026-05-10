@@ -1,0 +1,73 @@
+namespace app.main
+
+import borealis.game as game
+import borealis.game.assets3d as assets3d
+import borealis.game.camera3d as camera3d
+import borealis.game.render3d as render3d
+
+func main() -> result<void, core.Error>
+    if game.raylib_available() == false
+        return success()
+    end
+
+    render3d.render3d_set_quality_profile(render3d.QualityProfile.High)?
+
+    const config: game.WindowConfig = game.WindowConfig(
+        title: "Borealis Render3D Basic",
+        width: 640,
+        height: 360,
+        target_fps: 60,
+        backend: game.Backend.Raylib
+    )
+
+    const ctx: game.GameContext = game.start(config)?
+    const camera: camera3d.Camera3D = camera3d.camera3d_create(
+        game.vec3(3.5, 2.5, 3.5),
+        game.vec3(0.0, 0.5, 0.0),
+        60.0
+    )?
+    const model: assets3d.ModelHandle = assets3d.model_load(
+        "tests/behavior/borealis_render3d_basic/assets/triangle.obj"
+    )?
+    const texture: assets3d.TextureId = assets3d.texture_load(
+        "tests/behavior/borealis_raylib_assets_real/assets/pixel.png"
+    )?
+    const stats: assets3d.AssetMemoryStats = assets3d.asset_memory_stats()
+    if stats.loaded_count < 2
+        return error("assets3d memory stats should count loaded 3d assets")
+    end
+
+    var frame: int = 0
+    while frame < 3
+        game.frame_begin(ctx, game.rgb(18, 20, 28))?
+        render3d.render3d_begin(camera)?
+        render3d.draw_grid(12, 1.0)?
+
+        render3d.draw_cube(
+            game.vec3(0.0, 0.5, 0.0),
+            game.vec3(1.0, 1.0, 1.0),
+            game.rgb(255, 170, 40)
+        )?
+        render3d.draw_model(
+            model,
+            game.transform3d(
+                game.vec3(-1.0, 0.0, 0.0),
+                game.vec3(0.0, 0.0, 0.0),
+                game.vec3(1.0, 1.0, 1.0)
+            )
+        )?
+        render3d.draw_billboard(
+            texture,
+            game.vec3(1.0, 1.0, 0.0),
+            game.vec2(0.8, 0.8),
+            game.rgb(120, 210, 255)
+        )?
+
+        render3d.render3d_end()?
+        game.frame_end(ctx)?
+        frame = frame + 1
+    end
+
+    game.close(ctx)?
+    return success()
+end

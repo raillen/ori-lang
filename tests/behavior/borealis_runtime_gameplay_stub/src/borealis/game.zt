@@ -1,0 +1,409 @@
+namespace borealis.game
+
+extern c
+    func zt_borealis_open_window(title: text, width: int, height: int, target_fps: int, backend_id: int) -> result<int, core.Error>
+    func zt_borealis_close_window(window_id: int) -> result<void, core.Error>
+    func zt_borealis_window_should_close(window_id: int) -> bool
+    func zt_borealis_begin_frame(window_id: int, clear_r: int, clear_g: int, clear_b: int, clear_a: int) -> result<void, core.Error>
+    func zt_borealis_end_frame(window_id: int) -> result<void, core.Error>
+    func zt_borealis_draw_rect(
+        window_id: int,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        color_r: int,
+        color_g: int,
+        color_b: int,
+        color_a: int
+    ) -> result<void, core.Error>
+    func zt_borealis_draw_line(
+        window_id: int,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        color_r: int,
+        color_g: int,
+        color_b: int,
+        color_a: int
+    ) -> result<void, core.Error>
+    func zt_borealis_draw_rect_outline(
+        window_id: int,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        thickness: float,
+        color_r: int,
+        color_g: int,
+        color_b: int,
+        color_a: int
+    ) -> result<void, core.Error>
+    func zt_borealis_draw_circle(
+        window_id: int,
+        x: float,
+        y: float,
+        radius: float,
+        color_r: int,
+        color_g: int,
+        color_b: int,
+        color_a: int
+    ) -> result<void, core.Error>
+    func zt_borealis_draw_circle_outline(
+        window_id: int,
+        x: float,
+        y: float,
+        radius: float,
+        thickness: float,
+        color_r: int,
+        color_g: int,
+        color_b: int,
+        color_a: int
+    ) -> result<void, core.Error>
+    func zt_borealis_draw_text(
+        window_id: int,
+        value: text,
+        x: int,
+        y: int,
+        size: int,
+        color_r: int,
+        color_g: int,
+        color_b: int,
+        color_a: int
+    ) -> result<void, core.Error>
+    func zt_borealis_is_key_down(window_id: int, input_code: int) -> bool
+    func zt_borealis_is_key_pressed(window_id: int, input_code: int) -> bool
+    func zt_borealis_is_key_released(window_id: int, input_code: int) -> bool
+end
+
+public enum Backend
+    Stub
+    Raylib
+end
+
+public struct WindowConfig
+    title: text = "Zenith Game"
+    width: int = 960
+    height: int = 540
+    target_fps: int = 60
+    backend: game.Backend = game.Backend.Stub
+end
+
+public struct GameContext
+    window_id: int
+    config: game.WindowConfig
+end
+
+public struct Color
+    r: int = 0
+    g: int = 0
+    b: int = 0
+    a: int = 255
+end
+
+public struct Rect
+    x: float
+    y: float
+    width: float
+    height: float
+end
+
+public struct Point2
+    x: float
+    y: float
+end
+
+public struct Size2
+    width: float
+    height: float
+end
+
+public struct Vector2
+    x: float
+    y: float
+end
+
+public struct Vector3
+    x: float
+    y: float
+    z: float
+end
+
+public struct Point3
+    x: float
+    y: float
+    z: float
+end
+
+public struct Size3
+    width: float
+    height: float
+    depth: float
+end
+
+public struct Transform3D
+    position: game.Vector3
+    rotation: game.Vector3
+    scale: game.Vector3
+end
+
+public struct Bounds3D
+    min: game.Vector3
+    max: game.Vector3
+end
+
+public struct Ray3
+    origin: game.Vector3
+    direction: game.Vector3
+end
+
+public enum Key
+    Left
+    Right
+    Up
+    Down
+    Space
+    Escape
+end
+
+public func start(
+    config: game.WindowConfig = game.WindowConfig()
+) -> result<game.GameContext, core.Error>
+    const backend_id: int = game.backend_code(config.backend)
+    const window_id: int = game.zt_borealis_open_window(
+        config.title,
+        config.width,
+        config.height,
+        config.target_fps,
+        backend_id
+    )?
+    return success(game.GameContext(window_id: window_id, config: config))
+end
+
+public func running(ctx: game.GameContext) -> bool
+    return game.zt_borealis_window_should_close(ctx.window_id) == false
+end
+
+public func frame_begin(
+    ctx: game.GameContext,
+    clear: game.Color = game.rgb(24, 28, 36)
+) -> result<void, core.Error>
+    return game.zt_borealis_begin_frame(ctx.window_id, clear.r, clear.g, clear.b, clear.a)
+end
+
+public func frame_end(ctx: game.GameContext) -> result<void, core.Error>
+    return game.zt_borealis_end_frame(ctx.window_id)
+end
+
+public func close(ctx: game.GameContext) -> result<void, core.Error>
+    return game.zt_borealis_close_window(ctx.window_id)
+end
+
+public func draw_rect(
+    ctx: game.GameContext,
+    area: game.Rect,
+    color: game.Color
+) -> result<void, core.Error>
+    return game.zt_borealis_draw_rect(
+        ctx.window_id,
+        area.x,
+        area.y,
+        area.width,
+        area.height,
+        color.r,
+        color.g,
+        color.b,
+        color.a
+    )
+end
+
+public func draw_line(
+    ctx: game.GameContext,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    color: game.Color
+) -> result<void, core.Error>
+    return game.zt_borealis_draw_line(
+        ctx.window_id,
+        x1,
+        y1,
+        x2,
+        y2,
+        color.r,
+        color.g,
+        color.b,
+        color.a
+    )
+end
+
+public func draw_rect_outline(
+    ctx: game.GameContext,
+    area: game.Rect,
+    color: game.Color,
+    thickness: float = 1.0
+) -> result<void, core.Error>
+    return game.zt_borealis_draw_rect_outline(
+        ctx.window_id,
+        area.x,
+        area.y,
+        area.width,
+        area.height,
+        thickness,
+        color.r,
+        color.g,
+        color.b,
+        color.a
+    )
+end
+
+public func draw_circle(
+    ctx: game.GameContext,
+    center: game.Vector2,
+    radius: float,
+    color: game.Color
+) -> result<void, core.Error>
+    return game.zt_borealis_draw_circle(
+        ctx.window_id,
+        center.x,
+        center.y,
+        radius,
+        color.r,
+        color.g,
+        color.b,
+        color.a
+    )
+end
+
+public func draw_circle_outline(
+    ctx: game.GameContext,
+    center: game.Vector2,
+    radius: float,
+    color: game.Color,
+    thickness: float = 1.0
+) -> result<void, core.Error>
+    return game.zt_borealis_draw_circle_outline(
+        ctx.window_id,
+        center.x,
+        center.y,
+        radius,
+        thickness,
+        color.r,
+        color.g,
+        color.b,
+        color.a
+    )
+end
+
+public func draw_text(
+    ctx: game.GameContext,
+    value: text,
+    x: int,
+    y: int,
+    size: int,
+    color: game.Color
+) -> result<void, core.Error>
+    return game.zt_borealis_draw_text(
+        ctx.window_id,
+        value,
+        x,
+        y,
+        size,
+        color.r,
+        color.g,
+        color.b,
+        color.a
+    )
+end
+
+public func key_down(ctx: game.GameContext, key: game.Key) -> bool
+    return game.zt_borealis_is_key_down(ctx.window_id, game.key_code(key))
+end
+
+public func key_pressed(ctx: game.GameContext, key: game.Key) -> bool
+    return game.zt_borealis_is_key_pressed(ctx.window_id, game.key_code(key))
+end
+
+public func key_released(ctx: game.GameContext, key: game.Key) -> bool
+    return game.zt_borealis_is_key_released(ctx.window_id, game.key_code(key))
+end
+
+public func backend_code(value: game.Backend) -> int
+    match value
+        case game.Backend.Stub ->
+            return 0
+        case game.Backend.Raylib ->
+            return 1
+    end
+end
+
+public func key_code(key: game.Key) -> int
+    match key
+        case game.Key.Left ->
+            return 263
+        case game.Key.Right ->
+            return 262
+        case game.Key.Up ->
+            return 265
+        case game.Key.Down ->
+            return 264
+        case game.Key.Space ->
+            return 32
+        case game.Key.Escape ->
+            return 256
+    end
+end
+
+public func rgb(r: int, g: int, b: int) -> game.Color
+    return game.Color(r: r, g: g, b: b, a: 255)
+end
+
+public func rgba(r: int, g: int, b: int, a: int) -> game.Color
+    return game.Color(r: r, g: g, b: b, a: a)
+end
+
+public func rect(x: float, y: float, width: float, height: float) -> game.Rect
+    return game.Rect(x: x, y: y, width: width, height: height)
+end
+
+public func vec2(x: float, y: float) -> game.Vector2
+    return game.Vector2(x: x, y: y)
+end
+
+public func point2(x: float, y: float) -> game.Point2
+    return game.Point2(x: x, y: y)
+end
+
+public func size2(width: float, height: float) -> game.Size2
+    return game.Size2(width: width, height: height)
+end
+
+public func vec3(x: float, y: float, z: float) -> game.Vector3
+    return game.Vector3(x: x, y: y, z: z)
+end
+
+public func point3(x: float, y: float, z: float) -> game.Point3
+    return game.Point3(x: x, y: y, z: z)
+end
+
+public func size3(width: float, height: float, depth: float) -> game.Size3
+    return game.Size3(width: width, height: height, depth: depth)
+end
+
+public func transform3d(
+    position: game.Vector3 = game.vec3(0.0, 0.0, 0.0),
+    rotation: game.Vector3 = game.vec3(0.0, 0.0, 0.0),
+    scale: game.Vector3 = game.vec3(1.0, 1.0, 1.0)
+) -> game.Transform3D
+    return game.Transform3D(position: position, rotation: rotation, scale: scale)
+end
+
+public func bounds3d(min: game.Vector3, max: game.Vector3) -> game.Bounds3D
+    return game.Bounds3D(min: min, max: max)
+end
+
+public func ray3(origin: game.Vector3, direction: game.Vector3) -> game.Ray3
+    return game.Ray3(origin: origin, direction: direction)
+end

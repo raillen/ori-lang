@@ -1,0 +1,10 @@
+namespace app.main
+
+func parse_value() -> result<int, text>
+    return success(10)
+end
+
+func main() -> int
+    const value: int = parse_value()?
+    return value
+end

@@ -1,0 +1,614 @@
+namespace borealis.game.settings
+
+import std.format as std_format
+
+public struct Settings
+    master_volume: float = 1.0
+    music_volume: float = 1.0
+    sfx_volume: float = 1.0
+    language: text = "en-US"
+    accessibility_dyslexia_font: bool = false
+    accessibility_high_contrast: bool = false
+    accessibility_reduce_motion: bool = false
+    video_fullscreen: bool = false
+    video_vsync: bool = true
+    video_render_scale: float = 1.0
+    ui_scale: float = 1.0
+end
+
+public var current: settings.Settings = settings.Settings()
+
+public func defaults() -> settings.Settings
+    return settings.Settings()
+end
+
+public func current_state() -> settings.Settings
+    return current
+end
+
+public func apply_defaults() -> settings.Settings
+    current = settings.defaults()
+    return current
+end
+
+public func apply_state(next: settings.Settings) -> settings.Settings
+    current = settings.normalize(next)
+    return current
+end
+
+public func set_language(current: settings.Settings, language: text) -> settings.Settings
+    var next: settings.Settings = current
+    if language != ""
+        next.language = language
+    end
+    return settings.normalize(next)
+end
+
+public func set_master_volume(current: settings.Settings, volume: float) -> settings.Settings
+    var next: settings.Settings = current
+    next.master_volume = settings.clamp_volume(volume)
+    return settings.normalize(next)
+end
+
+public func set_music_volume(current: settings.Settings, volume: float) -> settings.Settings
+    var next: settings.Settings = current
+    next.music_volume = settings.clamp_volume(volume)
+    return settings.normalize(next)
+end
+
+public func set_sfx_volume(current: settings.Settings, volume: float) -> settings.Settings
+    var next: settings.Settings = current
+    next.sfx_volume = settings.clamp_volume(volume)
+    return settings.normalize(next)
+end
+
+public func set_dyslexia_font(current: settings.Settings, enabled: bool) -> settings.Settings
+    var next: settings.Settings = current
+    next.accessibility_dyslexia_font = enabled
+    return settings.normalize(next)
+end
+
+public func set_high_contrast(current: settings.Settings, enabled: bool) -> settings.Settings
+    var next: settings.Settings = current
+    next.accessibility_high_contrast = enabled
+    return settings.normalize(next)
+end
+
+public func set_reduce_motion(current: settings.Settings, enabled: bool) -> settings.Settings
+    var next: settings.Settings = current
+    next.accessibility_reduce_motion = enabled
+    return settings.normalize(next)
+end
+
+public func set_fullscreen(current: settings.Settings, enabled: bool) -> settings.Settings
+    var next: settings.Settings = current
+    next.video_fullscreen = enabled
+    return settings.normalize(next)
+end
+
+public func set_vsync(current: settings.Settings, enabled: bool) -> settings.Settings
+    var next: settings.Settings = current
+    next.video_vsync = enabled
+    return settings.normalize(next)
+end
+
+public func set_render_scale(current: settings.Settings, scale: float) -> settings.Settings
+    var next: settings.Settings = current
+    next.video_render_scale = settings.clamp_render_scale(scale)
+    return settings.normalize(next)
+end
+
+public func set_ui_scale(current: settings.Settings, scale: float) -> settings.Settings
+    var next: settings.Settings = current
+    next.ui_scale = settings.clamp_ui_scale(scale)
+    return settings.normalize(next)
+end
+
+public func save_profile(
+    profile: text,
+    value: settings.Settings = settings.current_state()
+) -> result<void, core.Error>
+    const profile_name: text = settings.require_profile_name(profile)?
+    const next: settings.Settings = settings.normalize(value)
+    storage.write(settings.profile_marker_key(profile_name), "borealis.settings.v1")?
+    storage.write(
+        settings.profile_value_key(profile_name, "master_volume"),
+        settings.serialize_number(next.master_volume)
+    )?
+    storage.write(
+        settings.profile_value_key(profile_name, "music_volume"),
+        settings.serialize_number(next.music_volume)
+    )?
+    storage.write(
+        settings.profile_value_key(profile_name, "sfx_volume"),
+        settings.serialize_number(next.sfx_volume)
+    )?
+    storage.write(settings.profile_value_key(profile_name, "language"), next.language)?
+    storage.write(
+        settings.profile_value_key(profile_name, "accessibility_dyslexia_font"),
+        settings.serialize_flag(next.accessibility_dyslexia_font)
+    )?
+    storage.write(
+        settings.profile_value_key(profile_name, "accessibility_high_contrast"),
+        settings.serialize_flag(next.accessibility_high_contrast)
+    )?
+    storage.write(
+        settings.profile_value_key(profile_name, "accessibility_reduce_motion"),
+        settings.serialize_flag(next.accessibility_reduce_motion)
+    )?
+    storage.write(
+        settings.profile_value_key(profile_name, "video_fullscreen"),
+        settings.serialize_flag(next.video_fullscreen)
+    )?
+    storage.write(
+        settings.profile_value_key(profile_name, "video_vsync"),
+        settings.serialize_flag(next.video_vsync)
+    )?
+    storage.write(
+        settings.profile_value_key(profile_name, "video_render_scale"),
+        settings.serialize_number(next.video_render_scale)
+    )?
+    storage.write(
+        settings.profile_value_key(profile_name, "ui_scale"),
+        settings.serialize_number(next.ui_scale)
+    )?
+    return success()
+end
+
+public func load_profile(profile: text) -> optional<settings.Settings>
+    const profile_name: text = settings.normalize_profile_name(profile)
+    if profile_name == ""
+        return none
+    end
+    if settings.profile_exists(profile_name) == false
+        return none
+    end
+    var next: settings.Settings = settings.defaults()
+    const maybe_master_volume: optional<float> = settings.read_profile_number_optional(profile_name, "master_volume", next.master_volume)
+    const maybe_music_volume: optional<float> = settings.read_profile_number_optional(profile_name, "music_volume", next.music_volume)
+    const maybe_sfx_volume: optional<float> = settings.read_profile_number_optional(profile_name, "sfx_volume", next.sfx_volume)
+    const maybe_accessibility_dyslexia_font: optional<bool> = settings.read_profile_flag_optional(
+        profile_name,
+        "accessibility_dyslexia_font",
+        next.accessibility_dyslexia_font
+    )
+    const maybe_accessibility_high_contrast: optional<bool> = settings.read_profile_flag_optional(
+        profile_name,
+        "accessibility_high_contrast",
+        next.accessibility_high_contrast
+    )
+    const maybe_accessibility_reduce_motion: optional<bool> = settings.read_profile_flag_optional(
+        profile_name,
+        "accessibility_reduce_motion",
+        next.accessibility_reduce_motion
+    )
+    const maybe_video_fullscreen: optional<bool> = settings.read_profile_flag_optional(profile_name, "video_fullscreen", next.video_fullscreen)
+    const maybe_video_vsync: optional<bool> = settings.read_profile_flag_optional(profile_name, "video_vsync", next.video_vsync)
+    const maybe_video_render_scale: optional<float> = settings.read_profile_number_optional(profile_name, "video_render_scale", next.video_render_scale)
+    const maybe_ui_scale: optional<float> = settings.read_profile_number_optional(profile_name, "ui_scale", next.ui_scale)
+    match maybe_master_volume
+        case some(master_volume):
+            next.master_volume = master_volume
+        case none:
+            return none
+    end
+    match maybe_music_volume
+        case some(music_volume):
+            next.music_volume = music_volume
+        case none:
+            return none
+    end
+    match maybe_sfx_volume
+        case some(sfx_volume):
+            next.sfx_volume = sfx_volume
+        case none:
+            return none
+    end
+    next.language = settings.read_profile_text(profile_name, "language", next.language)
+    match maybe_accessibility_dyslexia_font
+        case some(accessibility_dyslexia_font):
+            next.accessibility_dyslexia_font = accessibility_dyslexia_font
+        case none:
+            return none
+    end
+    match maybe_accessibility_high_contrast
+        case some(accessibility_high_contrast):
+            next.accessibility_high_contrast = accessibility_high_contrast
+        case none:
+            return none
+    end
+    match maybe_accessibility_reduce_motion
+        case some(accessibility_reduce_motion):
+            next.accessibility_reduce_motion = accessibility_reduce_motion
+        case none:
+            return none
+    end
+    match maybe_video_fullscreen
+        case some(video_fullscreen):
+            next.video_fullscreen = video_fullscreen
+        case none:
+            return none
+    end
+    match maybe_video_vsync
+        case some(video_vsync):
+            next.video_vsync = video_vsync
+        case none:
+            return none
+    end
+    match maybe_video_render_scale
+        case some(video_render_scale):
+            next.video_render_scale = video_render_scale
+        case none:
+            return none
+    end
+    match maybe_ui_scale
+        case some(ui_scale):
+            next.ui_scale = ui_scale
+        case none:
+            return none
+    end
+    const loaded: settings.Settings = settings.normalize(next)
+    return loaded
+end
+
+public func apply_profile(profile: text) -> optional<settings.Settings>
+    const maybe_loaded: optional<settings.Settings> = settings.load_profile(profile)
+    match maybe_loaded
+        case some(loaded):
+            const applied: settings.Settings = settings.apply_state(loaded)
+            return applied
+        case none:
+            return none
+    end
+end
+
+public func delete_profile(profile: text) -> result<void, core.Error>
+    const profile_name: text = settings.require_profile_name(profile)?
+    storage.remove(settings.profile_marker_key(profile_name))?
+    storage.remove(settings.profile_value_key(profile_name, "master_volume"))?
+    storage.remove(settings.profile_value_key(profile_name, "music_volume"))?
+    storage.remove(settings.profile_value_key(profile_name, "sfx_volume"))?
+    storage.remove(settings.profile_value_key(profile_name, "language"))?
+    storage.remove(settings.profile_value_key(profile_name, "accessibility_dyslexia_font"))?
+    storage.remove(settings.profile_value_key(profile_name, "accessibility_high_contrast"))?
+    storage.remove(settings.profile_value_key(profile_name, "accessibility_reduce_motion"))?
+    storage.remove(settings.profile_value_key(profile_name, "video_fullscreen"))?
+    storage.remove(settings.profile_value_key(profile_name, "video_vsync"))?
+    storage.remove(settings.profile_value_key(profile_name, "video_render_scale"))?
+    storage.remove(settings.profile_value_key(profile_name, "ui_scale"))?
+    return success()
+end
+
+public func profile_exists(profile: text) -> bool
+    const profile_name: text = settings.normalize_profile_name(profile)
+    if profile_name == ""
+        return false
+    end
+    return storage.exists(settings.profile_marker_key(profile_name))
+end
+
+public func reset(current: settings.Settings, name: text) -> settings.Settings
+    const base: settings.Settings = settings.defaults()
+    var next: settings.Settings = current
+    if name == "master_volume"
+        next.master_volume = base.master_volume
+    end
+    if name == "music_volume"
+        next.music_volume = base.music_volume
+    end
+    if name == "sfx_volume"
+        next.sfx_volume = base.sfx_volume
+    end
+    if name == "language"
+        next.language = base.language
+    end
+    if name == "accessibility_dyslexia_font"
+        next.accessibility_dyslexia_font = base.accessibility_dyslexia_font
+    end
+    if name == "accessibility_high_contrast"
+        next.accessibility_high_contrast = base.accessibility_high_contrast
+    end
+    if name == "accessibility_reduce_motion"
+        next.accessibility_reduce_motion = base.accessibility_reduce_motion
+    end
+    if name == "video_fullscreen"
+        next.video_fullscreen = base.video_fullscreen
+    end
+    if name == "video_vsync"
+        next.video_vsync = base.video_vsync
+    end
+    if name == "video_render_scale"
+        next.video_render_scale = base.video_render_scale
+    end
+    if name == "ui_scale"
+        next.ui_scale = base.ui_scale
+    end
+    return settings.normalize(next)
+end
+
+public func reset_all(_current: settings.Settings = settings.Settings()) -> settings.Settings
+    return settings.defaults()
+end
+
+public func list_names() -> list<text>
+    return ["master_volume", "music_volume", "sfx_volume", "language", "accessibility_dyslexia_font", "accessibility_high_contrast", "accessibility_reduce_motion", "video_fullscreen", "video_vsync", "video_render_scale", "ui_scale"]
+end
+
+public func get_text(current: settings.Settings, name: text) -> optional<text>
+    if name == "language"
+        return current.language
+    end
+    return none
+end
+
+public func get_number(current: settings.Settings, name: text) -> optional<float>
+    if name == "master_volume"
+        return current.master_volume
+    end
+    if name == "music_volume"
+        return current.music_volume
+    end
+    if name == "sfx_volume"
+        return current.sfx_volume
+    end
+    if name == "video_render_scale"
+        return current.video_render_scale
+    end
+    if name == "ui_scale"
+        return current.ui_scale
+    end
+    return none
+end
+
+public func get_flag(current: settings.Settings, name: text) -> optional<bool>
+    if name == "accessibility_dyslexia_font"
+        return current.accessibility_dyslexia_font
+    end
+    if name == "accessibility_high_contrast"
+        return current.accessibility_high_contrast
+    end
+    if name == "accessibility_reduce_motion"
+        return current.accessibility_reduce_motion
+    end
+    if name == "video_fullscreen"
+        return current.video_fullscreen
+    end
+    if name == "video_vsync"
+        return current.video_vsync
+    end
+    return none
+end
+
+public func normalize(value: settings.Settings) -> settings.Settings
+    var next: settings.Settings = value
+    next.master_volume = settings.clamp_volume(value.master_volume)
+    next.music_volume = settings.clamp_volume(value.music_volume)
+    next.sfx_volume = settings.clamp_volume(value.sfx_volume)
+    next.video_render_scale = settings.clamp_render_scale(value.video_render_scale)
+    next.ui_scale = settings.clamp_ui_scale(value.ui_scale)
+    if next.language == ""
+        next.language = settings.defaults().language
+    end
+    return next
+end
+
+public func clamp_volume(value: float) -> float
+    if value < 0.0
+        return 0.0
+    end
+    if value > 1.0
+        return 1.0
+    end
+    return value
+end
+
+public func clamp_render_scale(value: float) -> float
+    if value < 0.5
+        return 0.5
+    end
+    if value > 2.0
+        return 2.0
+    end
+    return value
+end
+
+public func clamp_ui_scale(value: float) -> float
+    if value < 0.75
+        return 0.75
+    end
+    if value > 2.0
+        return 2.0
+    end
+    return value
+end
+
+public func serialize_flag(value: bool) -> text
+    if value
+        return "true"
+    end
+    return "false"
+end
+
+public func serialize_number(value: float) -> text
+    return std_format.number(value, decimals: 6)
+end
+
+public func read_profile_text(profile: text, name: text, fallback: text) -> text
+    const maybe: optional<text> = storage.read(settings.profile_value_key(profile, name))
+    match maybe
+        case some(present):
+            return present
+        case none:
+            return fallback
+    end
+end
+
+public func read_profile_flag(profile: text, name: text, fallback: bool) -> result<bool, core.Error>
+    const maybe: optional<text> = storage.read(settings.profile_value_key(profile, name))
+    match maybe
+        case some(present):
+            return settings.parse_flag(present)
+        case none:
+            return success(fallback)
+    end
+end
+
+public func read_profile_number(
+    profile: text,
+    name: text,
+    fallback: float
+) -> result<float, core.Error>
+    const maybe: optional<text> = storage.read(settings.profile_value_key(profile, name))
+    match maybe
+        case some(present):
+            return settings.parse_number(present)
+        case none:
+            return success(fallback)
+    end
+end
+
+public func read_profile_flag_optional(profile: text, name: text, fallback: bool) -> optional<bool>
+    const parsed: result<bool, core.Error> = settings.read_profile_flag(profile, name, fallback)
+    match parsed
+        case success(value):
+            return value
+        case error(_err):
+            return none
+    end
+end
+
+public func read_profile_number_optional(
+    profile: text,
+    name: text,
+    fallback: float
+) -> optional<float>
+    const parsed: result<float, core.Error> = settings.read_profile_number(profile, name, fallback)
+    match parsed
+        case success(value):
+            return value
+        case error(_err):
+            return none
+    end
+end
+
+public func parse_flag(value: text) -> result<bool, core.Error>
+    const trimmed: text = value
+    if trimmed == "true" or trimmed == "1" or trimmed == "yes" or trimmed == "on"
+        return success(true)
+    end
+    if trimmed == "false" or trimmed == "0" or trimmed == "no" or trimmed == "off"
+        return success(false)
+    end
+    const message: text = "settings: invalid bool value"
+    return error(message)
+end
+
+public func parse_number(value: text) -> result<float, core.Error>
+    const trimmed: text = value
+    if trimmed == ""
+        const message: text = "settings: invalid number value"
+        return error(message)
+    end
+    var index: int = 0
+    var negative: bool = false
+    var seen_separator: bool = false
+    var seen_digit: bool = false
+    var whole: float = 0.0
+    var fraction: float = 0.0
+    var place: float = 0.1
+    if trimmed[0] == "-"
+        negative = true
+        index = 1
+    end
+    while index < len(trimmed)
+        const ch: text = trimmed[index]
+        if ch == "." or ch == ","
+            if seen_separator
+                const message: text = "settings: invalid number value"
+                return error(message)
+            end
+            seen_separator = true
+            index = index + 1
+            continue
+        end
+        const maybe_digit: optional<float> = settings.digit_value(ch)
+        match maybe_digit
+            case some(digit):
+                seen_digit = true
+                if seen_separator
+                    fraction = fraction + digit * place
+                    place = place * 0.1
+                else
+                    whole = whole * 10.0 + digit
+                end
+            case none:
+                const message: text = "settings: invalid number value"
+                return error(message)
+        end
+        index = index + 1
+    end
+    if seen_digit == false
+        const message: text = "settings: invalid number value"
+        return error(message)
+    end
+    var parsed: float = whole + fraction
+    if negative
+        parsed = 0.0 - parsed
+    end
+    return success(parsed)
+end
+
+public func digit_value(ch: text) -> optional<float>
+    if ch == "0"
+        return 0.0
+    end
+    if ch == "1"
+        return 1.0
+    end
+    if ch == "2"
+        return 2.0
+    end
+    if ch == "3"
+        return 3.0
+    end
+    if ch == "4"
+        return 4.0
+    end
+    if ch == "5"
+        return 5.0
+    end
+    if ch == "6"
+        return 6.0
+    end
+    if ch == "7"
+        return 7.0
+    end
+    if ch == "8"
+        return 8.0
+    end
+    if ch == "9"
+        return 9.0
+    end
+    return none
+end
+
+public func profile_marker_key(profile: text) -> text
+    return f"settings::{profile}::__profile"
+end
+
+public func profile_value_key(profile: text, name: text) -> text
+    return f"settings::{profile}::{name}"
+end
+
+public func normalize_profile_name(profile: text) -> text
+    return profile
+end
+
+public func require_profile_name(profile: text) -> result<text, core.Error>
+    const profile_name: text = settings.normalize_profile_name(profile)
+    if profile_name == ""
+        const message: text = "settings: profile cannot be empty"
+        return error(message)
+    end
+    return success(profile_name)
+end

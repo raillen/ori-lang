@@ -1,0 +1,11 @@
+namespace app.main
+
+public func main() -> int
+    var count: int = 0
+    const bump: func() -> int = func() -> int
+        count = count + 1
+        return count
+    end
+
+    return bump()
+end

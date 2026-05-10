@@ -1,0 +1,16 @@
+namespace app.main
+
+func inc(value: int) -> int
+    return value + 1
+end
+
+func main() -> int
+    const name: text = "Ada"
+    const hp: int = 41
+    const alive: bool = true
+    const msg: text = f"Player {name} hp={hp + 1} alive={alive} next={inc(hp)} braces={{ok}}"
+    if len(msg) > 0
+        return 0
+    end
+    return 1
+end

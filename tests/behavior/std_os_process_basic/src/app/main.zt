@@ -1,0 +1,16 @@
+namespace app.main
+
+import std.os.process as process
+
+func main() -> result<void, process.Error>
+    const arg0: text = "-Command"
+    const arg1: text = "exit 5"
+    const args: list<text> = [arg0, arg1]
+    const status: process.ExitStatus = process.run(program: "powershell", args: args)?
+
+    if status.code != 5
+        panic("std.os.process.run returned wrong exit code")
+    end
+
+    return success()
+end

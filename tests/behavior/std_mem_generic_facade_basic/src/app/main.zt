@@ -1,0 +1,114 @@
+namespace app.main
+
+import std.mem as mem
+
+func approx(left: float, right: float, epsilon: float = 0.001) -> bool
+    var diff: float = left - right
+    if diff < 0.0
+        diff = 0.0 - diff
+    end
+    return diff < epsilon
+end
+
+func check_text() -> result<void, core.Error>
+    const base: text = "alpha"
+    const owned: text = mem.own(base)
+    const viewed: text = mem.view(base)
+    const edited: text = mem.edit(base)
+
+    if len(owned) != 5 or len(viewed) != 5 or len(edited) != 5
+        return error("mem text helpers should preserve text values")
+    end
+
+    return success()
+end
+
+func check_int_list() -> result<void, core.Error>
+    const ids: list<int> = [1, 2, 3]
+    const owned: list<int> = mem.own(ids)
+    const viewed: list<int> = mem.view(ids)
+    var edited: list<int> = mem.edit(ids)
+    edited[0] = 99
+
+    if len(owned) != 3 or len(viewed) != 3 or len(edited) != 3
+        return error("mem list<int> helpers should preserve lengths")
+    end
+    if ids[0] != 1 or edited[0] != 99
+        return error("mem.edit(list<int>) should return an isolated editable copy")
+    end
+
+    return success()
+end
+
+func check_float_and_bool_lists() -> result<void, core.Error>
+    const ratios: list<float> = [1.5, 2.25]
+    const owned_ratios: list<float> = mem.own(ratios)
+    var edited_ratios: list<float> = mem.edit(ratios)
+    edited_ratios[1] = 8.5
+
+    const flags: list<bool> = [true, false]
+    const viewed_flags: list<bool> = mem.view(flags)
+    var edited_flags: list<bool> = mem.edit(flags)
+    edited_flags[1] = true
+
+    if approx(owned_ratios[0], 1.5) == false or approx(edited_ratios[1], 8.5) == false
+        return error("mem list<float> helpers should preserve and isolate values")
+    end
+    if approx(ratios[1], 2.25) == false
+        return error("mem.edit(list<float>) should not mutate the source")
+    end
+    if len(viewed_flags) != 2 or edited_flags[1] == false or flags[1] == true
+        return error("mem list<bool> helpers should preserve and isolate values")
+    end
+
+    return success()
+end
+
+func check_byte_lists() -> result<void, core.Error>
+    const signed_values: list<int8> = [1, 2, 3]
+    const owned_signed: list<int8> = mem.own(signed_values)
+    const viewed_signed: list<int8> = mem.view(signed_values)
+    var edited_signed: list<int8> = mem.edit(signed_values)
+    edited_signed[1] = 9
+
+    const bytes: list<u8> = [4, 5, 6]
+    const owned_bytes: list<u8> = mem.own(bytes)
+    const viewed_bytes: list<u8> = mem.view(bytes)
+    var edited_bytes: list<u8> = mem.edit(bytes)
+    edited_bytes[2] = 8
+
+    if len(owned_signed) != 3 or len(viewed_signed) != 3 or edited_signed[1] != 9 or signed_values[1] != 2
+        return error("mem list<int8> helpers should preserve and isolate values")
+    end
+    if len(owned_bytes) != 3 or len(viewed_bytes) != 3 or edited_bytes[2] != 8 or bytes[2] != 6
+        return error("mem list<u8> helpers should preserve and isolate values")
+    end
+
+    return success()
+end
+
+func check_text_list() -> result<void, core.Error>
+    const names: list<text> = ["ada", "bob"]
+    const owned: list<text> = mem.own(names)
+    const viewed: list<text> = mem.view(names)
+    var edited: list<text> = mem.edit(names)
+    edited[0] = "eve"
+
+    if len(owned) != 2 or len(viewed) != 2 or len(edited) != 2
+        return error("mem list<text> helpers should preserve lengths")
+    end
+    if names[0] != "ada" or edited[0] != "eve"
+        return error("mem.edit(list<text>) should return an isolated editable copy")
+    end
+
+    return success()
+end
+
+func main() -> result<void, core.Error>
+    check_text()?
+    check_int_list()?
+    check_float_and_bool_lists()?
+    check_byte_lists()?
+    check_text_list()?
+    return success()
+end

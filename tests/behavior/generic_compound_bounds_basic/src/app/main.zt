@@ -1,0 +1,10 @@
+namespace app.main
+
+func accept_ordered_addable<T>(value: T) -> int where T is Addable and T is Comparable
+    return 0
+end
+
+func main() -> int
+    const score: int = accept_ordered_addable(5)
+    return score
+end

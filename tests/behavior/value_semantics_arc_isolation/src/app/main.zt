@@ -1,0 +1,32 @@
+namespace app.main
+
+func main() -> int
+    var a: list<int> = [1, 2, 3]
+    var b: list<int> = a
+    var c: list<int> = b
+
+    b[0] = 9
+    c[2] = 7
+
+    const list_score: int = (a[0] * 40) + (a[2] * 10) + b[0] + c[2]
+
+    const key_a: text = "a"
+    const key_b: text = "b"
+    const key_c: text = "c"
+    const value_one: text = "1"
+    const value_two: text = "2"
+    const value_three: text = "3"
+
+    var m1: map<text, text> = { key_a: value_one }
+    var m2: map<text, text> = m1
+    var m3: map<text, text> = m2
+
+    m2[key_b] = value_two
+    m3[key_c] = value_three
+
+    const map_score: int = (len(m1) * 50) + (len(m2) * 10) + len(m3)
+    if list_score == 86 and map_score == 72
+        return 0
+    end
+    return 1
+end

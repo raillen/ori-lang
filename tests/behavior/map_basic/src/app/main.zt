@@ -1,0 +1,15 @@
+namespace app.main
+
+func main() -> int
+    const mode_key: text = "mode"
+    const mode_value: text = "debug"
+    const theme_key: text = "theme"
+    const theme_value: text = "paper"
+    const updated_value: text = "dark"
+
+    var cfg: map<text, text> = { mode_key: mode_value, theme_key: theme_value }
+    cfg[theme_key] = updated_value
+
+    const picked: text = cfg[theme_key]
+    return 0
+end

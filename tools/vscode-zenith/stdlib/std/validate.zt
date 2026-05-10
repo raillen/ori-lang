@@ -1,0 +1,284 @@
+namespace std.validate
+
+-- Zenith std.validate
+-- Pure bool predicates for where clauses and conditions.
+public func between(value: int, min: int, max: int) -> bool
+    return value >= min and value <= max
+end
+
+public func positive(value: int) -> bool
+    return value > 0
+end
+
+public func non_negative(value: int) -> bool
+    return value >= 0
+end
+
+public func negative(value: int) -> bool
+    return value < 0
+end
+
+public func non_zero(value: int) -> bool
+    return value != 0
+end
+
+public func one_of(value: int, candidates: list<int>) -> bool
+    for item in candidates
+        if item == value
+            return true
+        end
+    end
+    return false
+end
+
+public func one_of_text(value: text, candidates: list<text>) -> bool
+    for item in candidates
+        if item == value
+            return true
+        end
+    end
+    return false
+end
+
+public func between_float(value: float, min: float, max: float) -> bool
+    return value >= min and value <= max
+end
+
+public func positive_float(value: float) -> bool
+    return value > 0.0
+end
+
+public func non_negative_float(value: float) -> bool
+    return value >= 0.0
+end
+
+public func negative_float(value: float) -> bool
+    return value < 0.0
+end
+
+public func non_zero_float(value: float) -> bool
+    return value != 0.0
+end
+
+public func one_of_float(value: float, candidates: list<float>) -> bool
+    for item in candidates
+        if item == value
+            return true
+        end
+    end
+    return false
+end
+
+public func is_true(value: bool) -> bool
+    return value
+end
+
+public func is_false(value: bool) -> bool
+    return value == false
+end
+
+public func one_of_bool(value: bool, candidates: list<bool>) -> bool
+    for item in candidates
+        if item == value
+            return true
+        end
+    end
+    return false
+end
+
+public func is_some_int(value: optional<int>) -> bool
+    return value.is_some()
+end
+
+public func is_none_int(value: optional<int>) -> bool
+    return value.is_none()
+end
+
+public func is_some_float(value: optional<float>) -> bool
+    return value.is_some()
+end
+
+public func is_none_float(value: optional<float>) -> bool
+    return value.is_none()
+end
+
+public func is_some_bool(value: optional<bool>) -> bool
+    return value.is_some()
+end
+
+public func is_none_bool(value: optional<bool>) -> bool
+    return value.is_none()
+end
+
+public func is_success_int_text(value: result<int, text>) -> bool
+    return value.is_success()
+end
+
+public func is_error_int_text(value: result<int, text>) -> bool
+    return value.is_error()
+end
+
+public func not_empty_list_int(values: list<int>) -> bool
+    return len(values) > 0
+end
+
+public func min_length_list_int(values: list<int>, min: int) -> bool
+    return len(values) >= min
+end
+
+public func max_length_list_int(values: list<int>, max: int) -> bool
+    return len(values) <= max
+end
+
+public func length_between_list_int(values: list<int>, min: int, max: int) -> bool
+    const count: int = len(values)
+    return count >= min and count <= max
+end
+
+public func not_empty_list_text(values: list<text>) -> bool
+    return len(values) > 0
+end
+
+public func min_length_list_text(values: list<text>, min: int) -> bool
+    return len(values) >= min
+end
+
+public func max_length_list_text(values: list<text>, max: int) -> bool
+    return len(values) <= max
+end
+
+public func length_between_list_text(values: list<text>, min: int, max: int) -> bool
+    const count: int = len(values)
+    return count >= min and count <= max
+end
+
+public func not_empty_list_float(values: list<float>) -> bool
+    return len(values) > 0
+end
+
+public func min_length_list_float(values: list<float>, min: int) -> bool
+    return len(values) >= min
+end
+
+public func max_length_list_float(values: list<float>, max: int) -> bool
+    return len(values) <= max
+end
+
+public func length_between_list_float(values: list<float>, min: int, max: int) -> bool
+    const count: int = len(values)
+    return count >= min and count <= max
+end
+
+public func not_empty_list_bool(values: list<bool>) -> bool
+    return len(values) > 0
+end
+
+public func min_length_list_bool(values: list<bool>, min: int) -> bool
+    return len(values) >= min
+end
+
+public func max_length_list_bool(values: list<bool>, max: int) -> bool
+    return len(values) <= max
+end
+
+public func length_between_list_bool(values: list<bool>, min: int, max: int) -> bool
+    const count: int = len(values)
+    return count >= min and count <= max
+end
+
+public func not_empty_map_text_int(values: map<text, int>) -> bool
+    return len(values) > 0
+end
+
+public func min_size_map_text_int(values: map<text, int>, min: int) -> bool
+    return len(values) >= min
+end
+
+public func max_size_map_text_int(values: map<text, int>, max: int) -> bool
+    return len(values) <= max
+end
+
+public func size_between_map_text_int(values: map<text, int>, min: int, max: int) -> bool
+    const count: int = len(values)
+    return count >= min and count <= max
+end
+
+public func not_empty_map_text_text(values: map<text, text>) -> bool
+    return len(values) > 0
+end
+
+public func min_size_map_text_text(values: map<text, text>, min: int) -> bool
+    return len(values) >= min
+end
+
+public func max_size_map_text_text(values: map<text, text>, max: int) -> bool
+    return len(values) <= max
+end
+
+public func size_between_map_text_text(values: map<text, text>, min: int, max: int) -> bool
+    const count: int = len(values)
+    return count >= min and count <= max
+end
+
+public func not_empty_map_int_text(values: map<int, text>) -> bool
+    return len(values) > 0
+end
+
+public func min_size_map_int_text(values: map<int, text>, min: int) -> bool
+    return len(values) >= min
+end
+
+public func max_size_map_int_text(values: map<int, text>, max: int) -> bool
+    return len(values) <= max
+end
+
+public func size_between_map_int_text(values: map<int, text>, min: int, max: int) -> bool
+    const count: int = len(values)
+    return count >= min and count <= max
+end
+
+public func not_empty_map_int_int(values: map<int, int>) -> bool
+    return len(values) > 0
+end
+
+public func min_size_map_int_int(values: map<int, int>, min: int) -> bool
+    return len(values) >= min
+end
+
+public func max_size_map_int_int(values: map<int, int>, max: int) -> bool
+    return len(values) <= max
+end
+
+public func size_between_map_int_int(values: map<int, int>, min: int, max: int) -> bool
+    const count: int = len(values)
+    return count >= min and count <= max
+end
+
+public func not_empty(value: text) -> bool
+    return len(value) > 0
+end
+
+public func not_empty_text(value: text) -> bool
+    return validate.not_empty(value)
+end
+
+public func min_length(value: text, min: int) -> bool
+    return len(value) >= min
+end
+
+public func min_len(value: text, min: int) -> bool
+    return validate.min_length(value, min)
+end
+
+public func max_length(value: text, max: int) -> bool
+    return len(value) <= max
+end
+
+public func max_len(value: text, max: int) -> bool
+    return validate.max_length(value, max)
+end
+
+public func length_between(value: text, min: int, max: int) -> bool
+    const count: int = len(value)
+    return count >= min and count <= max
+end

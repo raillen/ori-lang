@@ -1,0 +1,7 @@
+namespace app.main
+
+func main() -> int
+    const message: text = "finish payment validation"
+    todo(message)
+    return 0
+end

@@ -1,0 +1,15 @@
+namespace app.main
+
+func main() -> int
+    const key_mode: text = "mode"
+    const key_missing: text = "missing"
+    const value_debug: text = "debug"
+    var cfg: map<text, text> = { key_mode: value_debug }
+
+    const strict_value: text = cfg[key_mode]
+
+    const missing: optional<text> = cfg.get(key_missing)
+    const keep_missing: optional<text> = missing
+
+    return len(strict_value) + 10
+end

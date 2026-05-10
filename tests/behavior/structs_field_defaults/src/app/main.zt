@@ -1,0 +1,11 @@
+namespace app.main
+
+struct Player
+    hp: int = 100
+    bonus: int = 17
+end
+
+func main() -> int
+    const player: Player = Player()
+    return player.hp + player.bonus
+end

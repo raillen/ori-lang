@@ -1,0 +1,7 @@
+namespace app.main
+
+func main() -> int
+    const points: int = 10
+    points = 20
+    return points
+end

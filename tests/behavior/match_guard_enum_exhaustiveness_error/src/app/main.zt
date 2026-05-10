@@ -1,0 +1,19 @@
+namespace app.main
+
+enum Color
+    Red
+    Green
+    Blue
+end
+
+func main() -> int
+    const c: Color = Color.Red
+    match c
+        case Color.Red if false ->
+            return 1
+        case Color.Green ->
+            return 2
+        case Color.Blue ->
+            return 3
+    end
+end

@@ -1,0 +1,612 @@
+{
+  "suite": "quick",
+  "generated_at_utc": "2026-04-21T15:51:50.718315+00:00",
+  "platform_key": "windows-AMD64",
+  "host": {
+    "host": "RAILLEN-REDE",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "system": "windows",
+    "release": "11",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+    "python_version": "3.12.0",
+    "cpu_count": 12
+  },
+  "status": "pass",
+  "benchmark_count": 3,
+  "scenarios": {
+    "micro_runtime": {
+      "status": "pass",
+      "count": 1
+    },
+    "micro_stdlib": {
+      "status": "pass",
+      "count": 1
+    },
+    "m37_result_generic": {
+      "status": "pass",
+      "count": 1
+    }
+  },
+  "benchmarks": [
+    {
+      "benchmark_id": "micro_runtime_core",
+      "scenario": "micro_runtime",
+      "category": "runtime",
+      "kind": "bin",
+      "suite": "quick",
+      "status": "pass",
+      "generated_at_utc": "2026-04-21T15:51:38.924304+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 82.107,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -59.86028070964493
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "lat_p95_ms": {
+          "value": 99.878,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -51.319868208137564
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "lat_std_ms": {
+          "value": 10.429,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 12.1792,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -149.12962546280198
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "peak_ws": {
+          "value": 4407296,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 753664,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 248172,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "startup_ms": {
+          "value": 82.107,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -59.86028070964493
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 82.107,
+        "lat_p95_ms": 99.878,
+        "lat_std_ms": 10.429,
+        "throughput_ops_per_sec": 12.1792,
+        "peak_ws": 4407296,
+        "alloc_proxy": 753664,
+        "binary_size": 248172,
+        "startup_ms": 82.107
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 2200,
+          "lat_p95_ms": 3500,
+          "startup_ms": 2200,
+          "peak_ws": 260000000
+        },
+        "fail": {
+          "lat_median_ms": 5000,
+          "lat_p95_ms": 8000,
+          "startup_ms": 5000,
+          "peak_ws": 520000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 4,
+        "retries": 1,
+        "outliers": 1
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "m36-runtime-core-ok\n",
+          "stderr": "",
+          "ms": 267.9196,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "m36-runtime-core-ok\n",
+          "stderr": "",
+          "ms": 77.9413,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 4407296,
+          "alloc": 753664,
+          "stdout": "m36-runtime-core-ok\n",
+          "stderr": "",
+          "ms": 101.8523,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "m36-runtime-core-ok\n",
+          "stderr": "",
+          "ms": 82.10690000000001,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 0,
+        "alloc": 0,
+        "stdout": "m36-runtime-core-ok\n",
+        "stderr": "",
+        "ms": 82.10690000000001,
+        "timeout": false
+      }
+    },
+    {
+      "benchmark_id": "micro_stdlib_core",
+      "scenario": "micro_stdlib",
+      "category": "stdlib",
+      "kind": "bin",
+      "suite": "quick",
+      "status": "pass",
+      "generated_at_utc": "2026-04-21T15:51:43.313012+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 94.756,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -49.887617869023245
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "lat_p95_ms": {
+          "value": 110.981,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -43.77862208713273
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "lat_std_ms": {
+          "value": 16.442,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 10.5534,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -99.54997541882541
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "peak_ws": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 0,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 240291,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "startup_ms": {
+          "value": 94.756,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": -49.887617869023245
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 94.756,
+        "lat_p95_ms": 110.981,
+        "lat_std_ms": 16.442,
+        "throughput_ops_per_sec": 10.5534,
+        "peak_ws": 0,
+        "alloc_proxy": 0,
+        "binary_size": 240291,
+        "startup_ms": 94.756
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 2400,
+          "lat_p95_ms": 3800,
+          "peak_ws": 280000000
+        },
+        "fail": {
+          "lat_median_ms": 5600,
+          "lat_p95_ms": 8500,
+          "peak_ws": 560000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 3,
+        "retries": 0,
+        "outliers": 0
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "m36-stdlib-core-ok\n",
+          "stderr": "",
+          "ms": 112.78410000000001,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "m36-stdlib-core-ok\n",
+          "stderr": "",
+          "ms": 94.75630000000001,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 0,
+          "alloc": 0,
+          "stdout": "m36-stdlib-core-ok\n",
+          "stderr": "",
+          "ms": 72.5808,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 0,
+        "alloc": 0,
+        "stdout": "m36-stdlib-core-ok\n",
+        "stderr": "",
+        "ms": 72.5808,
+        "timeout": false
+      }
+    },
+    {
+      "benchmark_id": "m37_result_generic",
+      "scenario": "m37_result_generic",
+      "category": "macro",
+      "kind": "bin",
+      "suite": "quick",
+      "status": "pass",
+      "generated_at_utc": "2026-04-21T15:51:50.718315+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 80.531,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "lat_p95_ms": {
+          "value": 81.028,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "lat_std_ms": {
+          "value": 0.552,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 12.4176,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "peak_ws": {
+          "value": 3903488,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 675840,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 240118,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "startup_ms": {
+          "value": 80.531,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 80.531,
+        "lat_p95_ms": 81.028,
+        "lat_std_ms": 0.552,
+        "throughput_ops_per_sec": 12.4176,
+        "peak_ws": 3903488,
+        "alloc_proxy": 675840,
+        "binary_size": 240118,
+        "startup_ms": 80.531
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 4200,
+          "lat_p95_ms": 7000,
+          "peak_ws": 520000000,
+          "binary_size": 22000000
+        },
+        "fail": {
+          "lat_median_ms": 9800,
+          "lat_p95_ms": 16000,
+          "peak_ws": 800000000,
+          "binary_size": 44000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 2,
+        "retries": 0,
+        "outliers": 0
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 3903488,
+          "alloc": 675840,
+          "stdout": "m37-result-generic-ok",
+          "stderr": "",
+          "ms": 79.9787,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 3899392,
+          "alloc": 667648,
+          "stdout": "m37-result-generic-ok",
+          "stderr": "",
+          "ms": 81.0836,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 3899392,
+        "alloc": 667648,
+        "stdout": "m37-result-generic-ok",
+        "stderr": "",
+        "ms": 81.0836,
+        "timeout": false
+      }
+    }
+  ],
+  "release_gate": false,
+  "override_file": ""
+}

@@ -1,0 +1,71 @@
+{
+  "Namespace": {
+    "prefix": "namespace",
+    "body": [
+      "namespace ${1:app.main}"
+    ],
+    "description": "Declara o namespace do arquivo Zenith."
+  },
+  "Main Function": {
+    "prefix": "main",
+    "body": [
+      "func main()",
+      "    ${0}",
+      "end"
+    ],
+    "description": "Cria a funcao principal simples."
+  },
+  "Hello World": {
+    "prefix": "hello",
+    "body": [
+      "namespace app.main",
+      "",
+      "func main()",
+      "    print(\"Hello from Zenith\")",
+      "end"
+    ],
+    "description": "Cria um hello world Zenith atual."
+  },
+  "Function": {
+    "prefix": "func",
+    "body": [
+      "func ${1:name}(${2})",
+      "    ${0}",
+      "end"
+    ],
+    "description": "Declara uma funcao."
+  },
+  "Struct": {
+    "prefix": "struct",
+    "body": [
+      "struct ${1:Name}",
+      "    ${0}",
+      "end"
+    ],
+    "description": "Declara uma struct."
+  },
+  "Match": {
+    "prefix": "match",
+    "body": [
+      "match ${1:value}",
+      "case ${2:pattern}",
+      "    ${0}",
+      "end"
+    ],
+    "description": "Cria um match."
+  },
+  "For In": {
+    "prefix": "for",
+    "body": [
+      "for ${1:item} in ${2:values}",
+      "    ${0}",
+      "end"
+    ],
+    "description": "Cria um loop for-in."
+  },
+  "F String": {
+    "prefix": "f",
+    "body": "f\"${1:texto {valor}}\"",
+    "description": "Cria uma string interpolada."
+  }
+}

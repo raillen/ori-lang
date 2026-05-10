@@ -1,0 +1,13 @@
+[project]
+name = "dyn-generic-trait-error"
+version = "0.1.0"
+kind = "app"
+
+[app]
+entry = "app.main"
+
+[source]
+root = "src"
+
+[build]
+target = "native"

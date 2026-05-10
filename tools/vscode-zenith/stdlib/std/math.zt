@@ -1,0 +1,188 @@
+namespace std.math
+
+-- Zenith Standard Library — Math Module
+-- Pure numeric mathematics (Decision 062).
+-- 🏗️ EXTERN C
+-- 📐 CONSTANTS
+-- ➗ ARITHMETIC
+-- 📏 ROUNDING
+-- 📐 TRIGONOMETRY
+-- 📊 LOGARITHMS / EXPONENTIALS
+-- 🔍 INSPECTION
+extern c
+    public func zt_math_pow(base: float, exponent: float) -> float
+    public func zt_math_sqrt(value: float) -> float
+    public func zt_math_floor(value: float) -> float
+    public func zt_math_ceil(value: float) -> float
+    public func zt_math_round_half_away_from_zero(value: float) -> float
+    public func zt_math_trunc(value: float) -> float
+    public func zt_math_sin(value: float) -> float
+    public func zt_math_cos(value: float) -> float
+    public func zt_math_tan(value: float) -> float
+    public func zt_math_asin(value: float) -> float
+    public func zt_math_acos(value: float) -> float
+    public func zt_math_atan(value: float) -> float
+    public func zt_math_atan2(y: float, x: float) -> float
+    public func zt_math_ln(value: float) -> float
+    public func zt_math_log_ten(value: float) -> float
+    public func zt_math_log2(value: float) -> float
+    public func zt_math_log(value: float, base: float) -> float
+    public func zt_math_exp(value: float) -> float
+    public func zt_math_infinity() -> float
+    public func zt_math_nan() -> float
+    public func zt_math_is_nan(value: float) -> bool
+    public func zt_math_is_infinite(value: float) -> bool
+    public func zt_math_is_finite(value: float) -> bool
+end
+
+public const pi: float = 3.141592653589793
+
+public const e: float = 2.718281828459045
+
+public const tau: float = 6.283185307179586
+
+public func infinity() -> float
+    return math.zt_math_infinity()
+end
+
+public func nan() -> float
+    return math.zt_math_nan()
+end
+
+public func abs(value: float) -> float
+    if value < 0.0
+        return 0.0 - value
+    end
+    return value
+end
+
+public func abs_int(value: int) -> int
+    if value < 0
+        return 0 - value
+    end
+    return value
+end
+
+public func min(a: float, b: float) -> float
+    if a < b
+        return a
+    end
+    return b
+end
+
+public func max(a: float, b: float) -> float
+    if a > b
+        return a
+    end
+    return b
+end
+
+public func clamp(value: float, min: float, max: float) -> float
+    if value < min
+        return min
+    end
+    if value > max
+        return max
+    end
+    return value
+end
+
+public func pow(base: float, exponent: float) -> float
+    return math.zt_math_pow(base, exponent)
+end
+
+public func sqrt(value: float) -> float
+    return math.zt_math_sqrt(value)
+end
+
+public func floor(value: float) -> float
+    return math.zt_math_floor(value)
+end
+
+public func ceil(value: float) -> float
+    return math.zt_math_ceil(value)
+end
+
+public func round(value: float) -> float
+    return math.zt_math_round_half_away_from_zero(value)
+end
+
+public func trunc(value: float) -> float
+    return math.zt_math_trunc(value)
+end
+
+public func deg_to_rad(x: float) -> float
+    return x * (math.pi / 180.0)
+end
+
+public func rad_to_deg(x: float) -> float
+    return x * (180.0 / math.pi)
+end
+
+public func approx_equal(a: float, b: float, epsilon: float) -> bool
+    var diff: float = a - b
+    if diff < 0.0
+        diff = 0.0 - diff
+    end
+    return diff <= epsilon
+end
+
+public func sin(value: float) -> float
+    return math.zt_math_sin(value)
+end
+
+public func cos(value: float) -> float
+    return math.zt_math_cos(value)
+end
+
+public func tan(value: float) -> float
+    return math.zt_math_tan(value)
+end
+
+public func asin(value: float) -> float
+    return math.zt_math_asin(value)
+end
+
+public func acos(value: float) -> float
+    return math.zt_math_acos(value)
+end
+
+public func atan(value: float) -> float
+    return math.zt_math_atan(value)
+end
+
+public func atan2(y: float, x: float) -> float
+    return math.zt_math_atan2(y, x)
+end
+
+public func ln(value: float) -> float
+    return math.zt_math_ln(value)
+end
+
+public func log_ten(value: float) -> float
+    return math.zt_math_log_ten(value)
+end
+
+public func log2(value: float) -> float
+    return math.zt_math_log2(value)
+end
+
+public func log(value: float, base: float) -> float
+    return math.zt_math_log(value, base)
+end
+
+public func exp(value: float) -> float
+    return math.zt_math_exp(value)
+end
+
+public func is_nan(value: float) -> bool
+    return math.zt_math_is_nan(value)
+end
+
+public func is_infinite(value: float) -> bool
+    return math.zt_math_is_infinite(value)
+end
+
+public func is_finite(value: float) -> bool
+    return math.zt_math_is_finite(value)
+end

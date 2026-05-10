@@ -1,0 +1,10 @@
+namespace app.main
+
+func bad_predicate(value: int where 123) -> int
+    return value
+end
+
+func main() -> int
+    return 0
+end
+

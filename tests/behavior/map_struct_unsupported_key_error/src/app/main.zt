@@ -1,0 +1,10 @@
+namespace app.main
+
+struct Reading
+    value: float
+end
+
+func main() -> int
+    const values: map<Reading, int> = {}
+    return len(values)
+end

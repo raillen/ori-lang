@@ -1,0 +1,85 @@
+namespace app.main
+
+import std.list as list
+import std.map as map
+import std.text as text
+import std.validate as validate
+
+func main() -> int
+    const values: list<int> = [1, 2]
+    const empty_values: list<int> = []
+    const key_mode: text = "mode"
+    const key_missing: text = "missing"
+    const value_debug: text = "debug"
+    const labels: map<text, text> = { key_mode: value_debug }
+    const empty_labels: map<text, text> = {}
+    const mode_id: int = 1
+    const missing_id: int = 2
+    const labels_by_id: map<int, text> = { mode_id: value_debug }
+
+    if validate.positive(2) == false
+        return 1
+    end
+    if validate.non_negative(0) == false
+        return 2
+    end
+    if validate.not_empty_text("zen") == false
+        return 3
+    end
+    if validate.min_len("zen", 3) == false
+        return 4
+    end
+    if validate.max_len("zen", 3) == false
+        return 5
+    end
+    if validate.between(4, 1, 5) == false
+        return 6
+    end
+
+    if text.is_empty("") == false
+        return 7
+    end
+    if text.is_blank("   ") == false
+        return 8
+    end
+    if text.is_blank(" zen ")
+        return 9
+    end
+    if text.contains("zenith", "nit") == false
+        return 10
+    end
+    if text.starts_with("zenith", "zen") == false
+        return 11
+    end
+    if text.ends_with("zenith", "ith") == false
+        return 12
+    end
+
+    if list.is_empty(values)
+        return 13
+    end
+    if list.is_empty(empty_values) == false
+        return 14
+    end
+
+    if map.is_empty(labels)
+        return 15
+    end
+    if map.is_empty(empty_labels) == false
+        return 16
+    end
+    if map.has_key(labels, key_mode) == false
+        return 17
+    end
+    if map.has_key(labels, key_missing)
+        return 18
+    end
+    if map.has_key(labels_by_id, mode_id) == false
+        return 19
+    end
+    if map.has_key(labels_by_id, missing_id)
+        return 20
+    end
+
+    return 0
+end

@@ -1,0 +1,211 @@
+{
+  "suite": "quick",
+  "generated_at_utc": "2026-04-21T16:17:22.300536+00:00",
+  "platform_key": "windows-AMD64",
+  "host": {
+    "host": "RAILLEN-REDE",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "system": "windows",
+    "release": "11",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+    "python_version": "3.12.0",
+    "cpu_count": 12
+  },
+  "status": "pass",
+  "benchmark_count": 1,
+  "scenarios": {
+    "m37_result_generic": {
+      "status": "pass",
+      "count": 1
+    }
+  },
+  "benchmarks": [
+    {
+      "benchmark_id": "m37_result_generic",
+      "scenario": "m37_result_generic",
+      "category": "macro",
+      "kind": "bin",
+      "suite": "quick",
+      "status": "pass",
+      "generated_at_utc": "2026-04-21T16:17:22.298863+00:00",
+      "host": {
+        "host": "RAILLEN-REDE",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "system": "windows",
+        "release": "11",
+        "machine": "AMD64",
+        "processor": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+        "python_version": "3.12.0",
+        "cpu_count": 12
+      },
+      "metrics": {
+        "lat_median_ms": {
+          "value": 94.521,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "lat_p95_ms": {
+          "value": 102.406,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "lat_std_ms": {
+          "value": 8.762,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "throughput_ops_per_sec": {
+          "value": 10.5797,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "peak_ws": {
+          "value": 3899392,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "alloc_proxy": {
+          "value": 679936,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "binary_size": {
+          "value": 240118,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        },
+        "startup_ms": {
+          "value": 94.521,
+          "budget": "pass",
+          "baseline": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "base_report": {
+            "status": "pass",
+            "pct": 0.0
+          },
+          "status": "pass"
+        }
+      },
+      "metric_values": {
+        "lat_median_ms": 94.521,
+        "lat_p95_ms": 102.406,
+        "lat_std_ms": 8.762,
+        "throughput_ops_per_sec": 10.5797,
+        "peak_ws": 3899392,
+        "alloc_proxy": 679936,
+        "binary_size": 240118,
+        "startup_ms": 94.521
+      },
+      "budget": {
+        "warn": {
+          "lat_median_ms": 4200,
+          "lat_p95_ms": 7000,
+          "peak_ws": 520000000,
+          "binary_size": 22000000
+        },
+        "fail": {
+          "lat_median_ms": 9800,
+          "lat_p95_ms": 16000,
+          "peak_ws": 800000000,
+          "binary_size": 44000000
+        }
+      },
+      "method": {
+        "warmup": 1,
+        "runs": 2,
+        "retries": 0,
+        "outliers": 0
+      },
+      "samples": [
+        {
+          "exit": 0,
+          "ws": 3899392,
+          "alloc": 679936,
+          "stdout": "m37-result-generic-ok",
+          "stderr": "",
+          "ms": 85.7586,
+          "timeout": false
+        },
+        {
+          "exit": 0,
+          "ws": 3895296,
+          "alloc": 671744,
+          "stdout": "m37-result-generic-ok",
+          "stderr": "",
+          "ms": 103.2826,
+          "timeout": false
+        }
+      ],
+      "last": {
+        "exit": 0,
+        "ws": 3895296,
+        "alloc": 671744,
+        "stdout": "m37-result-generic-ok",
+        "stderr": "",
+        "ms": 103.2826,
+        "timeout": false
+      }
+    }
+  ],
+  "release_gate": false,
+  "override_file": ""
+}

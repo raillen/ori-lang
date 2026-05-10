@@ -1,0 +1,10 @@
+namespace app.main
+
+func main() -> int
+    var values: list<int> = [4, 7, 9, 11]
+    const middle: list<int> = values[1..2]
+    const head: list<int> = values[..1]
+    const tail: list<int> = values[2..]
+
+    return len(values) + len(middle) + middle[0] + middle[1] + len(head) + len(tail) + tail[1]
+end

@@ -1,0 +1,56 @@
+namespace app.main
+
+---
+Callable Basic Example
+
+Demonstrates R3.M5 callable types: func(T, ...) -> R
+
+Features shown:
+1. Function references: assign a function to a callable variable
+2. Indirect calls: call through the callable variable
+3. Multiple callable types with different signatures
+4. Using callables as callbacks
+---
+
+-- Math operations as pure functions
+func add(a: int, b: int) -> int
+    return a + b
+end
+
+func subtract(a: int, b: int) -> int
+    return a - b
+end
+
+func multiply(a: int, b: int) -> int
+    return a * b
+end
+
+func negate(x: int) -> int
+    return -x
+end
+
+-- Calculator using callables as "operations"
+public func main() -> int
+    -- Basic callable: assign function reference
+    var Oper: func(int, int) -> int = add
+    var value: int = Oper(10, 5)
+    -- value = 15
+
+    -- Reassign to different function with same signature
+    Oper = subtract
+    value = Oper(10, 5)
+    -- value = 5
+
+    -- Callable with different signature
+    var Negate: func(int) -> int = negate
+    value = Negate(value)
+    -- value = -5
+
+    -- Multiple operations via callable array (simulated with sequential calls)
+    var operations: func(int, int) -> int = multiply
+    value = operations(6, 7)
+    -- value = 42
+
+    -- Return final value to verify
+    return value
+end

@@ -1,0 +1,126 @@
+R3.M5 - Callables Tipados e Delegates - Progress Notes
+========================================================
+
+Goal: deliver full R3.M5 (all 5 checklist items) to unblock R3.M2 Phase 3
+(jobs.spawn/join/cancel).
+
+Scope:
+- tipo `func(T1,...) -> R` como tipo de primeira classe
+- referência a função top-level como valor (sem captura; closures = R3.M6)
+- compatibilidade estrutural de assinatura
+- chamada indireta via callable
+- integração FFI (extern c) para function pointer
+- escape/ownership rules (sem vazar para public var, sem captura)
+- testes positivos + negativos + FFI
+- docs: Decision 089 + docs/spec/language/callables.md
+
+Phases:
+  Phase 1 - docs + tipo + parser                       [DONE 2026-04-24]
+  Phase 2 - checker (type resolve + escape + diag)     [DONE 2026-04-24]
+  Phase 5a - behavior fixtures (Phase 2 negatives)     [DONE 2026-04-24]
+  Phase 2b - HIR lowering (func ref + indirect call)   [pending]
+  Phase 3 - ZIR + emitter (codegen)                    [pending]
+  Phase 4 - FFI callbacks + escape rules               [pending]
+  Phase 5b - positive fixtures (need Phase 3 codegen)  [pending]
+  Phase 6 (R3.M2) - runtime jobs + std.concurrent      [pending]
+
+Phase 5a deliverables (all green, 178 total / 176 pass / 0 fail / 2 skip):
+- tests/behavior/callable_escape_public_var_error        (check-fail)
+- tests/behavior/callable_escape_struct_field_error      (check-fail)
+- tests/behavior/callable_escape_container_error         (check-fail)
+- tests/behavior/callable_invalid_func_ref_error         (check-fail)
+- tests/behavior/callable_signature_mismatch_error       (check-fail)
+- tests/fixtures/diagnostics/callable_*.contains.txt     (5 fragment files)
+- tests/suites/suite_definitions.py                      (registered in CHECK_FAIL + FRAGMENTS)
+- compiler/semantic/diagnostics/diagnostics.c            (stable codes callable.*)
+
+Phase 1 deliverables (all green, 170/172 tests):
+- docs/internal/decisions/language/089-callable-delegates-v1.md         (new)
+- docs/spec/language/callables.md                              (new)
+- compiler/semantic/types/types.h                         (ZT_TYPE_CALLABLE + helpers)
+- compiler/semantic/types/types.c                         (make/format/signatures_equal)
+- compiler/frontend/ast/model.h                           (ZT_AST_TYPE_CALLABLE + type_callable payload)
+- compiler/frontend/parser/parser.c                       (func(T,...) -> R)
+- compiler/tooling/formatter.c                            (formatter support)
+
+Phase 2 deliverables (all green, 170/172 tests):
+- compiler/semantic/diagnostics/diagnostics.h/.c          (6 new callable.* codes + ACTION/WHY/NEXT)
+- compiler/semantic/types/checker.c                       (callable type resolve + func-ref-as-value +
+                                                           indirect call via local binding + escape rules
+                                                           for container / public var / struct field)
+
+Phase 2 known limitations (intentional, handled in later phases):
+- HIR/ZIR/emitter still emit callable IDENT_EXPR as a direct call (not &funcname) -> Phase 2b+3
+- Public var escape applies to top-level public vars; member vars inside namespaces are still caught via
+  public-var-decl path but struct fields and containers are covered at resolve time.
+- Indirect call supports only top-level `op(args)` through an ident bound to a callable. Chained
+  indirect calls (`get_callable()(args)`) need Phase 2b HIR nodes.
+- FFI boundary checks (Decision 089 "Permitted / Rejected" for extern c callable params) -> Phase 4
+
+Invariants per phase:
+- `python build.py` green
+- `python run_all_tests.py` green (or unrelated fails only)
+
+Design notes:
+
+  Type encoding in zt_type:
+    kind: ZT_TYPE_CALLABLE
+    name: NULL
+    args[0]: return type (ZT_TYPE_VOID if none)
+    args[1..n]: parameter types
+
+  Format: `func(T1, T2) -> R`   (void-returning: `func(T1, T2) -> void`)
+
+  Compatibility rule (Phase 1 surface):
+    same param count, each param type equal, same return type (zt_type_equals).
+    No variance. No default params in callable type.
+
+  AST surface:
+    New AST type-node kind: ZT_AST_TYPE_CALLABLE
+      .params: zt_ast_node_list (of type nodes)
+      .return_type: zt_ast_node (NULL => void)
+
+    New expression kind for func-as-value:
+      reuse ZT_AST_IDENT_EXPR; checker decides based on expected type and
+      the fact that the identifier resolves to a FUNC_DECL (not called).
+
+  HIR:
+    New expr kind: ZT_HIR_FUNC_REF_EXPR
+      .name (string, lowered/qualified)
+      .callable_type (copy of callable type)
+
+    Call-through-callable:
+      reuse ZT_HIR_CALL_EXPR, but callee is not a plain name - add a flag
+      is_indirect + callee_expr.
+      Simplest: introduce ZT_HIR_CALL_INDIRECT_EXPR with callee: zt_hir_expr*
+      and args: zt_hir_expr_list.
+
+  ZIR:
+    New instr kinds:
+      ZIR_EXPR_FUNC_REF  -> produces a callable value
+      ZIR_EXPR_CALL_INDIRECT -> callee is a value, args follow
+
+  Emitter C:
+    typedef: `typedef zt_int (*zt_callable__i64__i64)(zt_int);`
+      naming scheme: zt_callable__<ret>__<param1>__<param2>...
+    func-ref: emit `&zt_pkg__func_name`
+    indirect call: emit `callee(args...)`
+
+  Escape rules (Phase 4):
+    - callable value may appear in: local let/var, function param, function
+      return value, extern c param with compatible signature.
+    - callable value may NOT appear in: public var, struct field (Phase 1),
+      list/map/optional/result element types (Phase 1).
+    - rationale: no captures yet, so stored callables have no lifetime
+      coupling; future phases will relax.
+
+Open questions (tracked for later):
+- Q1: do we allow `func(int) -> int` as struct field in a later phase?
+- Q2: named-arg support on indirect calls? [no for Phase 1]
+- Q3: does `public func` applied to a callable-field become a re-export? [no]
+
+Cross-references:
+- docs/internal/planning/checklist-v3.md        (R3.M5 section)
+- docs/internal/planning/roadmap-v3.md
+- docs/internal/decisions/language/087-concurrency-workers-and-transfer-boundaries.md
+- docs/spec/language/concurrency.md         (R3.M2 Phase 3 uses jobs.spawn)

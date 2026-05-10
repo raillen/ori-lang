@@ -1,0 +1,9 @@
+namespace app.main
+
+struct Config
+    op: func(int, int) -> int
+end
+
+public func main() -> int
+    return 0
+end

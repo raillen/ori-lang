@@ -1,0 +1,173 @@
+namespace borealis.game.camera3d
+
+public enum CameraMode
+    Manual
+    Fps
+    Tps
+    TopDown
+    Isometric
+    OverShoulder
+    Fixed
+end
+
+public struct Camera3D
+    id: int
+end
+
+public struct CameraDebugInfo
+    mode: camera3d.CameraMode
+    position: game.Vector3
+    target: game.Vector3
+    fov: float
+end
+
+public struct FpsConfig
+    move_speed: float = 5.0
+    look_speed: float = 1.0
+end
+
+public struct TpsConfig
+    distance: float = 5.0
+    smooth: float = 0.15
+end
+
+public struct TopDownConfig
+    height: float = 12.0
+end
+
+public struct IsometricConfig
+    distance: float = 8.0
+end
+
+public struct OverShoulderConfig
+    distance: float = 3.5
+end
+
+public struct FixedConfig
+    locked: bool = true
+end
+
+public var camera3d_next_id: int = 1
+public var camera3d_position_x: map<int, float> = {}
+public var camera3d_position_y: map<int, float> = {}
+public var camera3d_position_z: map<int, float> = {}
+public var camera3d_target_x: map<int, float> = {}
+public var camera3d_target_y: map<int, float> = {}
+public var camera3d_target_z: map<int, float> = {}
+public var camera3d_fov: map<int, float> = {}
+public var camera3d_mode: map<int, int> = {}
+
+public func camera3d_create(position: game.Vector3, target: game.Vector3, fov: float) -> result<camera3d.Camera3D, core.Error>
+    const id: int = camera3d_next_id
+    camera3d_next_id = camera3d_next_id + 1
+    camera3d_position_x = camera3d.camera3d_set_float(camera3d_position_x, id, position.x)
+    camera3d_position_y = camera3d.camera3d_set_float(camera3d_position_y, id, position.y)
+    camera3d_position_z = camera3d.camera3d_set_float(camera3d_position_z, id, position.z)
+    camera3d_target_x = camera3d.camera3d_set_float(camera3d_target_x, id, target.x)
+    camera3d_target_y = camera3d.camera3d_set_float(camera3d_target_y, id, target.y)
+    camera3d_target_z = camera3d.camera3d_set_float(camera3d_target_z, id, target.z)
+    camera3d_fov = camera3d.camera3d_set_float(camera3d_fov, id, fov)
+    camera3d_mode = camera3d.camera3d_set_int(camera3d_mode, id, 0)
+    return success(camera3d.Camera3D(id: id))
+end
+
+public func camera3d_set_position(camera: camera3d.Camera3D, position: game.Vector3) -> result<void, core.Error>
+    camera3d_position_x = camera3d.camera3d_set_float(camera3d_position_x, camera.id, position.x)
+    camera3d_position_y = camera3d.camera3d_set_float(camera3d_position_y, camera.id, position.y)
+    camera3d_position_z = camera3d.camera3d_set_float(camera3d_position_z, camera.id, position.z)
+    return success()
+end
+
+public func camera3d_get_position(camera: camera3d.Camera3D) -> game.Vector3
+    return game.vec3(
+        camera3d.camera3d_float_or(camera3d_position_x, camera.id, 0.0),
+        camera3d.camera3d_float_or(camera3d_position_y, camera.id, 0.0),
+        camera3d.camera3d_float_or(camera3d_position_z, camera.id, 0.0)
+    )
+end
+
+public func camera3d_set_target(camera: camera3d.Camera3D, target: game.Vector3) -> result<void, core.Error>
+    camera3d_target_x = camera3d.camera3d_set_float(camera3d_target_x, camera.id, target.x)
+    camera3d_target_y = camera3d.camera3d_set_float(camera3d_target_y, camera.id, target.y)
+    camera3d_target_z = camera3d.camera3d_set_float(camera3d_target_z, camera.id, target.z)
+    return success()
+end
+
+public func camera3d_get_target(camera: camera3d.Camera3D) -> game.Vector3
+    return game.vec3(
+        camera3d.camera3d_float_or(camera3d_target_x, camera.id, 0.0),
+        camera3d.camera3d_float_or(camera3d_target_y, camera.id, 0.0),
+        camera3d.camera3d_float_or(camera3d_target_z, camera.id, 0.0)
+    )
+end
+
+public func camera3d_set_fov(camera: camera3d.Camera3D, fov: float) -> result<void, core.Error>
+    camera3d_fov = camera3d.camera3d_set_float(camera3d_fov, camera.id, fov)
+    return success()
+end
+
+public func camera3d_get_fov(camera: camera3d.Camera3D) -> float
+    return camera3d.camera3d_float_or(camera3d_fov, camera.id, 60.0)
+end
+
+public func camera_use_fps(camera: camera3d.Camera3D, _config: camera3d.FpsConfig) -> result<void, core.Error>
+    camera3d_mode = camera3d.camera3d_set_int(camera3d_mode, camera.id, 1)
+    return success()
+end
+
+public func camera_use_tps(camera: camera3d.Camera3D, _config: camera3d.TpsConfig) -> result<void, core.Error>
+    camera3d_mode = camera3d.camera3d_set_int(camera3d_mode, camera.id, 2)
+    return success()
+end
+
+public func camera_mode_get(camera: camera3d.Camera3D) -> camera3d.CameraMode
+    const raw: int = camera3d.camera3d_int_or(camera3d_mode, camera.id, 0)
+    if raw == 1
+        return camera3d.CameraMode.Fps
+    end
+    if raw == 2
+        return camera3d.CameraMode.Tps
+    end
+    return camera3d.CameraMode.Manual
+end
+
+public func camera_debug_info(camera: camera3d.Camera3D) -> camera3d.CameraDebugInfo
+    return camera3d.CameraDebugInfo(
+        mode: camera3d.camera_mode_get(camera),
+        position: camera3d.camera3d_get_position(camera),
+        target: camera3d.camera3d_get_target(camera),
+        fov: camera3d.camera3d_get_fov(camera)
+    )
+end
+
+public func camera3d_float_or(values: map<int, float>, id: int, fallback: float) -> float
+    const maybe: optional<float> = values.get(id)
+    match maybe
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func camera3d_int_or(values: map<int, int>, id: int, fallback: int) -> int
+    const maybe: optional<int> = values.get(id)
+    match maybe
+        case value present ->
+            return present
+        case none ->
+            return fallback
+    end
+end
+
+public func camera3d_set_float(values: map<int, float>, id: int, value: float) -> map<int, float>
+    var next: map<int, float> = values
+    next[id] = value
+    return next
+end
+
+public func camera3d_set_int(values: map<int, int>, id: int, value: int) -> map<int, int>
+    var next: map<int, int> = values
+    next[id] = value
+    return next
+end

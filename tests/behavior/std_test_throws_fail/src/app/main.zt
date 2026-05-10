@@ -1,0 +1,11 @@
+namespace app.main
+
+import std.test as test
+
+func main() -> int
+    test.throws(func() -> void
+        return
+    end)
+
+    return 0
+end

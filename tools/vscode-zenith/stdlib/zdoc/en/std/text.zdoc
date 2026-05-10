@@ -1,0 +1,160 @@
+--- @target: namespace
+# std.text - current alpha text module
+
+Pure, locale-neutral text helpers for the current alpha cut.
+The module works by code point in the current MVP model.
+Only the delivered and safe subset is documented here.
+---
+
+--- @target: to_utf8
+```zt
+public func to_utf8(value: text) -> bytes
+```
+
+Converts valid Zenith `text` into UTF-8 `bytes`.
+---
+
+--- @target: from_utf8
+```zt
+public func from_utf8(value: bytes) -> result<text, text>
+```
+
+Decodes UTF-8 `bytes`.
+In the current alpha cut, the error is still represented as `text`.
+---
+
+--- @target: trim
+```zt
+public func trim(value: text) -> text
+```
+
+Removes whitespace from both ends.
+---
+
+--- @target: trim_start
+```zt
+public func trim_start(value: text) -> text
+```
+
+Removes leading whitespace.
+---
+
+--- @target: trim_end
+```zt
+public func trim_end(value: text) -> text
+```
+
+Removes trailing whitespace.
+---
+
+--- @target: contains
+```zt
+public func contains(value: text, needle: text) -> bool
+```
+
+Returns `true` when `needle` appears in `value`.
+---
+
+--- @target: starts_with
+```zt
+public func starts_with(value: text, prefix: text) -> bool
+```
+
+Returns `true` when `value` starts with `prefix`.
+---
+
+--- @target: ends_with
+```zt
+public func ends_with(value: text, suffix: text) -> bool
+```
+
+Returns `true` when `value` ends with `suffix`.
+---
+
+--- @target: has_prefix
+```zt
+public func has_prefix(value: text, prefix: text) -> bool
+```
+
+Explicit semantic alias for `starts_with`.
+---
+
+--- @target: has_suffix
+```zt
+public func has_suffix(value: text, suffix: text) -> bool
+```
+
+Explicit semantic alias for `ends_with`.
+---
+
+--- @target: has_whitespace
+```zt
+public func has_whitespace(value: text) -> bool
+```
+
+Returns `true` when at least one whitespace character is present.
+---
+
+--- @target: index_of
+```zt
+public func index_of(value: text, needle: text) -> optional<int>
+```
+
+Returns the first matching index, or `none`.
+---
+
+--- @target: index_of_or_minus_one
+```zt
+public func index_of_or_minus_one(value: text, needle: text) -> int
+```
+
+Compatibility helper. Returns the first matching index, or `-1`.
+---
+
+--- @target: last_index_of
+```zt
+public func last_index_of(value: text, needle: text) -> optional<int>
+```
+
+Returns the last matching index, or `none`.
+---
+
+--- @target: last_index_of_or_minus_one
+```zt
+public func last_index_of_or_minus_one(value: text, needle: text) -> int
+```
+
+Compatibility helper. Returns the last matching index, or `-1`.
+---
+
+--- @target: is_empty
+```zt
+public func is_empty(value: text) -> bool
+```
+
+Returns `true` when the text is empty.
+---
+
+--- @target: is_blank
+```zt
+public func is_blank(value: text) -> bool
+```
+
+Returns `true` when text is empty or contains only spaces.
+---
+
+--- @target: is_digits
+```zt
+public func is_digits(value: text) -> bool
+```
+
+Returns `true` only for non-empty text made of ASCII digits `0-9`.
+---
+
+--- @target: limit
+```zt
+public func limit(value: text, max_len: int) -> text
+```
+
+Cuts text to at most `max_len` code points, without adding a suffix.
+---

@@ -1,0 +1,16 @@
+[project]
+name = "c-bindings-sqlite3"
+version = "0.1.0"
+kind = "app"
+
+[source]
+root = "src"
+
+[app]
+entry = "app.main"
+
+[build]
+target = "native"
+output = "build"
+profile = "debug"
+linker_flags = "examples/c-bindings-sqlite3/build/sqlite3_smoke.o examples/c-bindings-sqlite3/build/libsqlite3.a"

@@ -1,0 +1,14 @@
+namespace app.main
+
+public func main() -> int
+    const factor: int = 5
+    const add_factor: func(int) -> int = func(value: int) -> int
+        return value + factor
+    end
+
+    if add_factor(12) != 17
+        panic("closure capture returned wrong value")
+    end
+
+    return 0
+end

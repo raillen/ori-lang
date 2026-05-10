@@ -1,0 +1,62 @@
+--- @target: namespace
+# std.random — Geração de Números Pseudo-Aleatórios
+
+Módulo para geração determinística de números aleatórios usando PRNG do host.
+Permite definir semente para reprodutibilidade em testes.
+---
+
+--- @target: seed
+```zt
+public func seed(seed: int) -> void
+```
+
+Define a semente do gerador pseudo-aleatório.
+Usar a mesma semente produz sempre a mesma sequência de números, útil para testes determinísticos.
+
+@param seed — Valor inteiro usado como semente do PRNG.
+---
+
+--- @target: next
+```zt
+public func next() -> int
+```
+
+Gera o próximo número pseudo-aleatório da sequência.
+
+@return Inteiro pseudo-aleatório.
+---
+
+--- @target: between
+```zt
+public func between(min: int, max: int) -> result<int, core.Error>
+```
+
+Gera um número pseudo-aleatório no intervalo fechado `[min, max]`.
+Retorna erro se `max < min`.
+
+@param min — Limite inferior (inclusivo).
+@param max — Limite superior (inclusivo).
+@return Inteiro aleatório no intervalo, ou mensagem de erro se `max < min`.
+---
+
+--- @target: Stats
+```zt
+public struct Stats
+```
+
+Tipo publico `Stats`.
+---
+--- @target: float_between
+```zt
+public func float_between(min: float, max: float) -> result<float, core.Error>
+```
+
+Funcao publica `float_between`.
+---
+--- @target: stats
+```zt
+public func stats() -> random.Stats
+```
+
+Funcao publica `stats`.
+---

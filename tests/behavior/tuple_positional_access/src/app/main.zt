@@ -1,0 +1,15 @@
+namespace app.main
+
+func make_pair() -> tuple<int, text>
+    return (42, "answer")
+end
+
+func main() -> int
+    const pair: tuple<int, text> = make_pair()
+    const score: int = pair.0
+    const label: text = pair.1
+    if score == 42 and label == "answer"
+        return 0
+    end
+    return 1
+end

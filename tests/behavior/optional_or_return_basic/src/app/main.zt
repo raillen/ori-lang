@@ -1,0 +1,46 @@
+namespace app.main
+
+func maybe_score(ok: bool) -> optional<int>
+    if ok
+        return 9
+    end
+
+    return none
+end
+
+func score_or_return(ok: bool) -> int
+    const score: int = maybe_score(ok).or_return(41)
+    return score + 1
+end
+
+func score_or_error(ok: bool) -> result<int, core.Error>
+    const score: int = maybe_score(ok).or_return(error("missing score"))
+    return success(score)
+end
+
+func main() -> int
+    if score_or_return(true) != 10
+        return 1
+    end
+
+    if score_or_return(false) != 41
+        return 2
+    end
+
+    const ok_score: result<int, core.Error> = score_or_error(true)
+    if ok_score.is_error()
+        return 3
+    end
+
+    const missing_score: result<int, core.Error> = score_or_error(false)
+    match missing_score
+        case success(_value) ->
+            return 4
+        case error(err) ->
+            if err.message != "missing score"
+                return 5
+            end
+    end
+
+    return 0
+end

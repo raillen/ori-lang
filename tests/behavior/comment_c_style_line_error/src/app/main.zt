@@ -1,0 +1,6 @@
+namespace app.main
+
+// this is a C-style comment
+public func main() -> int
+    return 0
+end

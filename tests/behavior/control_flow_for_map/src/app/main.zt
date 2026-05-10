@@ -1,0 +1,17 @@
+namespace app.main
+
+func main() -> int
+    const key_a: text = "a"
+    const value_a: text = "bc"
+    const key_b: text = "de"
+    const value_b: text = "f"
+
+    var labels: map<text, text> = { key_a: value_a, key_b: value_b }
+    var total: int = 0
+
+    for key, value in labels
+        total = total + len(key) + len(value)
+    end
+
+    return total
+end

@@ -1,0 +1,13 @@
+namespace app.main
+
+import std.set as set
+
+struct Reading
+    value: float
+end
+
+func main() -> int
+    var readings: set<Reading> = set.empty()
+    set.add(readings, Reading(value: 1.5))
+    return set.len(readings)
+end

@@ -1,0 +1,299 @@
+namespace std.fs
+
+-- Zenith Standard Library - FS Module
+-- Synchronous filesystem operations (Decision 064).
+public enum Error
+    NotFound
+    PermissionDenied
+    AlreadyExists
+    NotADirectory
+    IsADirectory
+    IOError
+    InvalidPath
+    Unknown
+end
+
+public struct Metadata
+    size_bytes: int
+    modified_at_ms: int
+    created_at_ms: optional<int>
+    is_file: bool
+    is_dir: bool
+end
+
+extern c
+    public func zt_host_read_file(file_path: text) -> result<text, core.Error>
+    public func zt_host_write_file(file_path: text, content: text) -> result<void, core.Error>
+    public func zt_host_path_exists(target_path: text) -> bool
+    public func zt_host_fs_append_text_core(file_path: text, content: text) -> result<void, core.Error>
+    public func zt_host_fs_read_bytes_core(file_path: text) -> result<bytes, core.Error>
+    public func zt_host_fs_write_bytes_core(file_path: text, content: bytes) -> result<void, core.Error>
+    public func zt_host_fs_is_file_core(file_path: text) -> result<bool, core.Error>
+    public func zt_host_fs_is_dir_core(dir_path: text) -> result<bool, core.Error>
+    public func zt_host_fs_create_dir_core(dir_path: text) -> result<void, core.Error>
+    public func zt_host_fs_create_dir_all_core(dir_path: text) -> result<void, core.Error>
+    public func zt_host_fs_list_core(dir_path: text) -> result<list<text>, core.Error>
+    public func zt_host_fs_walk_dir_core(dir_path: text) -> result<list<text>, core.Error>
+    public func zt_host_fs_remove_file_core(file_path: text) -> result<void, core.Error>
+    public func zt_host_fs_remove_dir_core(dir_path: text) -> result<void, core.Error>
+    public func zt_host_fs_remove_dir_all_core(dir_path: text) -> result<void, core.Error>
+    public func zt_host_fs_copy_file_core(from_path: text, to_path: text) -> result<void, core.Error>
+    public func zt_host_fs_move_core(from_path: text, to_path: text) -> result<void, core.Error>
+    public func zt_host_fs_size_core(target_path: text) -> result<int, core.Error>
+    public func zt_host_fs_modified_at_core(target_path: text) -> result<int, core.Error>
+    public func zt_host_fs_created_at_core(target_path: text) -> result<optional<int>, core.Error>
+end
+
+func map_host_error(err: core.Error) -> fs.Error
+    if err.code == "fs.not_found"
+        return fs.Error.NotFound
+    end
+    if err.code == "fs.permission_denied"
+        return fs.Error.PermissionDenied
+    end
+    if err.code == "fs.already_exists"
+        return fs.Error.AlreadyExists
+    end
+    if err.code == "fs.not_a_directory"
+        return fs.Error.NotADirectory
+    end
+    if err.code == "fs.is_a_directory"
+        return fs.Error.IsADirectory
+    end
+    if err.code == "fs.invalid_path"
+        return fs.Error.InvalidPath
+    end
+    if err.code == "fs.io"
+        return fs.Error.IOError
+    end
+    if err.message == "No such file or directory" or err.message == "The system cannot find the file specified" or err.message == "The system cannot find the path specified"
+        return fs.Error.NotFound
+    end
+    if err.message == "Permission denied" or err.message == "Access is denied."
+        return fs.Error.PermissionDenied
+    end
+    return fs.Error.Unknown
+end
+
+public func read_text(file_path: text) -> result<text, fs.Error>
+    match fs.zt_host_read_file(file_path)
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func write_text(file_path: text, content: text) -> result<void, fs.Error>
+    match fs.zt_host_write_file(file_path, content)
+        case success():
+            return success()
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func append_text(file_path: text, content: text) -> result<void, fs.Error>
+    match fs.zt_host_fs_append_text_core(file_path, content)
+        case success():
+            return success()
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func read_bytes(file_path: text) -> result<bytes, fs.Error>
+    match fs.zt_host_fs_read_bytes_core(file_path)
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func write_bytes(file_path: text, content: bytes) -> result<void, fs.Error>
+    match fs.zt_host_fs_write_bytes_core(file_path, content)
+        case success():
+            return success()
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func exists(target_path: text) -> result<bool, fs.Error>
+    const val: bool = fs.zt_host_path_exists(target_path)
+    return success(val)
+end
+
+public func is_file(file_path: text) -> result<bool, fs.Error>
+    match fs.zt_host_fs_is_file_core(file_path)
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func is_dir(dir_path: text) -> result<bool, fs.Error>
+    match fs.zt_host_fs_is_dir_core(dir_path)
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func create_dir(dir_path: text) -> result<void, fs.Error>
+    match fs.zt_host_fs_create_dir_core(dir_path)
+        case success():
+            return success()
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func create_dir_all(dir_path: text) -> result<void, fs.Error>
+    match fs.zt_host_fs_create_dir_all_core(dir_path)
+        case success():
+            return success()
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func list_dir(dir_path: text) -> result<list<text>, fs.Error>
+    match fs.zt_host_fs_list_core(dir_path)
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func walk_dir(dir_path: text) -> result<list<text>, fs.Error>
+    match fs.zt_host_fs_walk_dir_core(dir_path)
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func remove_file(file_path: text) -> result<void, fs.Error>
+    match fs.zt_host_fs_remove_file_core(file_path)
+        case success():
+            return success()
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func remove_dir(dir_path: text) -> result<void, fs.Error>
+    match fs.zt_host_fs_remove_dir_core(dir_path)
+        case success():
+            return success()
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func remove_dir_all(dir_path: text) -> result<void, fs.Error>
+    match fs.zt_host_fs_remove_dir_all_core(dir_path)
+        case success():
+            return success()
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func copy_file(from: text, to: text) -> result<void, fs.Error>
+    match fs.zt_host_fs_copy_file_core(from, to)
+        case success():
+            return success()
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func copy(from: text, to: text) -> result<void, fs.Error>
+    return fs.copy_file(from, to)
+end
+
+public func move(from: text, to: text) -> result<void, fs.Error>
+    match fs.zt_host_fs_move_core(from, to)
+        case success():
+            return success()
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func rename(from: text, to: text) -> result<void, fs.Error>
+    return fs.move(from, to)
+end
+
+public func metadata(target_path: text) -> result<fs.Metadata, fs.Error>
+    match fs.size(target_path)
+        case success(meta_size):
+            match fs.modified_at(target_path)
+                case success(modified):
+                    match fs.created_at(target_path)
+                        case success(created):
+                            match fs.is_file(target_path)
+                                case success(file_flag):
+                                    match fs.is_dir(target_path)
+                                        case success(dir_flag):
+                                            return success(fs.Metadata(
+                                                size_bytes: meta_size,
+                                                modified_at_ms: modified,
+                                                created_at_ms: created,
+                                                is_file: file_flag,
+                                                is_dir: dir_flag
+                                            ))
+                                        case error(err):
+                                            return error(err)
+                                    end
+                                case error(err):
+                                    return error(err)
+                            end
+                        case error(err):
+                            return error(err)
+                    end
+                case error(err):
+                    return error(err)
+            end
+        case error(err):
+            return error(err)
+    end
+end
+
+public func size(target_path: text) -> result<int, fs.Error>
+    match fs.zt_host_fs_size_core(target_path)
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func file_size(target_path: text) -> result<int, fs.Error>
+    return fs.size(target_path)
+end
+
+public func modified_at(target_path: text) -> result<int, fs.Error>
+    match fs.zt_host_fs_modified_at_core(target_path)
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end
+
+public func created_at(target_path: text) -> result<optional<int>, fs.Error>
+    match fs.zt_host_fs_created_at_core(target_path)
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(fs.map_host_error(err))
+    end
+end

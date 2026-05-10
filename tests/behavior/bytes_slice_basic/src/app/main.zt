@@ -1,0 +1,10 @@
+namespace app.main
+
+public func main() -> int
+    const data: bytes = hex bytes "01 02 03 04 05"
+    const slice: bytes = data[1..3]
+    if len(slice) == 0
+        return 1
+    end
+    return 0
+end

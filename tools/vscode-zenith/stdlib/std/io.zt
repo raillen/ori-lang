@@ -1,0 +1,107 @@
+namespace std.io
+
+-- Zenith Standard Library — IO Module
+-- Typed textual input/output/error streams (Decision 058).
+-- 🏗️ TYPES
+-- 🏗️ EXTERN C
+-- 📖 READ
+-- ✍️ WRITE
+public struct Input
+    handle: int
+end
+
+public struct Output
+    handle: int
+end
+
+public enum Error
+    ReadFailed
+    WriteFailed
+    Unknown
+end
+
+public const input: io.Input = io.Input(handle: 0)
+
+public const output: io.Output = io.Output(handle: 1)
+
+public const stderr: io.Output = io.Output(handle: 2)
+
+extern c
+    public func zt_host_read_line_stdin() -> result<optional<text>, core.Error>
+    public func zt_host_read_all_stdin() -> result<text, core.Error>
+    public func zt_host_write_stdout(value: text) -> result<void, core.Error>
+    public func zt_host_write_stderr(value: text) -> result<void, core.Error>
+end
+
+func map_host_error(err: core.Error, fallback: io.Error) -> io.Error
+    if err.code == "io.read_failed"
+        return io.Error.ReadFailed
+    end
+    if err.code == "io.write_failed"
+        return io.Error.WriteFailed
+    end
+    match fallback
+        case io.Error.ReadFailed:
+            return io.Error.ReadFailed
+        case io.Error.WriteFailed:
+            return io.Error.WriteFailed
+        case io.Error.Unknown:
+            return io.Error.Unknown
+    end
+end
+
+public func to_core_error(err: io.Error) -> core.Error
+    match err
+        case io.Error.ReadFailed:
+            return core.Error("io.read_failed", "read failed")
+        case io.Error.WriteFailed:
+            return core.Error("io.write_failed", "write failed")
+        case io.Error.Unknown:
+            return core.Error("io.unknown", "unknown I/O error")
+    end
+end
+
+public func read_line(from: io.Input = io.input) -> result<optional<text>, io.Error>
+    match io.zt_host_read_line_stdin()
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(io.map_host_error(err, io.Error.ReadFailed))
+    end
+end
+
+public func read_all(from: io.Input = io.input) -> result<text, io.Error>
+    match io.zt_host_read_all_stdin()
+        case success(value):
+            return success(value)
+        case error(err):
+            return error(io.map_host_error(err, io.Error.ReadFailed))
+    end
+end
+
+public func write(
+    value: text,
+    to: io.Output = io.output
+) -> result<void, io.Error>
+    if to.handle == 2
+        match io.zt_host_write_stderr(value)
+            case success():
+                return success()
+            case error(err):
+                return error(io.map_host_error(err, io.Error.WriteFailed))
+        end
+    end
+    match io.zt_host_write_stdout(value)
+        case success():
+            return success()
+        case error(err):
+            return error(io.map_host_error(err, io.Error.WriteFailed))
+    end
+end
+
+public func print(
+    value: text,
+    to: io.Output = io.output
+) -> result<void, io.Error>
+    return io.write(value, to: to)
+end

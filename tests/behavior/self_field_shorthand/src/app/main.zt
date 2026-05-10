@@ -1,0 +1,21 @@
+namespace app.main
+
+struct Counter
+    value: int
+    label: text
+end
+
+apply Counter
+    mut func add(delta: int) 
+        @value = @value + delta
+    end
+    func score() -> int 
+        return @value + len(@label)
+    end
+end
+
+func main() -> int 
+    var counter: Counter = Counter(value: 3, label: "zen")
+    counter.add(4)
+    return counter.score()
+end

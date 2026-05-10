@@ -1,0 +1,26 @@
+namespace app.main
+
+import std.jobs as jobs
+import std.text as text
+
+func produce_text() -> text
+    return "ok"
+end
+
+func suffix_text(value: text) -> text
+    return text.concat(value, "!")
+end
+
+public func main() -> int
+    const plain: jobs.Job<text> = jobs.spawn(produce_text)
+    if jobs.join(plain) != "ok"
+        return 1
+    end
+
+    const with_value: jobs.Job<text> = jobs.spawn(suffix_text, "go")
+    if jobs.join(with_value) != "go!"
+        return 2
+    end
+
+    return 0
+end

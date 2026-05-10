@@ -1,0 +1,16 @@
+namespace app.main
+
+struct Player
+    hp: int where it >= 0
+end
+
+func keep_positive(x: int where it >= 0) -> int
+    return x
+end
+
+func main() -> int
+    const p: Player = Player(hp: 2)
+    var copy: Player = p
+    copy.hp = keep_positive(40)
+    return copy.hp
+end

@@ -1,0 +1,6 @@
+namespace app.main
+
+func main() -> int
+    const x: int = 9223372036854775808
+    return x
+end

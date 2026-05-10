@@ -1,0 +1,42 @@
+namespace app.main
+
+import std.list as list
+
+func main() -> int
+    const values: list<int> = [4, 8, 15]
+    const rest_values: list<int> = list.rest(values)
+    if len(rest_values) != 2
+        return 1
+    end
+    const rest_first: optional<int> = list.first(rest_values)
+    if rest_first.or(0) != 8
+        return 2
+    end
+    const rest_last: optional<int> = list.last(rest_values)
+    if rest_last.or(0) != 15
+        return 3
+    end
+
+    const single: list<int> = [9]
+    if list.is_empty(list.rest(single)) == false
+        return 4
+    end
+
+    const empty_values: list<int> = []
+    if list.is_empty(list.rest(empty_values)) == false
+        return 5
+    end
+
+    const words: list<text> = ["zen", "lang", "docs"]
+    const rest_words: list<text> = list.rest(words)
+    if len(rest_words) != 2
+        return 6
+    end
+    var fallback: text = ""
+    const rest_last_word: optional<text> = list.last(rest_words)
+    if len(rest_last_word.or(fallback)) != 4
+        return 7
+    end
+
+    return 0
+end

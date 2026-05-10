@@ -1,0 +1,13 @@
+namespace app.main
+
+struct TextBox<T: TextRepresentable>
+    value: int
+end
+
+struct WhereBox<T> where T is TextRepresentable
+    value: int
+end
+
+func main() -> int
+    return 0
+end

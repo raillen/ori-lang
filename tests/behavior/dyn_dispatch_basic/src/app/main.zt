@@ -1,0 +1,47 @@
+namespace app.main
+
+import std.io as io
+
+trait Shape
+    func area() -> int
+end
+
+struct Circle
+    radius: int
+end
+
+apply Shape to Circle
+    func area() -> int
+        return 3 * self.radius * self.radius
+    end
+end
+
+struct Rect
+    w: int
+    h: int
+end
+
+apply Shape to Rect
+    func area() -> int
+        return self.w * self.h
+    end
+end
+
+func main() -> int
+    const c: Circle = Circle(radius: 10)
+    const r: Rect = Rect(w: 5, h: 4)
+
+    -- Dynamic dispatch
+    const s1: any Shape = c
+    const s2: any Shape = r
+
+    if s1.area() != 300
+        return 1
+    end
+
+    if s2.area() != 20
+        return 2
+    end
+
+    return 0
+end

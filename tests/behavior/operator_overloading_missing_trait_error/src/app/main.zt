@@ -1,0 +1,12 @@
+namespace app.main
+
+struct Plain
+    value: int
+end
+
+func main() -> int 
+    const left: Plain = Plain(value: 1)
+    const right: Plain = Plain(value: 2)
+    const added: Plain = left + right
+    return added.value
+end
