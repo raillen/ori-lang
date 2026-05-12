@@ -1,5 +1,5 @@
+use crate::def::{DefId, DefKind, DefMap};
 use smol_str::SmolStr;
-use crate::def::DefId;
 
 /// The canonical type representation used throughout the type checker.
 ///
@@ -9,9 +9,18 @@ use crate::def::DefId;
 pub enum Ty {
     // ── Primitives ────────────────────────────────────────────────────────────
     Bool,
-    Int, Int8, Int16, Int32, Int64,
-    U8,  U16,  U32,  U64,
-    Float, Float32, Float64,
+    Int,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    U8,
+    U16,
+    U32,
+    U64,
+    Float,
+    Float32,
+    Float64,
     String,
     Bytes,
     Void,
@@ -38,7 +47,10 @@ pub enum Ty {
     Tuple(Vec<Ty>),
 
     /// `func(T, U) -> R`
-    Func { params: Vec<Ty>, ret: Box<Ty> },
+    Func {
+        params: Vec<Ty>,
+        ret: Box<Ty>,
+    },
 
     // ── User-defined types ────────────────────────────────────────────────────
     /// A named type (struct or enum) with optional generic arguments.
@@ -46,23 +58,52 @@ pub enum Ty {
 
     // ── Generic type parameters ───────────────────────────────────────────────
     /// A generic type parameter inside a declaration: `T` in `func f<T>`.
-    Param { index: u32, name: SmolStr },
+    Param {
+        index: u32,
+        name: SmolStr,
+    },
 
     /// An unsolved inference variable (used during type inference).
     Infer(u32),
 }
 
 impl Ty {
-    pub fn is_error(&self) -> bool { matches!(self, Ty::Error) }
-    pub fn is_never(&self) -> bool { matches!(self, Ty::Never) }
+    pub fn is_error(&self) -> bool {
+        matches!(self, Ty::Error)
+    }
+    pub fn is_never(&self) -> bool {
+        matches!(self, Ty::Never)
+    }
     pub fn is_numeric(&self) -> bool {
-        matches!(self, Ty::Int | Ty::Int8 | Ty::Int16 | Ty::Int32 | Ty::Int64
-                      | Ty::U8 | Ty::U16 | Ty::U32 | Ty::U64
-                      | Ty::Float | Ty::Float32 | Ty::Float64)
+        matches!(
+            self,
+            Ty::Int
+                | Ty::Int8
+                | Ty::Int16
+                | Ty::Int32
+                | Ty::Int64
+                | Ty::U8
+                | Ty::U16
+                | Ty::U32
+                | Ty::U64
+                | Ty::Float
+                | Ty::Float32
+                | Ty::Float64
+        )
     }
     pub fn is_integer(&self) -> bool {
-        matches!(self, Ty::Int | Ty::Int8 | Ty::Int16 | Ty::Int32 | Ty::Int64
-                      | Ty::U8 | Ty::U16 | Ty::U32 | Ty::U64)
+        matches!(
+            self,
+            Ty::Int
+                | Ty::Int8
+                | Ty::Int16
+                | Ty::Int32
+                | Ty::Int64
+                | Ty::U8
+                | Ty::U16
+                | Ty::U32
+                | Ty::U64
+        )
     }
     pub fn is_float(&self) -> bool {
         matches!(self, Ty::Float | Ty::Float32 | Ty::Float64)
@@ -71,75 +112,279 @@ impl Ty {
     /// Returns `true` if this type or any contained type is an inference variable.
     pub fn contains_infer(&self) -> bool {
         match self {
-            Ty::Infer(_)       => true,
-            Ty::Optional(t) | Ty::List(t) | Ty::Set(t) | Ty::Range(t) | Ty::Lazy(t) => t.contains_infer(),
-            Ty::Any(_)         => false,
+            Ty::Infer(_) => true,
+            Ty::Optional(t) | Ty::List(t) | Ty::Set(t) | Ty::Range(t) | Ty::Lazy(t) => {
+                t.contains_infer()
+            }
+            Ty::Any(_) => false,
             Ty::Result(a, b) | Ty::Map(a, b) => a.contains_infer() || b.contains_infer(),
-            Ty::Tuple(ts)      => ts.iter().any(|t| t.contains_infer()),
-            Ty::Func { params, ret } => params.iter().any(|p| p.contains_infer()) || ret.contains_infer(),
+            Ty::Tuple(ts) => ts.iter().any(|t| t.contains_infer()),
+            Ty::Func { params, ret } => {
+                params.iter().any(|p| p.contains_infer()) || ret.contains_infer()
+            }
             Ty::Named(_, args) => args.iter().any(|a| a.contains_infer()),
-            _                  => false,
+            _ => false,
         }
     }
 
     /// `Never` and `Infer` (at any depth) are subtypes of everything (v1 — full inference pending).
+    /// Structural unification-based check. In v2 we don't record substitutions
+    /// but we walk both types to ensure they can be made equal when treating
+    /// `Infer(_)` as a wildcard.
     pub fn is_assignable_to(&self, other: &Ty) -> bool {
-        if self == other    { return true; }
-        if self.is_error()  { return true; }
-        if self.is_never()  { return true; }
-        if other.is_error() { return true; }
-        // If either side contains an unresolved Infer, skip the check in v1
-        if self.contains_infer() || other.contains_infer() { return true; }
-        false
+        use Ty::*;
+        // Reflexive & error/never rules
+        if self == other {
+            return true;
+        }
+        if self.is_error() {
+            return true;
+        }
+        if self.is_never() {
+            return true;
+        }
+        if other.is_error() {
+            return true;
+        }
+
+        // Wildcards — any Infer matches anything
+        if matches!(self, Infer(_)) || matches!(other, Infer(_)) {
+            return true;
+        }
+
+        match (self, other) {
+            (Optional(a), Optional(b)) => a.is_assignable_to(b),
+            (Result(a_ok, a_err), Result(b_ok, b_err)) => {
+                a_ok.is_assignable_to(b_ok) && a_err.is_assignable_to(b_err)
+            }
+            (List(a), List(b)) | (Set(a), Set(b)) | (Range(a), Range(b)) | (Lazy(a), Lazy(b)) => {
+                a.is_assignable_to(b)
+            }
+            (Map(ka, va), Map(kb, vb)) => ka.is_assignable_to(kb) && va.is_assignable_to(vb),
+            (Tuple(as_), Tuple(bs)) => {
+                as_.len() == bs.len()
+                    && as_
+                        .iter()
+                        .zip(bs.iter())
+                        .all(|(a, b)| a.is_assignable_to(b))
+            }
+            (
+                Func {
+                    params: ps_a,
+                    ret: ra,
+                },
+                Func {
+                    params: ps_b,
+                    ret: rb,
+                },
+            ) => {
+                ps_a.len() == ps_b.len()
+                    && ps_a
+                        .iter()
+                        .zip(ps_b.iter())
+                        .all(|(a, b)| a.is_assignable_to(b))
+                    && ra.is_assignable_to(rb)
+            }
+            (Named(id_a, args_a), Named(id_b, args_b)) => {
+                id_a == id_b
+                    && args_a.len() == args_b.len()
+                    && args_a
+                        .iter()
+                        .zip(args_b.iter())
+                        .all(|(a, b)| a.is_assignable_to(b))
+            }
+            (Any(id_a), Any(id_b)) => id_a == id_b,
+            _ => false,
+        }
     }
 
     /// Human-readable display name for diagnostics.
     pub fn display(&self) -> std::string::String {
         match self {
-            Ty::Bool    => "bool".into(),
-            Ty::Int     => "int".into(),
-            Ty::Int8    => "int8".into(),
-            Ty::Int16   => "int16".into(),
-            Ty::Int32   => "int32".into(),
-            Ty::Int64   => "int64".into(),
-            Ty::U8      => "u8".into(),
-            Ty::U16     => "u16".into(),
-            Ty::U32     => "u32".into(),
-            Ty::U64     => "u64".into(),
-            Ty::Float   => "float".into(),
+            Ty::Bool => "bool".into(),
+            Ty::Int => "int".into(),
+            Ty::Int8 => "int8".into(),
+            Ty::Int16 => "int16".into(),
+            Ty::Int32 => "int32".into(),
+            Ty::Int64 => "int64".into(),
+            Ty::U8 => "u8".into(),
+            Ty::U16 => "u16".into(),
+            Ty::U32 => "u32".into(),
+            Ty::U64 => "u64".into(),
+            Ty::Float => "float".into(),
             Ty::Float32 => "float32".into(),
             Ty::Float64 => "float64".into(),
-            Ty::String  => "string".into(),
-            Ty::Bytes   => "bytes".into(),
-            Ty::Void    => "void".into(),
-            Ty::Never   => "never".into(),
-            Ty::Error   => "<error>".into(),
-            Ty::Optional(t)     => format!("optional<{}>", t.display()),
+            Ty::String => "string".into(),
+            Ty::Bytes => "bytes".into(),
+            Ty::Void => "void".into(),
+            Ty::Never => "never".into(),
+            Ty::Error => "<error>".into(),
+            Ty::Optional(t) => format!("optional<{}>", t.display()),
             Ty::Result(ok, err) => format!("result<{}, {}>", ok.display(), err.display()),
-            Ty::List(t)         => format!("list<{}>", t.display()),
-            Ty::Map(k, v)       => format!("map<{}, {}>", k.display(), v.display()),
-            Ty::Set(t)          => format!("set<{}>", t.display()),
-            Ty::Range(t)        => format!("range<{}>", t.display()),
-            Ty::Lazy(t)         => format!("lazy<{}>", t.display()),
-            Ty::Any(d)          => format!("any<{:?}>", d),
+            Ty::List(t) => format!("list<{}>", t.display()),
+            Ty::Map(k, v) => format!("map<{}, {}>", k.display(), v.display()),
+            Ty::Set(t) => format!("set<{}>", t.display()),
+            Ty::Range(t) => format!("range<{}>", t.display()),
+            Ty::Lazy(t) => format!("lazy<{}>", t.display()),
+            Ty::Any(d) => format!("any<{:?}>", d),
             Ty::Tuple(ts) => {
-                let inner = ts.iter().map(|t| t.display()).collect::<Vec<_>>().join(", ");
+                let inner = ts
+                    .iter()
+                    .map(|t| t.display())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 format!("tuple<{}>", inner)
             }
             Ty::Func { params, ret } => {
-                let ps = params.iter().map(|p| p.display()).collect::<Vec<_>>().join(", ");
+                let ps = params
+                    .iter()
+                    .map(|p| p.display())
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 format!("func({}) -> {}", ps, ret.display())
             }
             Ty::Named(id, args) => {
                 if args.is_empty() {
                     format!("<def {:?}>", id)
                 } else {
-                    let as_ = args.iter().map(|a| a.display()).collect::<Vec<_>>().join(", ");
+                    let as_ = args
+                        .iter()
+                        .map(|a| a.display())
+                        .collect::<Vec<_>>()
+                        .join(", ");
                     format!("<def {:?}><{}>", id, as_)
                 }
             }
             Ty::Param { name, .. } => name.to_string(),
-            Ty::Infer(id)          => format!("_#{}", id),
+            Ty::Infer(id) => format!("_#{}", id),
         }
     }
+}
+
+// ── Type alias expansion ───────────────────────────────────────────────────────
+
+/// Substitute `Ty::Param { index, .. }` placeholders with the actual type
+/// arguments in `args`.  Used when instantiating a generic type alias.
+pub fn substitute_ty_params(ty: &Ty, args: &[Ty]) -> Ty {
+    match ty {
+        Ty::Param { index, .. } => args.get(*index as usize).cloned().unwrap_or_else(|| ty.clone()),
+        Ty::Named(id, inner_args) => {
+            let new_args = inner_args.iter().map(|a| substitute_ty_params(a, args)).collect();
+            Ty::Named(*id, new_args)
+        }
+        Ty::Optional(inner) => Ty::Optional(Box::new(substitute_ty_params(inner, args))),
+        Ty::Result(ok, err) => Ty::Result(
+            Box::new(substitute_ty_params(ok, args)),
+            Box::new(substitute_ty_params(err, args)),
+        ),
+        Ty::List(elem) => Ty::List(Box::new(substitute_ty_params(elem, args))),
+        Ty::Map(k, v) => Ty::Map(
+            Box::new(substitute_ty_params(k, args)),
+            Box::new(substitute_ty_params(v, args)),
+        ),
+        Ty::Set(elem) => Ty::Set(Box::new(substitute_ty_params(elem, args))),
+        Ty::Range(elem) => Ty::Range(Box::new(substitute_ty_params(elem, args))),
+        Ty::Lazy(inner) => Ty::Lazy(Box::new(substitute_ty_params(inner, args))),
+        Ty::Tuple(elems) => {
+            Ty::Tuple(elems.iter().map(|e| substitute_ty_params(e, args)).collect())
+        }
+        Ty::Func { params, ret } => Ty::Func {
+            params: params.iter().map(|p| substitute_ty_params(p, args)).collect(),
+            ret: Box::new(substitute_ty_params(ret, args)),
+        },
+        other => other.clone(),
+    }
+}
+
+/// A minimal view of a type alias signature needed for expansion.
+pub struct AliasView<'a> {
+    pub def_id: DefId,
+    pub ty: &'a Ty,
+    pub arity: usize,
+}
+
+/// Expand all `Ty::Named(id, args)` where `id` refers to a `TypeAlias` def.
+///
+/// The expansion is performed recursively until no alias remains (with a
+/// depth-limit guard to avoid infinite loops on ill-formed cyclic aliases).
+pub fn normalize_ty_aliases<F>(ty: Ty, lookup: &F) -> Ty
+where
+    F: Fn(DefId) -> Option<(usize, Ty)>,
+{
+    normalize_ty_aliases_depth(ty, lookup, 0)
+}
+
+fn normalize_ty_aliases_depth<F>(ty: Ty, lookup: &F, depth: usize) -> Ty
+where
+    F: Fn(DefId) -> Option<(usize, Ty)>,
+{
+    if depth > 32 {
+        // Safety valve against cyclic aliases.
+        return ty;
+    }
+    match ty {
+        Ty::Named(id, args) => {
+            let new_args: Vec<Ty> = args
+                .into_iter()
+                .map(|a| normalize_ty_aliases_depth(a, lookup, depth))
+                .collect();
+            if let Some((_arity, alias_ty)) = lookup(id) {
+                let expanded = substitute_ty_params(&alias_ty, &new_args);
+                normalize_ty_aliases_depth(expanded, lookup, depth + 1)
+            } else {
+                Ty::Named(id, new_args)
+            }
+        }
+        Ty::Optional(inner) => {
+            Ty::Optional(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth)))
+        }
+        Ty::Result(ok, err) => Ty::Result(
+            Box::new(normalize_ty_aliases_depth(*ok, lookup, depth)),
+            Box::new(normalize_ty_aliases_depth(*err, lookup, depth)),
+        ),
+        Ty::List(elem) => {
+            Ty::List(Box::new(normalize_ty_aliases_depth(*elem, lookup, depth)))
+        }
+        Ty::Map(k, v) => Ty::Map(
+            Box::new(normalize_ty_aliases_depth(*k, lookup, depth)),
+            Box::new(normalize_ty_aliases_depth(*v, lookup, depth)),
+        ),
+        Ty::Set(elem) => Ty::Set(Box::new(normalize_ty_aliases_depth(*elem, lookup, depth))),
+        Ty::Range(elem) => {
+            Ty::Range(Box::new(normalize_ty_aliases_depth(*elem, lookup, depth)))
+        }
+        Ty::Lazy(inner) => {
+            Ty::Lazy(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth)))
+        }
+        Ty::Tuple(elems) => Ty::Tuple(
+            elems
+                .into_iter()
+                .map(|e| normalize_ty_aliases_depth(e, lookup, depth))
+                .collect(),
+        ),
+        Ty::Func { params, ret } => Ty::Func {
+            params: params
+                .into_iter()
+                .map(|p| normalize_ty_aliases_depth(p, lookup, depth))
+                .collect(),
+            ret: Box::new(normalize_ty_aliases_depth(*ret, lookup, depth)),
+        },
+        other => other,
+    }
+}
+
+/// Convenience wrapper: expand aliases given a `DefMap` and a slice of
+/// `TypeAliasSig`-like pairs `(def_id, ty)`.
+pub fn expand_ty_aliases(
+    ty: Ty,
+    def_map: &DefMap,
+    alias_map: &std::collections::HashMap<DefId, (usize, Ty)>,
+) -> Ty {
+    normalize_ty_aliases(ty, &|id| {
+        if def_map.get(id).kind == DefKind::TypeAlias {
+            alias_map.get(&id).cloned()
+        } else {
+            None
+        }
+    })
 }
