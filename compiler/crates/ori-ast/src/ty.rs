@@ -1,5 +1,5 @@
-use ori_diagnostics::Span;
 use crate::common::QualifiedName;
+use ori_diagnostics::Span;
 
 /// Every type that can appear in an Ori program.
 ///
@@ -10,9 +10,17 @@ pub enum Type {
     // ── Primitive types ──────────────────────────────────────────────────────
     Bool(Span),
     Int(Span),
-    Int8(Span), Int16(Span), Int32(Span), Int64(Span),
-    U8(Span),   U16(Span),   U32(Span),   U64(Span),
-    Float(Span), Float32(Span), Float64(Span),
+    Int8(Span),
+    Int16(Span),
+    Int32(Span),
+    Int64(Span),
+    U8(Span),
+    U16(Span),
+    U32(Span),
+    U64(Span),
+    Float(Span),
+    Float32(Span),
+    Float64(Span),
     String(Span),
     Bytes(Span),
     Void(Span),
@@ -36,24 +44,50 @@ pub enum Type {
 
     // ── Callable types ────────────────────────────────────────────────────────
     /// `func(T, U) -> R`  or `func(T)` (void return → `None`).
-    Func { params: Vec<Type>, return_ty: Option<Box<Type>>, span: Span },
+    Func {
+        params: Vec<Type>,
+        return_ty: Option<Box<Type>>,
+        span: Span,
+    },
 
     // ── User-defined generic types ────────────────────────────────────────────
     /// `MyContainer<T>`, `Either<Left, Right>`.
-    Generic { name: QualifiedName, args: Vec<Type>, span: Span },
+    Generic {
+        name: QualifiedName,
+        args: Vec<Type>,
+        span: Span,
+    },
 }
 
 impl Type {
     pub fn span(&self) -> Span {
         match self {
-            Type::Bool(s) | Type::Int(s) | Type::Int8(s) | Type::Int16(s)
-            | Type::Int32(s) | Type::Int64(s) | Type::U8(s) | Type::U16(s)
-            | Type::U32(s) | Type::U64(s) | Type::Float(s) | Type::Float32(s)
-            | Type::Float64(s) | Type::String(s) | Type::Bytes(s) | Type::Void(s) => *s,
+            Type::Bool(s)
+            | Type::Int(s)
+            | Type::Int8(s)
+            | Type::Int16(s)
+            | Type::Int32(s)
+            | Type::Int64(s)
+            | Type::U8(s)
+            | Type::U16(s)
+            | Type::U32(s)
+            | Type::U64(s)
+            | Type::Float(s)
+            | Type::Float32(s)
+            | Type::Float64(s)
+            | Type::String(s)
+            | Type::Bytes(s)
+            | Type::Void(s) => *s,
             Type::Named(q) => q.span,
-            Type::Optional(_, s) | Type::List(_, s) | Type::Set(_, s)
-            | Type::Range(_, s) | Type::Lazy(_, s) | Type::Any(_, s)
-            | Type::Tuple(_, s) | Type::Result(_, _, s) | Type::Map(_, _, s) => *s,
+            Type::Optional(_, s)
+            | Type::List(_, s)
+            | Type::Set(_, s)
+            | Type::Range(_, s)
+            | Type::Lazy(_, s)
+            | Type::Any(_, s)
+            | Type::Tuple(_, s)
+            | Type::Result(_, _, s)
+            | Type::Map(_, _, s) => *s,
             Type::Func { span, .. } | Type::Generic { span, .. } => *span,
         }
     }

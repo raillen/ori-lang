@@ -31,7 +31,7 @@ namespace_decl
     ;
 
 import_decl
-    = "import" qualified_name [ "as" IDENT ]
+    = [ "public" ] "import" qualified_name [ "as" IDENT ]
     ;
 
 qualified_name

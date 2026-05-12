@@ -13,7 +13,10 @@ impl Span {
 
     #[inline]
     pub fn new(start: usize, end: usize) -> Self {
-        Self { start: start as u32, end: end as u32 }
+        Self {
+            start: start as u32,
+            end: end as u32,
+        }
     }
 
     #[inline]
@@ -31,7 +34,7 @@ impl Span {
     pub fn cover(self, other: Span) -> Span {
         Span {
             start: self.start.min(other.start),
-            end:   self.end.max(other.end),
+            end: self.end.max(other.end),
         }
     }
 

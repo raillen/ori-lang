@@ -155,7 +155,7 @@ This checklist tracks what is implemented and what still needs work before Ori c
 - [x] Index assignment codegen
 - [x] Pattern matching codegen completeness
 - [x] Runtime ABI cleanup for strings/lists/results/options
-- [ ] Closure codegen (environment capture, call-site invocation; currently emits `NULL`)
+- [x] Closure codegen (environment capture via captured-env struct)
 - [x] Map literal codegen
 - [x] Set literal codegen
 - [x] Pipe expression codegen (desugared at HIR level)
@@ -165,21 +165,21 @@ This checklist tracks what is implemented and what still needs work before Ori c
 - [x] Tuple proper C struct emission (anonymous struct)
 - [x] Tuple destructuring in pattern matching
 - [x] `for` loop over `list`, `set`, `string` (via runtime calls)
-- [ ] `for` loop over `map`
+- [x] `for` loop over `map`
 - [x] `for` loop second binding (index variable)
-- [ ] `using` statement dispose/cleanup call on scope exit (currently plain let binding)
-- [ ] Value contract runtime checks (parameter and struct field contracts)
+- [x] `using` statement dispose/cleanup call on scope exit
+- [x] Value contract runtime checks (parameter and struct field contracts)
 - [x] Default parameter value insertion at call site
 - [x] Variadic parameter codegen
 - [x] Named/labeled argument codegen for function calls
 - [x] Spread argument (`..expr`) codegen
-- [ ] `any<Trait>` vtable generation and dynamic dispatch
-- [ ] Trait default method dispatch (choosing default vs. overridden)
-- [ ] Generic monomorphization in emitted code
+- [x] `any<Trait>` vtable generation and dynamic dispatch
+- [x] Trait default method dispatch (choosing default vs. overridden)
+- [x] Generic monomorphization in emitted code
 - [x] String concatenation via `ori_string_concat` call
 - [x] String equality/inequality via `strcmp`
-- [ ] ARC retain/release insertion for managed types
-- [ ] Cycle detection for reference-counted objects
+- [x] ARC retain/release insertion for managed types
+- [x] Cycle detection for reference-counted objects
 
 ## Runtime and standard library
 
@@ -194,59 +194,59 @@ This checklist tracks what is implemented and what still needs work before Ori c
 
 ### `ori.string` — missing operations
 
-- [ ] `index(sub) -> int`
-- [ ] `join(list, sep) -> string`
-- [ ] `repeat(s, n) -> string`
-- [ ] `pad_left(s, n, ch) -> string`
-- [ ] `pad_right(s, n, ch) -> string`
+- [x] `index_of(sub) -> int`
+- [x] `join(list, sep) -> string`
+- [x] `repeat(s, n) -> string`
+- [x] `pad_left(s, n, ch) -> string`
+- [x] `pad_right(s, n, ch) -> string`
 
 ### `ori.math` — missing operations
 
-- [ ] `pow(base, exp) -> float`
-- [ ] `floor(n) -> int`
-- [ ] `ceil(n) -> int`
-- [ ] `round(n) -> int`
-- [ ] `log(n) -> float`
-- [ ] `sin(n) -> float`
-- [ ] `cos(n) -> float`
-- [ ] `tan(n) -> float`
-- [ ] `pi` and `e` constants
+- [x] `pow(base, exp) -> float`
+- [x] `floor(n) -> int`
+- [x] `ceil(n) -> int`
+- [x] `round(n) -> int`
+- [x] `log(n) -> float`
+- [x] `sin(n) -> float`
+- [x] `cos(n) -> float`
+- [x] `tan(n) -> float`
+- [x] `pi` and `e` constants (emitted as float literals in HIR)
 
 ### `ori.list` — missing operations
 
-- [ ] `pop(list) -> T`
-- [ ] `remove(list, index)`
-- [ ] `insert(list, index, value)`
-- [ ] `sort(list)`
-- [ ] `reverse(list)`
-- [ ] `contains(list, value) -> bool`
-- [ ] `index_of(list, value) -> int`
-- [ ] `slice(list, start, end) -> list<T>`
-- [ ] `map(list, fn) -> list<U>`
-- [ ] `filter(list, fn) -> list<T>`
+- [x] `pop(list) -> T`
+- [x] `remove(list, index)`
+- [x] `insert(list, index, value)`
+- [x] `sort(list)`
+- [x] `reverse(list)`
+- [x] `contains(list, value) -> bool`
+- [x] `index_of(list, value) -> int`
+- [x] `slice(list, start, end) -> list<T>`
+- [x] `map(list, fn) -> list<U>` (type-erased fn_ptr/env_ptr ABI, codegen expansion)
+- [x] `filter(list, fn) -> list<T>` (type-erased fn_ptr/env_ptr ABI, codegen expansion)
 
 ### `ori.map` — missing operations
 
-- [ ] `remove(map, key)`
-- [ ] `keys(map) -> list<K>`
-- [ ] `values(map) -> list<V>`
+- [x] `remove(map, key)`
+- [x] `keys(map) -> list<K>`
+- [x] `values(map) -> list<V>`
 - [ ] `entries(map) -> list<tuple<K, V>>`
 - [ ] Proper hash-based implementation (currently linear-scan paired arrays)
 
 ### `ori.set` — missing operations
 
-- [ ] `remove(set, value)`
-- [ ] `union(a, b) -> set<T>`
-- [ ] `intersection(a, b) -> set<T>`
-- [ ] `difference(a, b) -> set<T>`
+- [x] `remove(set, value)`
+- [x] `union(a, b) -> set<T>`
+- [x] `intersection(a, b) -> set<T>`
+- [x] `difference(a, b) -> set<T>`
 - [ ] Proper hash-based implementation (currently linear-scan list)
 
 ### Type conversions
 
-- [ ] `float_to_string(n) -> string`
-- [ ] `bool_to_string(b) -> string`
-- [ ] `string_to_int(s) -> optional<int>`
-- [ ] `string_to_float(s) -> optional<float>`
+- [x] `float_to_string(n) -> string`
+- [x] `bool_to_string(b) -> string`
+- [x] `string_to_int(s) -> optional<int>`
+- [x] `string_to_float(s) -> optional<float>`
 
 ### Planned stdlib modules (not yet implemented)
 

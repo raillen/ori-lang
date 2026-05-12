@@ -59,6 +59,46 @@ fn stdlib_c_name(ori_path: &str) -> Option<&'static str> {
         "ori.math.abs" => Some("ori_math_abs"),
         "ori.math.min" => Some("ori_math_min"),
         "ori.math.max" => Some("ori_math_max"),
+        "ori.math.pow" => Some("ori_math_pow"),
+        "ori.math.floor" => Some("ori_math_floor"),
+        "ori.math.ceil" => Some("ori_math_ceil"),
+        "ori.math.round" => Some("ori_math_round"),
+        "ori.math.log" => Some("ori_math_log"),
+        "ori.math.sin" => Some("ori_math_sin"),
+        "ori.math.cos" => Some("ori_math_cos"),
+        "ori.math.tan" => Some("ori_math_tan"),
+        // additional list operations
+        "ori.list.pop" | "list.pop" => Some("ori_list_pop"),
+        "ori.list.remove" | "list.remove" => Some("ori_list_remove"),
+        "ori.list.insert" | "list.insert" => Some("ori_list_insert"),
+        "ori.list.contains" | "list.contains" => Some("ori_list_contains"),
+        "ori.list.index_of" | "list.index_of" => Some("ori_list_index_of"),
+        "ori.list.sort" | "list.sort" => Some("ori_list_sort"),
+        "ori.list.reverse" | "list.reverse" => Some("ori_list_reverse"),
+        "ori.list.slice" | "list.slice" => Some("ori_list_slice"),
+        // additional map operations
+        "ori.map.remove" | "map.remove" => Some("ori_map_remove"),
+        "ori.map.keys" | "map.keys" => Some("ori_map_keys"),
+        "ori.map.values" | "map.values" => Some("ori_map_values"),
+        // additional set operations
+        "ori.set.remove" | "set.remove" => Some("ori_set_remove"),
+        "ori.set.union" | "set.union" => Some("ori_set_union"),
+        "ori.set.intersection" | "set.intersection" => Some("ori_set_intersection"),
+        "ori.set.difference" | "set.difference" => Some("ori_set_difference"),
+        // list higher-order (closure expanded at codegen level)
+        "ori.list.map" | "list.map" => Some("ori_list_map"),
+        "ori.list.filter" | "list.filter" => Some("ori_list_filter"),
+        // additional string operations
+        "ori.string.index_of" | "string.index_of" => Some("ori_string_index_of"),
+        "ori.string.join" | "string.join" => Some("ori_string_join"),
+        "ori.string.repeat" | "string.repeat" => Some("ori_string_repeat"),
+        "ori.string.pad_left" | "string.pad_left" => Some("ori_string_pad_left"),
+        "ori.string.pad_right" | "string.pad_right" => Some("ori_string_pad_right"),
+        // type conversion functions
+        "float_to_string" | "ori.convert.float_to_string" => Some("ori_float_to_string"),
+        "bool_to_string" | "ori.convert.bool_to_string" => Some("ori_bool_to_string"),
+        "string_to_int" | "ori.convert.string_to_int" => Some("ori_string_to_int"),
+        "string_to_float" | "ori.convert.string_to_float" => Some("ori_string_to_float"),
         _ => None,
     }
 }
@@ -143,6 +183,76 @@ fn stdlib_c_func_ty(c_name: &str) -> Ty {
         "ori_math_sqrt" => (vec![Ty::Float], Ty::Float),
         "ori_math_abs" => (vec![Ty::Int], Ty::Int),
         "ori_math_min" | "ori_math_max" => (vec![Ty::Int, Ty::Int], Ty::Int),
+        "ori_math_pow" => (vec![Ty::Float, Ty::Float], Ty::Float),
+        "ori_math_floor" | "ori_math_ceil" | "ori_math_round" => (vec![Ty::Float], Ty::Int),
+        "ori_math_log" | "ori_math_sin" | "ori_math_cos" | "ori_math_tan" => {
+            (vec![Ty::Float], Ty::Float)
+        }
+        "ori_list_pop" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Infer(0)),
+        "ori_list_remove" => (vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int], Ty::Void),
+        "ori_list_insert" => (
+            vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int, Ty::Infer(0)],
+            Ty::Void,
+        ),
+        "ori_list_contains" => (
+            vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Infer(0)],
+            Ty::Bool,
+        ),
+        "ori_list_index_of" => (
+            vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Infer(0)],
+            Ty::Int,
+        ),
+        "ori_list_sort" | "ori_list_reverse" => {
+            (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Void)
+        }
+        "ori_list_slice" => (
+            vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int, Ty::Int],
+            Ty::List(Box::new(Ty::Infer(0))),
+        ),
+        "ori_map_remove" => (
+            vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0))), Ty::Infer(0)],
+            Ty::Void,
+        ),
+        "ori_map_keys" => (
+            vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0)))],
+            Ty::List(Box::new(Ty::Infer(0))),
+        ),
+        "ori_map_values" => (
+            vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0)))],
+            Ty::List(Box::new(Ty::Infer(0))),
+        ),
+        "ori_set_remove" => (
+            vec![Ty::Set(Box::new(Ty::Infer(0))), Ty::Infer(0)],
+            Ty::Void,
+        ),
+        "ori_set_union" | "ori_set_intersection" | "ori_set_difference" => (
+            vec![Ty::Set(Box::new(Ty::Infer(0))), Ty::Set(Box::new(Ty::Infer(0)))],
+            Ty::Set(Box::new(Ty::Infer(0))),
+        ),
+        "ori_list_map" => (
+            vec![
+                Ty::List(Box::new(Ty::Infer(0))),
+                Ty::Func { params: vec![Ty::Infer(0)], ret: Box::new(Ty::Infer(1)) },
+            ],
+            Ty::List(Box::new(Ty::Infer(1))),
+        ),
+        "ori_list_filter" => (
+            vec![
+                Ty::List(Box::new(Ty::Infer(0))),
+                Ty::Func { params: vec![Ty::Infer(0)], ret: Box::new(Ty::Bool) },
+            ],
+            Ty::List(Box::new(Ty::Infer(0))),
+        ),
+        "ori_string_index_of" => (vec![Ty::String, Ty::String], Ty::Int),
+        "ori_string_join" => (vec![Ty::List(Box::new(Ty::String)), Ty::String], Ty::String),
+        "ori_string_repeat" => (vec![Ty::String, Ty::Int], Ty::String),
+        "ori_string_pad_left" | "ori_string_pad_right" => {
+            (vec![Ty::String, Ty::Int, Ty::String], Ty::String)
+        }
+        "ori_float_to_string" => (vec![Ty::Float], Ty::String),
+        "ori_bool_to_string" => (vec![Ty::Bool], Ty::String),
+        "ori_string_to_int" => (vec![Ty::String], Ty::Optional(Box::new(Ty::Int))),
+        "ori_string_to_float" => (vec![Ty::String], Ty::Optional(Box::new(Ty::Float))),
         _ => return Ty::Infer(0),
     };
     Ty::Func {
@@ -1641,6 +1751,22 @@ impl<'a> Lowerer<'a> {
             Expr::QualifiedIdent(q) => {
                 let path = q.to_string();
                 // Check stdlib / alias resolution first
+                // Math constants emitted as float literals
+                let expanded_path = self.expand_alias(&path);
+                if expanded_path.as_str() == "ori.math.pi" {
+                    return HirExpr {
+                        kind: HirExprKind::FloatLit(std::f64::consts::PI),
+                        ty: Ty::Float,
+                        span,
+                    };
+                }
+                if expanded_path.as_str() == "ori.math.e" {
+                    return HirExpr {
+                        kind: HirExprKind::FloatLit(std::f64::consts::E),
+                        ty: Ty::Float,
+                        span,
+                    };
+                }
                 if let Some(c_name) = self.resolve_stdlib(&path) {
                     return HirExpr {
                         kind: HirExprKind::Var(SmolStr::new(c_name)),

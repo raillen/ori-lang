@@ -739,6 +739,50 @@ end
 }
 
 #[test]
+fn compile_runs_more_string_and_conversion_stdlib() {
+    let dir = TestDir::new("compile_more_string_conversion_stdlib");
+    dir.write("main.orl", r#"namespace app.main
+
+import ori.convert as conv
+import ori.io as io
+import ori.string as str
+
+func main()
+    const parts: list<string> = str.split("a,b,c", ",")
+    io.print(str.join(parts, "|"))
+    io.print(str.repeat("ha", 3))
+    io.print(str.pad_left("7", 3, "0"))
+    io.print(str.pad_right("x", 3, "."))
+    io.print(string(str.index_of("abcdef", "cd")))
+    io.print(conv.float_to_string(2.5))
+    io.print(conv.bool_to_string(false))
+    if some(n) = conv.string_to_int("41")
+        io.print(string(n + 1))
+    end
+    if some(f) = conv.string_to_float("3.5")
+        io.print(conv.float_to_string(f))
+    end
+end
+"#);
+
+    let exe = dir.path(if cfg!(windows) {
+        "more_string_conversion_stdlib.exe"
+    } else {
+        "more_string_conversion_stdlib"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(
+        stdout.replace("\r\n", "\n"),
+        "a|b|c\nhahaha\n007\nx..\n2\n2.5\nfalse\n42\n3.5\n"
+    );
+}
+
+#[test]
 fn compile_runs_list_index_set_and_len() {
     let dir = TestDir::new("compile_list_index_set_len");
     dir.write(
@@ -869,6 +913,46 @@ end
 }
 
 #[test]
+fn compile_runs_more_math_stdlib() {
+    let dir = TestDir::new("compile_more_math_stdlib");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.math as math
+
+func main()
+    io.print(string(math.floor(3.9) + math.ceil(3.1) + math.round(3.5)))
+    if math.pow(2.0, 3.0) == 8.0 and math.log(1.0) == 0.0
+        io.print("powlog")
+    else
+        io.print("bad")
+    end
+    if math.sin(0.0) == 0.0 and math.cos(0.0) == 1.0 and math.tan(0.0) == 0.0
+        io.print("trig")
+    else
+        io.print("bad")
+    end
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "more_math_stdlib.exe"
+    } else {
+        "more_math_stdlib"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.replace("\r\n", "\n"), "11\npowlog\ntrig\n");
+}
+
+#[test]
 fn compile_runs_string_split_and_chars() {
     let dir = TestDir::new("compile_string_split_chars");
     dir.write(
@@ -946,6 +1030,65 @@ end
     assert!(output.status.success(), "{:?}", output);
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(stdout.replace("\r\n", "\n"), "4\n134\n");
+}
+
+#[test]
+fn compile_runs_more_collection_stdlib() {
+    let dir = TestDir::new("compile_more_collection_stdlib");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.list as lists
+import ori.map as maps
+import ori.set as sets
+
+func main()
+    var values: list<int> = [3, 1, 2]
+    lists.insert(values, 1, 7)
+    lists.remove(values, 2)
+    io.print(string(lists.index_of(values, 7)))
+    if lists.contains(values, 2)
+        io.print("contains")
+    end
+    lists.sort(values)
+    lists.reverse(values)
+    const chunk: list<int> = lists.slice(values, 1, 3)
+    io.print(string(lists.pop(chunk)))
+    io.print(string(chunk[0] + lists.len(values)))
+
+    const seen: set<int> = sets.new()
+    sets.add(seen, 1)
+    sets.add(seen, 2)
+    sets.remove(seen, 1)
+    io.print(string(sets.len(seen)))
+
+    const scores: map<int, int> = maps.new()
+    maps.set(scores, 1, 10)
+    maps.set(scores, 2, 20)
+    maps.set(scores, 3, 30)
+    maps.remove(scores, 2)
+    const keys: list<int> = maps.keys(scores)
+    const vals: list<int> = maps.values(scores)
+    io.print(string(lists.len(keys) + lists.len(vals)))
+    io.print(string(keys[0] + keys[1] + vals[0] + vals[1]))
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "more_collection_stdlib.exe"
+    } else {
+        "more_collection_stdlib"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.replace("\r\n", "\n"), "1\ncontains\n2\n6\n1\n4\n44\n");
 }
 
 #[test]
@@ -1488,6 +1631,76 @@ end
     assert!(output.status.success(), "{:?}", output);
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(stdout.replace("\r\n", "\n"), "37\n42\n37\n5\n5\n9\n");
+}
+
+#[test]
+fn build_c_backend_compiles_any_trait_dynamic_dispatch() {
+    let dir = TestDir::new("build_any_trait_dispatch");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+struct Player
+    score: int
+end
+
+struct Booster
+    score: int
+end
+
+trait Scored
+    func score(self) -> int
+
+    func bonus(self) -> int
+        return 5
+    end
+end
+
+implement Scored for Player
+    func score(self) -> int
+        return self.score
+    end
+end
+
+implement Scored for Booster
+    func score(self) -> int
+        return self.score
+    end
+
+    func bonus(self) -> int
+        return 9
+    end
+end
+
+func add_bonus(item: any<Scored>) -> int
+    return item.score() + 5
+end
+
+func identity(item: any<Scored>) -> any<Scored>
+    return item
+end
+
+func main()
+    const player: Player = Player(score: 37)
+    const booster: Booster = Booster(score: 20)
+    const item: any<Scored> = player
+    const boosted: any<Scored> = booster
+    io.print(string(item.score()))
+    io.print(string(add_bonus(player)))
+    io.print(string(identity(player).score()))
+    io.print(string(player.bonus()))
+    io.print(string(item.bonus()))
+    io.print(string(boosted.bonus()))
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    compile_c_source(&dir, "any_trait_dispatch", &out.c_source);
 }
 
 #[test]

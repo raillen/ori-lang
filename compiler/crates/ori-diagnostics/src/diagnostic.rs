@@ -11,13 +11,17 @@ pub enum Severity {
 #[derive(Debug, Clone)]
 pub struct Label {
     pub file_id: FileId,
-    pub span:    Span,
+    pub span: Span,
     pub message: String,
 }
 
 impl Label {
     pub fn primary(file_id: FileId, span: Span, message: impl Into<String>) -> Self {
-        Self { file_id, span, message: message.into() }
+        Self {
+            file_id,
+            span,
+            message: message.into(),
+        }
     }
 }
 
@@ -37,12 +41,12 @@ impl Label {
 #[derive(Debug, Clone)]
 pub struct Diagnostic {
     pub severity: Severity,
-    pub code:     &'static str,
-    pub message:  String,
-    pub labels:   Vec<Label>,
-    pub why:      Option<String>,
-    pub action:   Option<String>,
-    pub notes:    Vec<String>,
+    pub code: &'static str,
+    pub message: String,
+    pub labels: Vec<Label>,
+    pub why: Option<String>,
+    pub action: Option<String>,
+    pub notes: Vec<String>,
 }
 
 impl Diagnostic {
@@ -51,10 +55,10 @@ impl Diagnostic {
             severity: Severity::Error,
             code,
             message: message.into(),
-            labels:  Vec::new(),
-            why:     None,
-            action:  None,
-            notes:   Vec::new(),
+            labels: Vec::new(),
+            why: None,
+            action: None,
+            notes: Vec::new(),
         }
     }
 
@@ -63,10 +67,10 @@ impl Diagnostic {
             severity: Severity::Warning,
             code,
             message: message.into(),
-            labels:  Vec::new(),
-            why:     None,
-            action:  None,
-            notes:   Vec::new(),
+            labels: Vec::new(),
+            why: None,
+            action: None,
+            notes: Vec::new(),
         }
     }
 
@@ -99,7 +103,7 @@ impl Diagnostic {
 #[derive(Debug, Default)]
 pub struct DiagnosticSink {
     diagnostics: Vec<Diagnostic>,
-    error_count:  usize,
+    error_count: usize,
 }
 
 impl DiagnosticSink {

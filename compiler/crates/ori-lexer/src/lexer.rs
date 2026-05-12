@@ -1,6 +1,6 @@
+use crate::token::TokenKind;
 use logos::Logos;
 use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label, Span};
-use crate::token::TokenKind;
 
 /// A single token produced by the lexer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,10 +40,10 @@ pub fn lex(source: &str, file_id: FileId, sink: &mut DiagnosticSink) -> Vec<Toke
                 // logos returns `Err(())` for unrecognised characters.
                 let bad = &source[raw_span.clone()];
                 sink.emit(
-                    Diagnostic::error("lex.unexpected_character", format!(
-                        "unexpected character `{}`",
-                        bad.escape_default()
-                    ))
+                    Diagnostic::error(
+                        "lex.unexpected_character",
+                        format!("unexpected character `{}`", bad.escape_default()),
+                    )
                     .with_label(Label::primary(file_id, span, "not a valid token"))
                     .with_action("remove or replace this character"),
                 );
@@ -58,9 +58,9 @@ pub fn lex(source: &str, file_id: FileId, sink: &mut DiagnosticSink) -> Vec<Toke
 /// An unclosed block comment was detected during lexing.
 pub fn check_unclosed_block_comments(
     tokens: &[Token],
-    source:  &str,
+    source: &str,
     file_id: FileId,
-    sink:    &mut DiagnosticSink,
+    sink: &mut DiagnosticSink,
 ) {
     // If lex_block_comment callback returns false, logos emits Err(()).
     // An unclosed `--|` will already have been reported as an unexpected

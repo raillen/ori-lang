@@ -69,6 +69,9 @@ Errors produced by the type checker.
 | `type.equality_unsupported_field` | error | Struct contains a field type that does not support `==` |
 | `type.anon_struct_type_unknown` | error | `.{...}` used where the expected struct type cannot be inferred |
 | `type.anon_struct_field_mismatch` | error | Field in `.{...}` does not exist on the target struct type |
+| `type.struct_literal_named_fields_required` | error | Struct construction uses positional fields instead of named fields |
+| `type.missing_struct_field` | error | Struct construction does not provide a required field |
+| `type.enum_variant_named_fields_required` | error | Enum variant construction uses positional fields instead of named fields |
 | `type.invalid_is_check` | error | `is` check on a non-dynamic type |
 | `type.incompatible_result_error` | error | `?` used but error types are incompatible |
 | `type.propagation_context` | error | `?` used in a function that does not return `optional<_>` or `result<_,_>` |
@@ -76,8 +79,14 @@ Errors produced by the type checker.
 | `type.no_such_method` | error | Method not found for this type |
 | `type.ambiguous_method` | error | Method name matches multiple traits; use explicit disambiguation |
 | `type.callable_mismatch` | error | Argument types do not match closure or function signature |
+| `type.arg_count_mismatch` | error | Function call has too few or too many arguments |
+| `type.arg_type_mismatch` | error | Function call argument type does not match the parameter type |
+| `type.unknown_arg_label` | error | Named call argument does not match any parameter name |
+| `type.duplicate_arg_label` | error | Named call argument is passed more than once |
+| `type.positional_after_named_arg` | error | Positional argument appears after a named argument |
 | `type.index_non_indexable` | error | `[index]` applied to a non-indexable type |
 | `type.spread_non_list` | error | `..expr` spread used with a non-list value |
+| `type.spread_non_variadic` | error | `..expr` spread used outside a variadic argument position |
 | `type.unused_result` | warning | `result<T, E>` value is discarded without `?` or match |
 
 ---
@@ -92,7 +101,7 @@ Errors produced by the name resolution / binding phase.
 | `bind.shadowing` | error | Binding shadows an existing binding in the same scope |
 | `bind.const_reassignment` | error | Reassigning a `const` binding |
 | `bind.import_not_found` | error | Imported namespace does not exist |
-| `bind.import_ambiguous` | error | Import alias conflicts with an existing name |
+| `bind.import_ambiguous` | error | Imported namespace matches more than one source file |
 | `bind.self_outside_method` | error | `self` used outside a method or `implement` block |
 | `bind.duplicate_field` | error | Struct or enum variant declares the same field name twice |
 | `bind.duplicate_variant` | error | Enum declares the same variant name twice |

@@ -1,6 +1,6 @@
-use ori_diagnostics::Span;
 use crate::common::Name;
 use crate::expr::Expr;
+use ori_diagnostics::Span;
 
 /// A pattern in a `match` arm.
 #[derive(Debug, Clone, PartialEq)]
@@ -15,14 +15,18 @@ pub enum Pattern {
     Binding(Name),
 
     /// `Direction.North` or `.North` — unit enum variant.
-    VariantUnit { name: Name, shorthand: bool, span: Span },
+    VariantUnit {
+        name: Name,
+        shorthand: bool,
+        span: Span,
+    },
 
     /// `Shape.Circle(radius: r)` or `.Circle(radius: r)`.
     VariantNamed {
-        name:     Name,
-        fields:   Vec<NamedPattern>,
+        name: Name,
+        fields: Vec<NamedPattern>,
         shorthand: bool,
-        span:     Span,
+        span: Span,
     },
 
     /// `some(inner)` — optional presence.
@@ -45,8 +49,8 @@ impl Pattern {
     pub fn span(&self) -> Span {
         match self {
             Pattern::Wildcard(s) | Pattern::None(s) => *s,
-            Pattern::Literal(e)  => e.span(),
-            Pattern::Binding(n)  => n.span,
+            Pattern::Literal(e) => e.span(),
+            Pattern::Binding(n) => n.span,
             Pattern::VariantUnit { span, .. } | Pattern::VariantNamed { span, .. } => *span,
             Pattern::Some(_, s) | Pattern::Success(_, s) | Pattern::Error(_, s) => *s,
             Pattern::Tuple(_, s) => *s,
@@ -58,9 +62,9 @@ impl Pattern {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NamedPattern {
     /// Field name.
-    pub name:    Name,
+    pub name: Name,
     /// Sub-pattern. When the source uses the bare shorthand `field`,
     /// this is `Pattern::Binding(field)`.
     pub pattern: Pattern,
-    pub span:    Span,
+    pub span: Span,
 }

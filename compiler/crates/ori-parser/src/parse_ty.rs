@@ -1,6 +1,6 @@
-use ori_lexer::TokenKind;
-use ori_ast::ty::Type;
 use crate::parser::Parser;
+use ori_ast::ty::Type;
+use ori_lexer::TokenKind;
 
 impl<'src> Parser<'src> {
     /// Parse any type expression.
@@ -8,22 +8,70 @@ impl<'src> Parser<'src> {
         let span = self.current_span();
         match self.peek_kind()? {
             // ── Primitive types ───────────────────────────────────────────────
-            TokenKind::BoolTy    => { self.advance(); Some(Type::Bool(span)) }
-            TokenKind::IntTy     => { self.advance(); Some(Type::Int(span)) }
-            TokenKind::Int8Ty    => { self.advance(); Some(Type::Int8(span)) }
-            TokenKind::Int16Ty   => { self.advance(); Some(Type::Int16(span)) }
-            TokenKind::Int32Ty   => { self.advance(); Some(Type::Int32(span)) }
-            TokenKind::Int64Ty   => { self.advance(); Some(Type::Int64(span)) }
-            TokenKind::U8Ty      => { self.advance(); Some(Type::U8(span)) }
-            TokenKind::U16Ty     => { self.advance(); Some(Type::U16(span)) }
-            TokenKind::U32Ty     => { self.advance(); Some(Type::U32(span)) }
-            TokenKind::U64Ty     => { self.advance(); Some(Type::U64(span)) }
-            TokenKind::FloatTy   => { self.advance(); Some(Type::Float(span)) }
-            TokenKind::Float32Ty => { self.advance(); Some(Type::Float32(span)) }
-            TokenKind::Float64Ty => { self.advance(); Some(Type::Float64(span)) }
-            TokenKind::StringTy  => { self.advance(); Some(Type::String(span)) }
-            TokenKind::BytesTy   => { self.advance(); Some(Type::Bytes(span)) }
-            TokenKind::Void      => { self.advance(); Some(Type::Void(span)) }
+            TokenKind::BoolTy => {
+                self.advance();
+                Some(Type::Bool(span))
+            }
+            TokenKind::IntTy => {
+                self.advance();
+                Some(Type::Int(span))
+            }
+            TokenKind::Int8Ty => {
+                self.advance();
+                Some(Type::Int8(span))
+            }
+            TokenKind::Int16Ty => {
+                self.advance();
+                Some(Type::Int16(span))
+            }
+            TokenKind::Int32Ty => {
+                self.advance();
+                Some(Type::Int32(span))
+            }
+            TokenKind::Int64Ty => {
+                self.advance();
+                Some(Type::Int64(span))
+            }
+            TokenKind::U8Ty => {
+                self.advance();
+                Some(Type::U8(span))
+            }
+            TokenKind::U16Ty => {
+                self.advance();
+                Some(Type::U16(span))
+            }
+            TokenKind::U32Ty => {
+                self.advance();
+                Some(Type::U32(span))
+            }
+            TokenKind::U64Ty => {
+                self.advance();
+                Some(Type::U64(span))
+            }
+            TokenKind::FloatTy => {
+                self.advance();
+                Some(Type::Float(span))
+            }
+            TokenKind::Float32Ty => {
+                self.advance();
+                Some(Type::Float32(span))
+            }
+            TokenKind::Float64Ty => {
+                self.advance();
+                Some(Type::Float64(span))
+            }
+            TokenKind::StringTy => {
+                self.advance();
+                Some(Type::String(span))
+            }
+            TokenKind::BytesTy => {
+                self.advance();
+                Some(Type::Bytes(span))
+            }
+            TokenKind::Void => {
+                self.advance();
+                Some(Type::Void(span))
+            }
 
             // ── Generic built-in types ────────────────────────────────────────
             TokenKind::Optional => {
@@ -111,7 +159,11 @@ impl<'src> Parser<'src> {
                     None
                 };
                 let end = return_ty.as_ref().map(|t| t.span()).unwrap_or(end_paren);
-                Some(Type::Func { params, return_ty, span: span.cover(end) })
+                Some(Type::Func {
+                    params,
+                    return_ty,
+                    span: span.cover(end),
+                })
             }
 
             // ── User-defined type: `Name` or `Name<T, U>` ────────────────────
@@ -122,7 +174,11 @@ impl<'src> Parser<'src> {
                     self.advance(); // <
                     let args = self.parse_type_list(&TokenKind::Gt)?;
                     let end = self.expect(&TokenKind::Gt)?;
-                    Some(Type::Generic { name, args, span: span.cover(end) })
+                    Some(Type::Generic {
+                        name,
+                        args,
+                        span: span.cover(end),
+                    })
                 } else {
                     Some(Type::Named(name))
                 }
@@ -141,7 +197,9 @@ impl<'src> Parser<'src> {
         let mut types = Vec::new();
         while !self.at(stop) && !self.at_eof() {
             types.push(self.parse_type()?);
-            if !self.eat(&TokenKind::Comma) { break; }
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
         }
         Some(types)
     }

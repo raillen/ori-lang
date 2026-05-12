@@ -1,26 +1,32 @@
-use smol_str::SmolStr;
+use ori_ast::common::{Name, QualifiedName, TypeParam, WhereClause, WhereConstraint};
 use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label, Span};
 use ori_lexer::{Token, TokenKind};
-use ori_ast::common::{Name, QualifiedName, TypeParam, WhereClause, WhereConstraint};
+use smol_str::SmolStr;
 
 // ── Parser core ───────────────────────────────────────────────────────────────
 
 pub(crate) struct Parser<'src> {
-    pub tokens:  &'src [Token],
-    pub pos:     usize,
-    pub source:  &'src str,
+    pub tokens: &'src [Token],
+    pub pos: usize,
+    pub source: &'src str,
     pub file_id: FileId,
-    pub sink:    &'src mut DiagnosticSink,
+    pub sink: &'src mut DiagnosticSink,
 }
 
 impl<'src> Parser<'src> {
     pub fn new(
-        tokens:  &'src [Token],
-        source:  &'src str,
+        tokens: &'src [Token],
+        source: &'src str,
         file_id: FileId,
-        sink:    &'src mut DiagnosticSink,
+        sink: &'src mut DiagnosticSink,
     ) -> Self {
-        let mut p = Self { tokens, pos: 0, source, file_id, sink };
+        let mut p = Self {
+            tokens,
+            pos: 0,
+            source,
+            file_id,
+            sink,
+        };
         p.skip_trivia();
         p
     }
@@ -57,7 +63,9 @@ impl<'src> Parser<'src> {
         let mut i = self.pos;
         while i < self.tokens.len() {
             if !self.tokens[i].is_trivia() {
-                if count == n { return Some(&self.tokens[i].kind); }
+                if count == n {
+                    return Some(&self.tokens[i].kind);
+                }
                 count += 1;
             }
             i += 1;
@@ -82,7 +90,8 @@ impl<'src> Parser<'src> {
             Some(self.advance().unwrap().span)
         } else {
             let span = self.current_span();
-            let found = self.peek_kind()
+            let found = self
+                .peek_kind()
                 .map(|k| k.display_name())
                 .unwrap_or("end of file");
             self.error(
@@ -127,8 +136,8 @@ impl<'src> Parser<'src> {
     }
 
     pub fn error(&mut self, code: &'static str, msg: impl Into<String>, span: Span) {
-        let diag = Diagnostic::error(code, msg)
-            .with_label(Label::primary(self.file_id, span, "here"));
+        let diag =
+            Diagnostic::error(code, msg).with_label(Label::primary(self.file_id, span, "here"));
         self.sink.emit(diag);
     }
 
@@ -149,17 +158,26 @@ impl<'src> Parser<'src> {
         }
     }
 
+    fn parse_qualified_name_part(&mut self) -> Option<Name> {
+        if !is_qualified_name_part(self.peek_kind()) {
+            let span = self.current_span();
+            self.error("parse.expected_identifier", "expected identifier", span);
+            return None;
+        }
+        let tok = self.advance().unwrap();
+        let text = SmolStr::new(self.slice(tok.span));
+        Some(Name::new(text, tok.span))
+    }
+
     /// Parse `ident (.ident)*` in a type or import context.
     pub fn parse_qualified_name(&mut self) -> Option<QualifiedName> {
-        let first = self.parse_name()?;
+        let first = self.parse_qualified_name_part()?;
         let mut span = first.span;
         let mut parts = vec![first];
         // Continue only if Dot is followed by Ident (not a field access)
-        while self.at(&TokenKind::Dot)
-            && self.peek_nth_kind(1) == Some(&TokenKind::Ident)
-        {
+        while self.at(&TokenKind::Dot) && is_qualified_name_part(self.peek_nth_kind(1)) {
             self.advance(); // dot
-            let name = self.parse_name()?;
+            let name = self.parse_qualified_name_part()?;
             span = span.cover(name.span);
             parts.push(name);
         }
@@ -176,13 +194,17 @@ impl<'src> Parser<'src> {
         self.advance(); // <
         let mut params = Vec::new();
         loop {
-            if self.at_eof() || self.at(&TokenKind::Gt) { break; }
+            if self.at_eof() || self.at(&TokenKind::Gt) {
+                break;
+            }
             if let Some(name) = self.parse_name() {
                 params.push(TypeParam { name });
             } else {
                 break;
             }
-            if !self.eat(&TokenKind::Comma) { break; }
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
         }
         self.expect(&TokenKind::Gt);
         params
@@ -211,17 +233,25 @@ impl<'src> Parser<'src> {
             } else {
                 constraints.push(WhereConstraint::Is { param, bound, span });
             }
-            if !self.eat(&TokenKind::Comma) { break; }
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
             // Stop if next token is not an Ident (end of where clause)
-            if !self.at(&TokenKind::Ident) { break; }
+            if !self.at(&TokenKind::Ident) {
+                break;
+            }
         }
-        let end = constraints.last()
+        let end = constraints
+            .last()
             .map(|c| match c {
-                WhereConstraint::Is   { span, .. } => *span,
+                WhereConstraint::Is { span, .. } => *span,
                 WhereConstraint::IsNot { span, .. } => *span,
             })
             .unwrap_or(start);
-        Some(WhereClause { constraints, span: start.cover(end) })
+        Some(WhereClause {
+            constraints,
+            span: start.cover(end),
+        })
     }
 
     /// Advance past all tokens that are NOT in the sync set (error recovery).
@@ -230,4 +260,37 @@ impl<'src> Parser<'src> {
             self.advance();
         }
     }
+}
+
+fn is_qualified_name_part(kind: Option<&TokenKind>) -> bool {
+    matches!(
+        kind,
+        Some(TokenKind::Ident)
+            | Some(TokenKind::Any)
+            | Some(TokenKind::Optional)
+            | Some(TokenKind::ResultKw)
+            | Some(TokenKind::List)
+            | Some(TokenKind::Map)
+            | Some(TokenKind::Set)
+            | Some(TokenKind::Range)
+            | Some(TokenKind::Repeat)
+            | Some(TokenKind::Void)
+            | Some(TokenKind::Tuple)
+            | Some(TokenKind::Lazy)
+            | Some(TokenKind::BoolTy)
+            | Some(TokenKind::IntTy)
+            | Some(TokenKind::Int8Ty)
+            | Some(TokenKind::Int16Ty)
+            | Some(TokenKind::Int32Ty)
+            | Some(TokenKind::Int64Ty)
+            | Some(TokenKind::U8Ty)
+            | Some(TokenKind::U16Ty)
+            | Some(TokenKind::U32Ty)
+            | Some(TokenKind::U64Ty)
+            | Some(TokenKind::FloatTy)
+            | Some(TokenKind::Float32Ty)
+            | Some(TokenKind::Float64Ty)
+            | Some(TokenKind::StringTy)
+            | Some(TokenKind::BytesTy)
+    )
 }

@@ -1,8 +1,8 @@
-use ori_diagnostics::Span;
 use crate::common::{Attr, Name, QualifiedName, TypeParams, Visibility, WhereClause};
 use crate::expr::Expr;
 use crate::stmt::Block;
 use crate::ty::Type;
+use ori_diagnostics::Span;
 
 // ── Source file ───────────────────────────────────────────────────────────────
 
@@ -10,9 +10,9 @@ use crate::ty::Type;
 #[derive(Debug, Clone, PartialEq)]
 pub struct SourceFile {
     pub namespace: NamespaceDecl,
-    pub imports:   Vec<ImportDecl>,
-    pub items:     Vec<ItemWithAttrs>,
-    pub span:      Span,
+    pub imports: Vec<ImportDecl>,
+    pub items: Vec<ItemWithAttrs>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -23,9 +23,10 @@ pub struct NamespaceDecl {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImportDecl {
-    pub path:  QualifiedName,
+    pub visibility: Visibility,
+    pub path: QualifiedName,
     pub alias: Option<Name>,
-    pub span:  Span,
+    pub span: Span,
 }
 
 // ── Top-level items ───────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ pub struct ImportDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ItemWithAttrs {
     pub attrs: Vec<Attr>,
-    pub item:  Item,
+    pub item: Item,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,15 +54,15 @@ pub enum Item {
 impl Item {
     pub fn span(&self) -> Span {
         match self {
-            Item::Func(f)      => f.span,
-            Item::Struct(s)    => s.span,
-            Item::Enum(e)      => e.span,
-            Item::Trait(t)     => t.span,
+            Item::Func(f) => f.span,
+            Item::Struct(s) => s.span,
+            Item::Enum(e) => e.span,
+            Item::Trait(t) => t.span,
             Item::Implement(i) => i.span,
-            Item::Alias(a)     => a.span,
-            Item::Const(c)     => c.span,
-            Item::Var(v)       => v.span,
-            Item::Extern(e)    => e.span,
+            Item::Alias(a) => a.span,
+            Item::Const(c) => c.span,
+            Item::Var(v) => v.span,
+            Item::Extern(e) => e.span,
         }
     }
 }
@@ -70,34 +71,34 @@ impl Item {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncDecl {
-    pub visibility:   Visibility,
-    pub is_mut:       bool,
-    pub name:         Name,
-    pub type_params:  TypeParams,
-    pub params:       Vec<Param>,
-    pub return_ty:    Option<Type>,
+    pub visibility: Visibility,
+    pub is_mut: bool,
+    pub name: Name,
+    pub type_params: TypeParams,
+    pub params: Vec<Param>,
+    pub return_ty: Option<Type>,
     pub where_clause: Option<WhereClause>,
-    pub body:         Block,
-    pub span:         Span,
+    pub body: Block,
+    pub span: Span,
 }
 
 /// A `func` declaration with no body (used inside trait declarations).
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncSignature {
-    pub visibility:   Visibility,
-    pub is_mut:       bool,
-    pub name:         Name,
-    pub type_params:  TypeParams,
-    pub params:       Vec<Param>,
-    pub return_ty:    Option<Type>,
+    pub visibility: Visibility,
+    pub is_mut: bool,
+    pub name: Name,
+    pub type_params: TypeParams,
+    pub params: Vec<Param>,
+    pub return_ty: Option<Type>,
     pub where_clause: Option<WhereClause>,
-    pub span:         Span,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Param {
     pub name: Name,
-    pub ty:   Type,
+    pub ty: Type,
     pub kind: ParamKind,
     pub span: Span,
 }
@@ -120,47 +121,47 @@ pub enum ParamKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructDecl {
-    pub visibility:   Visibility,
-    pub name:         Name,
-    pub type_params:  TypeParams,
+    pub visibility: Visibility,
+    pub name: Name,
+    pub type_params: TypeParams,
     pub where_clause: Option<WhereClause>,
-    pub fields:       Vec<StructField>,
-    pub methods:      Vec<FuncDecl>,
-    pub span:         Span,
+    pub fields: Vec<StructField>,
+    pub methods: Vec<FuncDecl>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructField {
-    pub name:     Name,
-    pub ty:       Type,
+    pub name: Name,
+    pub ty: Type,
     /// `if it > 0` value contract; `None` = no contract.
     pub contract: Option<Box<Expr>>,
-    pub span:     Span,
+    pub span: Span,
 }
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumDecl {
-    pub visibility:  Visibility,
-    pub name:        Name,
+    pub visibility: Visibility,
+    pub name: Name,
     pub type_params: TypeParams,
-    pub variants:    Vec<EnumVariant>,
-    pub span:        Span,
+    pub variants: Vec<EnumVariant>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumVariant {
-    pub name:   Name,
+    pub name: Name,
     /// Empty = unit variant; non-empty = named-field variant.
     pub fields: Vec<NamedField>,
-    pub span:   Span,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NamedField {
     pub name: Name,
-    pub ty:   Type,
+    pub ty: Type,
     pub span: Span,
 }
 
@@ -168,12 +169,12 @@ pub struct NamedField {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TraitDecl {
-    pub visibility:   Visibility,
-    pub name:         Name,
-    pub type_params:  TypeParams,
+    pub visibility: Visibility,
+    pub name: Name,
+    pub type_params: TypeParams,
     pub where_clause: Option<WhereClause>,
-    pub members:      Vec<TraitMember>,
-    pub span:         Span,
+    pub members: Vec<TraitMember>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -189,12 +190,12 @@ pub enum TraitMember {
 /// `implement<T> Trait for Type where T is Bound … end`
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImplementDecl {
-    pub type_params:  TypeParams,
-    pub trait_name:   QualifiedName,
-    pub for_type:     QualifiedName,
+    pub type_params: TypeParams,
+    pub trait_name: QualifiedName,
+    pub for_type: QualifiedName,
     pub where_clause: Option<WhereClause>,
-    pub methods:      Vec<FuncDecl>,
-    pub span:         Span,
+    pub methods: Vec<FuncDecl>,
+    pub span: Span,
 }
 
 // ── Alias ─────────────────────────────────────────────────────────────────────
@@ -202,11 +203,11 @@ pub struct ImplementDecl {
 /// `alias Name<T> = Type`
 #[derive(Debug, Clone, PartialEq)]
 pub struct AliasDecl {
-    pub visibility:  Visibility,
-    pub name:        Name,
+    pub visibility: Visibility,
+    pub name: Name,
     pub type_params: TypeParams,
-    pub ty:          Type,
-    pub span:        Span,
+    pub ty: Type,
+    pub span: Span,
 }
 
 // ── Top-level const / var ─────────────────────────────────────────────────────
@@ -214,28 +215,28 @@ pub struct AliasDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TopConst {
     pub visibility: Visibility,
-    pub name:       Name,
-    pub ty:         Type,
-    pub value:      Box<Expr>,
-    pub span:       Span,
+    pub name: Name,
+    pub ty: Type,
+    pub value: Box<Expr>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TopVar {
     pub visibility: Visibility,
-    pub name:       Name,
-    pub ty:         Type,
-    pub value:      Box<Expr>,
-    pub span:       Span,
+    pub name: Name,
+    pub ty: Type,
+    pub value: Box<Expr>,
+    pub span: Span,
 }
 
 // ── Extern ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExternBlock {
-    pub abi:     AbiLabel,
+    pub abi: AbiLabel,
     pub members: Vec<ExternMember>,
-    pub span:    Span,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -248,15 +249,15 @@ pub enum AbiLabel {
 pub enum ExternMember {
     Func {
         visibility: Visibility,
-        name:       Name,
-        params:     Vec<Param>,
-        return_ty:  Option<Type>,
-        span:       Span,
+        name: Name,
+        params: Vec<Param>,
+        return_ty: Option<Type>,
+        span: Span,
     },
     Var {
         visibility: Visibility,
-        name:       Name,
-        ty:         Type,
-        span:       Span,
+        name: Name,
+        ty: Type,
+        span: Span,
     },
 }

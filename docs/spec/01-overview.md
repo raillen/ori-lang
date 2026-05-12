@@ -71,6 +71,28 @@ public func item_count() -> int
 end
 ```
 
+Imports create local namespace aliases. A plain import is local to the file.
+
+`public import` re-exports that alias through the current namespace:
+
+```ori
+namespace app.api
+
+public import app.inventory as inventory
+```
+
+A consumer can then write:
+
+```ori
+namespace app.main
+
+import app.api as api
+
+func main()
+    const count: int = api.inventory.item_count()
+end
+```
+
 The common path through Ori code:
 
 1. Define data shapes with `struct` and `enum`.

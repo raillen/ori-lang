@@ -1,7 +1,7 @@
-use ori_lexer::TokenKind;
-use ori_ast::pattern::{NamedPattern, Pattern};
-use ori_ast::common::Name;
 use crate::parser::Parser;
+use ori_ast::common::Name;
+use ori_ast::pattern::{NamedPattern, Pattern};
+use ori_lexer::TokenKind;
 
 impl<'src> Parser<'src> {
     pub fn parse_pattern(&mut self) -> Option<Pattern> {
@@ -53,7 +53,9 @@ impl<'src> Parser<'src> {
                 let mut pats = Vec::new();
                 while !self.at(&TokenKind::RParen) && !self.at_eof() {
                     pats.push(self.parse_pattern()?);
-                    if !self.eat(&TokenKind::Comma) { break; }
+                    if !self.eat(&TokenKind::Comma) {
+                        break;
+                    }
                 }
                 let end = self.expect(&TokenKind::RParen)?;
                 Some(Pattern::Tuple(pats, span.cover(end)))
@@ -67,8 +69,10 @@ impl<'src> Parser<'src> {
             }
 
             // Literal: `true`, `false`, integer, float, string
-            TokenKind::True | TokenKind::False
-            | TokenKind::IntLit | TokenKind::FloatLit
+            TokenKind::True
+            | TokenKind::False
+            | TokenKind::IntLit
+            | TokenKind::FloatLit
             | TokenKind::StrLit => {
                 let expr = self.parse_primary_expr()?;
                 Some(Pattern::Literal(Box::new(expr)))
@@ -113,13 +117,28 @@ impl<'src> Parser<'src> {
                     Pattern::Binding(field_name.clone())
                 };
                 let span = field_name.span.cover(pattern.span());
-                fields.push(NamedPattern { name: field_name, pattern, span });
-                if !self.eat(&TokenKind::Comma) { break; }
+                fields.push(NamedPattern {
+                    name: field_name,
+                    pattern,
+                    span,
+                });
+                if !self.eat(&TokenKind::Comma) {
+                    break;
+                }
             }
             let end = self.expect(&TokenKind::RParen)?;
-            Some(Pattern::VariantNamed { name, fields, shorthand, span: start.cover(end) })
+            Some(Pattern::VariantNamed {
+                name,
+                fields,
+                shorthand,
+                span: start.cover(end),
+            })
         } else {
-            Some(Pattern::VariantUnit { name, shorthand, span: start })
+            Some(Pattern::VariantUnit {
+                name,
+                shorthand,
+                span: start,
+            })
         }
     }
 }

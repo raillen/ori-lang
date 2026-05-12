@@ -1,6 +1,6 @@
+use ori_diagnostics::Span;
 use smol_str::SmolStr;
 use std::collections::HashMap;
-use ori_diagnostics::Span;
 
 /// A unique identifier for a top-level definition within a compilation session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -28,12 +28,13 @@ pub enum DefKind {
 /// A single registered definition.
 #[derive(Debug, Clone)]
 pub struct Def {
-    pub id:   DefId,
+    pub id: DefId,
     pub kind: DefKind,
     /// Simple (unqualified) name: `"User"`, `"connect"`.
     pub name: SmolStr,
     /// Fully-qualified path: `"app.user.User"`, `"ori.io.print"`.
     pub path: SmolStr,
+    pub is_public: bool,
     pub span: Span,
 }
 
@@ -42,7 +43,7 @@ pub struct Def {
 /// Populated during name resolution; queried by the type checker.
 #[derive(Debug, Default)]
 pub struct DefMap {
-    defs:    Vec<Def>,
+    defs: Vec<Def>,
     by_path: HashMap<SmolStr, DefId>,
 }
 
@@ -56,13 +57,21 @@ impl DefMap {
         kind: DefKind,
         name: SmolStr,
         path: SmolStr,
+        is_public: bool,
         span: Span,
     ) -> DefId {
         if let Some(&existing) = self.by_path.get(&path) {
             return existing;
         }
         let id = DefId(self.defs.len() as u32);
-        self.defs.push(Def { id, kind, name, path: path.clone(), span });
+        self.defs.push(Def {
+            id,
+            kind,
+            name,
+            path: path.clone(),
+            is_public,
+            span,
+        });
         self.by_path.insert(path, id);
         id
     }

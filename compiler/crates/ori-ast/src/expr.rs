@@ -1,8 +1,8 @@
-use smol_str::SmolStr;
-use ori_diagnostics::Span;
 use crate::common::{Name, QualifiedName};
-use crate::ty::Type;
 use crate::stmt::Block;
+use crate::ty::Type;
+use ori_diagnostics::Span;
+use smol_str::SmolStr;
 
 /// Every expression in Ori.
 #[derive(Debug, Clone, PartialEq)]
@@ -10,11 +10,26 @@ pub enum Expr {
     // ── Literals ─────────────────────────────────────────────────────────────
     BoolLit(bool, Span),
     /// Raw source text is kept for arbitrary-precision parsing later.
-    IntLit  { raw: SmolStr, span: Span },
-    FloatLit { raw: SmolStr, span: Span },
-    StrLit  { value: SmolStr, span: Span },
-    FStrLit { parts: Vec<FStrPart>, span: Span },
-    BytesLit { bytes: Vec<u8>, span: Span },
+    IntLit {
+        raw: SmolStr,
+        span: Span,
+    },
+    FloatLit {
+        raw: SmolStr,
+        span: Span,
+    },
+    StrLit {
+        value: SmolStr,
+        span: Span,
+    },
+    FStrLit {
+        parts: Vec<FStrPart>,
+        span: Span,
+    },
+    BytesLit {
+        bytes: Vec<u8>,
+        span: Span,
+    },
     None(Span),
 
     // ── Name references ──────────────────────────────────────────────────────
@@ -24,42 +39,101 @@ pub enum Expr {
 
     // ── Range ────────────────────────────────────────────────────────────────
     /// `start..end` — always inclusive both ends.
-    Range { start: Box<Expr>, end: Box<Expr>, span: Span },
+    Range {
+        start: Box<Expr>,
+        end: Box<Expr>,
+        span: Span,
+    },
 
     // ── Collection literals ──────────────────────────────────────────────────
-    List  { elements: Vec<Expr>, span: Span },
-    Map   { entries: Vec<(Expr, Expr)>, span: Span },
-    Set   { elements: Vec<Expr>, span: Span },
-    Tuple { elements: Vec<Expr>, span: Span },
+    List {
+        elements: Vec<Expr>,
+        span: Span,
+    },
+    Map {
+        entries: Vec<(Expr, Expr)>,
+        span: Span,
+    },
+    Set {
+        elements: Vec<Expr>,
+        span: Span,
+    },
+    Tuple {
+        elements: Vec<Expr>,
+        span: Span,
+    },
 
     // ── Struct / enum construction ────────────────────────────────────────────
     /// `Point(x: 0, y: 0)` — full form with explicit type.
-    StructLit { ty: QualifiedName, fields: Vec<FieldInit>, span: Span },
+    StructLit {
+        ty: QualifiedName,
+        fields: Vec<FieldInit>,
+        span: Span,
+    },
     /// `.{x: 0, y: 0}` — anonymous form; type resolved by checker.
-    AnonStructLit { fields: Vec<FieldInit>, span: Span },
+    AnonStructLit {
+        fields: Vec<FieldInit>,
+        span: Span,
+    },
     /// `Direction.North` or `.North` (shorthand).
-    EnumVariantUnit { ty: Option<QualifiedName>, variant: Name, span: Span },
+    EnumVariantUnit {
+        ty: Option<QualifiedName>,
+        variant: Name,
+        span: Span,
+    },
     /// `Shape.Circle(radius: 5.0)` or `.Circle(radius: 5.0)`.
     EnumVariantNamed {
-        ty:      Option<QualifiedName>,
+        ty: Option<QualifiedName>,
         variant: Name,
-        fields:  Vec<FieldInit>,
-        span:    Span,
+        fields: Vec<FieldInit>,
+        span: Span,
     },
 
     // ── Operators ────────────────────────────────────────────────────────────
-    Unary  { op: UnaryOp,  operand: Box<Expr>, span: Span },
-    Binary { op: BinaryOp, lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
+    Unary {
+        op: UnaryOp,
+        operand: Box<Expr>,
+        span: Span,
+    },
+    Binary {
+        op: BinaryOp,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+        span: Span,
+    },
 
     // ── Postfix operations ───────────────────────────────────────────────────
-    Field       { object: Box<Expr>, field: Name, span: Span },
-    TupleIndex  { object: Box<Expr>, index: u32, span: Span },
-    Call        { callee: Box<Expr>, args: Vec<Arg>, span: Span },
-    Index       { object: Box<Expr>, index: IndexExpr, span: Span },
+    Field {
+        object: Box<Expr>,
+        field: Name,
+        span: Span,
+    },
+    TupleIndex {
+        object: Box<Expr>,
+        index: u32,
+        span: Span,
+    },
+    Call {
+        callee: Box<Expr>,
+        args: Vec<Arg>,
+        span: Span,
+    },
+    Index {
+        object: Box<Expr>,
+        index: IndexExpr,
+        span: Span,
+    },
     /// `expr?`  — propagate error / absence.
-    Try         { expr: Box<Expr>, span: Span },
+    Try {
+        expr: Box<Expr>,
+        span: Span,
+    },
     /// `a |> f` — pipe into function.
-    Pipe        { value: Box<Expr>, func: Box<Expr>, span: Span },
+    Pipe {
+        value: Box<Expr>,
+        func: Box<Expr>,
+        span: Span,
+    },
 
     // ── Inline control flow ──────────────────────────────────────────────────
     /// `if cond then a else b`
@@ -67,7 +141,7 @@ pub enum Expr {
         condition: Box<Expr>,
         then_expr: Box<Expr>,
         else_expr: Box<Expr>,
-        span:      Span,
+        span: Span,
     },
 
     // ── Closures ─────────────────────────────────────────────────────────────
@@ -75,31 +149,51 @@ pub enum Expr {
 
     // ── Struct update ─────────────────────────────────────────────────────────
     /// `original with { field: value } end`
-    StructUpdate { base: Box<Expr>, updates: Vec<FieldInit>, span: Span },
+    StructUpdate {
+        base: Box<Expr>,
+        updates: Vec<FieldInit>,
+        span: Span,
+    },
 
     // ── Type check ───────────────────────────────────────────────────────────
     /// `expr is TypeName` — runtime type narrowing on `any<Trait>`.
-    IsCheck { value: Box<Expr>, ty: QualifiedName, span: Span },
+    IsCheck {
+        value: Box<Expr>,
+        ty: QualifiedName,
+        span: Span,
+    },
 }
 
 impl Expr {
     pub fn span(&self) -> Span {
         match self {
             Expr::BoolLit(_, s) | Expr::None(s) | Expr::SelfExpr(s) => *s,
-            Expr::IntLit { span, .. } | Expr::FloatLit { span, .. }
-            | Expr::StrLit { span, .. } | Expr::FStrLit { span, .. }
+            Expr::IntLit { span, .. }
+            | Expr::FloatLit { span, .. }
+            | Expr::StrLit { span, .. }
+            | Expr::FStrLit { span, .. }
             | Expr::BytesLit { span, .. } => *span,
             Expr::Ident(n) => n.span,
             Expr::QualifiedIdent(q) => q.span,
-            Expr::Range { span, .. } | Expr::List { span, .. } | Expr::Map { span, .. }
-            | Expr::Set { span, .. } | Expr::Tuple { span, .. }
-            | Expr::StructLit { span, .. } | Expr::AnonStructLit { span, .. }
-            | Expr::EnumVariantUnit { span, .. } | Expr::EnumVariantNamed { span, .. }
-            | Expr::Unary { span, .. } | Expr::Binary { span, .. }
-            | Expr::Field { span, .. } | Expr::TupleIndex { span, .. }
-            | Expr::Call { span, .. } | Expr::Index { span, .. }
-            | Expr::Try { span, .. } | Expr::Pipe { span, .. }
-            | Expr::IfExpr { span, .. } | Expr::StructUpdate { span, .. }
+            Expr::Range { span, .. }
+            | Expr::List { span, .. }
+            | Expr::Map { span, .. }
+            | Expr::Set { span, .. }
+            | Expr::Tuple { span, .. }
+            | Expr::StructLit { span, .. }
+            | Expr::AnonStructLit { span, .. }
+            | Expr::EnumVariantUnit { span, .. }
+            | Expr::EnumVariantNamed { span, .. }
+            | Expr::Unary { span, .. }
+            | Expr::Binary { span, .. }
+            | Expr::Field { span, .. }
+            | Expr::TupleIndex { span, .. }
+            | Expr::Call { span, .. }
+            | Expr::Index { span, .. }
+            | Expr::Try { span, .. }
+            | Expr::Pipe { span, .. }
+            | Expr::IfExpr { span, .. }
+            | Expr::StructUpdate { span, .. }
             | Expr::IsCheck { span, .. } => *span,
             Expr::Closure(c) => c.span,
         }
@@ -118,9 +212,9 @@ pub enum FStrPart {
 /// A named field initialiser: `name: expr`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldInit {
-    pub name:  Name,
+    pub name: Name,
     pub value: Box<Expr>,
-    pub span:  Span,
+    pub span: Span,
 }
 
 /// A call argument: positional, named, or spread (`..list`).
@@ -128,7 +222,7 @@ pub struct FieldInit {
 pub struct Arg {
     pub label: Option<Name>,
     pub value: ArgValue,
-    pub span:  Span,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -145,7 +239,7 @@ pub enum IndexExpr {
     /// `obj[a..b]`, `obj[a..]`, `obj[..b]`, `obj[..]`
     Range {
         start: Option<Box<Expr>>,
-        end:   Option<Box<Expr>>,
+        end: Option<Box<Expr>>,
     },
 }
 
@@ -157,24 +251,34 @@ pub enum UnaryOp {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
-    Add, Sub, Mul, Div, Rem,
-    Eq, Ne, Lt, Le, Gt, Ge,
-    And, Or,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    And,
+    Or,
 }
 
 /// A closure expression: `do(params) => expr` or `do(params) block end`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClosureExpr {
-    pub params:    Vec<ClosureParam>,
+    pub params: Vec<ClosureParam>,
     pub return_ty: Option<Type>,
-    pub body:      ClosureBody,
-    pub span:      Span,
+    pub body: ClosureBody,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClosureParam {
     pub name: Name,
-    pub ty:   Type,
+    pub ty: Type,
     pub span: Span,
 }
 

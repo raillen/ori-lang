@@ -1,15 +1,15 @@
-use smol_str::SmolStr;
-use ori_diagnostics::Span;
 use crate::common::Name;
 use crate::expr::Expr;
 use crate::pattern::Pattern;
 use crate::ty::Type;
+use ori_diagnostics::Span;
+use smol_str::SmolStr;
 
 /// A sequence of statements closed by `end`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
-    pub span:  Span,
+    pub span: Span,
 }
 
 /// Every statement that can appear inside a function body.
@@ -40,18 +40,18 @@ pub enum Stmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalConst {
-    pub name:  Name,
-    pub ty:    Type,
+    pub name: Name,
+    pub ty: Type,
     pub value: Box<Expr>,
-    pub span:  Span,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalVar {
-    pub name:  Name,
-    pub ty:    Type,
+    pub name: Name,
+    pub ty: Type,
     pub value: Box<Expr>,
-    pub span:  Span,
+    pub span: Span,
 }
 
 // ── Assignment ────────────────────────────────────────────────────────────────
@@ -59,29 +59,40 @@ pub struct LocalVar {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssignStmt {
     pub lvalue: LValue,
-    pub value:  Box<Expr>,
-    pub span:   Span,
+    pub value: Box<Expr>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompoundAssignStmt {
     pub lvalue: LValue,
-    pub op:     CompoundOp,
-    pub value:  Box<Expr>,
-    pub span:   Span,
+    pub op: CompoundOp,
+    pub value: Box<Expr>,
+    pub span: Span,
 }
 
 /// An assignable location: a variable, field, or index.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LValue {
     Ident(Name),
-    Field { base: Box<LValue>, field: Name, span: Span },
-    Index { base: Box<LValue>, index: Box<Expr>, span: Span },
+    Field {
+        base: Box<LValue>,
+        field: Name,
+        span: Span,
+    },
+    Index {
+        base: Box<LValue>,
+        index: Box<Expr>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompoundOp {
-    Add, Sub, Mul, Div,
+    Add,
+    Sub,
+    Mul,
+    Div,
 }
 
 // ── Control flow ──────────────────────────────────────────────────────────────
@@ -89,59 +100,59 @@ pub enum CompoundOp {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReturnStmt {
     pub value: Option<Box<Expr>>,
-    pub span:  Span,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IfStmt {
-    pub condition:  Box<Expr>,
+    pub condition: Box<Expr>,
     pub then_block: Block,
     /// `else if cond … end` chains.
-    pub else_ifs:   Vec<(Box<Expr>, Block)>,
+    pub else_ifs: Vec<(Box<Expr>, Block)>,
     pub else_block: Option<Block>,
-    pub span:       Span,
+    pub span: Span,
 }
 
 /// `if some(binding) = expr … end`
 #[derive(Debug, Clone, PartialEq)]
 pub struct IfSomeStmt {
-    pub binding:    Name,
-    pub value:      Box<Expr>,
+    pub binding: Name,
+    pub value: Box<Expr>,
     pub then_block: Block,
     pub else_block: Option<Block>,
-    pub span:       Span,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WhileStmt {
     pub condition: Box<Expr>,
-    pub body:      Block,
-    pub span:      Span,
+    pub body: Block,
+    pub span: Span,
 }
 
 /// `while some(binding) = expr … end`
 #[derive(Debug, Clone, PartialEq)]
 pub struct WhileSomeStmt {
     pub binding: Name,
-    pub value:   Box<Expr>,
-    pub body:    Block,
-    pub span:    Span,
+    pub value: Box<Expr>,
+    pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ForStmt {
-    pub binding:        Name,
+    pub binding: Name,
     pub second_binding: Option<Name>,
-    pub iterable:       Box<Expr>,
-    pub body:           Block,
-    pub span:           Span,
+    pub iterable: Box<Expr>,
+    pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RepeatStmt {
     pub count: Box<Expr>,
-    pub body:  Block,
-    pub span:  Span,
+    pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -155,8 +166,8 @@ pub struct LoopStmt {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchStmt {
     pub scrutinee: Box<Expr>,
-    pub cases:     Vec<MatchCase>,
-    pub span:      Span,
+    pub cases: Vec<MatchCase>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -164,15 +175,12 @@ pub enum MatchCase {
     /// `case pattern [if guard]: stmts`
     Pattern {
         pattern: Pattern,
-        guard:   Option<Box<Expr>>,
-        body:    Vec<Stmt>,
-        span:    Span,
-    },
-    /// `case else: stmts`
-    Else {
+        guard: Option<Box<Expr>>,
         body: Vec<Stmt>,
         span: Span,
     },
+    /// `case else: stmts`
+    Else { body: Vec<Stmt>, span: Span },
 }
 
 // ── Resource cleanup ──────────────────────────────────────────────────────────
@@ -180,10 +188,10 @@ pub enum MatchCase {
 /// `using name: Type = expr`
 #[derive(Debug, Clone, PartialEq)]
 pub struct UsingStmt {
-    pub name:  Name,
-    pub ty:    Type,
+    pub name: Name,
+    pub ty: Type,
     pub value: Box<Expr>,
-    pub span:  Span,
+    pub span: Span,
 }
 
 // ── Assertion ─────────────────────────────────────────────────────────────────
@@ -192,6 +200,6 @@ pub struct UsingStmt {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CheckStmt {
     pub condition: Box<Expr>,
-    pub message:   Option<SmolStr>,
-    pub span:      Span,
+    pub message: Option<SmolStr>,
+    pub span: Span,
 }

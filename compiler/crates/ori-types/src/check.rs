@@ -2654,6 +2654,12 @@ fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         }
         "ori.string.replace" => (vec![Ty::String, Ty::String, Ty::String], Ty::String),
         "ori.string.chars" => (vec![Ty::String], Ty::List(Box::new(Ty::String))),
+        "ori.string.index_of" => (vec![Ty::String, Ty::String], Ty::Int),
+        "ori.string.join" => (vec![Ty::List(Box::new(Ty::String)), Ty::String], Ty::String),
+        "ori.string.repeat" => (vec![Ty::String, Ty::Int], Ty::String),
+        "ori.string.pad_left" | "ori.string.pad_right" => {
+            (vec![Ty::String, Ty::Int, Ty::String], Ty::String)
+        }
         "ori.list.new" => (vec![], Ty::List(Box::new(Ty::Infer(0)))),
         "ori.list.push" => (
             vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Infer(0)],
@@ -2669,6 +2675,27 @@ fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         ),
         "ori.list.len" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Int),
         "ori.list.free" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Void),
+        "ori.list.pop" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Infer(0)),
+        "ori.list.remove" => (vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int], Ty::Void),
+        "ori.list.insert" => (
+            vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int, Ty::Infer(0)],
+            Ty::Void,
+        ),
+        "ori.list.contains" => (
+            vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Infer(0)],
+            Ty::Bool,
+        ),
+        "ori.list.index_of" => (
+            vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Infer(0)],
+            Ty::Int,
+        ),
+        "ori.list.sort" | "ori.list.reverse" => {
+            (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Void)
+        }
+        "ori.list.slice" => (
+            vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int, Ty::Int],
+            Ty::List(Box::new(Ty::Infer(0))),
+        ),
         "ori.set.new" => (vec![], Ty::Set(Box::new(Ty::Infer(0)))),
         "ori.set.add" => (
             vec![Ty::Set(Box::new(Ty::Infer(0))), Ty::Infer(0)],
@@ -2680,6 +2707,10 @@ fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         ),
         "ori.set.len" => (vec![Ty::Set(Box::new(Ty::Infer(0)))], Ty::Int),
         "ori.set.free" => (vec![Ty::Set(Box::new(Ty::Infer(0)))], Ty::Void),
+        "ori.set.remove" => (
+            vec![Ty::Set(Box::new(Ty::Infer(0))), Ty::Infer(0)],
+            Ty::Void,
+        ),
         "ori.map.new" => (
             vec![],
             Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0))),
@@ -2714,9 +2745,34 @@ fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0)))],
             Ty::Void,
         ),
+        "ori.map.remove" => (
+            vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0))), Ty::Infer(0)],
+            Ty::Void,
+        ),
+        "ori.map.keys" => (
+            vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0)))],
+            Ty::List(Box::new(Ty::Infer(0))),
+        ),
+        "ori.map.values" => (
+            vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0)))],
+            Ty::List(Box::new(Ty::Infer(0))),
+        ),
         "ori.math.sqrt" => (vec![Ty::Float], Ty::Float),
         "ori.math.abs" => (vec![Ty::Int], Ty::Int),
         "ori.math.min" | "ori.math.max" => (vec![Ty::Int, Ty::Int], Ty::Int),
+        "ori.math.pow" => (vec![Ty::Float, Ty::Float], Ty::Float),
+        "ori.math.floor" | "ori.math.ceil" | "ori.math.round" => (vec![Ty::Float], Ty::Int),
+        "ori.math.log" | "ori.math.sin" | "ori.math.cos" | "ori.math.tan" => {
+            (vec![Ty::Float], Ty::Float)
+        }
+        "float_to_string" | "ori.convert.float_to_string" => (vec![Ty::Float], Ty::String),
+        "bool_to_string" | "ori.convert.bool_to_string" => (vec![Ty::Bool], Ty::String),
+        "string_to_int" | "ori.convert.string_to_int" => {
+            (vec![Ty::String], Ty::Optional(Box::new(Ty::Int)))
+        }
+        "string_to_float" | "ori.convert.string_to_float" => {
+            (vec![Ty::String], Ty::Optional(Box::new(Ty::Float)))
+        }
         "string" => (vec![Ty::Int], Ty::String),
         "len" => (vec![Ty::String], Ty::Int),
         _ => return None,
