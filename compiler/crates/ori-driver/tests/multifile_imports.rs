@@ -3092,6 +3092,124 @@ end
 }
 
 #[test]
+fn compile_runs_map_set_literals_native() {
+    let dir = TestDir::new("map_set_literals");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.list as lists
+import ori.map as maps
+import ori.set as sets
+
+func main()
+    const my_map: map<int, int> = { 10: 100, 20: 200 }
+    const my_set: set<int> = set { 10, 20, 30 }
+    io.print(string(maps.get(my_map, 20)))
+    io.print(if sets.contains(my_set, 30) then "1" else "0")
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "map_set_literals.exe"
+    } else {
+        "map_set_literals"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.replace("\r\n", "\n"), "200\n1\n");
+}
+
+#[test]
+fn compile_runs_index_slicing_native() {
+    let dir = TestDir::new("index_slicing");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+func main()
+    const text: string = "hello world"
+    const part: string = text[1..5]
+    io.print(part)
+    
+    const arr: list<int> = [10, 20, 30, 40, 50]
+    const sub: list<int> = arr[2..4]
+    io.print(string(sub[0]))
+    io.print(string(sub[1]))
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "index_slicing.exe"
+    } else {
+        "index_slicing"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.replace("\r\n", "\n"), "ello\n30\n40\n");
+}
+
+#[test]
+fn compile_runs_pipe_operator_native() {
+    let dir = TestDir::new("pipe_operator");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+struct Point
+    x: int
+    y: int
+    z: int
+end
+
+func double(p: Point) -> Point
+    return Point(x: p.x * 2, y: p.y * 2, z: p.z * 2)
+end
+
+func extract_x(p: Point) -> int
+    return p.x
+end
+
+func main()
+    const base: Point = Point(x: 1, y: 2, z: 3)
+
+    -- pipe operator `|>` allows calling functions like methods
+    const answer: int = base |> double |> extract_x
+    io.print(string(answer))
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "pipe_operator.exe"
+    } else {
+        "pipe_operator"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.replace("\r\n", "\n"), "2\n");
+}
+
+#[test]
 fn compile_is_check_on_any_trait_native() {
     let dir = TestDir::new("is_check_native");
     dir.write(

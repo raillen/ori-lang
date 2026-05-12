@@ -281,18 +281,18 @@ This checklist tracks what is implemented and what still needs work before Ori c
 - [x] Larger project tree tests
 - [x] End-to-end compile/run tests for complex imported structs/enums
 - [x] Closure expression tests (capture, invoke, pass as argument)
-- [ ] Pipe operator tests
+- [x] Pipe operator tests
 - [ ] Struct update expression tests
 - [x] `is` type-check expression tests
-- [ ] Map/set literal tests
-- [ ] Index slicing tests
-- [ ] Value contract violation tests
+- [x] Map/set literal tests
+- [x] Index slicing tests
+- [x] Value contract violation tests
 - [x] Default parameter tests
 - [x] Generic monomorphization tests
-- [ ] `for` over collections tests (list, set, map, string)
-- [ ] `using`/dispose tests
+- [x] `for` over collections tests (list, set, map, string)
+- [x] `using`/dispose tests
 - [x] Match exhaustiveness diagnostic tests
-- [ ] String concatenation tests
+- [x] String concatenation tests
 - [x] `any<Trait>` dynamic dispatch tests
 
 ## Documentation and tooling
