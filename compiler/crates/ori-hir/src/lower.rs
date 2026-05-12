@@ -80,6 +80,7 @@ fn stdlib_c_name(ori_path: &str) -> Option<&'static str> {
         "ori.map.remove" | "map.remove" => Some("ori_map_remove"),
         "ori.map.keys" | "map.keys" => Some("ori_map_keys"),
         "ori.map.values" | "map.values" => Some("ori_map_values"),
+        "ori.map.entries" | "map.entries" => Some("ori_map_entries"),
         // additional set operations
         "ori.set.remove" | "set.remove" => Some("ori_set_remove"),
         "ori.set.union" | "set.union" => Some("ori_set_union"),

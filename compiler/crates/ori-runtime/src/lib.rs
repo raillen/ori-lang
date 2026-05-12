@@ -775,6 +775,21 @@ pub unsafe extern "C" fn ori_map_values(map: *mut OriMap) -> *mut OriList {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn ori_map_entries(map: *mut OriMap) -> *mut OriList {
+    let out = ori_list_new();
+    if map.is_null() {
+        return out;
+    }
+    for i in 0..(*map).len {
+        let tuple = libc::calloc(1, 16) as *mut i64;
+        *tuple.add(0) = *(*map).keys.add(i as usize);
+        *tuple.add(1) = *(*map).values.add(i as usize);
+        ori_list_push(out, tuple as i64);
+    }
+    out
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn ori_map_len(map: *mut OriMap) -> i64 {
     if map.is_null() {
         0

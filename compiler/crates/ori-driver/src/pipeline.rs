@@ -1283,6 +1283,17 @@ ori_list_t* ori_map_values(ori_map_t* m) {
     for (long long i = 0; i < m->len; i++) ori_list_push(out, m->values[i]);
     return out;
 }
+ori_list_t* ori_map_entries(ori_map_t* m) {
+    ori_list_t* out = ori_list_new();
+    if (!m) return out;
+    for (long long i = 0; i < m->len; i++) {
+        long long* tuple = (long long*)calloc(1, 16);
+        tuple[0] = m->keys[i];
+        tuple[1] = m->values[i];
+        ori_list_push(out, (long long)tuple);
+    }
+    return out;
+}
 long long ori_map_len(ori_map_t* m) {
     return m ? m->len : 0;
 }

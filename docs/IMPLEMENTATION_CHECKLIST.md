@@ -230,7 +230,7 @@ This checklist tracks what is implemented and what still needs work before Ori c
 - [x] `remove(map, key)`
 - [x] `keys(map) -> list<K>`
 - [x] `values(map) -> list<V>`
-- [ ] `entries(map) -> list<tuple<K, V>>`
+- [x] `entries(map) -> list<tuple<K, V>>`
 - [ ] Proper hash-based implementation (currently linear-scan paired arrays)
 
 ### `ori.set` — missing operations

@@ -2757,6 +2757,10 @@ fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0)))],
             Ty::List(Box::new(Ty::Infer(0))),
         ),
+        "ori.map.entries" => (
+            vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0)))],
+            Ty::List(Box::new(Ty::Tuple(vec![Ty::Infer(0), Ty::Infer(0)]))),
+        ),
         "ori.math.sqrt" => (vec![Ty::Float], Ty::Float),
         "ori.math.abs" => (vec![Ty::Int], Ty::Int),
         "ori.math.min" | "ori.math.max" => (vec![Ty::Int, Ty::Int], Ty::Int),

@@ -898,6 +898,9 @@ impl NativeBackend {
         let id = decl("ori_map_values", &[pt], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_map_values"), id);
+        let id = decl("ori_map_entries", &[pt], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_entries"), id);
         let id = decl("ori_arc_retain", &[pt], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_arc_retain"), id);
         let id = decl("ori_arc_release", &[pt], None)?;
