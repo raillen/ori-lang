@@ -90,6 +90,7 @@ pub struct HirFunc {
     pub body: HirBlock,
     pub closure_captures: Vec<HirClosureCapture>,
     pub is_public: bool,
+    pub is_async: bool,
     pub is_mut: bool,
     pub span: Span,
 }
@@ -290,7 +291,6 @@ pub enum HirExprKind {
 
     // Variables and paths
     Var(SmolStr),
-    GlobalConst(DefId),
 
     // Operators
     Binary {
@@ -356,6 +356,9 @@ pub enum HirExprKind {
 
     // `expr?` desugared: propagate None or Err upward
     Propagate(Box<HirExpr>),
+
+    // `await expr` desugared by the native backend through the executor.
+    Await(Box<HirExpr>),
 
     // `if cond then a else b`
     IfExpr {

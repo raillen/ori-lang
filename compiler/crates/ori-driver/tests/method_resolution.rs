@@ -69,11 +69,13 @@ end
 
     let build = run_build(&dir.path("main.orl")).unwrap();
     assert!(!build.has_errors, "{:?}", build.diagnostics);
-    assert!(build.c_source.contains("ORI__app_main_Player_add"));
+    assert!(build
+        .c_source
+        .contains("ORI__app_dot_main_dot_Player_dot_add"));
     assert!(
         build
             .c_source
-            .contains("ORI__app_main_Player_add(player, INT64_C(5))"),
+            .contains("ORI__app_dot_main_dot_Player_dot_add(player, INT64_C(5))"),
         "{}",
         build.c_source
     );
@@ -139,12 +141,148 @@ end
 
     let build = run_build(&dir.path("main.orl")).unwrap();
     assert!(!build.has_errors, "{:?}", build.diagnostics);
-    assert!(build.c_source.contains("ORI__app_main_Player_id"));
+    assert!(build
+        .c_source
+        .contains("ORI__app_dot_main_dot_Player_dot_Entity_dot_id"));
     assert!(
-        build.c_source.contains("ORI__app_main_Player_id(player)"),
+        build
+            .c_source
+            .contains("ORI__app_dot_main_dot_Player_dot_Entity_dot_id(player)"),
         "{}",
         build.c_source
     );
+}
+
+#[test]
+fn check_reports_ambiguous_trait_method_call() {
+    let dir = TestDir::new("ambiguous_trait_method");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+struct Thing
+    name: string
+end
+
+trait Alpha
+    func output(self) -> string
+end
+
+trait Beta
+    func output(self) -> string
+end
+
+implement Alpha for Thing
+    func output(self) -> string
+        return "alpha"
+    end
+end
+
+implement Beta for Thing
+    func output(self) -> string
+        return "beta"
+    end
+end
+
+func main()
+    const thing: Thing = Thing(name: "x")
+    const text: string = thing.output()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(diagnostic_codes(&out).contains(&"type.ambiguous_method"));
+}
+
+#[test]
+fn build_lowers_qualified_trait_method_call() {
+    let dir = TestDir::new("qualified_trait_method");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+struct Thing
+    name: string
+end
+
+trait Alpha
+    func output(self) -> string
+end
+
+trait Beta
+    func output(self) -> string
+end
+
+implement Alpha for Thing
+    func output(self) -> string
+        return "alpha"
+    end
+end
+
+implement Beta for Thing
+    func output(self) -> string
+        return "beta"
+    end
+end
+
+func main()
+    const thing: Thing = Thing(name: "x")
+    const alpha: string = Alpha.output(thing)
+    const beta: string = Beta.output(thing)
+end
+"#,
+    );
+
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+
+    let build = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!build.has_errors, "{:?}", build.diagnostics);
+    assert!(build
+        .c_source
+        .contains("ORI__app_dot_main_dot_Thing_dot_Alpha_dot_output"));
+    assert!(build
+        .c_source
+        .contains("ORI__app_dot_main_dot_Thing_dot_Beta_dot_output"));
+}
+
+#[test]
+fn build_lowers_default_trait_method_call() {
+    let dir = TestDir::new("default_trait_method");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+struct Player
+    score: int
+end
+
+trait Entity
+    func id(self) -> int
+        return 7
+    end
+end
+
+implement Entity for Player
+end
+
+func main()
+    const player: Player = Player(score: 42)
+    const id: int = player.id()
+end
+"#,
+    );
+
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+
+    let build = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!build.has_errors, "{:?}", build.diagnostics);
+    assert!(build
+        .c_source
+        .contains("ORI__app_dot_main_dot_Entity_dot_id"));
 }
 
 #[test]
@@ -227,6 +365,33 @@ end
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
     assert!(diagnostic_codes(&out).contains(&"impl.mut_mismatch"));
+}
+
+#[test]
+fn check_reports_implicit_self_mut_method_on_const_receiver() {
+    let dir = TestDir::new("implicit_self_const_receiver");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+struct Counter
+    value: int
+
+    mut func increment()
+        self.value = self.value + 1
+    end
+end
+
+func main()
+    const counter: Counter = Counter(value: 1)
+    counter.increment()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(diagnostic_codes(&out).contains(&"mut.const_method_call"));
 }
 
 #[test]

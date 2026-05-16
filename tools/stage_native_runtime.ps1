@@ -1,0 +1,194 @@
+[CmdletBinding()]
+param(
+    [string]$Target = "",
+    [ValidateSet("debug", "release")]
+    [string]$Profile = "debug",
+    [string]$OutputRoot = "",
+    [switch]$SkipBuild
+)
+
+$ErrorActionPreference = "Stop"
+
+function Get-HostTriple {
+    $rustcVersion = & rustc -vV
+    if ($LASTEXITCODE -ne 0) {
+        throw "rustc -vV failed; install Rust or set -Target explicitly."
+    }
+
+    foreach ($line in $rustcVersion) {
+        if ($line -like "host:*") {
+            return $line.Substring(5).Trim()
+        }
+    }
+
+    throw "Could not detect the Rust host target from rustc -vV."
+}
+
+function Get-RuntimeArtifactName([string]$TargetTriple) {
+    if ($TargetTriple -like "*windows-msvc*") {
+        return "ori_runtime.lib"
+    }
+
+    return "libori_runtime.a"
+}
+
+function Get-WorkspaceVersion([string]$RepoRoot) {
+    $cargoToml = Join-Path $RepoRoot "Cargo.toml"
+    $inWorkspacePackage = $false
+    foreach ($line in Get-Content -LiteralPath $cargoToml) {
+        $text = [string]$line
+        if ($text.Trim() -eq "[workspace.package]") {
+            $inWorkspacePackage = $true
+            continue
+        }
+        if ($inWorkspacePackage -and $text.Trim().StartsWith("[")) {
+            break
+        }
+        if ($inWorkspacePackage -and $text -match '^\s*version\s*=\s*"([^"]+)"') {
+            return $Matches[1]
+        }
+    }
+
+    throw "Could not read workspace package version from Cargo.toml."
+}
+
+function Get-OriAbiVersion([string]$RepoRoot) {
+    $runtimeSource = Join-Path $RepoRoot "compiler/crates/ori-runtime/src/lib.rs"
+    foreach ($line in Get-Content -LiteralPath $runtimeSource) {
+        $text = [string]$line
+        if ($text -match 'pub\s+const\s+ORI_ABI_VERSION\s*:\s*&str\s*=\s*"([^"]+)"') {
+            return $Matches[1]
+        }
+    }
+
+    throw "Could not read ORI_ABI_VERSION from ori-runtime."
+}
+
+function Get-FallbackNativeStaticLibs([string]$TargetTriple) {
+    if ($TargetTriple -like "*windows-msvc*") {
+        return @(
+            "legacy_stdio_definitions.lib",
+            "kernel32.lib",
+            "ntdll.lib",
+            "userenv.lib",
+            "ws2_32.lib",
+            "dbghelp.lib",
+            "/defaultlib:msvcrt"
+        )
+    }
+
+    if ($TargetTriple -like "*linux*") {
+        return @("pthread", "dl", "m")
+    }
+
+    return @()
+}
+
+function Get-NativeStaticLibs([string]$TargetTriple, [string]$ProfileName) {
+    $profileArgs = @()
+    if ($ProfileName -eq "release") {
+        $profileArgs += "--release"
+    }
+
+    $targetArgs = @("--target", $TargetTriple)
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & cargo rustc -p ori-runtime --lib @targetArgs @profileArgs -- --print native-static-libs 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+
+    if ($exitCode -eq 0) {
+        foreach ($line in $output) {
+            $text = [string]$line
+            $marker = "native-static-libs:"
+            $index = $text.IndexOf($marker)
+            if ($index -ge 0) {
+                $libsText = $text.Substring($index + $marker.Length).Trim()
+                if ($libsText.Length -gt 0) {
+                    return @($libsText -split "\s+" | Where-Object { $_ -ne "" })
+                }
+            }
+        }
+    }
+
+    return Get-FallbackNativeStaticLibs $TargetTriple
+}
+
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+if ([string]::IsNullOrWhiteSpace($Target)) {
+    $Target = Get-HostTriple
+}
+
+$oriVersion = Get-WorkspaceVersion $repoRoot
+$abiVersion = Get-OriAbiVersion $repoRoot
+$artifact = Get-RuntimeArtifactName $Target
+$profileArgs = @()
+if ($Profile -eq "release") {
+    $profileArgs += "--release"
+}
+$targetArgs = @("--target", $Target)
+
+Push-Location $repoRoot
+try {
+    if (-not $SkipBuild) {
+        & cargo build -p ori-runtime --lib @targetArgs @profileArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "cargo build -p ori-runtime --lib failed."
+        }
+    }
+
+    $targetRoot = if ($env:CARGO_TARGET_DIR) {
+        [System.IO.Path]::GetFullPath($env:CARGO_TARGET_DIR)
+    } else {
+        Join-Path $repoRoot "target"
+    }
+
+    $candidates = @(
+        (Join-Path $targetRoot (Join-Path $Target (Join-Path $Profile $artifact))),
+        (Join-Path $targetRoot (Join-Path $Profile $artifact))
+    )
+
+    $source = $null
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            $source = Resolve-Path -LiteralPath $candidate
+            break
+        }
+    }
+
+    if ($null -eq $source) {
+        throw "Runtime artifact $artifact was not found after build."
+    }
+
+    $stageRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
+        Join-Path $repoRoot "runtime"
+    } else {
+        [System.IO.Path]::GetFullPath($OutputRoot)
+    }
+    $targetDir = Join-Path $stageRoot $Target
+    New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+
+    $dest = Join-Path $targetDir $artifact
+    Copy-Item -LiteralPath $source -Destination $dest -Force
+
+    $nativeStaticLibs = Get-NativeStaticLibs $Target $Profile
+    $metadata = [ordered]@{
+        target = $Target
+        runtime = $artifact
+        ori_version = $oriVersion
+        abi_version = $abiVersion
+        profile = $Profile
+        native_static_libs = @($nativeStaticLibs)
+        generated_by = "tools/stage_native_runtime.ps1"
+    }
+    $metadataPath = Join-Path $targetDir "runtime-link.json"
+    $metadata | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $metadataPath -Encoding UTF8
+
+    Write-Host "staged runtime: $dest"
+    Write-Host "metadata: $metadataPath"
+} finally {
+    Pop-Location
+}

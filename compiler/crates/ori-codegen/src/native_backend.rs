@@ -1,5 +1,6 @@
 use smol_str::SmolStr;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
 use cranelift_codegen::ir::{self, types, AbiParam, InstBuilder, MemFlags};
 use cranelift_codegen::settings;
@@ -8,18 +9,113 @@ use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 
 use ori_ast::expr::{BinaryOp, UnaryOp};
+use ori_diagnostics::Span;
 use ori_hir::hir::*;
-use ori_types::Ty;
+use ori_types::{
+    stdlib::{stdlib_func_sig, stdlib_native_abi, stdlib_runtime_functions, StdlibNativeAbiTy},
+    OpaqueTy, Ty,
+};
 
-// == String collection ==
+#[cfg(test)]
+const INTERNAL_NATIVE_RUNTIME_IMPORTS: &[&str] = &[
+    "ori_arc_collect_cycles",
+    "ori_arc_register_edge",
+    "ori_arc_release",
+    "ori_arc_retain",
+    "ori_arc_unregister_edge",
+    "ori_arc_update_edge",
+    "ori_alloc",
+    "ori_bool_to_string_parts",
+    "ori_executor_drain",
+    "ori_executor_run_one",
+    "ori_executor_schedule",
+    "ori_float_to_string_parts",
+    "ori_future_cancel",
+    "ori_future_complete_f64",
+    "ori_future_complete_i64",
+    "ori_future_complete_ptr",
+    "ori_future_complete_void",
+    "ori_future_fail",
+    "ori_future_on_ready",
+    "ori_future_pending",
+    "ori_future_poll",
+    "ori_future_ready_f64",
+    "ori_future_ready_i64",
+    "ori_future_ready_ptr",
+    "ori_future_ready_void",
+    "ori_future_value_f64",
+    "ori_future_value_i64",
+    "ori_future_value_ptr",
+    "ori_graph_add_edge_string",
+    "ori_graph_add_node_string",
+    "ori_graph_bfs_string",
+    "ori_graph_dfs_string",
+    "ori_graph_has_edge_string",
+    "ori_graph_has_node_string",
+    "ori_graph_neighbors_string",
+    "ori_graph_remove_edge_string",
+    "ori_graph_remove_node_string",
+    "ori_hash_table_contains_string",
+    "ori_hash_table_get_string",
+    "ori_hash_table_remove_string",
+    "ori_hash_table_set_string",
+    "ori_heap_new_custom",
+    "ori_heap_new_string",
+    "ori_heap_push_custom",
+    "ori_heap_push_string",
+    "ori_int_to_cstr",
+    "ori_map_contains_string",
+    "ori_map_get_string",
+    "ori_map_key_at",
+    "ori_map_remove_string",
+    "ori_map_set_string",
+    "ori_map_value_at",
+    "ori_math_abs_float",
+    "ori_math_max_float",
+    "ori_math_min_float",
+    "ori_new_result",
+    "ori_os_set_args",
+    "ori_set_add_string",
+    "ori_set_contains_string",
+    "ori_set_remove_string",
+    "ori_string_concat_parts",
+    "ori_to_string_parts",
+];
 
-fn collect_strings_expr(expr: &HirExpr, out: &mut Vec<SmolStr>) {
-    match &expr.kind {
-        HirExprKind::StrLit(s) => {
-            if !out.contains(s) {
-                out.push(s.clone());
-            }
+struct StringCollector {
+    out: Vec<SmolStr>,
+    seen: std::collections::HashSet<SmolStr>,
+}
+
+impl StringCollector {
+    fn new() -> Self {
+        let mut seen = std::collections::HashSet::new();
+        let empty = SmolStr::new("");
+        seen.insert(empty.clone());
+        Self {
+            out: vec![empty],
+            seen,
         }
+    }
+
+    fn add(&mut self, s: SmolStr) {
+        if self.seen.insert(s.clone()) {
+            self.out.push(s);
+        }
+    }
+}
+
+fn collect_strings_expr(expr: &HirExpr, out: &mut StringCollector) {
+    match &expr.kind {
+        HirExprKind::BoolLit(_)
+        | HirExprKind::IntLit(_)
+        | HirExprKind::FloatLit(_)
+        | HirExprKind::BytesLit(_)
+        | HirExprKind::Unit
+        | HirExprKind::None_
+        | HirExprKind::Var(_)
+        | HirExprKind::Closure { .. } => {}
+        HirExprKind::StrLit(s) => out.add(s.clone()),
         HirExprKind::Call { callee, args } => {
             collect_strings_expr(callee, out);
             for a in args {
@@ -38,6 +134,7 @@ fn collect_strings_expr(expr: &HirExpr, out: &mut Vec<SmolStr>) {
             collect_strings_expr(else_, out);
         }
         HirExprKind::Propagate(e)
+        | HirExprKind::Await(e)
         | HirExprKind::Some_(e)
         | HirExprKind::Ok_(e)
         | HirExprKind::Err_(e) => collect_strings_expr(e, out),
@@ -59,11 +156,7 @@ fn collect_strings_expr(expr: &HirExpr, out: &mut Vec<SmolStr>) {
         HirExprKind::InterpolatedStr(parts) => {
             for p in parts {
                 match p {
-                    HirStrPart::Literal(s) => {
-                        if !out.contains(s) {
-                            out.push(s.clone());
-                        }
-                    }
+                    HirStrPart::Literal(s) => out.add(s.clone()),
                     HirStrPart::Expr(e) => collect_strings_expr(e, out),
                 }
             }
@@ -112,21 +205,25 @@ fn collect_strings_expr(expr: &HirExpr, out: &mut Vec<SmolStr>) {
         HirExprKind::TupleIndex { object, .. } => {
             collect_strings_expr(object, out);
         }
-        _ => {}
+        HirExprKind::IsCheck { value, .. } => collect_strings_expr(value, out),
     }
 }
 
-fn collect_strings_block(block: &HirBlock, out: &mut Vec<SmolStr>) {
+fn collect_strings_block(block: &HirBlock, out: &mut StringCollector) {
     for s in &block.stmts {
         collect_strings_stmt(s, out);
     }
 }
 
-fn collect_strings_stmt(stmt: &HirStmt, out: &mut Vec<SmolStr>) {
+fn collect_strings_stmt(stmt: &HirStmt, out: &mut StringCollector) {
     match stmt {
         HirStmt::Let { value, .. } => collect_strings_expr(value, out),
-        HirStmt::Assign { value, .. } => collect_strings_expr(value, out),
+        HirStmt::Assign { lvalue, value, .. } => {
+            collect_strings_lvalue(lvalue, out);
+            collect_strings_expr(value, out);
+        }
         HirStmt::Return(Some(e), _) => collect_strings_expr(e, out),
+        HirStmt::Return(None, _) | HirStmt::Break(_) | HirStmt::Continue(_) => {}
         HirStmt::Expr(e) => collect_strings_expr(e, out),
         HirStmt::If {
             cond,
@@ -183,29 +280,47 @@ fn collect_strings_stmt(stmt: &HirStmt, out: &mut Vec<SmolStr>) {
             collect_strings_block(body, out);
         }
         HirStmt::Using { value, .. } => collect_strings_expr(value, out),
-        HirStmt::Check { condition, .. } => collect_strings_expr(condition, out),
-        _ => {}
+        HirStmt::Check {
+            condition, message, ..
+        } => {
+            collect_strings_expr(condition, out);
+            if let Some(message) = message {
+                out.add(message.clone());
+            }
+        }
+    }
+}
+
+fn collect_strings_lvalue(lvalue: &HirLValue, out: &mut StringCollector) {
+    match lvalue {
+        HirLValue::Var(_) => {}
+        HirLValue::Field { base, .. } => collect_strings_lvalue(base, out),
+        HirLValue::Index { base, index } => {
+            collect_strings_lvalue(base, out);
+            collect_strings_expr(index, out);
+        }
     }
 }
 
 fn collect_all_strings(hir: &HirModule) -> Vec<SmolStr> {
-    let mut out = vec![SmolStr::new("")];
+    let mut collector = StringCollector::new();
     for f in &hir.funcs {
-        collect_strings_block(&f.body, &mut out);
+        collect_strings_block(&f.body, &mut collector);
     }
     for c in &hir.consts {
-        collect_strings_expr(&c.value, &mut out);
+        collect_strings_expr(&c.value, &mut collector);
     }
-    out
+    collector.out
 }
 
-fn collect_strings_pattern(pat: &HirPattern, out: &mut Vec<SmolStr>) {
+fn collect_strings_pattern(pat: &HirPattern, out: &mut StringCollector) {
     match pat {
-        HirPattern::StrLit(s) => {
-            if !out.contains(s) {
-                out.push(s.clone());
-            }
-        }
+        HirPattern::Wildcard
+        | HirPattern::Binding(_, _)
+        | HirPattern::BoolLit(_)
+        | HirPattern::IntLit(_)
+        | HirPattern::None_ => {}
+        HirPattern::StrLit(s) => out.add(s.clone()),
         HirPattern::Some_(inner) | HirPattern::Ok_(inner) | HirPattern::Err_(inner) => {
             collect_strings_pattern(inner, out);
         }
@@ -219,7 +334,6 @@ fn collect_strings_pattern(pat: &HirPattern, out: &mut Vec<SmolStr>) {
                 collect_strings_pattern(pat, out);
             }
         }
-        _ => {}
     }
 }
 
@@ -234,7 +348,22 @@ fn cl_type(ty: &Ty, ptr_ty: types::Type) -> Option<types::Type> {
         Ty::Int8 | Ty::U8 => Some(types::I8),
         Ty::Float | Ty::Float64 => Some(types::F64),
         Ty::Float32 => Some(types::F32),
-        Ty::String | Ty::Bytes | Ty::Func { .. } => Some(ptr_ty),
+        Ty::String
+        | Ty::Bytes
+        | Ty::Func { .. }
+        | Ty::Lazy(_)
+        | Ty::Future(_)
+        | Ty::TaskJob(_)
+        | Ty::Channel(_)
+        | Ty::AtomicInt
+        | Ty::TaskJoinError
+        | Ty::ChannelSendError
+        | Ty::ChannelReceiveError => Some(ptr_ty),
+        Ty::Opaque {
+            kind: OpaqueTy::NodeId,
+            ..
+        } => Some(types::I64),
+        Ty::Opaque { .. } => Some(ptr_ty),
         Ty::Any(_) => Some(ptr_ty),
         Ty::Optional(_)
         | Ty::Result(_, _)
@@ -247,6 +376,21 @@ fn cl_type(ty: &Ty, ptr_ty: types::Type) -> Option<types::Type> {
         Ty::Named(_, _) => Some(ptr_ty),
         Ty::Infer(_) => Some(types::I64),
         _ => Some(types::I64),
+    }
+}
+
+fn native_codegen_unsupported(message: impl Into<String>) -> String {
+    const CODE: &str = "backend.native_unsupported";
+    format!("{CODE}: {}", message.into())
+}
+
+fn cl_stdlib_abi_type(ty: StdlibNativeAbiTy, ptr_ty: types::Type) -> types::Type {
+    match ty {
+        StdlibNativeAbiTy::Ptr => ptr_ty,
+        StdlibNativeAbiTy::I64 => types::I64,
+        StdlibNativeAbiTy::I32 => types::I32,
+        StdlibNativeAbiTy::I8 => types::I8,
+        StdlibNativeAbiTy::F64 => types::F64,
     }
 }
 
@@ -265,6 +409,26 @@ fn is_managed_ty(ty: &Ty) -> bool {
             | Ty::Named(_, _)
             | Ty::Any(_)
             | Ty::Func { .. }
+            | Ty::Lazy(_)
+            | Ty::Future(_)
+            | Ty::TaskJob(_)
+            | Ty::Channel(_)
+            | Ty::AtomicInt
+            | Ty::TaskJoinError
+            | Ty::ChannelSendError
+            | Ty::ChannelReceiveError
+            | Ty::Opaque {
+                kind: OpaqueTy::Deque
+                    | OpaqueTy::Queue
+                    | OpaqueTy::Stack
+                    | OpaqueTy::LinkedList
+                    | OpaqueTy::DoublyLinkedList
+                    | OpaqueTy::Tree
+                    | OpaqueTy::HashTable
+                    | OpaqueTy::Graph
+                    | OpaqueTy::Heap,
+                ..
+            }
     )
 }
 
@@ -295,20 +459,448 @@ fn const_static_bytes(expr: &HirExpr, ty: &Ty) -> Option<Vec<u8>> {
     }
 }
 
+fn needs_runtime_global_init(expr: &HirExpr, ty: &Ty) -> bool {
+    const_static_bytes(expr, ty).is_none()
+}
+
 fn is_float_ty(ty: &Ty) -> bool {
     matches!(ty, Ty::Float | Ty::Float32 | Ty::Float64)
 }
 
-fn mangle_symbol(name: &str) -> String {
-    name.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '_' {
-                c
-            } else {
-                '_'
+fn validate_native_hir(hir: &HirModule) -> Result<(), String> {
+    NativeHirValidator::new()
+        .module(hir)
+        .map_err(|err| format!("invalid HIR for native backend: {err}"))
+}
+
+struct NativeHirValidator;
+
+impl NativeHirValidator {
+    fn new() -> Self {
+        Self
+    }
+
+    fn module(&self, hir: &HirModule) -> Result<(), String> {
+        for s in &hir.structs {
+            for field in &s.fields {
+                self.reject_error_ty(&field.ty, "struct field type", field.span)?;
+                if let Some(contract) = &field.contract {
+                    self.expr(contract)?;
+                }
             }
-        })
-        .collect()
+        }
+        for e in &hir.enums {
+            for variant in &e.variants {
+                for field in &variant.fields {
+                    self.reject_error_ty(&field.ty, "enum variant field type", field.span)?;
+                    if let Some(contract) = &field.contract {
+                        self.expr(contract)?;
+                    }
+                }
+            }
+        }
+        for t in &hir.traits {
+            for method in &t.methods {
+                for param in &method.params {
+                    self.reject_error_ty(param, "trait method parameter type", Span::DUMMY)?;
+                }
+                self.reject_error_ty(&method.return_ty, "trait method return type", Span::DUMMY)?;
+            }
+        }
+        for f in &hir.funcs {
+            for param in &f.params {
+                self.reject_error_ty(&param.ty, "function parameter type", param.span)?;
+                if let Some(default) = &param.default {
+                    self.expr(default)?;
+                }
+                if let Some(contract) = &param.contract {
+                    self.expr(contract)?;
+                }
+            }
+            self.reject_error_ty(&f.return_ty, "function return type", f.span)?;
+            for capture in &f.closure_captures {
+                self.reject_error_ty(&capture.ty, "closure capture type", f.span)?;
+            }
+            self.block(&f.body)?;
+        }
+        for c in &hir.consts {
+            self.reject_error_ty(&c.ty, "const type", c.span)?;
+            self.expr(&c.value)?;
+        }
+        for ext in &hir.externs {
+            match ext {
+                HirExtern::Func {
+                    params,
+                    return_ty,
+                    span,
+                    ..
+                } => {
+                    for param in params {
+                        self.reject_error_ty(
+                            &param.ty,
+                            "extern function parameter type",
+                            param.span,
+                        )?;
+                    }
+                    self.reject_error_ty(return_ty, "extern function return type", *span)?;
+                }
+                HirExtern::Var { ty, span, .. } => {
+                    self.reject_error_ty(ty, "extern variable type", *span)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn block(&self, block: &HirBlock) -> Result<(), String> {
+        for stmt in &block.stmts {
+            self.stmt(stmt)?;
+        }
+        Ok(())
+    }
+
+    fn stmt(&self, stmt: &HirStmt) -> Result<(), String> {
+        match stmt {
+            HirStmt::Let {
+                ty, value, span, ..
+            } => {
+                self.reject_error_ty(ty, "let binding type", *span)?;
+                self.expr(value)?;
+            }
+            HirStmt::Assign { value, .. } | HirStmt::Return(Some(value), _) => {
+                self.expr(value)?;
+            }
+            HirStmt::Return(None, _) | HirStmt::Break(_) | HirStmt::Continue(_) => {}
+            HirStmt::Expr(expr) => self.expr(expr)?,
+            HirStmt::If {
+                cond,
+                then,
+                else_ifs,
+                else_,
+                ..
+            } => {
+                self.expr(cond)?;
+                self.expect_bool(&cond.ty, "if condition", cond.span)?;
+                self.block(then)?;
+                for (else_cond, else_block) in else_ifs {
+                    self.expr(else_cond)?;
+                    self.expect_bool(&else_cond.ty, "else-if condition", else_cond.span)?;
+                    self.block(else_block)?;
+                }
+                if let Some(block) = else_ {
+                    self.block(block)?;
+                }
+            }
+            HirStmt::While { cond, body, .. } => {
+                self.expr(cond)?;
+                self.expect_bool(&cond.ty, "while condition", cond.span)?;
+                self.block(body)?;
+            }
+            HirStmt::For {
+                elem_ty,
+                iterable,
+                body,
+                span,
+                ..
+            } => {
+                self.reject_error_ty(elem_ty, "for element type", *span)?;
+                self.expr(iterable)?;
+                self.block(body)?;
+            }
+            HirStmt::Loop { body, .. } => self.block(body)?,
+            HirStmt::Repeat { count, body, .. } => {
+                self.expr(count)?;
+                self.expect_integer(&count.ty, "repeat count", count.span)?;
+                self.block(body)?;
+            }
+            HirStmt::Match {
+                scrutinee, arms, ..
+            } => {
+                self.expr(scrutinee)?;
+                for arm in arms {
+                    self.pattern(&arm.pattern, arm.span)?;
+                    for stmt in &arm.body {
+                        self.stmt(stmt)?;
+                    }
+                }
+            }
+            HirStmt::IfSome {
+                inner_ty,
+                value,
+                then,
+                else_,
+                span,
+                ..
+            } => {
+                self.reject_error_ty(inner_ty, "if-some binding type", *span)?;
+                self.expr(value)?;
+                self.block(then)?;
+                if let Some(block) = else_ {
+                    self.block(block)?;
+                }
+            }
+            HirStmt::WhileSome {
+                inner_ty,
+                value,
+                body,
+                span,
+                ..
+            } => {
+                self.reject_error_ty(inner_ty, "while-some binding type", *span)?;
+                self.expr(value)?;
+                self.block(body)?;
+            }
+            HirStmt::Using {
+                ty, value, span, ..
+            } => {
+                self.reject_error_ty(ty, "using binding type", *span)?;
+                self.expr(value)?;
+            }
+            HirStmt::Check { condition, .. } => {
+                self.expr(condition)?;
+                self.expect_bool(&condition.ty, "check condition", condition.span)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn expr(&self, expr: &HirExpr) -> Result<(), String> {
+        self.reject_error_ty(&expr.ty, "expression type", expr.span)?;
+        match &expr.kind {
+            HirExprKind::BoolLit(_)
+            | HirExprKind::IntLit(_)
+            | HirExprKind::FloatLit(_)
+            | HirExprKind::StrLit(_)
+            | HirExprKind::BytesLit(_)
+            | HirExprKind::Unit
+            | HirExprKind::None_
+            | HirExprKind::Var(_) => {}
+            HirExprKind::InterpolatedStr(parts) => {
+                for part in parts {
+                    if let HirStrPart::Expr(expr) = part {
+                        self.expr(expr)?;
+                    }
+                }
+            }
+            HirExprKind::Binary { op, lhs, rhs } => {
+                self.expr(lhs)?;
+                self.expr(rhs)?;
+                match op {
+                    BinaryOp::And | BinaryOp::Or => {
+                        self.expect_bool(&lhs.ty, "logical operator left operand", lhs.span)?;
+                        self.expect_bool(&rhs.ty, "logical operator right operand", rhs.span)?;
+                        self.expect_bool(&expr.ty, "logical operator result", expr.span)?;
+                    }
+                    BinaryOp::Eq
+                    | BinaryOp::Ne
+                    | BinaryOp::Lt
+                    | BinaryOp::Le
+                    | BinaryOp::Gt
+                    | BinaryOp::Ge => {
+                        self.expect_bool(&expr.ty, "comparison result", expr.span)?;
+                    }
+                    BinaryOp::Add
+                    | BinaryOp::Sub
+                    | BinaryOp::Mul
+                    | BinaryOp::Div
+                    | BinaryOp::Rem => {}
+                }
+            }
+            HirExprKind::Unary { op, operand } => {
+                self.expr(operand)?;
+                if matches!(op, UnaryOp::Not) {
+                    self.expect_bool(&operand.ty, "not operand", operand.span)?;
+                    self.expect_bool(&expr.ty, "not result", expr.span)?;
+                }
+            }
+            HirExprKind::Field { object, .. } | HirExprKind::TupleIndex { object, .. } => {
+                self.expr(object)?;
+            }
+            HirExprKind::Index { object, index } => {
+                self.expr(object)?;
+                self.expr(index)?;
+                self.expect_integer(&index.ty, "index expression", index.span)?;
+            }
+            HirExprKind::Call { callee, args } => {
+                self.expr(callee)?;
+                for arg in args {
+                    self.expr(&arg.value)?;
+                }
+            }
+            HirExprKind::MethodCall { receiver, args, .. } => {
+                self.expr(receiver)?;
+                for arg in args {
+                    self.expr(arg)?;
+                }
+            }
+            HirExprKind::StructLit { fields, .. } | HirExprKind::EnumVariant { fields, .. } => {
+                for (_, value) in fields {
+                    self.expr(value)?;
+                }
+            }
+            HirExprKind::ListLit { elem_ty, elements } => {
+                self.reject_error_ty(elem_ty, "list element type", expr.span)?;
+                for element in elements {
+                    self.expr(element)?;
+                }
+            }
+            HirExprKind::ListSpreadLit { elem_ty, elements } => {
+                self.reject_error_ty(elem_ty, "list element type", expr.span)?;
+                for element in elements {
+                    self.expr(&element.value)?;
+                }
+            }
+            HirExprKind::TupleLit(elements) => {
+                for element in elements {
+                    self.expr(element)?;
+                }
+            }
+            HirExprKind::Some_(inner)
+            | HirExprKind::Ok_(inner)
+            | HirExprKind::Err_(inner)
+            | HirExprKind::Propagate(inner)
+            | HirExprKind::Await(inner) => self.expr(inner)?,
+            HirExprKind::IfExpr { cond, then, else_ } => {
+                self.expr(cond)?;
+                self.expect_bool(&cond.ty, "if expression condition", cond.span)?;
+                self.expr(then)?;
+                self.expr(else_)?;
+            }
+            HirExprKind::Range { start, end } => {
+                self.expr(start)?;
+                self.expr(end)?;
+                self.expect_integer(&start.ty, "range start", start.span)?;
+                self.expect_integer(&end.ty, "range end", end.span)?;
+            }
+            HirExprKind::MapLit {
+                key_ty,
+                value_ty,
+                entries,
+            } => {
+                self.reject_error_ty(key_ty, "map key type", expr.span)?;
+                self.reject_error_ty(value_ty, "map value type", expr.span)?;
+                for (key, value) in entries {
+                    self.expr(key)?;
+                    self.expr(value)?;
+                }
+            }
+            HirExprKind::SetLit { elem_ty, elements } => {
+                self.reject_error_ty(elem_ty, "set element type", expr.span)?;
+                for element in elements {
+                    self.expr(element)?;
+                }
+            }
+            HirExprKind::StructUpdate { base, updates, .. } => {
+                self.expr(base)?;
+                for (_, value) in updates {
+                    self.expr(value)?;
+                }
+            }
+            HirExprKind::Closure { captures, .. } => {
+                for capture in captures {
+                    self.reject_error_ty(&capture.ty, "closure capture type", expr.span)?;
+                }
+            }
+            HirExprKind::IsCheck { value, check_ty } => {
+                self.expr(value)?;
+                self.reject_error_ty(check_ty, "is-check type", expr.span)?;
+                self.expect_bool(&expr.ty, "is-check result", expr.span)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn pattern(&self, pattern: &HirPattern, span: Span) -> Result<(), String> {
+        match pattern {
+            HirPattern::Binding(_, ty) => self.reject_error_ty(ty, "pattern binding type", span)?,
+            HirPattern::Some_(inner) | HirPattern::Ok_(inner) | HirPattern::Err_(inner) => {
+                self.pattern(inner, span)?;
+            }
+            HirPattern::Variant { fields, .. } => {
+                for (_, field_pattern) in fields {
+                    self.pattern(field_pattern, span)?;
+                }
+            }
+            HirPattern::Tuple(items) => {
+                for item in items {
+                    self.pattern(item, span)?;
+                }
+            }
+            HirPattern::Wildcard
+            | HirPattern::BoolLit(_)
+            | HirPattern::IntLit(_)
+            | HirPattern::StrLit(_)
+            | HirPattern::None_ => {}
+        }
+        Ok(())
+    }
+
+    fn expect_bool(&self, ty: &Ty, context: &str, span: Span) -> Result<(), String> {
+        if matches!(ty, Ty::Bool) {
+            Ok(())
+        } else {
+            Err(format!(
+                "{context} must be bool, got `{}` at {span}",
+                ty.display()
+            ))
+        }
+    }
+
+    fn expect_integer(&self, ty: &Ty, context: &str, span: Span) -> Result<(), String> {
+        if ty.is_integer() {
+            Ok(())
+        } else {
+            Err(format!(
+                "{context} must be an integer, got `{}` at {span}",
+                ty.display()
+            ))
+        }
+    }
+
+    fn reject_error_ty(&self, ty: &Ty, context: &str, span: Span) -> Result<(), String> {
+        if contains_error_ty(ty) {
+            Err(format!(
+                "{context} contains unresolved error type at {span}"
+            ))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+fn contains_error_ty(ty: &Ty) -> bool {
+    match ty {
+        Ty::Error => true,
+        Ty::Optional(inner)
+        | Ty::List(inner)
+        | Ty::Set(inner)
+        | Ty::Range(inner)
+        | Ty::Lazy(inner)
+        | Ty::Future(inner)
+        | Ty::TaskJob(inner)
+        | Ty::Channel(inner) => contains_error_ty(inner),
+        Ty::Result(ok, err) | Ty::Map(ok, err) => contains_error_ty(ok) || contains_error_ty(err),
+        Ty::Opaque { args, .. } => args.iter().any(contains_error_ty),
+        Ty::Tuple(items) => items.iter().any(contains_error_ty),
+        Ty::Func { params, ret } => params.iter().any(contains_error_ty) || contains_error_ty(ret),
+        Ty::Named(_, args) => args.iter().any(contains_error_ty),
+        _ => false,
+    }
+}
+
+fn mangle_symbol(name: &str) -> String {
+    let mut out = String::with_capacity(name.len() * 2);
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() || c == '_' {
+            out.push(c);
+        } else if c == '.' {
+            out.push_str("_dot_");
+        } else {
+            use std::fmt::Write;
+            write!(&mut out, "_x{:02x}_", c as u32).unwrap();
+        }
+    }
+    out
 }
 
 fn native_func_symbol(name: &str) -> String {
@@ -324,8 +916,12 @@ fn native_global_symbol(name: &str) -> String {
 }
 
 fn is_entry_main(hir: &HirModule, f: &HirFunc) -> bool {
-    let entry = format!("{}.main", hir.namespace);
-    f.params.is_empty() && (f.name.as_str() == "main" || f.name.as_str() == entry)
+    let entry = if hir.namespace.is_empty() {
+        "main".to_string()
+    } else {
+        format!("{}.main", hir.namespace)
+    };
+    f.params.is_empty() && f.name.as_str() == entry
 }
 
 fn is_synthetic_closure_func(f: &HirFunc) -> bool {
@@ -333,6 +929,749 @@ fn is_synthetic_closure_func(f: &HirFunc) -> bool {
         .first()
         .is_some_and(|param| param.name.as_str() == "__env")
         && f.name.contains(".__closure_")
+}
+
+fn async_step_name(f: &HirFunc) -> SmolStr {
+    SmolStr::new(format!("{}.__async_step", f.name))
+}
+
+fn async_inner_return_ty(f: &HirFunc) -> Option<Ty> {
+    match &f.return_ty {
+        Ty::Future(inner) => Some(inner.as_ref().clone()),
+        _ => None,
+    }
+}
+
+#[derive(Clone)]
+struct SimpleAsyncBinding {
+    name: SmolStr,
+    ty: Ty,
+}
+
+#[derive(Clone)]
+struct SimpleAsyncParam {
+    name: SmolStr,
+    ty: Ty,
+}
+
+#[derive(Clone)]
+struct SimpleAsyncLocal {
+    name: SmolStr,
+    ty: Ty,
+    value: HirExpr,
+}
+
+#[derive(Clone)]
+struct SimpleAsyncAwaitStep {
+    await_future: HirExpr,
+    binding: Option<SimpleAsyncBinding>,
+    propagate_result_ty: Option<Ty>,
+}
+
+#[derive(Clone)]
+struct SimpleAsyncStateMachinePlan {
+    params: Vec<SimpleAsyncParam>,
+    locals: Vec<SimpleAsyncLocal>,
+    awaits: Vec<SimpleAsyncAwaitStep>,
+    tail_stmts: Vec<HirStmt>,
+    return_expr: Option<HirExpr>,
+    tail_expr: Option<HirExpr>,
+    inner_ty: Ty,
+}
+
+const ASYNC_FRAME_STATE_OFFSET: i32 = 0;
+const ASYNC_FRAME_RESULT_OFFSET: i32 = 8;
+const ASYNC_FRAME_AWAITED_BASE_OFFSET: u32 = 16;
+
+fn align_u32(value: u32, align: u8) -> u32 {
+    let align = align.max(1) as u32;
+    (value + align - 1) & !(align - 1)
+}
+
+fn simple_async_frame_binding_offset(
+    plan: &SimpleAsyncStateMachinePlan,
+    step_index: usize,
+    ptr_ty: types::Type,
+) -> Option<u32> {
+    let binding = plan.awaits.get(step_index)?.binding.as_ref()?;
+    let mut offset = simple_async_frame_param_base_offset(plan, ptr_ty);
+    for (param_index, param) in plan.params.iter().enumerate() {
+        let param_offset = simple_async_frame_param_offset(plan, param_index, ptr_ty)
+            .expect("param offset exists for param");
+        let (size, _) = field_size_align(&param.ty, ptr_ty);
+        offset = param_offset + size;
+    }
+    for (local_index, local) in plan.locals.iter().enumerate() {
+        let local_offset = simple_async_frame_local_offset(plan, local_index, ptr_ty)
+            .expect("local offset exists for local");
+        let (size, _) = field_size_align(&local.ty, ptr_ty);
+        offset = local_offset + size;
+    }
+    for step in plan.awaits.iter().take(step_index) {
+        if let Some(binding) = &step.binding {
+            let (size, align) = field_size_align(&binding.ty, ptr_ty);
+            offset = align_u32(offset, align) + size;
+        }
+    }
+    let (_, align) = field_size_align(&binding.ty, ptr_ty);
+    Some(align_u32(offset, align))
+}
+
+fn simple_async_frame_local_offset(
+    plan: &SimpleAsyncStateMachinePlan,
+    local_index: usize,
+    ptr_ty: types::Type,
+) -> Option<u32> {
+    let local = plan.locals.get(local_index)?;
+    let mut offset = simple_async_frame_param_base_offset(plan, ptr_ty);
+    for param in &plan.params {
+        let (size, align) = field_size_align(&param.ty, ptr_ty);
+        offset = align_u32(offset, align) + size;
+    }
+    for previous in plan.locals.iter().take(local_index) {
+        let (size, align) = field_size_align(&previous.ty, ptr_ty);
+        offset = align_u32(offset, align) + size;
+    }
+    let (_, align) = field_size_align(&local.ty, ptr_ty);
+    Some(align_u32(offset, align))
+}
+
+fn simple_async_frame_param_base_offset(
+    plan: &SimpleAsyncStateMachinePlan,
+    ptr_ty: types::Type,
+) -> u32 {
+    ASYNC_FRAME_AWAITED_BASE_OFFSET + (plan.awaits.len() as u32 * ptr_ty.bytes() as u32)
+}
+
+fn simple_async_frame_param_offset(
+    plan: &SimpleAsyncStateMachinePlan,
+    param_index: usize,
+    ptr_ty: types::Type,
+) -> Option<u32> {
+    let param = plan.params.get(param_index)?;
+    let mut offset = simple_async_frame_param_base_offset(plan, ptr_ty);
+    for previous in plan.params.iter().take(param_index) {
+        let (size, align) = field_size_align(&previous.ty, ptr_ty);
+        offset = align_u32(offset, align) + size;
+    }
+    let (_, align) = field_size_align(&param.ty, ptr_ty);
+    Some(align_u32(offset, align))
+}
+
+fn simple_async_frame_size(plan: &SimpleAsyncStateMachinePlan, ptr_ty: types::Type) -> u32 {
+    let mut offset = simple_async_frame_param_base_offset(plan, ptr_ty);
+    let mut max_align = ptr_ty.bytes().min(8).max(1) as u8;
+    for param in &plan.params {
+        let (size, align) = field_size_align(&param.ty, ptr_ty);
+        offset = align_u32(offset, align) + size;
+        max_align = max_align.max(align);
+    }
+    for local in &plan.locals {
+        let (size, align) = field_size_align(&local.ty, ptr_ty);
+        offset = align_u32(offset, align) + size;
+        max_align = max_align.max(align);
+    }
+    for step in &plan.awaits {
+        if let Some(binding) = &step.binding {
+            let (size, align) = field_size_align(&binding.ty, ptr_ty);
+            offset = align_u32(offset, align) + size;
+            max_align = max_align.max(align);
+        }
+    }
+    align_u32(offset, max_align).max(ASYNC_FRAME_AWAITED_BASE_OFFSET + ptr_ty.bytes() as u32)
+}
+
+fn simple_async_frame_awaited_offset(step_index: usize, ptr_ty: types::Type) -> i32 {
+    (ASYNC_FRAME_AWAITED_BASE_OFFSET + (step_index as u32 * ptr_ty.bytes() as u32)) as i32
+}
+
+fn expr_contains_await(expr: &HirExpr) -> bool {
+    match &expr.kind {
+        HirExprKind::Await(_) => true,
+        HirExprKind::Unary { operand, .. } => expr_contains_await(operand),
+        HirExprKind::Binary { lhs, rhs, .. } => {
+            expr_contains_await(lhs) || expr_contains_await(rhs)
+        }
+        HirExprKind::Call { callee, args } => {
+            expr_contains_await(callee) || args.iter().any(|arg| expr_contains_await(&arg.value))
+        }
+        HirExprKind::MethodCall { receiver, args, .. } => {
+            expr_contains_await(receiver) || args.iter().any(expr_contains_await)
+        }
+        HirExprKind::Field { object, .. } | HirExprKind::TupleIndex { object, .. } => {
+            expr_contains_await(object)
+        }
+        HirExprKind::Index { object, index } => {
+            expr_contains_await(object) || expr_contains_await(index)
+        }
+        HirExprKind::ListLit { elements, .. }
+        | HirExprKind::TupleLit(elements)
+        | HirExprKind::SetLit { elements, .. } => elements.iter().any(expr_contains_await),
+        HirExprKind::ListSpreadLit { elements, .. } => elements
+            .iter()
+            .any(|element| expr_contains_await(&element.value)),
+        HirExprKind::MapLit { entries, .. } => entries
+            .iter()
+            .any(|(key, value)| expr_contains_await(key) || expr_contains_await(value)),
+        HirExprKind::StructLit { fields, .. } => {
+            fields.iter().any(|(_, value)| expr_contains_await(value))
+        }
+        HirExprKind::StructUpdate { base, updates, .. } => {
+            expr_contains_await(base) || updates.iter().any(|(_, value)| expr_contains_await(value))
+        }
+        HirExprKind::EnumVariant { fields, .. } => {
+            fields.iter().any(|(_, value)| expr_contains_await(value))
+        }
+        HirExprKind::Some_(inner) | HirExprKind::Ok_(inner) | HirExprKind::Err_(inner) => {
+            expr_contains_await(inner)
+        }
+        HirExprKind::IfExpr { cond, then, else_ } => {
+            expr_contains_await(cond) || expr_contains_await(then) || expr_contains_await(else_)
+        }
+        HirExprKind::Range { start, end, .. } => {
+            expr_contains_await(start) || expr_contains_await(end)
+        }
+        HirExprKind::Propagate(inner) => expr_contains_await(inner),
+        HirExprKind::InterpolatedStr(parts) => parts.iter().any(|part| match part {
+            HirStrPart::Literal(_) => false,
+            HirStrPart::Expr(expr) => expr_contains_await(expr),
+        }),
+        HirExprKind::IntLit(_)
+        | HirExprKind::FloatLit(_)
+        | HirExprKind::BoolLit(_)
+        | HirExprKind::StrLit(_)
+        | HirExprKind::BytesLit(_)
+        | HirExprKind::Unit
+        | HirExprKind::None_
+        | HirExprKind::Var(_)
+        | HirExprKind::Closure { .. }
+        | HirExprKind::IsCheck { .. } => false,
+    }
+}
+
+fn block_contains_await(block: &HirBlock) -> bool {
+    block.stmts.iter().any(stmt_contains_await)
+}
+
+fn arm_body_contains_await(stmts: &[HirStmt]) -> bool {
+    stmts.iter().any(stmt_contains_await)
+}
+
+fn stmt_contains_await(stmt: &HirStmt) -> bool {
+    match stmt {
+        HirStmt::Let { value, .. } | HirStmt::Using { value, .. } => expr_contains_await(value),
+        HirStmt::Assign { value, .. } => expr_contains_await(value),
+        HirStmt::Return(Some(value), _) | HirStmt::Expr(value) => expr_contains_await(value),
+        HirStmt::Return(None, _) | HirStmt::Break(_) | HirStmt::Continue(_) => false,
+        HirStmt::If {
+            cond,
+            then,
+            else_ifs,
+            else_,
+            ..
+        } => {
+            expr_contains_await(cond)
+                || block_contains_await(then)
+                || else_ifs
+                    .iter()
+                    .any(|(cond, block)| expr_contains_await(cond) || block_contains_await(block))
+                || else_.as_ref().is_some_and(block_contains_await)
+        }
+        HirStmt::While { cond, body, .. } => {
+            expr_contains_await(cond) || block_contains_await(body)
+        }
+        HirStmt::For { iterable, body, .. } => {
+            expr_contains_await(iterable) || block_contains_await(body)
+        }
+        HirStmt::Loop { body, .. } => block_contains_await(body),
+        HirStmt::Repeat { count, body, .. } => {
+            expr_contains_await(count) || block_contains_await(body)
+        }
+        HirStmt::Match {
+            scrutinee, arms, ..
+        } => {
+            expr_contains_await(scrutinee)
+                || arms.iter().any(|arm| arm_body_contains_await(&arm.body))
+        }
+        HirStmt::IfSome {
+            value, then, else_, ..
+        } => {
+            expr_contains_await(value)
+                || block_contains_await(then)
+                || else_.as_ref().is_some_and(block_contains_await)
+        }
+        HirStmt::WhileSome { value, body, .. } => {
+            expr_contains_await(value) || block_contains_await(body)
+        }
+        HirStmt::Check { condition, .. } => expr_contains_await(condition),
+    }
+}
+
+fn block_contains_return(block: &HirBlock) -> bool {
+    block.stmts.iter().any(stmt_contains_return)
+}
+
+fn arm_body_contains_return(stmts: &[HirStmt]) -> bool {
+    stmts.iter().any(stmt_contains_return)
+}
+
+fn stmt_contains_return(stmt: &HirStmt) -> bool {
+    match stmt {
+        HirStmt::Return(_, _) => true,
+        HirStmt::Let { .. }
+        | HirStmt::Assign { .. }
+        | HirStmt::Break(_)
+        | HirStmt::Continue(_)
+        | HirStmt::Expr(_)
+        | HirStmt::Using { .. }
+        | HirStmt::Check { .. } => false,
+        HirStmt::If {
+            then,
+            else_ifs,
+            else_,
+            ..
+        } => {
+            block_contains_return(then)
+                || else_ifs
+                    .iter()
+                    .any(|(_, block)| block_contains_return(block))
+                || else_.as_ref().is_some_and(block_contains_return)
+        }
+        HirStmt::While { body, .. }
+        | HirStmt::For { body, .. }
+        | HirStmt::Loop { body, .. }
+        | HirStmt::Repeat { body, .. }
+        | HirStmt::WhileSome { body, .. } => block_contains_return(body),
+        HirStmt::Match { arms, .. } => arms.iter().any(|arm| arm_body_contains_return(&arm.body)),
+        HirStmt::IfSome { then, else_, .. } => {
+            block_contains_return(then) || else_.as_ref().is_some_and(block_contains_return)
+        }
+    }
+}
+
+fn expr_collect_var_uses(expr: &HirExpr, uses: &mut HashSet<SmolStr>) {
+    match &expr.kind {
+        HirExprKind::Var(name) => {
+            uses.insert(name.clone());
+        }
+        HirExprKind::Unary { operand, .. }
+        | HirExprKind::Some_(operand)
+        | HirExprKind::Ok_(operand)
+        | HirExprKind::Err_(operand)
+        | HirExprKind::Propagate(operand)
+        | HirExprKind::Await(operand) => expr_collect_var_uses(operand, uses),
+        HirExprKind::Binary { lhs, rhs, .. } => {
+            expr_collect_var_uses(lhs, uses);
+            expr_collect_var_uses(rhs, uses);
+        }
+        HirExprKind::Field { object, .. } | HirExprKind::TupleIndex { object, .. } => {
+            expr_collect_var_uses(object, uses);
+        }
+        HirExprKind::Index { object, index } => {
+            expr_collect_var_uses(object, uses);
+            expr_collect_var_uses(index, uses);
+        }
+        HirExprKind::Call { callee, args } => {
+            expr_collect_var_uses(callee, uses);
+            for arg in args {
+                expr_collect_var_uses(&arg.value, uses);
+            }
+        }
+        HirExprKind::MethodCall { receiver, args, .. } => {
+            expr_collect_var_uses(receiver, uses);
+            for arg in args {
+                expr_collect_var_uses(arg, uses);
+            }
+        }
+        HirExprKind::StructLit { fields, .. } | HirExprKind::EnumVariant { fields, .. } => {
+            for (_, value) in fields {
+                expr_collect_var_uses(value, uses);
+            }
+        }
+        HirExprKind::ListLit { elements, .. }
+        | HirExprKind::TupleLit(elements)
+        | HirExprKind::SetLit { elements, .. } => {
+            for element in elements {
+                expr_collect_var_uses(element, uses);
+            }
+        }
+        HirExprKind::ListSpreadLit { elements, .. } => {
+            for element in elements {
+                expr_collect_var_uses(&element.value, uses);
+            }
+        }
+        HirExprKind::MapLit { entries, .. } => {
+            for (key, value) in entries {
+                expr_collect_var_uses(key, uses);
+                expr_collect_var_uses(value, uses);
+            }
+        }
+        HirExprKind::IfExpr { cond, then, else_ } => {
+            expr_collect_var_uses(cond, uses);
+            expr_collect_var_uses(then, uses);
+            expr_collect_var_uses(else_, uses);
+        }
+        HirExprKind::Range { start, end, .. } => {
+            expr_collect_var_uses(start, uses);
+            expr_collect_var_uses(end, uses);
+        }
+        HirExprKind::StructUpdate { base, updates, .. } => {
+            expr_collect_var_uses(base, uses);
+            for (_, value) in updates {
+                expr_collect_var_uses(value, uses);
+            }
+        }
+        HirExprKind::InterpolatedStr(parts) => {
+            for part in parts {
+                if let HirStrPart::Expr(expr) = part {
+                    expr_collect_var_uses(expr, uses);
+                }
+            }
+        }
+        HirExprKind::Closure { captures, .. } => {
+            for capture in captures {
+                uses.insert(capture.name.clone());
+            }
+        }
+        HirExprKind::IsCheck { value, .. } => expr_collect_var_uses(value, uses),
+        HirExprKind::IntLit(_)
+        | HirExprKind::FloatLit(_)
+        | HirExprKind::BoolLit(_)
+        | HirExprKind::StrLit(_)
+        | HirExprKind::BytesLit(_)
+        | HirExprKind::Unit
+        | HirExprKind::None_ => {}
+    }
+}
+
+fn lvalue_collect_var_uses(lvalue: &HirLValue, uses: &mut HashSet<SmolStr>) {
+    match lvalue {
+        HirLValue::Var(name) => {
+            uses.insert(name.clone());
+        }
+        HirLValue::Field { base, .. } => lvalue_collect_var_uses(base, uses),
+        HirLValue::Index { base, index } => {
+            lvalue_collect_var_uses(base, uses);
+            expr_collect_var_uses(index, uses);
+        }
+    }
+}
+
+fn stmt_collect_var_uses(stmt: &HirStmt, uses: &mut HashSet<SmolStr>) {
+    match stmt {
+        HirStmt::Let { value, .. } | HirStmt::Using { value, .. } => {
+            expr_collect_var_uses(value, uses);
+        }
+        HirStmt::Assign { lvalue, value, .. } => {
+            lvalue_collect_var_uses(lvalue, uses);
+            expr_collect_var_uses(value, uses);
+        }
+        HirStmt::Return(Some(value), _) | HirStmt::Expr(value) => {
+            expr_collect_var_uses(value, uses)
+        }
+        HirStmt::Return(None, _) | HirStmt::Break(_) | HirStmt::Continue(_) => {}
+        HirStmt::If {
+            cond,
+            then,
+            else_ifs,
+            else_,
+            ..
+        } => {
+            expr_collect_var_uses(cond, uses);
+            for stmt in &then.stmts {
+                stmt_collect_var_uses(stmt, uses);
+            }
+            for (cond, block) in else_ifs {
+                expr_collect_var_uses(cond, uses);
+                for stmt in &block.stmts {
+                    stmt_collect_var_uses(stmt, uses);
+                }
+            }
+            if let Some(block) = else_ {
+                for stmt in &block.stmts {
+                    stmt_collect_var_uses(stmt, uses);
+                }
+            }
+        }
+        HirStmt::While { cond, body, .. } => {
+            expr_collect_var_uses(cond, uses);
+            for stmt in &body.stmts {
+                stmt_collect_var_uses(stmt, uses);
+            }
+        }
+        HirStmt::For { iterable, body, .. } => {
+            expr_collect_var_uses(iterable, uses);
+            for stmt in &body.stmts {
+                stmt_collect_var_uses(stmt, uses);
+            }
+        }
+        HirStmt::Loop { body, .. } => {
+            for stmt in &body.stmts {
+                stmt_collect_var_uses(stmt, uses);
+            }
+        }
+        HirStmt::Repeat { count, body, .. } => {
+            expr_collect_var_uses(count, uses);
+            for stmt in &body.stmts {
+                stmt_collect_var_uses(stmt, uses);
+            }
+        }
+        HirStmt::Match {
+            scrutinee, arms, ..
+        } => {
+            expr_collect_var_uses(scrutinee, uses);
+            for arm in arms {
+                for stmt in &arm.body {
+                    stmt_collect_var_uses(stmt, uses);
+                }
+            }
+        }
+        HirStmt::IfSome {
+            value, then, else_, ..
+        } => {
+            expr_collect_var_uses(value, uses);
+            for stmt in &then.stmts {
+                stmt_collect_var_uses(stmt, uses);
+            }
+            if let Some(block) = else_ {
+                for stmt in &block.stmts {
+                    stmt_collect_var_uses(stmt, uses);
+                }
+            }
+        }
+        HirStmt::WhileSome { value, body, .. } => {
+            expr_collect_var_uses(value, uses);
+            for stmt in &body.stmts {
+                stmt_collect_var_uses(stmt, uses);
+            }
+        }
+        HirStmt::Check { condition, .. } => expr_collect_var_uses(condition, uses),
+    }
+}
+
+fn simple_async_uses_after_await(
+    plan: &SimpleAsyncStateMachinePlan,
+    await_index: usize,
+) -> HashSet<SmolStr> {
+    let mut uses = HashSet::new();
+    for step in plan.awaits.iter().skip(await_index + 1) {
+        expr_collect_var_uses(&step.await_future, &mut uses);
+    }
+    for stmt in &plan.tail_stmts {
+        stmt_collect_var_uses(stmt, &mut uses);
+    }
+    if let Some(expr) = &plan.return_expr {
+        expr_collect_var_uses(expr, &mut uses);
+    }
+    if let Some(expr) = &plan.tail_expr {
+        expr_collect_var_uses(expr, &mut uses);
+    }
+    uses
+}
+
+#[cfg(test)]
+fn simple_async_name_used_after_await(
+    plan: &SimpleAsyncStateMachinePlan,
+    name: &SmolStr,
+    await_index: usize,
+) -> bool {
+    simple_async_uses_after_await(plan, await_index).contains(name)
+}
+
+fn simple_async_state_machine_plan(f: &HirFunc) -> Option<SimpleAsyncStateMachinePlan> {
+    if f.body.stmts.is_empty() {
+        return None;
+    }
+    let mut params = Vec::with_capacity(f.params.len());
+    for param in &f.params {
+        if cl_type(&param.ty, types::I64).is_none() {
+            return None;
+        }
+        params.push(SimpleAsyncParam {
+            name: param.name.clone(),
+            ty: param.ty.clone(),
+        });
+    }
+    let inner_ty = async_inner_return_ty(f)?;
+    let mut locals = Vec::new();
+    let mut awaits = Vec::new();
+    let mut tail_stmts = Vec::new();
+    let mut return_expr = None;
+    let mut tail_expr = None;
+    let mut saw_await = false;
+    let mut terminal_return_await = false;
+
+    for stmt in &f.body.stmts {
+        if terminal_return_await {
+            return None;
+        }
+
+        let parsed_await = match stmt {
+            HirStmt::Expr(await_expr) => match &await_expr.kind {
+                HirExprKind::Await(await_future) => {
+                    Some((await_future.as_ref().clone(), None, None, None::<HirExpr>))
+                }
+                _ => None,
+            },
+            HirStmt::Let {
+                name, ty, value, ..
+            } => {
+                if let HirExprKind::Await(await_future) = &value.kind {
+                    if cl_type(ty, types::I64).is_none() {
+                        return None;
+                    }
+                    Some((
+                        await_future.as_ref().clone(),
+                        Some(SimpleAsyncBinding {
+                            name: name.clone(),
+                            ty: ty.clone(),
+                        }),
+                        None,
+                        None,
+                    ))
+                } else if let HirExprKind::Propagate(inner) = &value.kind {
+                    let HirExprKind::Await(await_future) = &inner.kind else {
+                        return None;
+                    };
+                    if cl_type(ty, types::I64).is_none() {
+                        return None;
+                    }
+                    let Ty::Future(await_result_ty) = &await_future.ty else {
+                        return None;
+                    };
+                    let Ty::Result(ok_ty, _) = await_result_ty.as_ref() else {
+                        return None;
+                    };
+                    if ok_ty.as_ref() != ty || await_result_ty.as_ref() != &inner_ty {
+                        return None;
+                    }
+                    Some((
+                        await_future.as_ref().clone(),
+                        Some(SimpleAsyncBinding {
+                            name: name.clone(),
+                            ty: ty.clone(),
+                        }),
+                        Some(await_result_ty.as_ref().clone()),
+                        None,
+                    ))
+                } else {
+                    None
+                }
+            }
+            HirStmt::Return(Some(expr), _) if matches!(expr.kind, HirExprKind::Await(_)) => {
+                let HirExprKind::Await(await_future) = &expr.kind else {
+                    unreachable!("guarded by matches")
+                };
+                let binding_name = SmolStr::new(".__async_return_value");
+                let return_value = HirExpr {
+                    kind: HirExprKind::Var(binding_name.clone()),
+                    ty: expr.ty.clone(),
+                    span: expr.span,
+                };
+                Some((
+                    await_future.as_ref().clone(),
+                    Some(SimpleAsyncBinding {
+                        name: binding_name,
+                        ty: expr.ty.clone(),
+                    }),
+                    None,
+                    Some(return_value),
+                ))
+            }
+            _ => None,
+        };
+
+        if let Some((await_future, binding, propagate_result_ty, return_value)) = parsed_await {
+            if !tail_stmts.is_empty() {
+                return None;
+            }
+            saw_await = true;
+            awaits.push(SimpleAsyncAwaitStep {
+                await_future,
+                binding,
+                propagate_result_ty,
+            });
+            if let Some(return_value) = return_value {
+                return_expr = Some(return_value);
+                terminal_return_await = true;
+            }
+            continue;
+        }
+
+        if stmt_contains_await(stmt) {
+            return None;
+        }
+
+        if !saw_await {
+            let HirStmt::Let {
+                name, ty, value, ..
+            } = stmt
+            else {
+                return None;
+            };
+            if cl_type(ty, types::I64).is_none() {
+                return None;
+            }
+            locals.push(SimpleAsyncLocal {
+                name: name.clone(),
+                ty: ty.clone(),
+                value: value.clone(),
+            });
+        } else {
+            tail_stmts.push(stmt.clone());
+        }
+    }
+
+    if awaits.is_empty() {
+        return None;
+    }
+    if !terminal_return_await {
+        match tail_stmts.pop() {
+            Some(HirStmt::Return(expr, _)) => {
+                if expr.as_ref().is_some_and(expr_contains_await) {
+                    return None;
+                }
+                return_expr = expr;
+            }
+            Some(HirStmt::Expr(expr)) if matches!(inner_ty, Ty::Void | Ty::Never) => {
+                if expr_contains_await(&expr) {
+                    return None;
+                }
+                tail_expr = Some(expr);
+            }
+            Some(stmt) if matches!(inner_ty, Ty::Void | Ty::Never) => {
+                if stmt_contains_return(&stmt) {
+                    return None;
+                }
+                tail_stmts.push(stmt);
+                tail_expr = Some(HirExpr {
+                    kind: HirExprKind::Unit,
+                    ty: Ty::Void,
+                    span: f.span,
+                });
+            }
+            None if matches!(inner_ty, Ty::Void | Ty::Never) => {
+                tail_expr = Some(HirExpr {
+                    kind: HirExprKind::Unit,
+                    ty: Ty::Void,
+                    span: f.span,
+                });
+            }
+            _ => return None,
+        }
+    }
+    if tail_stmts.iter().any(stmt_contains_return) {
+        return None;
+    }
+    Some(SimpleAsyncStateMachinePlan {
+        params,
+        locals,
+        awaits,
+        tail_stmts,
+        return_expr,
+        tail_expr,
+        inner_ty,
+    })
 }
 
 /// Layout of an `optional<T>`: `{ has_value: i8, [padding], value: T }`.
@@ -354,6 +1693,17 @@ fn result_layout(ok: &Ty, err: &Ty, ptr_ty: types::Type) -> (u32, u32, u32) {
     let pay_offset = (1u32 + pay_align as u32 - 1) & !(pay_align as u32 - 1);
     let total = ((pay_offset + pay_size + pay_align as u32 - 1) & !(pay_align as u32 - 1)).max(2);
     (pay_offset, ok_size, total)
+}
+
+/// Layout of `lazy<T>`: `{ thunk: ptr, forced: i8, [padding], value: T }`.
+fn lazy_layout(inner: &Ty, ptr_ty: types::Type) -> (u32, u32) {
+    let ptr_size = ptr_ty.bytes() as u32;
+    let (val_size, val_align) = field_size_align(inner, ptr_ty);
+    let val_offset = (ptr_size + 1 + val_align as u32 - 1) & !(val_align as u32 - 1);
+    let max_align = (ptr_ty.bytes() as u8).max(val_align).max(1);
+    let total = ((val_offset + val_size + max_align as u32 - 1) & !(max_align as u32 - 1))
+        .max(ptr_size + 1);
+    (val_offset, total)
 }
 
 // == Struct layout ==
@@ -593,6 +1943,7 @@ impl NativeBackend {
     }
 
     pub fn compile(mut self, hir: &HirModule) -> Result<Vec<u8>, String> {
+        validate_native_hir(hir)?;
         // Compute struct layouts before anything else
         for s in &hir.structs {
             let layout = compute_struct_layout(&s.fields, self.ptr_ty);
@@ -656,9 +2007,15 @@ impl NativeBackend {
 
     fn emit_global_data(&mut self, hir: &HirModule) -> Result<(), String> {
         for c in &hir.consts {
-            let Some(bytes) = const_static_bytes(&c.value, &c.ty) else {
+            let Some(cl_ty) = cl_type(&c.ty, self.ptr_ty) else {
                 continue;
             };
+            let static_bytes = const_static_bytes(&c.value, &c.ty);
+            let runtime_init = static_bytes.is_none();
+            let bytes = static_bytes.unwrap_or_else(|| {
+                let size = cl_ty.bytes().max(1) as usize;
+                vec![0; size]
+            });
             let mut desc = DataDescription::new();
             desc.define(bytes.into_boxed_slice());
             let link = if c.is_public {
@@ -666,9 +2023,10 @@ impl NativeBackend {
             } else {
                 Linkage::Local
             };
+            let writable = c.mutable || runtime_init;
             let id = self
                 .module
-                .declare_data(&native_global_symbol(&c.name), link, c.mutable, false)
+                .declare_data(&native_global_symbol(&c.name), link, writable, false)
                 .map_err(|e| format!("declare global '{}': {e}", c.name))?;
             self.module
                 .define_data(id, &desc)
@@ -688,7 +2046,15 @@ impl NativeBackend {
     /// Declare C library / runtime functions used by the stdlib mapping.
     fn declare_stdlib(&mut self) -> Result<(), String> {
         let pt = self.ptr_ty;
-        let mut decl = |name: &'static str, params: &[types::Type], ret: Option<types::Type>| {
+        let mut declared_imports = HashMap::new();
+        let mut decl = |name: &'static str,
+                        params: &[types::Type],
+                        params_ty: Vec<Ty>,
+                        ret: Option<types::Type>|
+         -> Result<FuncId, String> {
+            if let Some(existing) = declared_imports.get(name).copied() {
+                return Ok(existing);
+            }
             let mut sig = self.module.make_signature();
             for &p in params {
                 sig.params.push(AbiParam::new(p));
@@ -696,224 +2062,831 @@ impl NativeBackend {
             if let Some(r) = ret {
                 sig.returns.push(AbiParam::new(r));
             }
-            self.module
+            self.func_param_tys.insert(SmolStr::new(name), params_ty);
+            let id = self
+                .module
                 .declare_function(name, Linkage::Import, &sig)
-                .map_err(|e| format!("declare {name}: {e}"))
+                .map_err(|e| format!("declare {name}: {e}"))?;
+            declared_imports.insert(name, id);
+            Ok(id)
         };
+        let mut declared_manifest_symbols = std::collections::HashSet::new();
+        for entry in stdlib_runtime_functions()
+            .iter()
+            .filter(|entry| entry.native_runtime)
+        {
+            if !declared_manifest_symbols.insert(entry.runtime_symbol) {
+                continue;
+            }
+            let (abi_params, abi_ret) =
+                stdlib_native_abi(entry.runtime_symbol).ok_or_else(|| {
+                    format!(
+                        "stdlib manifest entry `{}` is missing native ABI metadata",
+                        entry.runtime_symbol
+                    )
+                })?;
+            let cl_params: Vec<_> = abi_params
+                .into_iter()
+                .map(|ty| cl_stdlib_abi_type(ty, pt))
+                .collect();
+            let cl_ret = abi_ret.map(|ty| cl_stdlib_abi_type(ty, pt));
+            let semantic_params = stdlib_func_sig(entry.canonical_path)
+                .map(|(params, _)| params)
+                .unwrap_or_default();
+            let id = decl(entry.runtime_symbol, &cl_params, semantic_params, cl_ret)?;
+            self.stdlib_ids
+                .insert(SmolStr::new(entry.runtime_symbol), id);
+        }
         // ori_io_print(ptr: *u8, len: i64) -- prints len bytes from ptr
-        let id = decl("ori_io_print", &[pt, types::I64], None)?;
+        let id = decl(
+            "ori_io_print",
+            &[pt, types::I64],
+            vec![Ty::String, Ty::Int64],
+            None,
+        )?;
         self.stdlib_ids.insert(SmolStr::new("ori_io_print"), id);
         // ori_io_eprint(ptr: *u8, len: i64) -- stderr print
-        let id = decl("ori_io_eprint", &[pt, types::I64], None)?;
+        let id = decl(
+            "ori_io_eprint",
+            &[pt, types::I64],
+            vec![Ty::String, Ty::Int64],
+            None,
+        )?;
         self.stdlib_ids.insert(SmolStr::new("ori_io_eprint"), id);
-        let id = decl("ori_io_read_line", &[], Some(pt))?;
+        let id = decl("ori_io_read_line", &[], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_io_read_line"), id);
+        let id = decl("ori_future_ready_i64", &[types::I64], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_ready_i64"), id);
+        let id = decl("ori_future_ready_f64", &[types::F64], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_ready_f64"), id);
+        let id = decl("ori_future_ready_ptr", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_ready_ptr"), id);
+        let id = decl("ori_future_ready_void", &[], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_ready_void"), id);
+        let id = decl("ori_future_pending", &[], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_pending"), id);
+        let id = decl("ori_future_poll", &[pt], vec![], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_future_poll"), id);
+        let id = decl("ori_future_value_i64", &[pt], vec![], Some(types::I64))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_value_i64"), id);
+        let id = decl("ori_future_value_f64", &[pt], vec![], Some(types::F64))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_value_f64"), id);
+        let id = decl("ori_future_value_ptr", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_value_ptr"), id);
+        let id = decl("ori_future_on_ready", &[pt, pt], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_on_ready"), id);
+        let id = decl("ori_future_complete_i64", &[pt, types::I64], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_complete_i64"), id);
+        let id = decl("ori_future_complete_f64", &[pt, types::F64], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_complete_f64"), id);
+        let id = decl("ori_future_complete_ptr", &[pt, pt], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_complete_ptr"), id);
+        let id = decl("ori_future_complete_void", &[pt], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_complete_void"), id);
+        let id = decl("ori_future_fail", &[pt], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_future_fail"), id);
+        let id = decl("ori_future_cancel", &[pt], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_future_cancel"), id);
+        let id = decl("ori_executor_schedule", &[pt], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_executor_schedule"), id);
+        let id = decl("ori_executor_run_one", &[], vec![], Some(types::I64))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_executor_run_one"), id);
+        let id = decl("ori_executor_drain", &[], vec![], Some(types::I64))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_executor_drain"), id);
         // Compatibility pointer return for stored `string(n)` values.
-        let id = decl("ori_int_to_cstr", &[types::I64], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_to_string"), id);
+        let id = decl("ori_int_to_cstr", &[types::I64], vec![], Some(pt))?;
+        self.stdlib_ids
+            .entry(SmolStr::new("ori_to_string"))
+            .or_insert(id);
         // Length-aware numeric conversion used by direct print/interpolation paths.
-        let id = decl("ori_to_string_parts", &[types::I64, pt, pt], None)?;
+        let id = decl("ori_to_string_parts", &[types::I64, pt, pt], vec![], None)?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_to_string_parts"), id);
         // strlen(ptr: *u8) -> i64
-        let id = decl("strlen", &[pt], Some(types::I64))?;
+        let id = decl("strlen", &[pt], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("strlen"), id);
-        let id = decl("strcmp", &[pt, pt], Some(types::I32))?;
+        let id = decl("strcmp", &[pt, pt], vec![], Some(types::I32))?;
         self.stdlib_ids.insert(SmolStr::new("strcmp"), id);
-        let id = decl("ori_string_len", &[pt], Some(types::I64))?;
+        let id = decl("ori_string_len", &[pt], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_string_len"), id);
-        let id = decl("ori_string_concat", &[pt, pt], Some(pt))?;
+        let id = decl("ori_string_concat", &[pt, pt], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_concat"), id);
         let id = decl(
             "ori_string_concat_parts",
             &[pt, types::I64, pt, types::I64],
+            vec![],
             Some(pt),
         )?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_concat_parts"), id);
-        let id = decl("ori_string_split", &[pt, pt], Some(pt))?;
+        let id = decl("ori_string_split", &[pt, pt], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_string_split"), id);
-        let id = decl("ori_string_slice", &[pt, types::I64, types::I64], Some(pt))?;
+        let id = decl(
+            "ori_string_slice",
+            &[pt, types::I64, types::I64],
+            vec![],
+            Some(pt),
+        )?;
         self.stdlib_ids.insert(SmolStr::new("ori_string_slice"), id);
-        let id = decl("ori_string_contains", &[pt, pt], Some(types::I8))?;
+        let id = decl("ori_string_contains", &[pt, pt], vec![], Some(types::I8))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_contains"), id);
-        let id = decl("ori_string_starts_with", &[pt, pt], Some(types::I8))?;
+        let id = decl("ori_string_starts_with", &[pt, pt], vec![], Some(types::I8))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_starts_with"), id);
-        let id = decl("ori_string_ends_with", &[pt, pt], Some(types::I8))?;
+        let id = decl("ori_string_ends_with", &[pt, pt], vec![], Some(types::I8))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_ends_with"), id);
-        let id = decl("ori_string_trim", &[pt], Some(pt))?;
+        let id = decl("ori_string_trim", &[pt], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_string_trim"), id);
-        let id = decl("ori_string_to_upper", &[pt], Some(pt))?;
+        let id = decl("ori_string_trim_start", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_string_trim_start"), id);
+        let id = decl("ori_string_trim_end", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_string_trim_end"), id);
+        let id = decl("ori_string_to_upper", &[pt], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_to_upper"), id);
-        let id = decl("ori_string_to_lower", &[pt], Some(pt))?;
+        let id = decl("ori_string_to_lower", &[pt], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_to_lower"), id);
-        let id = decl("ori_string_replace", &[pt, pt, pt], Some(pt))?;
+        let id = decl("ori_string_replace", &[pt, pt, pt], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_replace"), id);
-        let id = decl("ori_string_chars", &[pt], Some(pt))?;
+        let id = decl("ori_string_chars", &[pt], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_string_chars"), id);
-        let id = decl("ori_string_index_of", &[pt, pt], Some(types::I64))?;
+        let id = decl("ori_string_index_of", &[pt, pt], vec![], Some(types::I64))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_index_of"), id);
-        let id = decl("ori_string_join", &[pt, pt], Some(pt))?;
+        let id = decl("ori_string_join", &[pt, pt], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_string_join"), id);
-        let id = decl("ori_string_repeat", &[pt, types::I64], Some(pt))?;
+        let id = decl("ori_string_repeat", &[pt, types::I64], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_repeat"), id);
-        let id = decl("ori_string_pad_left", &[pt, types::I64, pt], Some(pt))?;
+        let id = decl(
+            "ori_string_pad_left",
+            &[pt, types::I64, pt],
+            vec![],
+            Some(pt),
+        )?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_pad_left"), id);
-        let id = decl("ori_string_pad_right", &[pt, types::I64, pt], Some(pt))?;
+        let id = decl(
+            "ori_string_pad_right",
+            &[pt, types::I64, pt],
+            vec![],
+            Some(pt),
+        )?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_pad_right"), id);
         // ori_len(ptr: *u8) -> i64
-        let id = decl("ori_len", &[pt], Some(types::I64))?;
+        let id = decl("ori_len", &[pt], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_len"), id);
         // ori_math_abs(n: i64) -> i64
-        let id = decl("ori_math_sqrt", &[types::F64], Some(types::F64))?;
+        let id = decl("ori_math_sqrt", &[types::F64], vec![], Some(types::F64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_sqrt"), id);
-        let id = decl("ori_math_abs", &[types::I64], Some(types::I64))?;
+        let id = decl("ori_math_abs", &[types::I64], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_abs"), id);
+        let id = decl(
+            "ori_math_abs_float",
+            &[types::F64],
+            vec![],
+            Some(types::F64),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_math_abs_float"), id);
         // ori_math_min / ori_math_max
-        let id = decl("ori_math_min", &[types::I64, types::I64], Some(types::I64))?;
+        let id = decl(
+            "ori_math_min",
+            &[types::I64, types::I64],
+            vec![],
+            Some(types::I64),
+        )?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_min"), id);
-        let id = decl("ori_math_max", &[types::I64, types::I64], Some(types::I64))?;
+        let id = decl(
+            "ori_math_min_float",
+            &[types::F64, types::F64],
+            vec![],
+            Some(types::F64),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_math_min_float"), id);
+        let id = decl(
+            "ori_math_max",
+            &[types::I64, types::I64],
+            vec![],
+            Some(types::I64),
+        )?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_max"), id);
-        let id = decl("ori_math_pow", &[types::F64, types::F64], Some(types::F64))?;
+        let id = decl(
+            "ori_math_max_float",
+            &[types::F64, types::F64],
+            vec![],
+            Some(types::F64),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_math_max_float"), id);
+        let id = decl(
+            "ori_math_clamp",
+            &[types::I64, types::I64, types::I64],
+            vec![],
+            Some(types::I64),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_math_clamp"), id);
+        let id = decl(
+            "ori_math_pow",
+            &[types::F64, types::F64],
+            vec![],
+            Some(types::F64),
+        )?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_pow"), id);
-        let id = decl("ori_math_floor", &[types::F64], Some(types::I64))?;
+        let id = decl("ori_math_floor", &[types::F64], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_floor"), id);
-        let id = decl("ori_math_ceil", &[types::F64], Some(types::I64))?;
+        let id = decl("ori_math_ceil", &[types::F64], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_ceil"), id);
-        let id = decl("ori_math_round", &[types::F64], Some(types::I64))?;
+        let id = decl("ori_math_round", &[types::F64], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_round"), id);
-        let id = decl("ori_math_log", &[types::F64], Some(types::F64))?;
+        let id = decl("ori_time_now", &[], vec![], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_time_now"), id);
+        let id = decl("ori_time_sleep", &[types::I64], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_time_sleep"), id);
+        let id = decl(
+            "ori_time_duration_ms",
+            &[types::I64, types::I64],
+            vec![],
+            Some(types::I64),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_time_duration_ms"), id);
+        let id = decl(
+            "ori_format_number",
+            &[types::F64, types::I64],
+            vec![],
+            Some(pt),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_format_number"), id);
+        let id = decl(
+            "ori_format_percent",
+            &[types::F64, types::I64],
+            vec![],
+            Some(pt),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_format_percent"), id);
+        let id = decl("ori_format_hex", &[types::I64], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_format_hex"), id);
+        let id = decl("ori_format_binary", &[types::I64], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_format_binary"), id);
+        let id = decl(
+            "ori_format_date",
+            &[types::I64, pt],
+            vec![Ty::Int64, Ty::String],
+            Some(pt),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_format_date"), id);
+        let id = decl(
+            "ori_format_datetime",
+            &[types::I64, pt, pt],
+            vec![Ty::Int64, Ty::String, Ty::String],
+            Some(pt),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_format_datetime"), id);
+        let id = decl(
+            "ori_format_bytes_size",
+            &[types::I64, pt],
+            vec![Ty::Int64, Ty::String],
+            Some(pt),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_format_bytes_size"), id);
+        let id = decl("ori_os_set_args", &[types::I32, pt], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_os_set_args"), id);
+        let id = decl("ori_os_args", &[], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_os_args"), id);
+        let id = decl("ori_os_env", &[pt], vec![Ty::String], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_os_env"), id);
+        let id = decl("ori_os_exit", &[types::I64], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_os_exit"), id);
+        let id = decl("ori_os_pid", &[], vec![], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_os_pid"), id);
+        let id = decl("ori_os_platform", &[], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_os_platform"), id);
+        let id = decl("ori_os_arch", &[], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_os_arch"), id);
+        let id = decl(
+            "ori_random_int",
+            &[types::I64, types::I64],
+            vec![],
+            Some(types::I64),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_random_int"), id);
+        let id = decl(
+            "ori_random_float",
+            &[types::F64, types::F64],
+            vec![],
+            Some(types::F64),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_random_float"), id);
+        let id = decl("ori_random_bool", &[], vec![], Some(types::I8))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_random_bool"), id);
+        let id = decl(
+            "ori_test_assert",
+            &[types::I8, pt],
+            vec![Ty::Bool, Ty::String],
+            None,
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_test_assert"), id);
+        let id = decl("ori_test_fail", &[pt], vec![Ty::String], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_test_fail"), id);
+        let test_assert_overloads = [
+            ("ori_test_assert_eq_float", vec![types::F64, types::F64]),
+            ("ori_test_assert_ne_float", vec![types::F64, types::F64]),
+            ("ori_test_assert_eq_bool", vec![types::I8, types::I8]),
+            ("ori_test_assert_ne_bool", vec![types::I8, types::I8]),
+            ("ori_test_assert_eq_string", vec![pt, pt]),
+            ("ori_test_assert_ne_string", vec![pt, pt]),
+        ];
+        for (name, abi_params) in test_assert_overloads {
+            let id = decl(name, &abi_params, Vec::new(), None)?;
+            self.stdlib_ids.insert(SmolStr::new(name), id);
+        }
+        let iter_overloads = [
+            ("ori_iter_sort_string", vec![pt], Some(pt)),
+            ("ori_iter_unique_string", vec![pt], Some(pt)),
+            ("ori_iter_group_by_string", vec![pt, pt, pt], Some(pt)),
+        ];
+        for (name, abi_params, ret) in iter_overloads {
+            let id = decl(name, &abi_params, Vec::new(), ret)?;
+            self.stdlib_ids.insert(SmolStr::new(name), id);
+        }
+
+        // Bytes methods
+        let id = decl(
+            "ori_bytes_len",
+            &[self.ptr_ty],
+            vec![Ty::Bytes],
+            Some(types::I64),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_bytes_len"), id);
+        let id = decl(
+            "ori_bytes_get",
+            &[self.ptr_ty, types::I64],
+            vec![Ty::Bytes, Ty::Int64],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_bytes_get"), id);
+        let id = decl(
+            "ori_bytes_concat",
+            &[self.ptr_ty, self.ptr_ty],
+            vec![Ty::Bytes, Ty::Bytes],
+            Some(self.ptr_ty),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_bytes_concat"), id);
+        let id = decl(
+            "ori_bytes_slice",
+            &[self.ptr_ty, types::I64, types::I64],
+            vec![Ty::Bytes, Ty::Int64, Ty::Int64],
+            Some(self.ptr_ty),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_bytes_slice"), id);
+        let id = decl(
+            "ori_bytes_from_hex",
+            &[self.ptr_ty],
+            vec![Ty::String],
+            Some(self.ptr_ty),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_bytes_from_hex"), id);
+        let id = decl(
+            "ori_bytes_to_hex",
+            &[self.ptr_ty],
+            vec![Ty::Bytes],
+            Some(self.ptr_ty),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_bytes_to_hex"), id);
+        let id = decl(
+            "ori_bytes_decode_utf8",
+            &[self.ptr_ty],
+            vec![Ty::Bytes],
+            Some(self.ptr_ty),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_bytes_decode_utf8"), id);
+        let id = decl(
+            "ori_string_to_bytes",
+            &[self.ptr_ty],
+            vec![Ty::String],
+            Some(self.ptr_ty),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_string_to_bytes"), id);
+        let id = decl(
+            "ori_string_from_bytes",
+            &[self.ptr_ty],
+            vec![Ty::Bytes],
+            Some(self.ptr_ty),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_string_from_bytes"), id);
+
+        // Primitive conversions
+        let id = decl(
+            "ori_to_int",
+            &[types::I64],
+            vec![Ty::Int64],
+            Some(types::I64),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_to_int"), id);
+        let id = decl(
+            "ori_to_float",
+            &[types::I64],
+            vec![Ty::Int64],
+            Some(types::F64),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_to_float"), id);
+        let id = decl(
+            "ori_new_result",
+            &[types::I8, self.ptr_ty],
+            vec![Ty::Bool, Ty::Int64],
+            Some(self.ptr_ty),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_new_result"), id);
+        let id = decl("ori_math_log", &[types::F64], vec![], Some(types::F64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_log"), id);
-        let id = decl("ori_math_sin", &[types::F64], Some(types::F64))?;
+        let id = decl("ori_math_log2", &[types::F64], vec![], Some(types::F64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_math_log2"), id);
+        let id = decl("ori_math_sin", &[types::F64], vec![], Some(types::F64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_sin"), id);
-        let id = decl("ori_math_cos", &[types::F64], Some(types::F64))?;
+        let id = decl("ori_math_cos", &[types::F64], vec![], Some(types::F64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_cos"), id);
-        let id = decl("ori_math_tan", &[types::F64], Some(types::F64))?;
+        let id = decl("ori_math_tan", &[types::F64], vec![], Some(types::F64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_tan"), id);
-        let id = decl("ori_float_to_string", &[types::F64], Some(pt))?;
+        let id = decl("ori_math_is_nan", &[types::F64], vec![], Some(types::I8))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_math_is_nan"), id);
+        let id = decl(
+            "ori_math_is_infinite",
+            &[types::F64],
+            vec![],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_math_is_infinite"), id);
+        let id = decl("ori_float_to_string", &[types::F64], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_float_to_string"), id);
-        let id = decl("ori_bool_to_string", &[types::I8], Some(pt))?;
+        let id = decl(
+            "ori_float_to_string_parts",
+            &[types::F64, pt, pt],
+            vec![],
+            None,
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_float_to_string_parts"), id);
+        let id = decl("ori_bool_to_string", &[types::I8], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_bool_to_string"), id);
-        let id = decl("ori_string_to_int", &[pt], Some(pt))?;
+        let id = decl(
+            "ori_bool_to_string_parts",
+            &[types::I8, pt, pt],
+            vec![],
+            None,
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_bool_to_string_parts"), id);
+        let id = decl("ori_string_to_int", &[pt], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_to_int"), id);
-        let id = decl("ori_string_to_float", &[pt], Some(pt))?;
+        let id = decl("ori_string_to_float", &[pt], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_to_float"), id);
+        let id = decl("ori_string_parse_int", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_string_parse_int"), id);
+        let id = decl("ori_string_parse_float", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_string_parse_float"), id);
         // list<T> runtime
-        let id = decl("ori_list_new", &[], Some(pt))?;
+        let id = decl("ori_list_new", &[], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_new"), id);
-        let id = decl("ori_list_push", &[pt, types::I64], None)?;
+        let id = decl("ori_list_push", &[pt, types::I64], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_push"), id);
-        let id = decl("ori_list_get", &[pt, types::I64], Some(types::I64))?;
+        let id = decl("ori_list_get", &[pt, types::I64], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_get"), id);
-        let id = decl("ori_list_set", &[pt, types::I64, types::I64], None)?;
+        let id = decl("ori_list_set", &[pt, types::I64, types::I64], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_set"), id);
-        let id = decl("ori_list_len", &[pt], Some(types::I64))?;
+        let id = decl("ori_list_len", &[pt], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_len"), id);
-        let id = decl("ori_list_free", &[pt], None)?;
+        let id = decl("ori_list_free", &[pt], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_free"), id);
-        let id = decl("ori_list_pop", &[pt], Some(types::I64))?;
+        let id = decl("ori_list_pop", &[pt], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_pop"), id);
-        let id = decl("ori_list_remove", &[pt, types::I64], None)?;
-        self.stdlib_ids
-            .insert(SmolStr::new("ori_list_remove"), id);
-        let id = decl("ori_list_insert", &[pt, types::I64, types::I64], None)?;
-        self.stdlib_ids
-            .insert(SmolStr::new("ori_list_insert"), id);
-        let id = decl("ori_list_contains", &[pt, types::I64], Some(types::I8))?;
+        let id = decl("ori_list_remove", &[pt, types::I64], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_remove"), id);
+        let id = decl(
+            "ori_list_insert",
+            &[pt, types::I64, types::I64],
+            vec![],
+            None,
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_insert"), id);
+        let id = decl(
+            "ori_list_contains",
+            &[pt, types::I64],
+            vec![],
+            Some(types::I8),
+        )?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_list_contains"), id);
-        let id = decl("ori_list_index_of", &[pt, types::I64], Some(types::I64))?;
+        let id = decl(
+            "ori_list_index_of",
+            &[pt, types::I64],
+            vec![],
+            Some(types::I64),
+        )?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_list_index_of"), id);
-        let id = decl("ori_list_sort", &[pt], None)?;
+        let id = decl("ori_list_sort", &[pt], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_sort"), id);
-        let id = decl("ori_list_reverse", &[pt], None)?;
-        self.stdlib_ids
-            .insert(SmolStr::new("ori_list_reverse"), id);
-        let id = decl("ori_list_slice", &[pt, types::I64, types::I64], Some(pt))?;
-        self.stdlib_ids
-            .insert(SmolStr::new("ori_list_slice"), id);
-        let id = decl("ori_set_new", &[], Some(pt))?;
+        let id = decl("ori_list_reverse", &[pt], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_reverse"), id);
+        let id = decl(
+            "ori_list_slice",
+            &[pt, types::I64, types::I64],
+            vec![],
+            Some(pt),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_slice"), id);
+        let id = decl("ori_set_new", &[], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_set_new"), id);
-        let id = decl("ori_set_add", &[pt, types::I64], None)?;
+        let id = decl("ori_set_add", &[pt, types::I64], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_set_add"), id);
-        let id = decl("ori_set_contains", &[pt, types::I64], Some(types::I8))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_set_contains"), id);
-        let id = decl("ori_set_len", &[pt], Some(types::I64))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_set_len"), id);
-        let id = decl("ori_set_free", &[pt], None)?;
-        self.stdlib_ids.insert(SmolStr::new("ori_set_free"), id);
-        let id = decl("ori_set_remove", &[pt, types::I64], None)?;
+        let id = decl("ori_set_add_string", &[pt, pt], vec![], None)?;
         self.stdlib_ids
-            .insert(SmolStr::new("ori_set_remove"), id);
-        let id = decl("ori_set_union", &[pt, pt], Some(pt))?;
+            .insert(SmolStr::new("ori_set_add_string"), id);
+        let id = decl(
+            "ori_set_contains",
+            &[pt, types::I64],
+            vec![],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_set_contains"), id);
+        let id = decl(
+            "ori_set_contains_string",
+            &[pt, pt],
+            vec![],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_set_contains_string"), id);
+        let id = decl("ori_set_len", &[pt], vec![], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_set_len"), id);
+        let id = decl("ori_set_capacity", &[pt], vec![], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_set_capacity"), id);
+        let id = decl("ori_set_reserve", &[pt, types::I64], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_set_reserve"), id);
+        let id = decl("ori_set_clear", &[pt], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_set_clear"), id);
+        let id = decl("ori_set_free", &[pt], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_set_free"), id);
+        let id = decl("ori_set_remove", &[pt, types::I64], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_set_remove"), id);
+        let id = decl("ori_set_remove_string", &[pt, pt], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_set_remove_string"), id);
+        let id = decl("ori_set_union", &[pt, pt], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_set_union"), id);
-        let id = decl("ori_set_intersection", &[pt, pt], Some(pt))?;
+        let id = decl("ori_set_intersection", &[pt, pt], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_set_intersection"), id);
-        let id = decl("ori_set_difference", &[pt, pt], Some(pt))?;
+        let id = decl("ori_set_difference", &[pt, pt], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_set_difference"), id);
-        let id = decl("ori_list_map", &[pt, pt, pt], Some(pt))?;
+        let id = decl("ori_list_map", &[pt, pt, pt], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_map"), id);
-        let id = decl("ori_list_filter", &[pt, pt, pt], Some(pt))?;
-        self.stdlib_ids
-            .insert(SmolStr::new("ori_list_filter"), id);
-        let id = decl("ori_map_new", &[], Some(pt))?;
+        let id = decl("ori_list_filter", &[pt, pt, pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_filter"), id);
+        let id = decl("ori_map_new", &[], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_new"), id);
-        let id = decl("ori_map_set", &[pt, types::I64, types::I64], None)?;
+        let id = decl("ori_map_set", &[pt, types::I64, types::I64], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_set"), id);
-        let id = decl("ori_map_get", &[pt, types::I64], Some(types::I64))?;
+        let id = decl("ori_map_set_string", &[pt, pt, types::I64], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_set_string"), id);
+        let id = decl("ori_map_get", &[pt, types::I64], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_get"), id);
-        let id = decl("ori_map_contains", &[pt, types::I64], Some(types::I8))?;
+        let id = decl("ori_map_get_string", &[pt, pt], vec![], Some(types::I64))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_get_string"), id);
+        let id = decl(
+            "ori_map_contains",
+            &[pt, types::I64],
+            vec![],
+            Some(types::I8),
+        )?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_contains"), id);
-        let id = decl("ori_map_len", &[pt], Some(types::I64))?;
+        let id = decl(
+            "ori_map_contains_string",
+            &[pt, pt],
+            vec![],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_contains_string"), id);
+        let id = decl("ori_map_len", &[pt], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_len"), id);
-        let id = decl("ori_map_key_at", &[pt, types::I64], Some(types::I64))?;
+        let id = decl("ori_map_capacity", &[pt], vec![], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_map_capacity"), id);
+        let id = decl("ori_map_reserve", &[pt, types::I64], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_map_reserve"), id);
+        let id = decl("ori_map_clear", &[pt], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_map_clear"), id);
+        let id = decl(
+            "ori_map_key_at",
+            &[pt, types::I64],
+            vec![],
+            Some(types::I64),
+        )?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_key_at"), id);
-        let id = decl("ori_map_value_at", &[pt, types::I64], Some(types::I64))?;
+        let id = decl(
+            "ori_map_value_at",
+            &[pt, types::I64],
+            vec![],
+            Some(types::I64),
+        )?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_value_at"), id);
-        let id = decl("ori_map_free", &[pt], None)?;
+        let id = decl("ori_map_free", &[pt], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_free"), id);
-        let id = decl("ori_map_remove", &[pt, types::I64], None)?;
+        let id = decl("ori_map_remove", &[pt, types::I64], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_map_remove"), id);
+        let id = decl("ori_map_remove_string", &[pt, pt], vec![], None)?;
         self.stdlib_ids
-            .insert(SmolStr::new("ori_map_remove"), id);
-        let id = decl("ori_map_keys", &[pt], Some(pt))?;
+            .insert(SmolStr::new("ori_map_remove_string"), id);
+        let id = decl("ori_map_keys", &[pt], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_keys"), id);
-        let id = decl("ori_map_values", &[pt], Some(pt))?;
+        let id = decl("ori_map_values", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_map_values"), id);
+        let id = decl("ori_map_entries", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_map_entries"), id);
+        let id = decl(
+            "ori_hash_table_set_string",
+            &[pt, pt, types::I64],
+            vec![],
+            None,
+        )?;
         self.stdlib_ids
-            .insert(SmolStr::new("ori_map_values"), id);
-        let id = decl("ori_map_entries", &[pt], Some(pt))?;
+            .insert(SmolStr::new("ori_hash_table_set_string"), id);
+        let id = decl("ori_hash_table_get_string", &[pt, pt], vec![], Some(pt))?;
         self.stdlib_ids
-            .insert(SmolStr::new("ori_map_entries"), id);
-        let id = decl("ori_arc_retain", &[pt], None)?;
+            .insert(SmolStr::new("ori_hash_table_get_string"), id);
+        let id = decl("ori_hash_table_remove_string", &[pt, pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_hash_table_remove_string"), id);
+        let id = decl(
+            "ori_hash_table_contains_string",
+            &[pt, pt],
+            vec![],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_hash_table_contains_string"), id);
+        for name in ["ori_graph_add_node_string", "ori_graph_remove_node_string"] {
+            let id = decl(name, &[pt, pt], vec![], None)?;
+            self.stdlib_ids.insert(SmolStr::new(name), id);
+        }
+        for name in ["ori_graph_add_edge_string", "ori_graph_remove_edge_string"] {
+            let id = decl(name, &[pt, pt, pt], vec![], None)?;
+            self.stdlib_ids.insert(SmolStr::new(name), id);
+        }
+        for name in ["ori_graph_has_node_string"] {
+            let id = decl(name, &[pt, pt], vec![], Some(types::I8))?;
+            self.stdlib_ids.insert(SmolStr::new(name), id);
+        }
+        for name in ["ori_graph_has_edge_string"] {
+            let id = decl(name, &[pt, pt, pt], vec![], Some(types::I8))?;
+            self.stdlib_ids.insert(SmolStr::new(name), id);
+        }
+        for name in [
+            "ori_graph_neighbors_string",
+            "ori_graph_bfs_string",
+            "ori_graph_dfs_string",
+        ] {
+            let id = decl(name, &[pt, pt], vec![], Some(pt))?;
+            self.stdlib_ids.insert(SmolStr::new(name), id);
+        }
+        let id = decl("ori_heap_new_string", &[], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_heap_new_string"), id);
+        let id = decl("ori_heap_new_custom", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_heap_new_custom"), id);
+        let id = decl("ori_heap_push_string", &[pt, pt], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_heap_push_string"), id);
+        let id = decl("ori_heap_push_custom", &[pt, types::I64, pt], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_heap_push_custom"), id);
+        let id = decl("ori_files_read_text", &[pt], vec![Ty::String], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_files_read_text"), id);
+        let id = decl(
+            "ori_files_write_text",
+            &[pt, pt],
+            vec![Ty::String, Ty::String],
+            Some(pt),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_files_write_text"), id);
+        let id = decl(
+            "ori_files_append_text",
+            &[pt, pt],
+            vec![Ty::String, Ty::String],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_files_append_text"), id);
+        let id = decl("ori_files_exists", &[pt], vec![Ty::String], Some(types::I8))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_files_exists"), id);
+        let id = decl("ori_files_delete", &[pt], vec![Ty::String], Some(types::I8))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_files_delete"), id);
+        let id = decl("ori_files_list_dir", &[pt], vec![Ty::String], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_files_list_dir"), id);
+        let id = decl(
+            "ori_files_create_dir",
+            &[pt],
+            vec![Ty::String],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_files_create_dir"), id);
+        let id = decl(
+            "ori_files_is_file",
+            &[pt],
+            vec![Ty::String],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_files_is_file"), id);
+        let id = decl("ori_files_is_dir", &[pt], vec![Ty::String], Some(types::I8))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_files_is_dir"), id);
+        let id = decl(
+            "ori_files_copy",
+            &[pt, pt],
+            vec![Ty::String, Ty::String],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_files_copy"), id);
+        let id = decl(
+            "ori_files_rename",
+            &[pt, pt],
+            vec![Ty::String, Ty::String],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_files_rename"), id);
+        let id = decl("ori_arc_retain", &[pt], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_arc_retain"), id);
-        let id = decl("ori_arc_release", &[pt], None)?;
+        let id = decl("ori_arc_release", &[pt], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_arc_release"), id);
-        let id = decl("ori_arc_collect_cycles", &[], Some(types::I64))?;
+        let id = decl("ori_arc_register_edge", &[pt, pt], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_arc_register_edge"), id);
+        let id = decl("ori_arc_unregister_edge", &[pt, pt], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_arc_unregister_edge"), id);
+        let id = decl("ori_arc_update_edge", &[pt, pt, pt], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_arc_update_edge"), id);
+        let id = decl("ori_arc_collect_cycles", &[], vec![], Some(types::I64))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_arc_collect_cycles"), id);
         // malloc / free for runtime allocation
-        let id = decl("malloc", &[types::I64], Some(pt))?;
+        let id = decl("malloc", &[types::I64], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("malloc"), id);
-        let id = decl("free", &[pt], None)?;
+        let id = decl("free", &[pt], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("free"), id);
-        let id = decl("ori_alloc", &[types::I64, pt], Some(pt))?;
+        let id = decl("ori_alloc", &[types::I64, pt], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_alloc"), id);
         Ok(())
     }
@@ -945,6 +2918,13 @@ impl NativeBackend {
         sig
     }
 
+    fn make_async_step_sig(&self) -> ir::Signature {
+        let mut sig = self.module.make_signature();
+        sig.params.push(AbiParam::new(self.ptr_ty));
+        sig.returns.push(AbiParam::new(types::I64));
+        sig
+    }
+
     fn declare_all(&mut self, hir: &HirModule) -> Result<(), String> {
         for f in &hir.funcs {
             let sig = self.make_sig(f);
@@ -960,6 +2940,17 @@ impl NativeBackend {
             self.func_ids.insert(f.name.clone(), id);
         }
         for f in &hir.funcs {
+            if f.is_async && simple_async_state_machine_plan(f).is_some() {
+                let step_name = async_step_name(f);
+                let sig = self.make_async_step_sig();
+                let id = self
+                    .module
+                    .declare_function(&native_func_symbol(&step_name), Linkage::Local, &sig)
+                    .map_err(|e| format!("declare async step '{}': {e}", step_name))?;
+                self.func_ids.insert(step_name, id);
+            }
+        }
+        for f in &hir.funcs {
             if is_synthetic_closure_func(f) {
                 continue;
             }
@@ -972,6 +2963,8 @@ impl NativeBackend {
         }
         if hir.funcs.iter().any(|f| is_entry_main(hir, f)) {
             let mut sig = self.module.make_signature();
+            sig.params.push(AbiParam::new(types::I32));
+            sig.params.push(AbiParam::new(self.ptr_ty));
             sig.returns.push(AbiParam::new(types::I32));
             self.module
                 .declare_function("main", Linkage::Export, &sig)
@@ -986,6 +2979,18 @@ impl NativeBackend {
             .iter()
             .map(|c| (c.name.clone(), c.value.clone()))
             .collect();
+        let global_init_id = if hir.consts.iter().any(|c| {
+            cl_type(&c.ty, self.ptr_ty).is_some() && needs_runtime_global_init(&c.value, &c.ty)
+        }) {
+            let sig = self.module.make_signature();
+            Some(
+                self.module
+                    .declare_function("__ori_init_globals", Linkage::Local, &sig)
+                    .map_err(|e| format!("declare global initializer: {e}"))?,
+            )
+        } else {
+            None
+        };
         for f in &hir.funcs {
             let sig = self.make_sig(f);
             let func_id = self.func_ids[&f.name];
@@ -1042,11 +3047,18 @@ impl NativeBackend {
                     current_return_ty: f.return_ty.clone(),
                     terminated: false,
                 }
-                .emit(f)?;
+                .emit_user_func(f)?;
             }
             self.module
                 .define_function(func_id, &mut ctx)
                 .map_err(|e| format!("define '{}': {e}", f.name))?;
+        }
+
+        for f in &hir.funcs {
+            let Some(plan) = simple_async_state_machine_plan(f) else {
+                continue;
+            };
+            self.define_simple_async_step(f, &plan, &const_exprs)?;
         }
 
         for f in &hir.funcs {
@@ -1082,10 +3094,16 @@ impl NativeBackend {
                 .map_err(|e| format!("define closure wrapper '{}': {e}", f.name))?;
         }
 
+        if let Some(global_init_id) = global_init_id {
+            self.define_global_initializer(hir, global_init_id)?;
+        }
+
         // Define C main wrapper
         if let Some(entry_main) = hir.funcs.iter().find(|f| is_entry_main(hir, f)) {
             let ori_main_id = self.func_ids[&entry_main.name];
             let mut sig = self.module.make_signature();
+            sig.params.push(AbiParam::new(types::I32));
+            sig.params.push(AbiParam::new(self.ptr_ty));
             sig.returns.push(AbiParam::new(types::I32));
             let main_id = self
                 .module
@@ -1094,13 +3112,49 @@ impl NativeBackend {
             let mut ctx = self.module.make_context();
             ctx.func.signature = sig;
             let ori_ref = self.module.declare_func_in_func(ori_main_id, &mut ctx.func);
+            let init_ref =
+                global_init_id.map(|id| self.module.declare_func_in_func(id, &mut ctx.func));
+            let set_args_ref = self
+                .stdlib_ids
+                .get("ori_os_set_args")
+                .copied()
+                .map(|id| self.module.declare_func_in_func(id, &mut ctx.func));
+            let block_on_ref = if matches!(entry_main.return_ty, Ty::Future(_)) {
+                Some(
+                    self.stdlib_ids
+                        .get("ori_task_block_on")
+                        .copied()
+                        .map(|id| self.module.declare_func_in_func(id, &mut ctx.func))
+                        .ok_or_else(|| {
+                            "missing runtime function `ori_task_block_on` for async main"
+                                .to_string()
+                        })?,
+                )
+            } else {
+                None
+            };
             let mut bctx = FunctionBuilderContext::new();
             {
                 let mut b = FunctionBuilder::new(&mut ctx.func, &mut bctx);
                 let blk = b.create_block();
+                b.append_block_params_for_function_params(blk);
                 b.switch_to_block(blk);
                 b.seal_block(blk);
-                b.ins().call(ori_ref, &[]);
+                if let Some(init_ref) = init_ref {
+                    b.ins().call(init_ref, &[]);
+                }
+                if let Some(set_args_ref) = set_args_ref {
+                    let (argc, argv) = {
+                        let params = b.block_params(blk);
+                        (params[0], params[1])
+                    };
+                    b.ins().call(set_args_ref, &[argc, argv]);
+                }
+                let call = b.ins().call(ori_ref, &[]);
+                if let Some(block_on_ref) = block_on_ref {
+                    let future = b.inst_results(call)[0];
+                    b.ins().call(block_on_ref, &[future]);
+                }
                 let zero = b.ins().iconst(types::I32, 0);
                 b.ins().return_(&[zero]);
                 b.seal_all_blocks();
@@ -1110,6 +3164,163 @@ impl NativeBackend {
                 .define_function(main_id, &mut ctx)
                 .map_err(|e| format!("define main wrapper: {e}"))?;
         }
+        Ok(())
+    }
+
+    fn define_simple_async_step(
+        &mut self,
+        f: &HirFunc,
+        plan: &SimpleAsyncStateMachinePlan,
+        const_exprs: &HashMap<SmolStr, HirExpr>,
+    ) -> Result<(), String> {
+        let step_name = async_step_name(f);
+        let sig = self.make_async_step_sig();
+        let func_id = self.func_ids[&step_name];
+        let mut ctx = self.module.make_context();
+        ctx.func.signature = sig;
+
+        let mut func_refs: HashMap<SmolStr, ir::FuncRef> = HashMap::new();
+        for (name, &id) in self.func_ids.iter().chain(self.stdlib_ids.iter()) {
+            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+            func_refs.insert(name.clone(), fref);
+        }
+        for (name, &id) in &self.func_wrapper_ids {
+            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+            func_refs.insert(SmolStr::new(format!("{name}.__fnptr_wrapper")), fref);
+        }
+
+        let mut string_gvs: HashMap<SmolStr, ir::GlobalValue> = HashMap::new();
+        for (s, &data_id) in &self.string_data {
+            let gv = self.module.declare_data_in_func(data_id, &mut ctx.func);
+            string_gvs.insert(s.clone(), gv);
+        }
+
+        let mut global_gvs: HashMap<SmolStr, ir::GlobalValue> = HashMap::new();
+        for (name, info) in &self.global_data {
+            let gv = self
+                .module
+                .declare_data_in_func(info.data_id, &mut ctx.func);
+            global_gvs.insert(name.clone(), gv);
+        }
+
+        let mut bctx = FunctionBuilderContext::new();
+        {
+            let builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
+            FuncCodegen {
+                builder,
+                func_refs: &func_refs,
+                string_gvs: &string_gvs,
+                global_gvs: &global_gvs,
+                global_data: &self.global_data,
+                const_exprs,
+                struct_layouts: &self.struct_layouts,
+                enum_layouts: &self.enum_layouts,
+                type_names: &self.type_names,
+                trait_layouts: &self.trait_layouts,
+                trait_impls: &self.trait_impls,
+                func_param_tys: &self.func_param_tys,
+                vars: HashMap::new(),
+                ptr_ty: self.ptr_ty,
+                loop_stack: Vec::new(),
+                using_stack: Vec::new(),
+                managed_stack: Vec::new(),
+                current_return_ty: plan.inner_ty.clone(),
+                terminated: false,
+            }
+            .emit_simple_async_step(f, plan)?;
+        }
+        self.module
+            .define_function(func_id, &mut ctx)
+            .map_err(|e| format!("define async step '{}': {e}", step_name))?;
+        Ok(())
+    }
+
+    fn define_global_initializer(
+        &mut self,
+        hir: &HirModule,
+        init_id: FuncId,
+    ) -> Result<(), String> {
+        let mut ctx = self.module.make_context();
+        ctx.func.signature = self.module.make_signature();
+
+        let mut func_refs: HashMap<SmolStr, ir::FuncRef> = HashMap::new();
+        for (name, &id) in self.func_ids.iter().chain(self.stdlib_ids.iter()) {
+            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+            func_refs.insert(name.clone(), fref);
+        }
+        for (name, &id) in &self.func_wrapper_ids {
+            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+            func_refs.insert(SmolStr::new(format!("{name}.__fnptr_wrapper")), fref);
+        }
+
+        let mut string_gvs: HashMap<SmolStr, ir::GlobalValue> = HashMap::new();
+        for (s, &data_id) in &self.string_data {
+            let gv = self.module.declare_data_in_func(data_id, &mut ctx.func);
+            string_gvs.insert(s.clone(), gv);
+        }
+
+        let mut global_gvs: HashMap<SmolStr, ir::GlobalValue> = HashMap::new();
+        for (name, info) in &self.global_data {
+            let gv = self
+                .module
+                .declare_data_in_func(info.data_id, &mut ctx.func);
+            global_gvs.insert(name.clone(), gv);
+        }
+
+        let const_exprs: HashMap<SmolStr, HirExpr> = hir
+            .consts
+            .iter()
+            .map(|c| (c.name.clone(), c.value.clone()))
+            .collect();
+        let mut bctx = FunctionBuilderContext::new();
+        {
+            let mut codegen = FuncCodegen {
+                builder: FunctionBuilder::new(&mut ctx.func, &mut bctx),
+                func_refs: &func_refs,
+                string_gvs: &string_gvs,
+                global_gvs: &global_gvs,
+                global_data: &self.global_data,
+                const_exprs: &const_exprs,
+                struct_layouts: &self.struct_layouts,
+                enum_layouts: &self.enum_layouts,
+                type_names: &self.type_names,
+                trait_layouts: &self.trait_layouts,
+                trait_impls: &self.trait_impls,
+                func_param_tys: &self.func_param_tys,
+                vars: HashMap::new(),
+                ptr_ty: self.ptr_ty,
+                loop_stack: Vec::new(),
+                using_stack: Vec::new(),
+                managed_stack: Vec::new(),
+                current_return_ty: Ty::Void,
+                terminated: false,
+            };
+            let block = codegen.builder.create_block();
+            codegen.builder.switch_to_block(block);
+            codegen.builder.seal_block(block);
+            for global in &hir.consts {
+                if cl_type(&global.ty, self.ptr_ty).is_none()
+                    || !needs_runtime_global_init(&global.value, &global.ty)
+                {
+                    continue;
+                }
+                let value = codegen.emit_expr_for_expected(&global.value, &global.ty)?;
+                codegen.emit_arc_retain_if_managed(&global.ty, value)?;
+                if !codegen.initialize_global(&global.name, value) {
+                    return Err(format!(
+                        "global `{}` is not available during native initialization",
+                        global.name
+                    ));
+                }
+            }
+            codegen.builder.ins().return_(&[]);
+            codegen.builder.seal_all_blocks();
+            codegen.builder.finalize();
+        }
+
+        self.module
+            .define_function(init_id, &mut ctx)
+            .map_err(|e| format!("define global initializer: {e}"))?;
         Ok(())
     }
 }
@@ -1139,6 +3350,99 @@ struct FuncCodegen<'a> {
 }
 
 impl<'a> FuncCodegen<'a> {
+    fn emit_user_func(self, f: &HirFunc) -> Result<(), String> {
+        if f.is_async {
+            self.emit_async_wrapper(f)
+        } else {
+            self.emit(f)
+        }
+    }
+
+    fn emit_async_wrapper(self, f: &HirFunc) -> Result<(), String> {
+        if let Some(plan) = simple_async_state_machine_plan(f) {
+            return self.emit_simple_async_state_machine_wrapper(f, &plan);
+        }
+        if !block_contains_await(&f.body) {
+            return self.emit(f);
+        }
+        Err(native_codegen_unsupported(format!(
+            "async function `{}` contains an `await` shape not yet covered by the native state machine; use top-level `await value`, `const x: T = await value`, `return await value`, or `const x = (await value)?` until nested await lowering lands",
+            f.name
+        )))
+    }
+
+    fn emit_simple_async_state_machine_wrapper(
+        mut self,
+        f: &HirFunc,
+        plan: &SimpleAsyncStateMachinePlan,
+    ) -> Result<(), String> {
+        let entry = self.builder.create_block();
+        self.builder.append_block_params_for_function_params(entry);
+        self.builder.switch_to_block(entry);
+        self.builder.seal_block(entry);
+
+        self.emit_param_contracts(&f.params)?;
+
+        let pending_ref = *self
+            .func_refs
+            .get("ori_future_pending")
+            .ok_or_else(|| "missing runtime function `ori_future_pending`".to_string())?;
+        let pending_call = self.builder.ins().call(pending_ref, &[]);
+        let future = self.builder.inst_results(pending_call)[0];
+
+        let frame = self.malloc_bytes(simple_async_frame_size(plan, self.ptr_ty))?;
+        let zero = self.builder.ins().iconst(types::I64, 0);
+        self.builder
+            .ins()
+            .store(MemFlags::new(), zero, frame, ASYNC_FRAME_STATE_OFFSET);
+        self.builder
+            .ins()
+            .store(MemFlags::new(), future, frame, ASYNC_FRAME_RESULT_OFFSET);
+        self.emit_arc_register_edge(frame, future)?;
+        for (index, param) in plan.params.iter().enumerate() {
+            let cl_ty = cl_type(&param.ty, self.ptr_ty)
+                .ok_or_else(|| format!("async param `{}` has no native value", param.name))?;
+            let value = self.builder.block_params(entry)[index];
+            debug_assert_eq!(self.builder.func.dfg.value_type(value), cl_ty);
+            let offset = simple_async_frame_param_offset(plan, index, self.ptr_ty)
+                .expect("async frame param offset");
+            self.builder
+                .ins()
+                .store(MemFlags::new(), value, frame, offset as i32);
+            self.emit_arc_register_edge_if_managed(&param.ty, frame, value)?;
+        }
+        for (index, local) in plan.locals.iter().enumerate() {
+            let value = self.zero_val(&local.ty);
+            let offset = simple_async_frame_local_offset(plan, index, self.ptr_ty)
+                .expect("async frame local offset");
+            self.builder
+                .ins()
+                .store(MemFlags::new(), value, frame, offset as i32);
+        }
+
+        let step_name = async_step_name(f);
+        let step_ref = *self
+            .func_refs
+            .get(step_name.as_str())
+            .ok_or_else(|| format!("missing async step function `{step_name}`"))?;
+        let step_closure = self.emit_closure_object(step_ref, Some(frame))?;
+        let schedule_ref = *self
+            .func_refs
+            .get("ori_executor_schedule")
+            .ok_or_else(|| "missing runtime function `ori_executor_schedule`".to_string())?;
+        self.builder.ins().call(schedule_ref, &[step_closure]);
+        self.emit_arc_release_if_managed(&Ty::Bytes, frame)?;
+
+        self.emit_arc_retain_if_managed(&f.return_ty, future)?;
+        self.emit_scope_cleanup_calls_from(0, 0)?;
+        self.builder.ins().return_(&[future]);
+        self.terminated = true;
+
+        self.builder.seal_all_blocks();
+        self.builder.finalize();
+        Ok(())
+    }
+
     fn emit(mut self, f: &HirFunc) -> Result<(), String> {
         let entry = self.builder.create_block();
         self.builder.append_block_params_for_function_params(entry);
@@ -1174,7 +3478,10 @@ impl<'a> FuncCodegen<'a> {
         self.emit_block(&f.body)?;
 
         if !self.terminated {
-            if cl_type(&f.return_ty, self.ptr_ty).is_none() {
+            if let Ty::Future(inner) = &f.return_ty {
+                let future = self.emit_future_ready(inner, None)?;
+                self.builder.ins().return_(&[future]);
+            } else if cl_type(&f.return_ty, self.ptr_ty).is_none() {
                 self.builder.ins().return_(&[]);
             } else {
                 let zero = self.zero_val(&f.return_ty);
@@ -1258,11 +3565,9 @@ impl<'a> FuncCodegen<'a> {
             self.vars.remove("it");
         }
         let condition = condition?;
-        self.emit_trap_unless(
-            condition,
-            ir::TrapCode::user(trap_code).unwrap(),
-            run_cleanup,
-        )
+        let trap = ir::TrapCode::user(trap_code)
+            .ok_or_else(|| format!("invalid runtime contract trap code `{trap_code}`"))?;
+        self.emit_trap_unless(condition, trap, run_cleanup)
     }
 
     fn emit_trap_unless(
@@ -1308,10 +3613,46 @@ impl<'a> FuncCodegen<'a> {
         }
         let value = self.emit_expr(expr)?;
         if let (Ty::Any(trait_def_id), Ty::Named(type_def_id, _)) = (expected, &expr.ty) {
-            self.emit_any_box(*trait_def_id, *type_def_id, value)
-        } else {
-            Ok(value)
+            return self.emit_any_box(*trait_def_id, *type_def_id, value);
         }
+
+        // Numeric widening casts
+        let actual_ty = self.builder.func.dfg.value_type(value);
+        let expected_ty = cl_type(expected, self.ptr_ty).unwrap_or(self.ptr_ty);
+        if actual_ty != expected_ty {
+            if actual_ty == types::F32 && expected_ty == types::F64 {
+                return Ok(self.builder.ins().fpromote(expected_ty, value));
+            }
+            if actual_ty == types::F64 && expected_ty == types::F32 {
+                return Ok(self.builder.ins().fdemote(expected_ty, value));
+            }
+
+            let actual_size = match actual_ty {
+                types::I8 => 1,
+                types::I16 => 2,
+                types::I32 => 4,
+                types::I64 => 8,
+                _ => 0,
+            };
+            let expected_size = match expected_ty {
+                types::I8 => 1,
+                types::I16 => 2,
+                types::I32 => 4,
+                types::I64 => 8,
+                _ => 0,
+            };
+            if actual_size > 0 && expected_size > actual_size {
+                // Determine if we should sign-extend or zero-extend
+                let is_unsigned = matches!(expr.ty, Ty::U8 | Ty::U16 | Ty::U32 | Ty::U64);
+                if is_unsigned {
+                    return Ok(self.builder.ins().uextend(expected_ty, value));
+                } else {
+                    return Ok(self.builder.ins().sextend(expected_ty, value));
+                }
+            }
+        }
+
+        Ok(value)
     }
 
     fn emit_named_function_closure(&mut self, name: &SmolStr) -> Result<ir::Value, String> {
@@ -1335,6 +3676,9 @@ impl<'a> FuncCodegen<'a> {
         self.builder
             .ins()
             .store(MemFlags::new(), env, object, ptr_size as i32);
+        if env_ptr.is_some() {
+            self.emit_arc_register_edge(object, env)?;
+        }
         Ok(object)
     }
 
@@ -1360,9 +3704,11 @@ impl<'a> FuncCodegen<'a> {
         let ptr_size = self.ptr_ty.bytes() as i64;
         let vtable_size = (trait_layout.methods.len() as i64 + 1) * ptr_size;
         let vtable = self.malloc_bytes(vtable_size as u32)?;
-        
+
         let type_id_val = self.builder.ins().iconst(self.ptr_ty, type_def_id.0 as i64);
-        self.builder.ins().store(MemFlags::new(), type_id_val, vtable, 0);
+        self.builder
+            .ins()
+            .store(MemFlags::new(), type_id_val, vtable, 0);
         for (index, method) in trait_layout.methods.iter().enumerate() {
             let func_name = impl_sig
                 .methods
@@ -1393,6 +3739,7 @@ impl<'a> FuncCodegen<'a> {
         self.builder
             .ins()
             .store(MemFlags::new(), vtable, object, ptr_size as i32);
+        self.emit_arc_register_edge(object, data_ptr)?;
         Ok(object)
     }
 
@@ -1502,7 +3849,6 @@ impl<'a> FuncCodegen<'a> {
                         capture.name
                     ));
                 };
-                self.emit_arc_retain_if_managed(&capture.ty, value)?;
                 if let Some(cl_ty) = cl_type(&capture.ty, self.ptr_ty) {
                     let stored = if cl_ty == self.ptr_ty || cl_ty == types::I64 {
                         value
@@ -1512,6 +3858,7 @@ impl<'a> FuncCodegen<'a> {
                     self.builder
                         .ins()
                         .store(MemFlags::new(), stored, env, offset as i32);
+                    self.emit_arc_register_edge_if_managed(&capture.ty, env, value)?;
                 }
             }
             Some(env)
@@ -1573,6 +3920,118 @@ impl<'a> FuncCodegen<'a> {
         }
     }
 
+    fn emit_lazy_once(&mut self, thunk: &HirExpr, lazy_ty: &Ty) -> Result<ir::Value, String> {
+        let Ty::Lazy(inner) = lazy_ty else {
+            return Err(format!(
+                "lazy.once expected lazy result type, got `{}`",
+                lazy_ty.display()
+            ));
+        };
+        let thunk_value = self.emit_expr(thunk)?;
+        let ptr_size = self.ptr_ty.bytes() as i32;
+        let (_, total) = lazy_layout(inner, self.ptr_ty);
+        let object = self.malloc_bytes(total)?;
+        let zero8 = self.builder.ins().iconst(types::I8, 0);
+        self.builder
+            .ins()
+            .store(MemFlags::new(), thunk_value, object, 0);
+        self.builder
+            .ins()
+            .store(MemFlags::new(), zero8, object, ptr_size);
+        self.emit_arc_register_edge(object, thunk_value)?;
+        self.emit_arc_release_if_managed(&thunk.ty, thunk_value)?;
+        Ok(object)
+    }
+
+    fn emit_lazy_force(&mut self, value: &HirExpr, ret_ty: &Ty) -> Result<ir::Value, String> {
+        let Ty::Lazy(inner) = &value.ty else {
+            return Err(format!(
+                "lazy.force expected lazy value, got `{}`",
+                value.ty.display()
+            ));
+        };
+        let ret_cl = cl_type(ret_ty, self.ptr_ty).ok_or_else(|| {
+            format!(
+                "native backend cannot force lazy value returning `{}`",
+                ret_ty.display()
+            )
+        })?;
+        let lazy_value = self.emit_expr(value)?;
+        let ptr_size = self.ptr_ty.bytes() as i32;
+        let (value_offset, _) = lazy_layout(inner, self.ptr_ty);
+        let forced = self
+            .builder
+            .ins()
+            .load(types::I8, MemFlags::new(), lazy_value, ptr_size);
+        let forced_block = self.builder.create_block();
+        let compute_block = self.builder.create_block();
+        let merge_block = self.builder.create_block();
+        let slot = self.builder.create_sized_stack_slot(ir::StackSlotData::new(
+            ir::StackSlotKind::ExplicitSlot,
+            ret_cl.bytes(),
+            3,
+        ));
+        let slot_addr = self.builder.ins().stack_addr(self.ptr_ty, slot, 0);
+        self.builder
+            .ins()
+            .brif(forced, forced_block, &[], compute_block, &[]);
+
+        self.builder.seal_block(forced_block);
+        self.builder.switch_to_block(forced_block);
+        let cached =
+            self.builder
+                .ins()
+                .load(ret_cl, MemFlags::new(), lazy_value, value_offset as i32);
+        self.builder
+            .ins()
+            .store(MemFlags::new(), cached, slot_addr, 0);
+        self.builder.ins().jump(merge_block, &[]);
+
+        self.builder.seal_block(compute_block);
+        self.builder.switch_to_block(compute_block);
+        let thunk = self
+            .builder
+            .ins()
+            .load(self.ptr_ty, MemFlags::new(), lazy_value, 0);
+        let fn_ptr = self
+            .builder
+            .ins()
+            .load(self.ptr_ty, MemFlags::new(), thunk, 0);
+        let env_ptr = self
+            .builder
+            .ins()
+            .load(self.ptr_ty, MemFlags::new(), thunk, ptr_size);
+        let mut sig = ir::Signature::new(self.builder.func.signature.call_conv);
+        sig.params.push(AbiParam::new(self.ptr_ty));
+        sig.returns.push(AbiParam::new(ret_cl));
+        let sig_ref = self.builder.func.import_signature(sig);
+        let call = self
+            .builder
+            .ins()
+            .call_indirect(sig_ref, fn_ptr, &[env_ptr]);
+        let computed = self.builder.inst_results(call)[0];
+        self.builder
+            .ins()
+            .store(MemFlags::new(), computed, lazy_value, value_offset as i32);
+        let one8 = self.builder.ins().iconst(types::I8, 1);
+        self.builder
+            .ins()
+            .store(MemFlags::new(), one8, lazy_value, ptr_size);
+        self.emit_arc_register_edge_if_managed(inner, lazy_value, computed)?;
+        self.emit_arc_release_if_managed(inner, computed)?;
+        self.builder
+            .ins()
+            .store(MemFlags::new(), computed, slot_addr, 0);
+        self.builder.ins().jump(merge_block, &[]);
+
+        self.builder.seal_block(merge_block);
+        self.builder.switch_to_block(merge_block);
+        Ok(self
+            .builder
+            .ins()
+            .load(ret_cl, MemFlags::new(), slot_addr, 0))
+    }
+
     fn emit_new_list(&mut self) -> Result<ir::Value, String> {
         let new_ref = *self
             .func_refs
@@ -1594,6 +4053,7 @@ impl<'a> FuncCodegen<'a> {
             .ok_or_else(|| "missing runtime function `ori_list_push`".to_string())?;
         let stored = self.to_list_storage_value(value, elem_ty);
         self.builder.ins().call(push_ref, &[list, stored]);
+        self.emit_arc_register_edge_if_managed(elem_ty, list, value)?;
         Ok(())
     }
 
@@ -1678,13 +4138,21 @@ impl<'a> FuncCodegen<'a> {
     }
 
     fn store_global(&mut self, name: &str, value: ir::Value) -> bool {
+        self.store_global_inner(name, value, true)
+    }
+
+    fn initialize_global(&mut self, name: &str, value: ir::Value) -> bool {
+        self.store_global_inner(name, value, false)
+    }
+
+    fn store_global_inner(&mut self, name: &str, value: ir::Value, require_mutable: bool) -> bool {
         let Some(gv) = self.global_gvs.get(name).copied() else {
             return false;
         };
         let Some(info) = self.global_data.get(name) else {
             return false;
         };
-        if !info.mutable {
+        if require_mutable && !info.mutable {
             return false;
         }
         let addr = self.builder.ins().global_value(self.ptr_ty, gv);
@@ -1706,8 +4174,45 @@ impl<'a> FuncCodegen<'a> {
                     Err(format!("undefined lvalue base `{name}` in native codegen"))
                 }
             }
-            _ => Err("unsupported indexed assignment base in native codegen".into()),
+            HirLValue::Field { base, field } => {
+                let (addr, field_layout, _) = self.emit_field_lvalue_addr(base, field)?;
+                let cl_ty = cl_type(&field_layout.ty, self.ptr_ty)
+                    .ok_or_else(|| format!("missing Cranelift type for field `{field}`"))?;
+                let value = self.builder.ins().load(cl_ty, MemFlags::new(), addr, 0);
+                Ok((value, field_layout.ty))
+            }
+            _ => Err(native_codegen_unsupported(
+                "indexed assignment base in native codegen",
+            )),
         }
+    }
+
+    fn emit_field_lvalue_addr(
+        &mut self,
+        base: &HirLValue,
+        field: &str,
+    ) -> Result<(ir::Value, FieldLayout, ir::Value), String> {
+        let (container, container_ty) = self.emit_lvalue_value(base)?;
+        let Ty::Named(def_id, _) = &container_ty else {
+            return Err(format!(
+                "field assignment `{field}` requires a struct value, got `{}`",
+                container_ty.display()
+            ));
+        };
+        let layout = self
+            .struct_layouts
+            .get(def_id)
+            .cloned()
+            .ok_or_else(|| format!("missing native layout for `{}`", container_ty.display()))?;
+        let field_layout = layout
+            .field(field)
+            .cloned()
+            .ok_or_else(|| format!("layout is missing field `{field}`"))?;
+        let addr = self
+            .builder
+            .ins()
+            .iadd_imm(container, i64::from(field_layout.offset));
+        Ok((addr, field_layout, container))
     }
 
     fn malloc_bytes(&mut self, size: u32) -> Result<ir::Value, String> {
@@ -1722,7 +4227,8 @@ impl<'a> FuncCodegen<'a> {
     }
 
     fn string_ptr(&mut self, value: &str) -> Result<ir::Value, String> {
-        let gv = *self.string_gvs
+        let gv = *self
+            .string_gvs
             .get(value)
             .ok_or_else(|| format!("string literal `{value}` was not emitted in native codegen"))?;
         let base = self.builder.ins().global_value(self.ptr_ty, gv);
@@ -1730,11 +4236,33 @@ impl<'a> FuncCodegen<'a> {
         Ok(self.builder.ins().iadd_imm(base, 16))
     }
 
-    fn int_to_string_parts(&mut self, value: ir::Value) -> Result<StringParts, String> {
+    fn bytes_ptr(&mut self, bytes: &[u8]) -> Result<ir::Value, String> {
+        let total = bytes.len() + 1;
+        let base = self.malloc_bytes(total as u32)?;
+
+        for (idx, byte) in bytes.iter().enumerate() {
+            let value = self.builder.ins().iconst(types::I8, i64::from(*byte as i8));
+            self.builder
+                .ins()
+                .store(MemFlags::new(), value, base, idx as i32);
+        }
+        let nul = self.builder.ins().iconst(types::I8, 0);
+        self.builder
+            .ins()
+            .store(MemFlags::new(), nul, base, bytes.len() as i32);
+
+        Ok(base)
+    }
+
+    fn call_string_parts_function(
+        &mut self,
+        function_name: &str,
+        value: ir::Value,
+    ) -> Result<StringParts, String> {
         let fref = *self
             .func_refs
-            .get("ori_to_string_parts")
-            .ok_or_else(|| "missing runtime function `ori_to_string_parts`".to_string())?;
+            .get(function_name)
+            .ok_or_else(|| format!("missing runtime function `{function_name}`"))?;
         let ptr_slot = self.builder.create_sized_stack_slot(ir::StackSlotData::new(
             ir::StackSlotKind::ExplicitSlot,
             8,
@@ -1759,6 +4287,18 @@ impl<'a> FuncCodegen<'a> {
         Ok(StringParts { ptr, len })
     }
 
+    fn int_to_string_parts(&mut self, value: ir::Value) -> Result<StringParts, String> {
+        self.call_string_parts_function("ori_to_string_parts", value)
+    }
+
+    fn float_to_string_parts(&mut self, value: ir::Value) -> Result<StringParts, String> {
+        self.call_string_parts_function("ori_float_to_string_parts", value)
+    }
+
+    fn bool_to_string_parts(&mut self, value: ir::Value) -> Result<StringParts, String> {
+        self.call_string_parts_function("ori_bool_to_string_parts", value)
+    }
+
     fn emit_to_string_call_parts(&mut self, expr: &HirExpr) -> Result<Option<StringParts>, String> {
         let HirExprKind::Call { callee, args } = &expr.kind else {
             return Ok(None);
@@ -1766,9 +4306,12 @@ impl<'a> FuncCodegen<'a> {
         let HirExprKind::Var(name) = &callee.kind else {
             return Ok(None);
         };
-        if name != "ori_to_string" {
-            return Ok(None);
-        }
+        let parts_function = match name.as_str() {
+            "ori_to_string" => "ori_to_string_parts",
+            "ori_float_to_string" => "ori_float_to_string_parts",
+            "ori_bool_to_string" => "ori_bool_to_string_parts",
+            _ => return Ok(None),
+        };
         let Some(arg) = args.first() else {
             return Ok(None);
         };
@@ -1776,9 +4319,13 @@ impl<'a> FuncCodegen<'a> {
         let value = match &arg.value.ty {
             Ty::Int8 | Ty::Int16 | Ty::Int32 => self.builder.ins().sextend(types::I64, value),
             Ty::U8 | Ty::U16 | Ty::U32 => self.builder.ins().uextend(types::I64, value),
+            Ty::Float32 if parts_function == "ori_float_to_string_parts" => {
+                self.builder.ins().fpromote(types::F64, value)
+            }
             _ => value,
         };
-        self.int_to_string_parts(value).map(Some)
+        self.call_string_parts_function(parts_function, value)
+            .map(Some)
     }
 
     fn emit_as_string_parts(&mut self, expr: &HirExpr) -> Result<StringParts, String> {
@@ -1803,6 +4350,12 @@ impl<'a> FuncCodegen<'a> {
                 let widened = self.builder.ins().uextend(types::I64, value);
                 self.int_to_string_parts(widened)
             }
+            Ty::Float | Ty::Float64 => self.float_to_string_parts(value),
+            Ty::Float32 => {
+                let widened = self.builder.ins().fpromote(types::F64, value);
+                self.float_to_string_parts(widened)
+            }
+            Ty::Bool => self.bool_to_string_parts(value),
             _ => Err(format!(
                 "native interpolated strings do not support expression type `{}`",
                 expr.ty.display()
@@ -1902,10 +4455,17 @@ impl<'a> FuncCodegen<'a> {
 
     fn emit_dispose_call(&mut self, cleanup: &UsingCleanup) -> Result<(), String> {
         let Some(func_name) = self.dispose_func_name_for_ty(&cleanup.ty) else {
-            return Ok(());
+            return Err(format!(
+                "using cleanup for `{}` has no disposable function name",
+                cleanup.ty.display()
+            ));
         };
         let Some(&dispose_ref) = self.func_refs.get(func_name.as_str()) else {
-            return Ok(());
+            return Err(format!(
+                "using cleanup for `{}` could not find native function `{}`",
+                cleanup.ty.display(),
+                func_name
+            ));
         };
         let value = self.builder.use_var(cleanup.var);
         self.builder.ins().call(dispose_ref, &[value]);
@@ -1914,12 +4474,76 @@ impl<'a> FuncCodegen<'a> {
 
     fn dispose_func_name_for_ty(&self, ty: &Ty) -> Option<SmolStr> {
         match ty {
-            Ty::Named(def_id, _) => self
-                .type_names
-                .get(def_id)
-                .map(|name| SmolStr::new(format!("{name}.dispose"))),
+            Ty::Named(def_id, _) => {
+                let mut matches = Vec::new();
+                for ((trait_def_id, impl_type_def_id), impl_sig) in self.trait_impls {
+                    if impl_type_def_id != def_id {
+                        continue;
+                    }
+                    let Some(trait_sig) = self.trait_layouts.get(trait_def_id) else {
+                        continue;
+                    };
+                    if !trait_sig.name.ends_with(".Disposable") {
+                        continue;
+                    }
+                    if let Some(method) = impl_sig
+                        .methods
+                        .iter()
+                        .find(|method| method.name == "dispose")
+                    {
+                        matches.push(method.func_name.clone());
+                    }
+                }
+                if matches.len() == 1 {
+                    return matches.pop();
+                }
+                self.type_names
+                    .get(def_id)
+                    .map(|name| SmolStr::new(format!("{name}.dispose")))
+            }
             _ => None,
         }
+    }
+
+    fn trait_method_func_name_for_type(
+        &self,
+        type_def_id: ori_types::DefId,
+        method_name: &SmolStr,
+    ) -> Option<SmolStr> {
+        let mut matches = Vec::new();
+        for ((_, impl_type_def_id), impl_sig) in self.trait_impls {
+            if *impl_type_def_id != type_def_id {
+                continue;
+            }
+            if let Some(method) = impl_sig
+                .methods
+                .iter()
+                .find(|method| method.name == *method_name)
+            {
+                matches.push(method.func_name.clone());
+            }
+        }
+        (matches.len() == 1).then(|| matches.remove(0))
+    }
+
+    fn iterable_next_func_name_for_type(&self, ty: &Ty) -> Option<SmolStr> {
+        let Ty::Named(type_def_id, _) = ty else {
+            return None;
+        };
+        self.trait_impls
+            .iter()
+            .filter(|((_, impl_type_def_id), _)| impl_type_def_id == type_def_id)
+            .find_map(|((trait_def_id, _), impl_sig)| {
+                let trait_sig = self.trait_layouts.get(trait_def_id)?;
+                if !trait_sig.name.ends_with(".Iterable") {
+                    return None;
+                }
+                impl_sig
+                    .methods
+                    .iter()
+                    .find(|method| method.name == "next")
+                    .map(|method| method.func_name.clone())
+            })
     }
 
     fn emit_arc_retain_if_managed(&mut self, ty: &Ty, value: ir::Value) -> Result<(), String> {
@@ -1941,6 +4565,57 @@ impl<'a> FuncCodegen<'a> {
             return Ok(());
         };
         self.builder.ins().call(release_ref, &[value]);
+        Ok(())
+    }
+
+    fn emit_arc_register_edge(&mut self, owner: ir::Value, child: ir::Value) -> Result<(), String> {
+        let Some(&register_ref) = self.func_refs.get("ori_arc_register_edge") else {
+            return Ok(());
+        };
+        self.builder.ins().call(register_ref, &[owner, child]);
+        Ok(())
+    }
+
+    fn emit_arc_unregister_edge(
+        &mut self,
+        owner: ir::Value,
+        child: ir::Value,
+    ) -> Result<(), String> {
+        let Some(&unregister_ref) = self.func_refs.get("ori_arc_unregister_edge") else {
+            return Ok(());
+        };
+        self.builder.ins().call(unregister_ref, &[owner, child]);
+        Ok(())
+    }
+
+    fn emit_arc_register_edge_if_managed(
+        &mut self,
+        ty: &Ty,
+        owner: ir::Value,
+        child: ir::Value,
+    ) -> Result<(), String> {
+        if !is_managed_ty(ty) {
+            return Ok(());
+        }
+        self.emit_arc_register_edge(owner, child)
+    }
+
+    fn emit_arc_update_edge_if_managed(
+        &mut self,
+        ty: &Ty,
+        owner: ir::Value,
+        old_child: ir::Value,
+        new_child: ir::Value,
+    ) -> Result<(), String> {
+        if !is_managed_ty(ty) {
+            return Ok(());
+        }
+        let Some(&update_ref) = self.func_refs.get("ori_arc_update_edge") else {
+            return Ok(());
+        };
+        self.builder
+            .ins()
+            .call(update_ref, &[owner, old_child, new_child]);
         Ok(())
     }
 
@@ -1970,6 +4645,23 @@ impl<'a> FuncCodegen<'a> {
 
     fn emit_return(&mut self, val: Option<&HirExpr>) -> Result<(), String> {
         let return_ty = self.current_return_ty.clone();
+        if let Ty::Future(inner) = return_ty {
+            let inner_ty = inner.as_ref().clone();
+            let value = match val {
+                Some(expr) if inner_ty == Ty::Void => {
+                    self.emit_expr(expr)?;
+                    None
+                }
+                Some(expr) => Some(self.emit_expr_for_expected(expr, &inner_ty)?),
+                None => None,
+            };
+            let future = self.emit_future_ready(&inner_ty, value)?;
+            self.emit_arc_retain_if_managed(&Ty::Future(Box::new(inner_ty)), future)?;
+            self.emit_scope_cleanup_calls_from(0, 0)?;
+            self.builder.ins().return_(&[future]);
+            self.terminated = true;
+            return Ok(());
+        }
         let return_value = val
             .map(|e| self.emit_expr_for_expected(e, &return_ty))
             .transpose()?;
@@ -1984,6 +4676,709 @@ impl<'a> FuncCodegen<'a> {
         }
         self.terminated = true;
         Ok(())
+    }
+
+    fn emit_future_ready(
+        &mut self,
+        inner_ty: &Ty,
+        value: Option<ir::Value>,
+    ) -> Result<ir::Value, String> {
+        let runtime_name = match inner_ty {
+            Ty::Void | Ty::Never => "ori_future_ready_void",
+            Ty::Float | Ty::Float64 | Ty::Float32 => "ori_future_ready_f64",
+            Ty::String
+            | Ty::Bytes
+            | Ty::Func { .. }
+            | Ty::Lazy(_)
+            | Ty::Future(_)
+            | Ty::TaskJob(_)
+            | Ty::Channel(_)
+            | Ty::AtomicInt
+            | Ty::TaskJoinError
+            | Ty::ChannelSendError
+            | Ty::ChannelReceiveError
+            | Ty::Any(_)
+            | Ty::Optional(_)
+            | Ty::Result(_, _)
+            | Ty::List(_)
+            | Ty::Map(_, _)
+            | Ty::Set(_)
+            | Ty::Range(_)
+            | Ty::Tuple(_)
+            | Ty::Named(_, _) => "ori_future_ready_ptr",
+            _ => "ori_future_ready_i64",
+        };
+        let fref = *self
+            .func_refs
+            .get(runtime_name)
+            .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+        let args = match runtime_name {
+            "ori_future_ready_void" => Vec::new(),
+            "ori_future_ready_f64" => {
+                let mut value = value.unwrap_or_else(|| self.builder.ins().f64const(0.0));
+                if self.builder.func.dfg.value_type(value) == types::F32 {
+                    value = self.builder.ins().fpromote(types::F64, value);
+                }
+                vec![value]
+            }
+            "ori_future_ready_ptr" => {
+                vec![value.unwrap_or_else(|| self.builder.ins().iconst(self.ptr_ty, 0))]
+            }
+            _ => {
+                let mut value = value.unwrap_or_else(|| self.builder.ins().iconst(types::I64, 0));
+                let actual_ty = self.builder.func.dfg.value_type(value);
+                if actual_ty != types::I64 {
+                    value = match inner_ty {
+                        Ty::Bool | Ty::U8 | Ty::U16 | Ty::U32 => {
+                            self.builder.ins().uextend(types::I64, value)
+                        }
+                        Ty::Int8 | Ty::Int16 | Ty::Int32 => {
+                            self.builder.ins().sextend(types::I64, value)
+                        }
+                        _ => value,
+                    };
+                }
+                vec![value]
+            }
+        };
+        let call = self.builder.ins().call(fref, &args);
+        Ok(self.builder.inst_results(call)[0])
+    }
+
+    fn emit_future_complete(
+        &mut self,
+        future: ir::Value,
+        inner_ty: &Ty,
+        value: Option<ir::Value>,
+    ) -> Result<(), String> {
+        let runtime_name = match inner_ty {
+            Ty::Void | Ty::Never => "ori_future_complete_void",
+            Ty::Float | Ty::Float64 | Ty::Float32 => "ori_future_complete_f64",
+            Ty::String
+            | Ty::Bytes
+            | Ty::Func { .. }
+            | Ty::Lazy(_)
+            | Ty::Future(_)
+            | Ty::TaskJob(_)
+            | Ty::Channel(_)
+            | Ty::AtomicInt
+            | Ty::TaskJoinError
+            | Ty::ChannelSendError
+            | Ty::ChannelReceiveError
+            | Ty::Any(_)
+            | Ty::Optional(_)
+            | Ty::Result(_, _)
+            | Ty::List(_)
+            | Ty::Map(_, _)
+            | Ty::Set(_)
+            | Ty::Range(_)
+            | Ty::Tuple(_)
+            | Ty::Named(_, _) => "ori_future_complete_ptr",
+            _ => "ori_future_complete_i64",
+        };
+        let fref = *self
+            .func_refs
+            .get(runtime_name)
+            .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+        let mut args = vec![future];
+        match runtime_name {
+            "ori_future_complete_void" => {}
+            "ori_future_complete_f64" => {
+                let mut value = value.unwrap_or_else(|| self.builder.ins().f64const(0.0));
+                if self.builder.func.dfg.value_type(value) == types::F32 {
+                    value = self.builder.ins().fpromote(types::F64, value);
+                }
+                args.push(value);
+            }
+            "ori_future_complete_ptr" => {
+                args.push(value.unwrap_or_else(|| self.builder.ins().iconst(self.ptr_ty, 0)));
+            }
+            _ => {
+                let mut value = value.unwrap_or_else(|| self.builder.ins().iconst(types::I64, 0));
+                let actual_ty = self.builder.func.dfg.value_type(value);
+                if actual_ty != types::I64 {
+                    value = match inner_ty {
+                        Ty::Bool | Ty::U8 | Ty::U16 | Ty::U32 => {
+                            self.builder.ins().uextend(types::I64, value)
+                        }
+                        Ty::Int8 | Ty::Int16 | Ty::Int32 => {
+                            self.builder.ins().sextend(types::I64, value)
+                        }
+                        _ => value,
+                    };
+                }
+                args.push(value);
+            }
+        }
+        self.builder.ins().call(fref, &args);
+        Ok(())
+    }
+
+    fn emit_future_value_read(
+        &mut self,
+        future: ir::Value,
+        result_ty: &Ty,
+    ) -> Result<ir::Value, String> {
+        let runtime_name = match result_ty {
+            Ty::Float | Ty::Float64 | Ty::Float32 => "ori_future_value_f64",
+            Ty::String
+            | Ty::Bytes
+            | Ty::Func { .. }
+            | Ty::Lazy(_)
+            | Ty::Future(_)
+            | Ty::TaskJob(_)
+            | Ty::Channel(_)
+            | Ty::AtomicInt
+            | Ty::TaskJoinError
+            | Ty::ChannelSendError
+            | Ty::ChannelReceiveError
+            | Ty::Any(_)
+            | Ty::Optional(_)
+            | Ty::Result(_, _)
+            | Ty::List(_)
+            | Ty::Map(_, _)
+            | Ty::Set(_)
+            | Ty::Range(_)
+            | Ty::Tuple(_)
+            | Ty::Named(_, _) => "ori_future_value_ptr",
+            _ => "ori_future_value_i64",
+        };
+        let fref = *self
+            .func_refs
+            .get(runtime_name)
+            .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+        let call = self.builder.ins().call(fref, &[future]);
+        let mut value = self.builder.inst_results(call)[0];
+        if matches!(runtime_name, "ori_future_value_i64") {
+            value = self.from_list_storage_value(value, result_ty);
+        } else if matches!(result_ty, Ty::Float32) {
+            value = self.builder.ins().fdemote(types::F32, value);
+        }
+        Ok(value)
+    }
+
+    fn emit_simple_async_step(
+        mut self,
+        f: &HirFunc,
+        plan: &SimpleAsyncStateMachinePlan,
+    ) -> Result<(), String> {
+        let entry = self.builder.create_block();
+        self.builder.append_block_params_for_function_params(entry);
+        self.builder.switch_to_block(entry);
+        self.builder.seal_block(entry);
+        let frame = self.builder.block_params(entry)[0];
+        let state =
+            self.builder
+                .ins()
+                .load(types::I64, MemFlags::new(), frame, ASYNC_FRAME_STATE_OFFSET);
+        for (index, param) in plan.params.iter().enumerate() {
+            let cl_ty = cl_type(&param.ty, self.ptr_ty)
+                .ok_or_else(|| format!("async param `{}` has no native value", param.name))?;
+            let offset = simple_async_frame_param_offset(plan, index, self.ptr_ty)
+                .expect("async frame param offset");
+            let value = self
+                .builder
+                .ins()
+                .load(cl_ty, MemFlags::new(), frame, offset as i32);
+            let var = self.builder.declare_var(cl_ty);
+            self.builder.def_var(var, value);
+            self.vars
+                .insert(param.name.clone(), (var, param.ty.clone()));
+        }
+        for (index, local) in plan.locals.iter().enumerate() {
+            let cl_ty = cl_type(&local.ty, self.ptr_ty)
+                .ok_or_else(|| format!("async local `{}` has no native value", local.name))?;
+            let offset = simple_async_frame_local_offset(plan, index, self.ptr_ty)
+                .expect("async frame local offset");
+            let value = self
+                .builder
+                .ins()
+                .load(cl_ty, MemFlags::new(), frame, offset as i32);
+            let var = self.builder.declare_var(cl_ty);
+            self.builder.def_var(var, value);
+            self.vars
+                .insert(local.name.clone(), (var, local.ty.clone()));
+        }
+        let await_count = plan.awaits.len();
+        let eval_blocks: Vec<_> = (0..await_count)
+            .map(|_| self.builder.create_block())
+            .collect();
+        let poll_blocks: Vec<_> = (0..await_count)
+            .map(|_| self.builder.create_block())
+            .collect();
+        let pending_blocks: Vec<_> = (0..await_count)
+            .map(|_| self.builder.create_block())
+            .collect();
+        let status_blocks: Vec<_> = (0..await_count)
+            .map(|_| self.builder.create_block())
+            .collect();
+        let ready_blocks: Vec<_> = (0..await_count)
+            .map(|_| self.builder.create_block())
+            .collect();
+        let non_pending_status_blocks: Vec<_> = (0..await_count)
+            .map(|_| self.builder.create_block())
+            .collect();
+        let failed_blocks: Vec<_> = (0..await_count)
+            .map(|_| self.builder.create_block())
+            .collect();
+        let cancelled_blocks: Vec<_> = (0..await_count)
+            .map(|_| self.builder.create_block())
+            .collect();
+        let dispatch_blocks: Vec<_> = (0..=await_count)
+            .map(|_| self.builder.create_block())
+            .collect();
+        let invalid_state_block = self.builder.create_block();
+        let complete_block = self.builder.create_block();
+
+        self.builder.ins().jump(dispatch_blocks[0], &[]);
+        for state_index in 0..=await_count {
+            self.builder.switch_to_block(dispatch_blocks[state_index]);
+            let is_state =
+                self.builder
+                    .ins()
+                    .icmp_imm(ir::condcodes::IntCC::Equal, state, state_index as i64);
+            let target = if state_index == 0 {
+                eval_blocks[0]
+            } else {
+                poll_blocks[state_index - 1]
+            };
+            let next = if state_index < await_count {
+                dispatch_blocks[state_index + 1]
+            } else {
+                invalid_state_block
+            };
+            self.builder.ins().brif(is_state, target, &[], next, &[]);
+        }
+
+        for (index, step) in plan.awaits.iter().enumerate() {
+            let awaited_offset = simple_async_frame_awaited_offset(index, self.ptr_ty);
+
+            self.builder.switch_to_block(eval_blocks[index]);
+            if index == 0 {
+                for (local_index, local) in plan.locals.iter().enumerate() {
+                    let value = self.emit_expr_for_expected(&local.value, &local.ty)?;
+                    let offset = simple_async_frame_local_offset(plan, local_index, self.ptr_ty)
+                        .expect("async frame local offset");
+                    self.builder
+                        .ins()
+                        .store(MemFlags::new(), value, frame, offset as i32);
+                    self.emit_arc_register_edge_if_managed(&local.ty, frame, value)?;
+                    if let Some((var, _)) = self.vars.get(&local.name).cloned() {
+                        self.builder.def_var(var, value);
+                    }
+                }
+            }
+            let awaited = self.emit_expr(&step.await_future)?;
+            self.builder
+                .ins()
+                .store(MemFlags::new(), awaited, frame, awaited_offset);
+            self.emit_arc_register_edge(frame, awaited)?;
+            self.emit_arc_release_if_managed(&step.await_future.ty, awaited)?;
+            self.builder.ins().jump(poll_blocks[index], &[]);
+
+            self.builder.switch_to_block(poll_blocks[index]);
+            let awaited =
+                self.builder
+                    .ins()
+                    .load(self.ptr_ty, MemFlags::new(), frame, awaited_offset);
+            let poll_ref = *self
+                .func_refs
+                .get("ori_future_poll")
+                .ok_or_else(|| "missing runtime function `ori_future_poll`".to_string())?;
+            let poll_call = self.builder.ins().call(poll_ref, &[awaited]);
+            let status = self.builder.inst_results(poll_call)[0];
+            let ready = self
+                .builder
+                .ins()
+                .icmp_imm(ir::condcodes::IntCC::Equal, status, 1);
+            self.builder
+                .ins()
+                .brif(ready, ready_blocks[index], &[], status_blocks[index], &[]);
+
+            self.builder.switch_to_block(ready_blocks[index]);
+            let ready_continue_block = self.builder.create_block();
+            if let Some(result_ty) = &step.propagate_result_ty {
+                let result_value = self.emit_future_value_read(awaited, result_ty)?;
+                let flag = self
+                    .builder
+                    .ins()
+                    .load(types::I8, MemFlags::new(), result_value, 0);
+                let ok_block = self.builder.create_block();
+                let err_block = self.builder.create_block();
+                self.builder.ins().brif(flag, ok_block, &[], err_block, &[]);
+
+                self.builder.switch_to_block(err_block);
+                let result_future = self.builder.ins().load(
+                    self.ptr_ty,
+                    MemFlags::new(),
+                    frame,
+                    ASYNC_FRAME_RESULT_OFFSET,
+                );
+                self.emit_future_complete(result_future, &plan.inner_ty, Some(result_value))?;
+                self.emit_arc_unregister_edge(frame, awaited)?;
+                self.emit_simple_async_frame_cleanup(plan, frame, index, true)?;
+                let zero = self.builder.ins().iconst(types::I64, 0);
+                self.builder.ins().return_(&[zero]);
+
+                self.builder.switch_to_block(ok_block);
+                if step.binding.is_none() {
+                    return Err("propagating await step has no binding".to_string());
+                }
+                let Ty::Result(ok_ty, err_ty) = result_ty else {
+                    return Err("propagating await step requires result type".to_string());
+                };
+                let (pay_off, _, _) = result_layout(ok_ty, err_ty, self.ptr_ty);
+                let cl_ty = cl_type(ok_ty, self.ptr_ty).unwrap_or(types::I64);
+                let value =
+                    self.builder
+                        .ins()
+                        .load(cl_ty, MemFlags::new(), result_value, pay_off as i32);
+                let offset = simple_async_frame_binding_offset(plan, index, self.ptr_ty)
+                    .expect("async frame binding offset");
+                self.builder
+                    .ins()
+                    .store(MemFlags::new(), value, frame, offset as i32);
+                self.emit_arc_register_edge_if_managed(ok_ty, frame, value)?;
+                self.builder.ins().jump(ready_continue_block, &[]);
+            } else if let Some(binding) = &step.binding {
+                let value = self.emit_future_value_read(awaited, &binding.ty)?;
+                let offset = simple_async_frame_binding_offset(plan, index, self.ptr_ty)
+                    .expect("async frame binding offset");
+                self.builder
+                    .ins()
+                    .store(MemFlags::new(), value, frame, offset as i32);
+                self.emit_arc_register_edge_if_managed(&binding.ty, frame, value)?;
+                self.builder.ins().jump(ready_continue_block, &[]);
+            } else {
+                self.builder.ins().jump(ready_continue_block, &[]);
+            }
+            self.builder.switch_to_block(ready_continue_block);
+            self.emit_arc_unregister_edge(frame, awaited)?;
+            self.emit_simple_async_drop_dead_frame_values_after_await(
+                plan,
+                frame,
+                index,
+                index + 1,
+            )?;
+            if index + 1 < await_count {
+                self.builder.ins().jump(eval_blocks[index + 1], &[]);
+            } else {
+                self.builder.ins().jump(complete_block, &[]);
+            }
+
+            self.builder.switch_to_block(status_blocks[index]);
+            let pending = self
+                .builder
+                .ins()
+                .icmp_imm(ir::condcodes::IntCC::Equal, status, 0);
+            self.builder.ins().brif(
+                pending,
+                pending_blocks[index],
+                &[],
+                non_pending_status_blocks[index],
+                &[],
+            );
+
+            self.builder.switch_to_block(pending_blocks[index]);
+            let next_state = self.builder.ins().iconst(types::I64, (index + 1) as i64);
+            self.builder
+                .ins()
+                .store(MemFlags::new(), next_state, frame, ASYNC_FRAME_STATE_OFFSET);
+            let step_name = async_step_name(f);
+            let step_ref = *self
+                .func_refs
+                .get(step_name.as_str())
+                .ok_or_else(|| format!("missing async step function `{step_name}`"))?;
+            let continuation = self.emit_closure_object(step_ref, Some(frame))?;
+            let on_ready_ref = *self
+                .func_refs
+                .get("ori_future_on_ready")
+                .ok_or_else(|| "missing runtime function `ori_future_on_ready`".to_string())?;
+            self.builder
+                .ins()
+                .call(on_ready_ref, &[awaited, continuation]);
+            self.emit_simple_async_drop_dead_frame_values_after_await(plan, frame, index, index)?;
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.ins().return_(&[zero]);
+
+            self.builder
+                .switch_to_block(non_pending_status_blocks[index]);
+            let failed = self
+                .builder
+                .ins()
+                .icmp_imm(ir::condcodes::IntCC::Equal, status, 2);
+            self.builder.ins().brif(
+                failed,
+                failed_blocks[index],
+                &[],
+                cancelled_blocks[index],
+                &[],
+            );
+
+            self.builder.switch_to_block(cancelled_blocks[index]);
+            let result_future = self.builder.ins().load(
+                self.ptr_ty,
+                MemFlags::new(),
+                frame,
+                ASYNC_FRAME_RESULT_OFFSET,
+            );
+            let cancel_ref = *self
+                .func_refs
+                .get("ori_future_cancel")
+                .ok_or_else(|| "missing runtime function `ori_future_cancel`".to_string())?;
+            self.emit_arc_unregister_edge(frame, awaited)?;
+            self.builder.ins().call(cancel_ref, &[result_future]);
+            self.emit_simple_async_frame_cleanup(plan, frame, index, true)?;
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.ins().return_(&[zero]);
+
+            self.builder.switch_to_block(failed_blocks[index]);
+            let result_future = self.builder.ins().load(
+                self.ptr_ty,
+                MemFlags::new(),
+                frame,
+                ASYNC_FRAME_RESULT_OFFSET,
+            );
+            let fail_ref = *self
+                .func_refs
+                .get("ori_future_fail")
+                .ok_or_else(|| "missing runtime function `ori_future_fail`".to_string())?;
+            self.emit_arc_unregister_edge(frame, awaited)?;
+            self.builder.ins().call(fail_ref, &[result_future]);
+            self.emit_simple_async_frame_cleanup(plan, frame, index, true)?;
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.ins().return_(&[zero]);
+        }
+
+        self.builder.switch_to_block(invalid_state_block);
+        let result_future = self.builder.ins().load(
+            self.ptr_ty,
+            MemFlags::new(),
+            frame,
+            ASYNC_FRAME_RESULT_OFFSET,
+        );
+        let cancel_ref = *self
+            .func_refs
+            .get("ori_future_cancel")
+            .ok_or_else(|| "missing runtime function `ori_future_cancel`".to_string())?;
+        self.builder.ins().call(cancel_ref, &[result_future]);
+        self.emit_simple_async_frame_cleanup(plan, frame, await_count, true)?;
+        let zero = self.builder.ins().iconst(types::I64, 0);
+        self.builder.ins().return_(&[zero]);
+
+        self.builder.switch_to_block(complete_block);
+        let result_future = self.builder.ins().load(
+            self.ptr_ty,
+            MemFlags::new(),
+            frame,
+            ASYNC_FRAME_RESULT_OFFSET,
+        );
+        for (index, step) in plan.awaits.iter().enumerate() {
+            if let Some(binding) = &step.binding {
+                let cl_ty = cl_type(&binding.ty, self.ptr_ty).ok_or_else(|| {
+                    format!("async binding `{}` has no native value", binding.name)
+                })?;
+                let offset = simple_async_frame_binding_offset(plan, index, self.ptr_ty)
+                    .expect("async frame binding offset");
+                let value = self
+                    .builder
+                    .ins()
+                    .load(cl_ty, MemFlags::new(), frame, offset as i32);
+                let var = self.builder.declare_var(cl_ty);
+                self.builder.def_var(var, value);
+                self.vars
+                    .insert(binding.name.clone(), (var, binding.ty.clone()));
+            }
+        }
+        for stmt in &plan.tail_stmts {
+            self.emit_stmt(stmt)?;
+        }
+        if let Some(expr) = &plan.tail_expr {
+            self.emit_expr(expr)?;
+            self.emit_future_complete(result_future, &plan.inner_ty, None)?;
+        } else {
+            let return_value = plan
+                .return_expr
+                .as_ref()
+                .map(|expr| self.emit_expr_for_expected(expr, &plan.inner_ty))
+                .transpose()?;
+            if let Some(value) = return_value {
+                self.emit_arc_retain_if_managed(&plan.inner_ty, value)?;
+                self.emit_future_complete(result_future, &plan.inner_ty, Some(value))?;
+                self.emit_arc_release_if_managed(&plan.inner_ty, value)?;
+            } else {
+                self.emit_future_complete(result_future, &plan.inner_ty, None)?;
+            }
+        }
+        self.emit_scope_cleanup_calls_from(0, 0)?;
+        self.emit_simple_async_frame_cleanup(plan, frame, await_count, true)?;
+        let zero = self.builder.ins().iconst(types::I64, 0);
+        self.builder.ins().return_(&[zero]);
+
+        self.builder.seal_all_blocks();
+        self.builder.finalize();
+        Ok(())
+    }
+
+    fn emit_simple_async_frame_cleanup(
+        &mut self,
+        plan: &SimpleAsyncStateMachinePlan,
+        frame: ir::Value,
+        initialized_bindings: usize,
+        include_result_future: bool,
+    ) -> Result<(), String> {
+        if include_result_future {
+            let result_future = self.builder.ins().load(
+                self.ptr_ty,
+                MemFlags::new(),
+                frame,
+                ASYNC_FRAME_RESULT_OFFSET,
+            );
+            self.emit_arc_unregister_edge(frame, result_future)?;
+        }
+        for (index, param) in plan.params.iter().enumerate() {
+            if !is_managed_ty(&param.ty) {
+                continue;
+            }
+            let offset = simple_async_frame_param_offset(plan, index, self.ptr_ty)
+                .expect("async frame param offset");
+            let value = self
+                .builder
+                .ins()
+                .load(self.ptr_ty, MemFlags::new(), frame, offset as i32);
+            self.emit_arc_unregister_edge(frame, value)?;
+        }
+        for (index, local) in plan.locals.iter().enumerate() {
+            if !is_managed_ty(&local.ty) {
+                continue;
+            }
+            let offset = simple_async_frame_local_offset(plan, index, self.ptr_ty)
+                .expect("async frame local offset");
+            let value = self
+                .builder
+                .ins()
+                .load(self.ptr_ty, MemFlags::new(), frame, offset as i32);
+            self.emit_arc_unregister_edge(frame, value)?;
+        }
+        for (index, step) in plan.awaits.iter().take(initialized_bindings).enumerate() {
+            let Some(binding) = &step.binding else {
+                continue;
+            };
+            if !is_managed_ty(&binding.ty) {
+                continue;
+            }
+            let offset = simple_async_frame_binding_offset(plan, index, self.ptr_ty)
+                .expect("async frame binding offset");
+            let value = self
+                .builder
+                .ins()
+                .load(self.ptr_ty, MemFlags::new(), frame, offset as i32);
+            self.emit_arc_unregister_edge(frame, value)?;
+        }
+        Ok(())
+    }
+
+    fn emit_simple_async_drop_dead_frame_values_after_await(
+        &mut self,
+        plan: &SimpleAsyncStateMachinePlan,
+        frame: ir::Value,
+        await_index: usize,
+        initialized_bindings: usize,
+    ) -> Result<(), String> {
+        let live_after = simple_async_uses_after_await(plan, await_index);
+        let mut dropped_any = false;
+
+        for (index, param) in plan.params.iter().enumerate() {
+            if !is_managed_ty(&param.ty) || live_after.contains(&param.name) {
+                continue;
+            }
+            let offset = simple_async_frame_param_offset(plan, index, self.ptr_ty)
+                .expect("async frame param offset");
+            self.emit_simple_async_drop_frame_edge(frame, offset as i32)?;
+            dropped_any = true;
+        }
+
+        for (index, local) in plan.locals.iter().enumerate() {
+            if !is_managed_ty(&local.ty) || live_after.contains(&local.name) {
+                continue;
+            }
+            let offset = simple_async_frame_local_offset(plan, index, self.ptr_ty)
+                .expect("async frame local offset");
+            self.emit_simple_async_drop_frame_edge(frame, offset as i32)?;
+            dropped_any = true;
+        }
+
+        for (index, step) in plan.awaits.iter().take(initialized_bindings).enumerate() {
+            let Some(binding) = &step.binding else {
+                continue;
+            };
+            if !is_managed_ty(&binding.ty) || live_after.contains(&binding.name) {
+                continue;
+            }
+            let offset = simple_async_frame_binding_offset(plan, index, self.ptr_ty)
+                .expect("async frame binding offset");
+            self.emit_simple_async_drop_frame_edge(frame, offset as i32)?;
+            dropped_any = true;
+        }
+
+        if dropped_any {
+            self.emit_arc_collect_cycles()?;
+        }
+        Ok(())
+    }
+
+    fn emit_simple_async_drop_frame_edge(
+        &mut self,
+        frame: ir::Value,
+        offset: i32,
+    ) -> Result<(), String> {
+        let value = self
+            .builder
+            .ins()
+            .load(self.ptr_ty, MemFlags::new(), frame, offset);
+        self.emit_arc_unregister_edge(frame, value)?;
+        let zero = self.builder.ins().iconst(self.ptr_ty, 0);
+        self.builder
+            .ins()
+            .store(MemFlags::new(), zero, frame, offset);
+        Ok(())
+    }
+
+    fn emit_await(&mut self, _future: &HirExpr, _result_ty: &Ty) -> Result<ir::Value, String> {
+        Err(native_codegen_unsupported(
+            "`await` must be lowered by the native async state machine; use `task.block_on(...)` only as an explicit synchronous bridge outside async lowering",
+        ))
+    }
+
+    fn emit_never_call_stmt(&mut self, expr: &HirExpr) -> Result<bool, String> {
+        if !expr.ty.is_never() {
+            return Ok(false);
+        }
+        let HirExprKind::Call { callee, args } = &expr.kind else {
+            return Ok(false);
+        };
+        let HirExprKind::Var(name) = &callee.kind else {
+            return Ok(false);
+        };
+        if !matches!(name.as_str(), "ori_panic" | "ori_test_fail") {
+            return Ok(false);
+        }
+
+        let mut args_v = Vec::new();
+        for arg in args {
+            args_v.push(self.emit_expr_for_expected(&arg.value, &Ty::String)?);
+        }
+        self.emit_scope_cleanup_calls_from(0, 0)?;
+        let fref = *self
+            .func_refs
+            .get(name.as_str())
+            .ok_or_else(|| format!("missing runtime function `{name}`"))?;
+        self.builder.ins().call(fref, &args_v);
+        let trap = ir::TrapCode::user(2)
+            .ok_or_else(|| "invalid panic fallback trap code `2`".to_string())?;
+        self.builder.ins().trap(trap);
+        self.terminated = true;
+        Ok(true)
     }
 
     fn emit_stmt(&mut self, stmt: &HirStmt) -> Result<(), String> {
@@ -2033,6 +5428,15 @@ impl<'a> FuncCodegen<'a> {
                     let (container, container_ty) = self.emit_lvalue_value(base)?;
                     if let Ty::List(elem_ty) = container_ty {
                         let idx = self.emit_expr(index)?;
+                        if is_managed_ty(&elem_ty) {
+                            let get_ref = *self.func_refs.get("ori_list_get").ok_or_else(|| {
+                                "missing runtime function `ori_list_get`".to_string()
+                            })?;
+                            let old_call = self.builder.ins().call(get_ref, &[container, idx]);
+                            let old = self.builder.inst_results(old_call)[0];
+                            let old = self.from_list_storage_value(old, &elem_ty);
+                            self.emit_arc_update_edge_if_managed(&elem_ty, container, old, val)?;
+                        }
                         let stored = self.to_list_storage_value(val, &elem_ty);
                         let set_ref = *self
                             .func_refs
@@ -2040,6 +5444,17 @@ impl<'a> FuncCodegen<'a> {
                             .ok_or_else(|| "missing runtime function `ori_list_set`".to_string())?;
                         self.builder.ins().call(set_ref, &[container, idx, stored]);
                     }
+                } else if let HirLValue::Field { base, field } = lvalue {
+                    let (addr, field_layout, owner) = self.emit_field_lvalue_addr(base, field)?;
+                    let val = self.emit_expr_for_expected(value, &field_layout.ty)?;
+                    if let Some(contract) = &field_layout.contract {
+                        self.emit_value_contract(&field_layout.ty, val, contract, 3, false)?;
+                    }
+                    let cl_ty = cl_type(&field_layout.ty, self.ptr_ty)
+                        .ok_or_else(|| format!("missing Cranelift type for field `{field}`"))?;
+                    let old = self.builder.ins().load(cl_ty, MemFlags::new(), addr, 0);
+                    self.emit_arc_update_edge_if_managed(&field_layout.ty, owner, old, val)?;
+                    self.builder.ins().store(MemFlags::new(), val, addr, 0);
                 }
             }
             HirStmt::Return(val, _) => self.emit_return(val.as_ref())?,
@@ -2064,7 +5479,9 @@ impl<'a> FuncCodegen<'a> {
                 }
             }
             HirStmt::Expr(e) => {
-                self.emit_expr(e)?;
+                if !self.emit_never_call_stmt(e)? {
+                    self.emit_expr(e)?;
+                }
             }
 
             HirStmt::If {
@@ -2133,14 +5550,26 @@ impl<'a> FuncCodegen<'a> {
             }
             HirStmt::Check { condition, .. } => {
                 let cv = self.emit_expr(condition)?;
-                self.emit_trap_unless(cv, ir::TrapCode::user(1).unwrap(), true)?;
+                let trap = ir::TrapCode::user(1)
+                    .ok_or_else(|| "invalid runtime check trap code `1`".to_string())?;
+                self.emit_trap_unless(cv, trap, true)?;
             }
             HirStmt::Repeat { count, body, .. } => {
                 // Desugar: for (int64_t _i = 0; _i < count; _i++) { body }
                 let count_v = self.emit_expr(count)?;
-                let idx_var = self.builder.declare_var(types::I64);
                 let zero = self.builder.ins().iconst(types::I64, 0);
-                self.builder.def_var(idx_var, zero);
+                let non_negative = self.builder.ins().icmp(
+                    ir::condcodes::IntCC::SignedGreaterThanOrEqual,
+                    count_v,
+                    zero,
+                );
+                let trap = ir::TrapCode::user(4)
+                    .ok_or_else(|| "invalid repeat-count trap code `4`".to_string())?;
+                self.emit_trap_unless(non_negative, trap, true)?;
+
+                let idx_var = self.builder.declare_var(types::I64);
+                let loop_zero = self.builder.ins().iconst(types::I64, 0);
+                self.builder.def_var(idx_var, loop_zero);
 
                 let header = self.builder.create_block();
                 let body_b = self.builder.create_block();
@@ -2431,11 +5860,123 @@ impl<'a> FuncCodegen<'a> {
             _ if matches!(&iterable.ty, Ty::String) => {
                 self.emit_for_string(binding, index_binding, iterable, body)
             }
-            _ => Err(format!(
-                "unsupported `for` iterable type `{}`",
-                iterable.ty.display()
-            )),
+            _ if matches!(&iterable.ty, Ty::Bytes) => {
+                self.emit_for_bytes(binding, index_binding, iterable, body)
+            }
+            _ => {
+                if let Some(next_func) = self.iterable_next_func_name_for_type(&iterable.ty) {
+                    self.emit_for_custom_iterable(
+                        binding,
+                        index_binding,
+                        elem_ty,
+                        iterable,
+                        body,
+                        &next_func,
+                    )
+                } else {
+                    Err(native_codegen_unsupported(format!(
+                        "`for` iterable type `{}`",
+                        iterable.ty.display()
+                    )))
+                }
+            }
         }
+    }
+
+    fn emit_for_custom_iterable(
+        &mut self,
+        binding: &SmolStr,
+        index_binding: Option<&SmolStr>,
+        elem_ty: &Ty,
+        iterable: &HirExpr,
+        body: &HirBlock,
+        next_func: &SmolStr,
+    ) -> Result<(), String> {
+        let Some(iter_cl_ty) = cl_type(&iterable.ty, self.ptr_ty) else {
+            return Err(native_codegen_unsupported(format!(
+                "`for` iterable type `{}`",
+                iterable.ty.display()
+            )));
+        };
+        let Some(elem_cl_ty) = cl_type(elem_ty, self.ptr_ty) else {
+            return Err(native_codegen_unsupported(format!(
+                "`for` element type `{}`",
+                elem_ty.display()
+            )));
+        };
+        let next_ref = *self.func_refs.get(next_func.as_str()).ok_or_else(|| {
+            format!("missing function reference `{next_func}` for custom Iterable")
+        })?;
+        let iter_value = self.emit_expr(iterable)?;
+        let iter_var = self.builder.declare_var(iter_cl_ty);
+        self.builder.def_var(iter_var, iter_value);
+        let idx_var = self.builder.declare_var(types::I64);
+        let zero = self.builder.ins().iconst(types::I64, 0);
+        self.builder.def_var(idx_var, zero);
+        let binding_var = self.builder.declare_var(elem_cl_ty);
+        self.vars
+            .insert(binding.clone(), (binding_var, elem_ty.clone()));
+
+        let header = self.builder.create_block();
+        let body_b = self.builder.create_block();
+        let step = self.builder.create_block();
+        let exit = self.builder.create_block();
+        self.builder.ins().jump(header, &[]);
+        self.builder.switch_to_block(header);
+        let iter_current = self.builder.use_var(iter_var);
+        let call = self.builder.ins().call(next_ref, &[iter_current]);
+        let opt_ptr = self.builder.inst_results(call)[0];
+        let has_val = self
+            .builder
+            .ins()
+            .load(types::I8, MemFlags::new(), opt_ptr, 0);
+        let has_val_bool = self
+            .builder
+            .ins()
+            .icmp_imm(ir::condcodes::IntCC::NotEqual, has_val, 0);
+        let idx_current = self.builder.use_var(idx_var);
+        let idx_non_negative = self.builder.ins().icmp_imm(
+            ir::condcodes::IntCC::SignedGreaterThanOrEqual,
+            idx_current,
+            0,
+        );
+        let keep_going = self.builder.ins().band(has_val_bool, idx_non_negative);
+        self.builder.ins().brif(keep_going, body_b, &[], exit, &[]);
+
+        self.builder.seal_block(body_b);
+        self.builder.switch_to_block(body_b);
+        let (val_off, _) = optional_layout(elem_ty, self.ptr_ty);
+        let item = self
+            .builder
+            .ins()
+            .load(elem_cl_ty, MemFlags::new(), opt_ptr, val_off as i32);
+        self.builder.def_var(binding_var, item);
+        if let Some(ib_name) = index_binding {
+            let cur = self.builder.use_var(idx_var);
+            let ib_var = self.builder.declare_var(types::I64);
+            self.builder.def_var(ib_var, cur);
+            self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+        }
+        self.terminated = false;
+        self.push_loop(step, exit);
+        self.emit_block(body)?;
+        self.pop_loop();
+        if !self.terminated {
+            self.builder.ins().jump(step, &[]);
+        }
+        self.terminated = false;
+        self.builder.seal_block(step);
+        self.builder.switch_to_block(step);
+        let cur = self.builder.use_var(idx_var);
+        let one = self.builder.ins().iconst(types::I64, 1);
+        let next = self.builder.ins().iadd(cur, one);
+        self.builder.def_var(idx_var, next);
+        self.builder.ins().jump(header, &[]);
+        self.builder.seal_block(header);
+        self.builder.seal_block(exit);
+        self.builder.switch_to_block(exit);
+        self.terminated = false;
+        Ok(())
     }
 
     fn emit_for_range(
@@ -2692,6 +6233,85 @@ impl<'a> FuncCodegen<'a> {
                 let value = self.from_list_storage_value(value, value_ty);
                 self.builder.def_var(value_var, value);
             }
+        }
+
+        self.terminated = false;
+        self.push_loop(step, exit);
+        self.emit_block(body)?;
+        self.pop_loop();
+        if !self.terminated {
+            self.builder.ins().jump(step, &[]);
+        }
+        self.terminated = false;
+        self.builder.seal_block(step);
+        self.builder.switch_to_block(step);
+        let cur3 = self.builder.use_var(idx_var);
+        let one = self.builder.ins().iconst(types::I64, 1);
+        let next = self.builder.ins().iadd(cur3, one);
+        self.builder.def_var(idx_var, next);
+        self.builder.ins().jump(header, &[]);
+        self.builder.seal_block(header);
+        self.builder.seal_block(exit);
+        self.builder.switch_to_block(exit);
+        self.terminated = false;
+        Ok(())
+    }
+
+    fn emit_for_bytes(
+        &mut self,
+        binding: &SmolStr,
+        index_binding: Option<&SmolStr>,
+        iterable: &HirExpr,
+        body: &HirBlock,
+    ) -> Result<(), String> {
+        let bytes_v = self.emit_expr(iterable)?;
+        let len_ref = *self
+            .func_refs
+            .get("ori_bytes_len")
+            .ok_or_else(|| "missing runtime function `ori_bytes_len`".to_string())?;
+        let get_ref = *self
+            .func_refs
+            .get("ori_bytes_get")
+            .ok_or_else(|| "missing runtime function `ori_bytes_get`".to_string())?;
+
+        let len_call = self.builder.ins().call(len_ref, &[bytes_v]);
+        let len_v = self.builder.inst_results(len_call)[0];
+        let idx_var = self.builder.declare_var(types::I64);
+        let zero = self.builder.ins().iconst(types::I64, 0);
+        self.builder.def_var(idx_var, zero);
+        let len_var = self.builder.declare_var(types::I64);
+        self.builder.def_var(len_var, len_v);
+
+        // Bind as U8 (i8 in cranelift)
+        let bvar = self.builder.declare_var(types::I8);
+        self.vars.insert(binding.clone(), (bvar, Ty::U8));
+
+        let header = self.builder.create_block();
+        let body_b = self.builder.create_block();
+        let step = self.builder.create_block();
+        let exit = self.builder.create_block();
+        self.builder.ins().jump(header, &[]);
+        self.builder.switch_to_block(header);
+        let cur = self.builder.use_var(idx_var);
+        let len = self.builder.use_var(len_var);
+        let cond = self
+            .builder
+            .ins()
+            .icmp(ir::condcodes::IntCC::SignedLessThan, cur, len);
+        self.builder.ins().brif(cond, body_b, &[], exit, &[]);
+        self.builder.seal_block(body_b);
+        self.builder.switch_to_block(body_b);
+
+        let cur2 = self.builder.use_var(idx_var);
+        let call = self.builder.ins().call(get_ref, &[bytes_v, cur2]);
+        let elem = self.builder.inst_results(call)[0];
+        self.builder.def_var(bvar, elem);
+
+        if let Some(ib_name) = index_binding {
+            let cur3 = self.builder.use_var(idx_var);
+            let ib_var = self.builder.declare_var(types::I64);
+            self.builder.def_var(ib_var, cur3);
+            self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
         }
 
         self.terminated = false;
@@ -3119,6 +6739,7 @@ impl<'a> FuncCodegen<'a> {
                 self.builder
                     .ins()
                     .store(MemFlags::new(), val, base, val_off as i32);
+                self.emit_arc_register_edge_if_managed(inner_ty, base, val)?;
                 base
             }
             HirExprKind::Ok_(inner) => {
@@ -3135,6 +6756,7 @@ impl<'a> FuncCodegen<'a> {
                 self.builder
                     .ins()
                     .store(MemFlags::new(), val, base, pay_off as i32);
+                self.emit_arc_register_edge_if_managed(ok_ty, base, val)?;
                 base
             }
             HirExprKind::Err_(inner) => {
@@ -3151,9 +6773,11 @@ impl<'a> FuncCodegen<'a> {
                 self.builder
                     .ins()
                     .store(MemFlags::new(), val, base, pay_off as i32);
+                self.emit_arc_register_edge_if_managed(err_ty, base, val)?;
                 base
             }
             HirExprKind::StrLit(s) => self.string_ptr(s.as_str())?,
+            HirExprKind::BytesLit(bytes) => self.bytes_ptr(bytes)?,
             HirExprKind::InterpolatedStr(parts) => self.emit_interpolated_string(parts)?,
             HirExprKind::Var(name) => {
                 if let Some((var, _)) = self.vars.get(name) {
@@ -3187,13 +6811,85 @@ impl<'a> FuncCodegen<'a> {
             }
             HirExprKind::Call { callee, args } => {
                 if let HirExprKind::Var(name) = &callee.kind {
+                    if name.as_str() == "ori_lazy_once" && args.len() == 1 {
+                        return self.emit_lazy_once(&args[0].value, &expr.ty);
+                    }
+                    if name.as_str() == "ori_lazy_force" && args.len() == 1 {
+                        return self.emit_lazy_force(&args[0].value, &expr.ty);
+                    }
                     // ori_io_print takes (ptr: *u8, len: i64) — build args accordingly
+                    if matches!(name.as_str(), "ori_test_assert_eq" | "ori_test_assert_ne") {
+                        return self.emit_test_assert_equality_call(name.as_str(), args);
+                    }
+                    if matches!(
+                        name.as_str(),
+                        "ori_map_set" | "ori_map_get" | "ori_map_contains" | "ori_map_remove"
+                    ) {
+                        return self.emit_map_runtime_call(name.as_str(), args);
+                    }
+                    if matches!(
+                        name.as_str(),
+                        "ori_hash_table_set"
+                            | "ori_hash_table_get"
+                            | "ori_hash_table_remove"
+                            | "ori_hash_table_contains"
+                    ) {
+                        return self.emit_hash_table_runtime_call(name.as_str(), args);
+                    }
+                    if matches!(
+                        name.as_str(),
+                        "ori_graph_add_node"
+                            | "ori_graph_remove_node"
+                            | "ori_graph_add_edge"
+                            | "ori_graph_remove_edge"
+                            | "ori_graph_has_node"
+                            | "ori_graph_has_edge"
+                            | "ori_graph_neighbors"
+                            | "ori_graph_bfs"
+                            | "ori_graph_dfs"
+                    ) {
+                        return self.emit_graph_runtime_call(name.as_str(), args);
+                    }
+                    if matches!(
+                        name.as_str(),
+                        "ori_set_add" | "ori_set_contains" | "ori_set_remove"
+                    ) {
+                        return self.emit_set_runtime_call(name.as_str(), args);
+                    }
+                    if matches!(
+                        name.as_str(),
+                        "ori_tree_new"
+                            | "ori_tree_root"
+                            | "ori_tree_value"
+                            | "ori_tree_add_child"
+                            | "ori_tree_children"
+                            | "ori_tree_parent"
+                            | "ori_tree_remove_subtree"
+                            | "ori_tree_len"
+                            | "ori_tree_depth"
+                            | "ori_tree_pre_order"
+                            | "ori_tree_post_order"
+                            | "ori_tree_breadth_first"
+                    ) {
+                        return self.emit_tree_runtime_call(name.as_str(), args);
+                    }
+                    if matches!(
+                        name.as_str(),
+                        "ori_heap_new"
+                            | "ori_heap_push"
+                            | "ori_heap_pop"
+                            | "ori_heap_peek"
+                            | "ori_heap_len"
+                            | "ori_heap_is_empty"
+                    ) {
+                        return self.emit_heap_runtime_call(name.as_str(), args, &expr.ty);
+                    }
                     if name == "ori_io_print" || name == "ori_io_eprint" {
                         if let Some(&fref) = self.func_refs.get(name.as_str()) {
                             let mut cl_args = Vec::new();
                             for a in args {
-                                // ori_io_print always takes (ptr, len); any string-like arg
-                                // (String, Infer, or ptr type) gets strlen added
+                                // ori_io_print always takes (ptr, len); string-like args
+                                // use length-aware parts or the Ori runtime length helper.
                                 let is_known_string =
                                     matches!(&a.value.ty, Ty::String | Ty::Infer(_));
                                 let is_ptr_like =
@@ -3223,9 +6919,112 @@ impl<'a> FuncCodegen<'a> {
                         {
                             return self.emit_closure_call(callee, args);
                         }
-                        // Special-case: list.map / list.filter pass closure as (fn_ptr, env_ptr)
-                        if (name.as_str() == "ori_list_map"
-                            || name.as_str() == "ori_list_filter")
+                        if matches!(name.as_str(), "ori_iter_sort" | "ori_iter_unique")
+                            && args.len() == 1
+                            && matches!(
+                                &args[0].value.ty,
+                                Ty::List(elem) if matches!(elem.as_ref(), Ty::String)
+                            )
+                        {
+                            let runtime_name = if name.as_str() == "ori_iter_sort" {
+                                "ori_iter_sort_string"
+                            } else {
+                                "ori_iter_unique_string"
+                            };
+                            let list_v = self.emit_expr(&args[0].value)?;
+                            let fref = *self.func_refs.get(runtime_name).ok_or_else(|| {
+                                format!("missing runtime function `{runtime_name}`")
+                            })?;
+                            let call = self.builder.ins().call(fref, &[list_v]);
+                            return Ok(self.builder.inst_results(call)[0]);
+                        }
+                        // Special-case: iter/list helpers pass closure as (fn_ptr, env_ptr).
+                        if matches!(
+                            name.as_str(),
+                            "ori_list_map"
+                                | "ori_list_filter"
+                                | "ori_iter_flat_map"
+                                | "ori_iter_any"
+                                | "ori_iter_all"
+                                | "ori_iter_count_where"
+                                | "ori_iter_find"
+                                | "ori_iter_partition"
+                                | "ori_iter_group_by"
+                        ) && args.len() == 2
+                            && matches!(&args[1].value.ty, Ty::Func { .. })
+                        {
+                            let list_v = self.emit_expr(&args[0].value)?;
+                            let closure_ptr = self.emit_expr(&args[1].value)?;
+                            let ptr_size = self.ptr_ty.bytes() as i32;
+                            let fn_ptr = self.builder.ins().load(
+                                self.ptr_ty,
+                                MemFlags::new(),
+                                closure_ptr,
+                                0,
+                            );
+                            let env_ptr = self.builder.ins().load(
+                                self.ptr_ty,
+                                MemFlags::new(),
+                                closure_ptr,
+                                ptr_size,
+                            );
+                            if self.func_refs.get(name.as_str()).is_some() {
+                                let runtime_name = if name.as_str() == "ori_iter_group_by"
+                                    && matches!(
+                                        &expr.ty,
+                                        Ty::Map(key, _) if matches!(key.as_ref(), Ty::String)
+                                    ) {
+                                    "ori_iter_group_by_string"
+                                } else {
+                                    name.as_str()
+                                };
+                                let fref = *self.func_refs.get(runtime_name).ok_or_else(|| {
+                                    format!("missing runtime function `{runtime_name}`")
+                                })?;
+                                let call =
+                                    self.builder.ins().call(fref, &[list_v, fn_ptr, env_ptr]);
+                                let res = self.builder.inst_results(call);
+                                return Ok(if res.is_empty() {
+                                    self.builder.ins().iconst(types::I8, 0)
+                                } else {
+                                    res[0]
+                                });
+                            }
+                        }
+                        if name.as_str() == "ori_iter_reduce"
+                            && args.len() == 3
+                            && matches!(&args[2].value.ty, Ty::Func { .. })
+                        {
+                            let list_v = self.emit_expr(&args[0].value)?;
+                            let initial_v = self.emit_expr(&args[1].value)?;
+                            let closure_ptr = self.emit_expr(&args[2].value)?;
+                            let ptr_size = self.ptr_ty.bytes() as i32;
+                            let fn_ptr = self.builder.ins().load(
+                                self.ptr_ty,
+                                MemFlags::new(),
+                                closure_ptr,
+                                0,
+                            );
+                            let env_ptr = self.builder.ins().load(
+                                self.ptr_ty,
+                                MemFlags::new(),
+                                closure_ptr,
+                                ptr_size,
+                            );
+                            if let Some(&fref) = self.func_refs.get(name.as_str()) {
+                                let call = self
+                                    .builder
+                                    .ins()
+                                    .call(fref, &[list_v, initial_v, fn_ptr, env_ptr]);
+                                let res = self.builder.inst_results(call);
+                                return Ok(if res.is_empty() {
+                                    self.builder.ins().iconst(types::I8, 0)
+                                } else {
+                                    res[0]
+                                });
+                            }
+                        }
+                        if name.as_str() == "ori_iter_sort_by"
                             && args.len() == 2
                             && matches!(&args[1].value.ty, Ty::Func { .. })
                         {
@@ -3245,7 +7044,8 @@ impl<'a> FuncCodegen<'a> {
                                 ptr_size,
                             );
                             if let Some(&fref) = self.func_refs.get(name.as_str()) {
-                                let call = self.builder.ins().call(fref, &[list_v, fn_ptr, env_ptr]);
+                                let call =
+                                    self.builder.ins().call(fref, &[list_v, fn_ptr, env_ptr]);
                                 let res = self.builder.inst_results(call);
                                 return Ok(if res.is_empty() {
                                     self.builder.ins().iconst(types::I8, 0)
@@ -3263,7 +7063,12 @@ impl<'a> FuncCodegen<'a> {
                                 .cloned()
                             {
                                 let value = self.emit_expr_for_expected(&arg.value, &expected)?;
-                                self.emit_arc_retain_if_managed(&expected, value)?;
+                                let retain_ty = if expected.contains_infer() {
+                                    &arg.value.ty
+                                } else {
+                                    &expected
+                                };
+                                self.emit_arc_retain_if_managed(retain_ty, value)?;
                                 args_v.push(value);
                             } else {
                                 let value = self.emit_expr(&arg.value)?;
@@ -3336,6 +7141,7 @@ impl<'a> FuncCodegen<'a> {
                     .ins()
                     .load(cl_ty, MemFlags::new(), ptr, pay_off)
             }
+            HirExprKind::Await(inner) => self.emit_await(inner, &expr.ty)?,
             HirExprKind::StructLit { def_id, fields } => {
                 if let Some(layout) = self.struct_layouts.get(def_id).cloned() {
                     let base = self.malloc_bytes(layout.size)?;
@@ -3352,6 +7158,7 @@ impl<'a> FuncCodegen<'a> {
                                     base,
                                     fi.offset as i32,
                                 );
+                                self.emit_arc_register_edge_if_managed(&fi.ty, base, val)?;
                             }
                         } else {
                             return Err(format!(
@@ -3416,6 +7223,13 @@ impl<'a> FuncCodegen<'a> {
                         let call = self.builder.ins().call(slice_ref, &[container, idx, end]);
                         self.builder.inst_results(call)[0]
                     }
+                    Ty::Bytes => {
+                        let get_ref = *self.func_refs.get("ori_bytes_get").ok_or_else(|| {
+                            "missing runtime function `ori_bytes_get`".to_string()
+                        })?;
+                        let call = self.builder.ins().call(get_ref, &[container, idx]);
+                        self.builder.inst_results(call)[0]
+                    }
                     _ => {
                         return Err(format!(
                             "native index codegen is missing for type `{}`",
@@ -3474,6 +7288,7 @@ impl<'a> FuncCodegen<'a> {
                                 self.builder
                                     .ins()
                                     .store(MemFlags::new(), val, base, total_offset);
+                                self.emit_arc_register_edge_if_managed(&fi.ty, base, val)?;
                             } else {
                                 return Err(format!("layout for enum variant `{variant}` is missing field `{fname}`"));
                             }
@@ -3493,16 +7308,17 @@ impl<'a> FuncCodegen<'a> {
                 let elem_tys: Vec<Ty> = elems.iter().map(|e| e.ty.clone()).collect();
                 let (layout, total, _) = tuple_layout(&elem_tys, self.ptr_ty);
 
-                for (e, (offset, _)) in elems.iter().zip(layout.iter()) {
+                for (e, (offset, elem_ty)) in elems.iter().zip(layout.iter()) {
                     let v = self.emit_expr(e)?;
-                    vals_and_offsets.push((v, *offset));
+                    vals_and_offsets.push((v, *offset, elem_ty.clone()));
                 }
                 let base = self.malloc_bytes(total)?;
 
-                for (v, off) in vals_and_offsets {
+                for (v, off, elem_ty) in vals_and_offsets {
                     self.builder
                         .ins()
                         .store(MemFlags::new(), v, base, off as i32);
+                    self.emit_arc_register_edge_if_managed(&elem_ty, base, v)?;
                 }
                 base
             }
@@ -3541,16 +7357,23 @@ impl<'a> FuncCodegen<'a> {
                 } else {
                     return Err("missing runtime function `ori_map_new`".to_string());
                 };
-                if let Some(&set_ref) = self.func_refs.get("ori_map_set") {
+                let set_symbol = if matches!(&key_ty, Ty::String) {
+                    "ori_map_set_string"
+                } else {
+                    "ori_map_set"
+                };
+                if let Some(&set_ref) = self.func_refs.get(set_symbol) {
                     for (k, v) in entries {
-                        let kv = self.emit_expr(k)?;
-                        let vv = self.emit_expr(v)?;
-                        let kv = self.to_list_storage_value(kv, &key_ty);
-                        let vv = self.to_list_storage_value(vv, &value_ty);
+                        let key_value = self.emit_expr(k)?;
+                        let map_value = self.emit_expr(v)?;
+                        let kv = self.to_list_storage_value(key_value, &key_ty);
+                        let vv = self.to_list_storage_value(map_value, &value_ty);
                         self.builder.ins().call(set_ref, &[map_ptr, kv, vv]);
+                        self.emit_arc_register_edge_if_managed(&key_ty, map_ptr, key_value)?;
+                        self.emit_arc_register_edge_if_managed(&value_ty, map_ptr, map_value)?;
                     }
                 } else {
-                    return Err("missing runtime function `ori_map_set`".to_string());
+                    return Err(format!("missing runtime function `{set_symbol}`"));
                 }
                 map_ptr
             }
@@ -3561,13 +7384,25 @@ impl<'a> FuncCodegen<'a> {
                 } else {
                     return Err("missing runtime function `ori_set_new`".to_string());
                 };
-                if let Some(&add_ref) = self.func_refs.get("ori_set_add") {
+                let elem_ty = if let Ty::Set(elem_ty) = &expr.ty {
+                    elem_ty.as_ref()
+                } else {
+                    &Ty::Int
+                };
+                let add_symbol = if matches!(elem_ty, Ty::String) {
+                    "ori_set_add_string"
+                } else {
+                    "ori_set_add"
+                };
+                if let Some(&add_ref) = self.func_refs.get(add_symbol) {
                     for elem in elements {
-                        let v = self.emit_expr(elem)?;
-                        self.builder.ins().call(add_ref, &[set_ptr, v]);
+                        let v = self.emit_expr_for_expected(elem, elem_ty)?;
+                        let stored = self.to_list_storage_value(v, elem_ty);
+                        self.builder.ins().call(add_ref, &[set_ptr, stored]);
+                        self.emit_arc_register_edge_if_managed(&elem.ty, set_ptr, v)?;
                     }
                 } else {
-                    return Err("missing runtime function `ori_set_add`".to_string());
+                    return Err(format!("missing runtime function `{add_symbol}`"));
                 }
                 set_ptr
             }
@@ -3579,8 +7414,10 @@ impl<'a> FuncCodegen<'a> {
                 if let Some(layout) = self.struct_layouts.get(def_id).cloned() {
                     let base_ptr = self.emit_expr(base)?;
                     let new_ptr = self.malloc_bytes(layout.size)?;
+                    let updated_names: Vec<_> =
+                        updates.iter().map(|(name, _)| name.clone()).collect();
                     // Copy all bytes from base
-                    for (_fname, fl) in &layout.fields {
+                    for (fname, fl) in &layout.fields {
                         if let Some(cl) = cl_type(&fl.ty, self.ptr_ty) {
                             let val = self.builder.ins().load(
                                 cl,
@@ -3594,6 +7431,9 @@ impl<'a> FuncCodegen<'a> {
                                 new_ptr,
                                 fl.offset as i32,
                             );
+                            if !updated_names.iter().any(|name| name == fname) {
+                                self.emit_arc_register_edge_if_managed(&fl.ty, new_ptr, val)?;
+                            }
                         }
                     }
                     // Override updated fields
@@ -3607,6 +7447,7 @@ impl<'a> FuncCodegen<'a> {
                                     new_ptr,
                                     fi.offset as i32,
                                 );
+                                self.emit_arc_register_edge_if_managed(&fi.ty, new_ptr, val)?;
                             }
                         }
                     }
@@ -3627,19 +7468,37 @@ impl<'a> FuncCodegen<'a> {
                 }
                 let recv = self.emit_expr(receiver)?;
                 match method.as_str() {
-                    "__slice" if matches!(&receiver.ty, Ty::String) => {
-                        // ori_string_slice(s, start, end)
-                        let slice_ref =
-                            *self.func_refs.get("ori_string_slice").ok_or_else(|| {
-                                "missing runtime function `ori_string_slice`".to_string()
-                            })?;
+                    "__slice" => {
+                        let runtime_name = match &receiver.ty {
+                            Ty::String => "ori_string_slice",
+                            Ty::List(_) => "ori_list_slice",
+                            Ty::Bytes => "ori_bytes_slice",
+                            other => {
+                                return Err(format!(
+                                    "native range slice codegen is missing for type `{}`",
+                                    other.display()
+                                ))
+                            }
+                        };
+                        let slice_ref = *self
+                            .func_refs
+                            .get(runtime_name)
+                            .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
                         let start = self.emit_expr(&args[0])?;
                         let end = self.emit_expr(&args[1])?;
                         let call = self.builder.ins().call(slice_ref, &[recv, start, end]);
                         self.builder.inst_results(call)[0]
                     }
                     _ => {
-                        // Generic method call: look up as a function `method(receiver, args...)`
+                        // Generic trait calls are lowered while the receiver may still be
+                        // a type parameter. After monomorphization the receiver is concrete,
+                        // so resolve the trait implementation symbol for that concrete type.
+                        let target_method = match &receiver.ty {
+                            Ty::Named(type_def_id, _) => self
+                                .trait_method_func_name_for_type(*type_def_id, method)
+                                .unwrap_or_else(|| method.clone()),
+                            _ => method.clone(),
+                        };
                         let mut all_args = vec![recv];
                         self.emit_arc_retain_if_managed(&receiver.ty, recv)?;
                         for a in args {
@@ -3647,7 +7506,7 @@ impl<'a> FuncCodegen<'a> {
                             self.emit_arc_retain_if_managed(&a.ty, value)?;
                             all_args.push(value);
                         }
-                        if let Some(&fref) = self.func_refs.get(method.as_str()) {
+                        if let Some(&fref) = self.func_refs.get(target_method.as_str()) {
                             let call = self.builder.ins().call(fref, &all_args);
                             let res = self.builder.inst_results(call);
                             if res.is_empty() {
@@ -3657,7 +7516,7 @@ impl<'a> FuncCodegen<'a> {
                             }
                         } else {
                             return Err(format!(
-                                "missing function reference `{method}` in native codegen"
+                                "missing function reference `{target_method}` in native codegen"
                             ));
                         }
                     }
@@ -3672,41 +7531,647 @@ impl<'a> FuncCodegen<'a> {
                 if let Ty::Named(check_def_id, _) = check_ty {
                     if matches!(&value.ty, Ty::Any(_)) {
                         let ptr_size = self.ptr_ty.bytes() as i64;
-                        let vtable = self.builder.ins().load(self.ptr_ty, MemFlags::new(), val, ptr_size as i32);
-                        let actual_type_id = self.builder.ins().load(self.ptr_ty, MemFlags::new(), vtable, 0);
-                        let expected_type_id = self.builder.ins().iconst(self.ptr_ty, check_def_id.0 as i64);
-                        
-                        let is_match = self.builder.ins().icmp(ir::condcodes::IntCC::Equal, actual_type_id, expected_type_id);
+                        let vtable = self.builder.ins().load(
+                            self.ptr_ty,
+                            MemFlags::new(),
+                            val,
+                            ptr_size as i32,
+                        );
+                        let actual_type_id =
+                            self.builder
+                                .ins()
+                                .load(self.ptr_ty, MemFlags::new(), vtable, 0);
+                        let expected_type_id = self
+                            .builder
+                            .ins()
+                            .iconst(self.ptr_ty, check_def_id.0 as i64);
+
+                        let is_match = self.builder.ins().icmp(
+                            ir::condcodes::IntCC::Equal,
+                            actual_type_id,
+                            expected_type_id,
+                        );
                         is_match
                     } else if let Ty::Named(actual_def_id, _) = &value.ty {
                         let is_match = actual_def_id.0 == check_def_id.0;
-                        self.builder.ins().iconst(types::I8, if is_match { 1 } else { 0 })
+                        self.builder
+                            .ins()
+                            .iconst(types::I8, if is_match { 1 } else { 0 })
                     } else {
                         self.builder.ins().iconst(types::I8, 0)
                     }
                 } else {
-                    self.builder.ins().iconst(types::I8, 0)
+                    self.builder
+                        .ins()
+                        .iconst(types::I8, if value.ty == *check_ty { 1 } else { 0 })
                 }
-            }
-            HirExprKind::BytesLit(_) | HirExprKind::GlobalConst(_) => {
-                return Err(format!(
-                    "native codegen missing for expression `{:?}`",
-                    expr.kind
-                ));
             }
         })
     }
 
-    /// For a null-terminated string pointer, compute its length as an i64.
-    /// Uses strlen-like logic: call strlen if available, else scan bytes.
-    /// For now we use the `strlen` libc function declared on demand.
+    /// Compute the length of an Ori string pointer as an i64.
+    /// Prefer the Ori runtime helper; keep libc `strlen` only as a C-pointer fallback.
     fn str_len_from_ptr(&mut self, ptr: ir::Value) -> Result<ir::Value, String> {
-        if let Some(&fref) = self.func_refs.get("strlen") {
+        if let Some(&fref) = self.func_refs.get("ori_string_len") {
             let call = self.builder.ins().call(fref, &[ptr]);
-            // strlen declared as returning I64; result is already the right type
             return Ok(self.builder.inst_results(call)[0]);
         }
-        Err("missing runtime function `strlen`".to_string())
+        if let Some(&fref) = self.func_refs.get("strlen") {
+            let call = self.builder.ins().call(fref, &[ptr]);
+            return Ok(self.builder.inst_results(call)[0]);
+        }
+        Err("missing runtime function `ori_string_len` or `strlen`".to_string())
+    }
+
+    fn emit_test_assert_equality_call(
+        &mut self,
+        name: &str,
+        args: &[HirArg],
+    ) -> Result<ir::Value, String> {
+        if args.len() != 2 {
+            return Err(format!("{name} expects two arguments"));
+        }
+        let ty = &args[0].value.ty;
+        let is_ne = name == "ori_test_assert_ne";
+        let runtime_name = match ty {
+            Ty::String => {
+                if is_ne {
+                    "ori_test_assert_ne_string"
+                } else {
+                    "ori_test_assert_eq_string"
+                }
+            }
+            Ty::Float | Ty::Float32 | Ty::Float64 => {
+                if is_ne {
+                    "ori_test_assert_ne_float"
+                } else {
+                    "ori_test_assert_eq_float"
+                }
+            }
+            Ty::Bool => {
+                if is_ne {
+                    "ori_test_assert_ne_bool"
+                } else {
+                    "ori_test_assert_eq_bool"
+                }
+            }
+            _ => name,
+        };
+        let fref = *self
+            .func_refs
+            .get(runtime_name)
+            .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+        let mut left = self.emit_expr_for_expected(&args[0].value, ty)?;
+        let mut right = self.emit_expr_for_expected(&args[1].value, ty)?;
+        match ty {
+            Ty::Float32 => {
+                left = self.builder.ins().fpromote(types::F64, left);
+                right = self.builder.ins().fpromote(types::F64, right);
+            }
+            Ty::Int8 | Ty::Int16 | Ty::Int32 => {
+                left = self.builder.ins().sextend(types::I64, left);
+                right = self.builder.ins().sextend(types::I64, right);
+            }
+            Ty::U8 | Ty::U16 | Ty::U32 => {
+                left = self.builder.ins().uextend(types::I64, left);
+                right = self.builder.ins().uextend(types::I64, right);
+            }
+            _ => {}
+        }
+        self.builder.ins().call(fref, &[left, right]);
+        Ok(self.builder.ins().iconst(types::I8, 0))
+    }
+
+    fn emit_map_runtime_call(&mut self, name: &str, args: &[HirArg]) -> Result<ir::Value, String> {
+        let Some(first_arg) = args.first() else {
+            return Err(format!("map runtime call `{name}` expects a map argument"));
+        };
+        let Ty::Map(key_ty, value_ty) = &first_arg.value.ty else {
+            return Err(format!(
+                "map runtime call `{name}` received `{}`",
+                first_arg.value.ty.display()
+            ));
+        };
+        let key_ty = key_ty.as_ref();
+        let value_ty = value_ty.as_ref();
+        let map_v = self.emit_expr(&first_arg.value)?;
+        let runtime_name = match (name, key_ty) {
+            ("ori_map_set", Ty::String) => "ori_map_set_string",
+            ("ori_map_get", Ty::String) => "ori_map_get_string",
+            ("ori_map_contains", Ty::String) => "ori_map_contains_string",
+            ("ori_map_remove", Ty::String) => "ori_map_remove_string",
+            _ => name,
+        };
+        let fref = *self
+            .func_refs
+            .get(runtime_name)
+            .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+        match name {
+            "ori_map_set" => {
+                if args.len() != 3 {
+                    return Err("ori_map_set expects map, key, and value".to_string());
+                }
+                let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
+                let map_value = self.emit_expr_for_expected(&args[2].value, value_ty)?;
+                let stored_key = self.to_list_storage_value(key_value, key_ty);
+                let stored_value = self.to_list_storage_value(map_value, value_ty);
+                self.builder
+                    .ins()
+                    .call(fref, &[map_v, stored_key, stored_value]);
+                self.emit_arc_register_edge_if_managed(key_ty, map_v, key_value)?;
+                self.emit_arc_register_edge_if_managed(value_ty, map_v, map_value)?;
+                Ok(self.builder.ins().iconst(types::I8, 0))
+            }
+            "ori_map_get" => {
+                if args.len() != 2 {
+                    return Err("ori_map_get expects map and key".to_string());
+                }
+                let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
+                let stored_key = self.to_list_storage_value(key_value, key_ty);
+                let call = self.builder.ins().call(fref, &[map_v, stored_key]);
+                let stored_value = self.builder.inst_results(call)[0];
+                Ok(self.from_list_storage_value(stored_value, value_ty))
+            }
+            "ori_map_contains" => {
+                if args.len() != 2 {
+                    return Err("ori_map_contains expects map and key".to_string());
+                }
+                let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
+                let stored_key = self.to_list_storage_value(key_value, key_ty);
+                let call = self.builder.ins().call(fref, &[map_v, stored_key]);
+                Ok(self.builder.inst_results(call)[0])
+            }
+            "ori_map_remove" => {
+                if args.len() != 2 {
+                    return Err("ori_map_remove expects map and key".to_string());
+                }
+                let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
+                let stored_key = self.to_list_storage_value(key_value, key_ty);
+                self.builder.ins().call(fref, &[map_v, stored_key]);
+                Ok(self.builder.ins().iconst(types::I8, 0))
+            }
+            _ => Err(native_codegen_unsupported(format!(
+                "map runtime call `{name}`"
+            ))),
+        }
+    }
+
+    fn emit_hash_table_runtime_call(
+        &mut self,
+        name: &str,
+        args: &[HirArg],
+    ) -> Result<ir::Value, String> {
+        let Some(first_arg) = args.first() else {
+            return Err(format!(
+                "hash_table runtime call `{name}` expects a table argument"
+            ));
+        };
+        let Ty::Opaque {
+            kind: OpaqueTy::HashTable,
+            args: table_args,
+        } = &first_arg.value.ty
+        else {
+            return Err(format!(
+                "hash_table runtime call `{name}` received `{}`",
+                first_arg.value.ty.display()
+            ));
+        };
+        if table_args.len() != 2 {
+            return Err(format!(
+                "hash_table runtime call `{name}` received malformed table type"
+            ));
+        }
+        let key_ty = &table_args[0];
+        let value_ty = &table_args[1];
+        let table_v = self.emit_expr(&first_arg.value)?;
+        let runtime_name = match (name, key_ty) {
+            ("ori_hash_table_set", Ty::String) => "ori_hash_table_set_string",
+            ("ori_hash_table_get", Ty::String) => "ori_hash_table_get_string",
+            ("ori_hash_table_remove", Ty::String) => "ori_hash_table_remove_string",
+            ("ori_hash_table_contains", Ty::String) => "ori_hash_table_contains_string",
+            _ => name,
+        };
+        let fref = *self
+            .func_refs
+            .get(runtime_name)
+            .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+        match name {
+            "ori_hash_table_set" => {
+                if args.len() != 3 {
+                    return Err("ori_hash_table_set expects table, key, and value".to_string());
+                }
+                let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
+                let table_value = self.emit_expr_for_expected(&args[2].value, value_ty)?;
+                let stored_key = self.to_list_storage_value(key_value, key_ty);
+                let stored_value = self.to_list_storage_value(table_value, value_ty);
+                self.builder
+                    .ins()
+                    .call(fref, &[table_v, stored_key, stored_value]);
+                self.emit_arc_register_edge_if_managed(key_ty, table_v, key_value)?;
+                self.emit_arc_register_edge_if_managed(value_ty, table_v, table_value)?;
+                Ok(self.builder.ins().iconst(types::I8, 0))
+            }
+            "ori_hash_table_get" | "ori_hash_table_remove" => {
+                if args.len() != 2 {
+                    return Err(format!("{name} expects table and key"));
+                }
+                let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
+                let stored_key = self.to_list_storage_value(key_value, key_ty);
+                let call = self.builder.ins().call(fref, &[table_v, stored_key]);
+                Ok(self.builder.inst_results(call)[0])
+            }
+            "ori_hash_table_contains" => {
+                if args.len() != 2 {
+                    return Err("ori_hash_table_contains expects table and key".to_string());
+                }
+                let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
+                let stored_key = self.to_list_storage_value(key_value, key_ty);
+                let call = self.builder.ins().call(fref, &[table_v, stored_key]);
+                Ok(self.builder.inst_results(call)[0])
+            }
+            _ => Err(native_codegen_unsupported(format!(
+                "hash_table runtime call `{name}`"
+            ))),
+        }
+    }
+
+    fn emit_graph_runtime_call(
+        &mut self,
+        name: &str,
+        args: &[HirArg],
+    ) -> Result<ir::Value, String> {
+        let Some(first_arg) = args.first() else {
+            return Err(format!(
+                "graph runtime call `{name}` expects a graph argument"
+            ));
+        };
+        let Ty::Opaque {
+            kind: OpaqueTy::Graph,
+            args: graph_args,
+        } = &first_arg.value.ty
+        else {
+            return Err(format!(
+                "graph runtime call `{name}` received `{}`",
+                first_arg.value.ty.display()
+            ));
+        };
+        let node_ty = graph_args.first().cloned().unwrap_or(Ty::Infer(0));
+        let runtime_name = match (name, &node_ty) {
+            ("ori_graph_add_node", Ty::String) => "ori_graph_add_node_string",
+            ("ori_graph_remove_node", Ty::String) => "ori_graph_remove_node_string",
+            ("ori_graph_add_edge", Ty::String) => "ori_graph_add_edge_string",
+            ("ori_graph_remove_edge", Ty::String) => "ori_graph_remove_edge_string",
+            ("ori_graph_has_node", Ty::String) => "ori_graph_has_node_string",
+            ("ori_graph_has_edge", Ty::String) => "ori_graph_has_edge_string",
+            ("ori_graph_neighbors", Ty::String) => "ori_graph_neighbors_string",
+            ("ori_graph_bfs", Ty::String) => "ori_graph_bfs_string",
+            ("ori_graph_dfs", Ty::String) => "ori_graph_dfs_string",
+            _ => name,
+        };
+        let fref = *self
+            .func_refs
+            .get(runtime_name)
+            .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+        let graph = self.emit_expr(&first_arg.value)?;
+        match name {
+            "ori_graph_add_node" => {
+                if args.len() != 2 {
+                    return Err("ori_graph_add_node expects graph and node".to_string());
+                }
+                let node = self.emit_expr_for_expected(&args[1].value, &node_ty)?;
+                let stored = self.to_list_storage_value(node, &node_ty);
+                self.builder.ins().call(fref, &[graph, stored]);
+                self.emit_arc_register_edge_if_managed(&node_ty, graph, node)?;
+                Ok(self.builder.ins().iconst(types::I8, 0))
+            }
+            "ori_graph_remove_node"
+            | "ori_graph_has_node"
+            | "ori_graph_neighbors"
+            | "ori_graph_bfs"
+            | "ori_graph_dfs" => {
+                if args.len() != 2 {
+                    return Err(format!("{name} expects graph and node"));
+                }
+                let node = self.emit_expr_for_expected(&args[1].value, &node_ty)?;
+                let stored = self.to_list_storage_value(node, &node_ty);
+                let call = self.builder.ins().call(fref, &[graph, stored]);
+                let res = self.builder.inst_results(call);
+                Ok(res
+                    .first()
+                    .copied()
+                    .unwrap_or_else(|| self.builder.ins().iconst(types::I8, 0)))
+            }
+            "ori_graph_add_edge" => {
+                if args.len() != 3 {
+                    return Err("ori_graph_add_edge expects graph, from, and to".to_string());
+                }
+                let from = self.emit_expr_for_expected(&args[1].value, &node_ty)?;
+                let to = self.emit_expr_for_expected(&args[2].value, &node_ty)?;
+                let stored_from = self.to_list_storage_value(from, &node_ty);
+                let stored_to = self.to_list_storage_value(to, &node_ty);
+                self.builder
+                    .ins()
+                    .call(fref, &[graph, stored_from, stored_to]);
+                self.emit_arc_register_edge_if_managed(&node_ty, graph, from)?;
+                self.emit_arc_register_edge_if_managed(&node_ty, graph, to)?;
+                Ok(self.builder.ins().iconst(types::I8, 0))
+            }
+            "ori_graph_remove_edge" | "ori_graph_has_edge" => {
+                if args.len() != 3 {
+                    return Err(format!("{name} expects graph, from, and to"));
+                }
+                let from = self.emit_expr_for_expected(&args[1].value, &node_ty)?;
+                let to = self.emit_expr_for_expected(&args[2].value, &node_ty)?;
+                let stored_from = self.to_list_storage_value(from, &node_ty);
+                let stored_to = self.to_list_storage_value(to, &node_ty);
+                let call = self
+                    .builder
+                    .ins()
+                    .call(fref, &[graph, stored_from, stored_to]);
+                let res = self.builder.inst_results(call);
+                Ok(res
+                    .first()
+                    .copied()
+                    .unwrap_or_else(|| self.builder.ins().iconst(types::I8, 0)))
+            }
+            _ => Err(native_codegen_unsupported(format!(
+                "graph runtime call `{name}`"
+            ))),
+        }
+    }
+
+    fn emit_set_runtime_call(&mut self, name: &str, args: &[HirArg]) -> Result<ir::Value, String> {
+        let Some(first_arg) = args.first() else {
+            return Err(format!("set runtime call `{name}` expects a set argument"));
+        };
+        let Ty::Set(elem_ty) = &first_arg.value.ty else {
+            return Err(format!(
+                "set runtime call `{name}` received `{}`",
+                first_arg.value.ty.display()
+            ));
+        };
+        let elem_ty = elem_ty.as_ref();
+        let set_v = self.emit_expr(&first_arg.value)?;
+        let runtime_name = match (name, elem_ty) {
+            ("ori_set_add", Ty::String) => "ori_set_add_string",
+            ("ori_set_contains", Ty::String) => "ori_set_contains_string",
+            ("ori_set_remove", Ty::String) => "ori_set_remove_string",
+            _ => name,
+        };
+        let fref = *self
+            .func_refs
+            .get(runtime_name)
+            .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+        match name {
+            "ori_set_add" => {
+                if args.len() != 2 {
+                    return Err("ori_set_add expects set and value".to_string());
+                }
+                let value = self.emit_expr_for_expected(&args[1].value, elem_ty)?;
+                let stored = self.to_list_storage_value(value, elem_ty);
+                self.builder.ins().call(fref, &[set_v, stored]);
+                self.emit_arc_register_edge_if_managed(elem_ty, set_v, value)?;
+                Ok(self.builder.ins().iconst(types::I8, 0))
+            }
+            "ori_set_contains" => {
+                if args.len() != 2 {
+                    return Err("ori_set_contains expects set and value".to_string());
+                }
+                let value = self.emit_expr_for_expected(&args[1].value, elem_ty)?;
+                let stored = self.to_list_storage_value(value, elem_ty);
+                let call = self.builder.ins().call(fref, &[set_v, stored]);
+                Ok(self.builder.inst_results(call)[0])
+            }
+            "ori_set_remove" => {
+                if args.len() != 2 {
+                    return Err("ori_set_remove expects set and value".to_string());
+                }
+                let value = self.emit_expr_for_expected(&args[1].value, elem_ty)?;
+                let stored = self.to_list_storage_value(value, elem_ty);
+                self.builder.ins().call(fref, &[set_v, stored]);
+                Ok(self.builder.ins().iconst(types::I8, 0))
+            }
+            _ => Err(native_codegen_unsupported(format!(
+                "set runtime call `{name}`"
+            ))),
+        }
+    }
+
+    fn emit_tree_runtime_call(&mut self, name: &str, args: &[HirArg]) -> Result<ir::Value, String> {
+        let fref = *self
+            .func_refs
+            .get(name)
+            .ok_or_else(|| format!("missing runtime function `{name}`"))?;
+        let node_id_ty = Ty::Opaque {
+            kind: OpaqueTy::NodeId,
+            args: vec![],
+        };
+        let tree_elem_ty = |arg: &HirArg| match &arg.value.ty {
+            Ty::Opaque {
+                kind: OpaqueTy::Tree,
+                args,
+            } => args.first().cloned(),
+            _ => None,
+        };
+        match name {
+            "ori_tree_new" => {
+                if args.len() != 1 {
+                    return Err("ori_tree_new expects one root value".to_string());
+                }
+                let elem_ty = args[0].value.ty.clone();
+                let value = self.emit_expr(&args[0].value)?;
+                let stored = self.to_list_storage_value(value, &elem_ty);
+                let call = self.builder.ins().call(fref, &[stored]);
+                let tree = self.builder.inst_results(call)[0];
+                self.emit_arc_register_edge_if_managed(&elem_ty, tree, value)?;
+                Ok(tree)
+            }
+            "ori_tree_add_child" => {
+                if args.len() != 3 {
+                    return Err("ori_tree_add_child expects tree, parent, and value".to_string());
+                }
+                let elem_ty = tree_elem_ty(&args[0]).unwrap_or(Ty::Infer(0));
+                let tree = self.emit_expr(&args[0].value)?;
+                let parent = self.emit_expr_for_expected(&args[1].value, &node_id_ty)?;
+                let value = self.emit_expr_for_expected(&args[2].value, &elem_ty)?;
+                let stored = self.to_list_storage_value(value, &elem_ty);
+                let call = self.builder.ins().call(fref, &[tree, parent, stored]);
+                let node = self.builder.inst_results(call)[0];
+                self.emit_arc_register_edge_if_managed(&elem_ty, tree, value)?;
+                Ok(node)
+            }
+            "ori_tree_value" => {
+                if args.len() != 2 {
+                    return Err("ori_tree_value expects tree and node".to_string());
+                }
+                let elem_ty = tree_elem_ty(&args[0]).unwrap_or(Ty::Infer(0));
+                let tree = self.emit_expr(&args[0].value)?;
+                let node = self.emit_expr_for_expected(&args[1].value, &node_id_ty)?;
+                let call = self.builder.ins().call(fref, &[tree, node]);
+                let stored = self.builder.inst_results(call)[0];
+                Ok(self.from_list_storage_value(stored, &elem_ty))
+            }
+            "ori_tree_root"
+            | "ori_tree_len"
+            | "ori_tree_pre_order"
+            | "ori_tree_post_order"
+            | "ori_tree_breadth_first" => {
+                if args.len() != 1 {
+                    return Err(format!("{name} expects one tree argument"));
+                }
+                let tree = self.emit_expr(&args[0].value)?;
+                let call = self.builder.ins().call(fref, &[tree]);
+                let res = self.builder.inst_results(call);
+                Ok(res
+                    .first()
+                    .copied()
+                    .unwrap_or_else(|| self.builder.ins().iconst(types::I8, 0)))
+            }
+            "ori_tree_children"
+            | "ori_tree_parent"
+            | "ori_tree_remove_subtree"
+            | "ori_tree_depth" => {
+                if args.len() != 2 {
+                    return Err(format!("{name} expects tree and node"));
+                }
+                let tree = self.emit_expr(&args[0].value)?;
+                let node = self.emit_expr_for_expected(&args[1].value, &node_id_ty)?;
+                let call = self.builder.ins().call(fref, &[tree, node]);
+                let res = self.builder.inst_results(call);
+                Ok(res
+                    .first()
+                    .copied()
+                    .unwrap_or_else(|| self.builder.ins().iconst(types::I8, 0)))
+            }
+            _ => Err(native_codegen_unsupported(format!(
+                "tree runtime call `{name}`"
+            ))),
+        }
+    }
+
+    fn emit_heap_runtime_call(
+        &mut self,
+        name: &str,
+        args: &[HirArg],
+        result_ty: &Ty,
+    ) -> Result<ir::Value, String> {
+        let heap_elem_ty = |ty: &Ty| match ty {
+            Ty::Opaque {
+                kind: OpaqueTy::Heap,
+                args,
+            } => args.first().cloned(),
+            _ => None,
+        };
+        match name {
+            "ori_heap_new" => {
+                if !args.is_empty() {
+                    return Err("ori_heap_new expects no public arguments".to_string());
+                }
+                let elem_ty = heap_elem_ty(result_ty).unwrap_or(Ty::Int);
+                let runtime_name = match &elem_ty {
+                    Ty::String => "ori_heap_new_string",
+                    Ty::Named(def_id, _) => {
+                        let compare = SmolStr::new("compare");
+                        let Some(compare_name) =
+                            self.trait_method_func_name_for_type(*def_id, &compare)
+                        else {
+                            return Err(format!(
+                                "heap element `{}` has no Comparable.compare implementation",
+                                elem_ty.display()
+                            ));
+                        };
+                        let compare_ref =
+                            *self.func_refs.get(compare_name.as_str()).ok_or_else(|| {
+                                format!("missing function reference `{compare_name}`")
+                            })?;
+                        let compare_ptr = self.builder.ins().func_addr(self.ptr_ty, compare_ref);
+                        let new_ref =
+                            *self.func_refs.get("ori_heap_new_custom").ok_or_else(|| {
+                                "missing runtime function `ori_heap_new_custom`".to_string()
+                            })?;
+                        let call = self.builder.ins().call(new_ref, &[compare_ptr]);
+                        return Ok(self.builder.inst_results(call)[0]);
+                    }
+                    _ => "ori_heap_new",
+                };
+                let fref = *self
+                    .func_refs
+                    .get(runtime_name)
+                    .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+                let call = self.builder.ins().call(fref, &[]);
+                Ok(self.builder.inst_results(call)[0])
+            }
+            "ori_heap_push" => {
+                if args.len() != 2 {
+                    return Err("ori_heap_push expects heap and value".to_string());
+                }
+                let elem_ty = match heap_elem_ty(&args[0].value.ty) {
+                    Some(ty) if !ty.contains_infer() => ty,
+                    _ => args[1].value.ty.clone(),
+                };
+                let heap = self.emit_expr(&args[0].value)?;
+                let value = self.emit_expr_for_expected(&args[1].value, &elem_ty)?;
+                let stored = self.to_list_storage_value(value, &elem_ty);
+                match &elem_ty {
+                    Ty::String => {
+                        let fref =
+                            *self.func_refs.get("ori_heap_push_string").ok_or_else(|| {
+                                "missing runtime function `ori_heap_push_string`".to_string()
+                            })?;
+                        self.builder.ins().call(fref, &[heap, stored]);
+                    }
+                    Ty::Named(def_id, _) => {
+                        let compare = SmolStr::new("compare");
+                        let Some(compare_name) =
+                            self.trait_method_func_name_for_type(*def_id, &compare)
+                        else {
+                            return Err(format!(
+                                "heap element `{}` has no Comparable.compare implementation",
+                                elem_ty.display()
+                            ));
+                        };
+                        let compare_ref =
+                            *self.func_refs.get(compare_name.as_str()).ok_or_else(|| {
+                                format!("missing function reference `{compare_name}`")
+                            })?;
+                        let compare_ptr = self.builder.ins().func_addr(self.ptr_ty, compare_ref);
+                        let fref =
+                            *self.func_refs.get("ori_heap_push_custom").ok_or_else(|| {
+                                "missing runtime function `ori_heap_push_custom`".to_string()
+                            })?;
+                        self.builder.ins().call(fref, &[heap, stored, compare_ptr]);
+                    }
+                    _ => {
+                        let fref = *self
+                            .func_refs
+                            .get(name)
+                            .ok_or_else(|| format!("missing runtime function `{name}`"))?;
+                        self.builder.ins().call(fref, &[heap, stored]);
+                    }
+                }
+                self.emit_arc_register_edge_if_managed(&elem_ty, heap, value)?;
+                Ok(self.builder.ins().iconst(types::I8, 0))
+            }
+            "ori_heap_pop" | "ori_heap_peek" | "ori_heap_len" | "ori_heap_is_empty" => {
+                if args.len() != 1 {
+                    return Err(format!("{name} expects one heap argument"));
+                }
+                let heap = self.emit_expr(&args[0].value)?;
+                let fref = *self
+                    .func_refs
+                    .get(name)
+                    .ok_or_else(|| format!("missing runtime function `{name}`"))?;
+                let call = self.builder.ins().call(fref, &[heap]);
+                let res = self.builder.inst_results(call);
+                Ok(res
+                    .first()
+                    .copied()
+                    .unwrap_or_else(|| self.builder.ins().iconst(types::I8, 0)))
+            }
+            _ => Err(native_codegen_unsupported(format!(
+                "heap runtime call `{name}`"
+            ))),
+        }
     }
 
     fn to_list_storage_value(&mut self, value: ir::Value, ty: &Ty) -> ir::Value {
@@ -3740,10 +8205,17 @@ impl<'a> FuncCodegen<'a> {
         let string = matches!(ty, Ty::String);
         Ok(match op {
             Add => {
-                if string {
+                if matches!(ty, Ty::String) {
                     let concat_ref = *self.func_refs.get("ori_string_concat").ok_or_else(|| {
                         "missing runtime function `ori_string_concat`".to_string()
                     })?;
+                    let call = self.builder.ins().call(concat_ref, &[lv, rv]);
+                    self.builder.inst_results(call)[0]
+                } else if matches!(ty, Ty::Bytes) {
+                    let concat_ref = *self
+                        .func_refs
+                        .get("ori_bytes_concat")
+                        .ok_or_else(|| "missing runtime function `ori_bytes_concat`".to_string())?;
                     let call = self.builder.ins().call(concat_ref, &[lv, rv]);
                     self.builder.inst_results(call)[0]
                 } else if float {
@@ -3853,27 +8325,1925 @@ pub fn emit_native(hir: &HirModule, obj_path: &std::path::Path) -> Result<(), St
         .map_err(|e| format!("write {} failed: {e}", obj_path.display()))
 }
 
+/// Native linker facade used by the Cranelift backend.
+///
+/// The default path uses `rustc` as the native linker driver. This keeps the
+/// route independent from a C compiler driver while still letting the Rust
+/// toolchain provide the platform-specific CRT and linker configuration.
+#[derive(Debug, Clone)]
+pub struct NativeLinker {
+    strategy: NativeLinkerStrategy,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NativeLinkOptions {
+    pub raw_diagnostics: bool,
+}
+
+#[derive(Debug, Clone)]
+enum NativeLinkerStrategy {
+    RustcDriver {
+        command: PathBuf,
+        linker_override: Option<PathBuf>,
+    },
+    RawNativeCommand {
+        command: PathBuf,
+    },
+}
+
+impl NativeLinker {
+    pub fn discover() -> Result<Self, String> {
+        if let Ok(command) = std::env::var("ORI_NATIVE_LINKER") {
+            let command = command.trim();
+            if command.is_empty() {
+                return Err("ORI_NATIVE_LINKER is set but empty".to_string());
+            }
+            return Ok(Self {
+                strategy: NativeLinkerStrategy::RawNativeCommand {
+                    command: PathBuf::from(command),
+                },
+            });
+        }
+
+        let command = std::env::var("ORI_RUSTC")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("rustc"));
+        let linker_override = rust_lld_override(&command)?;
+        Ok(Self {
+            strategy: NativeLinkerStrategy::RustcDriver {
+                command,
+                linker_override,
+            },
+        })
+    }
+
+    pub fn link(
+        &self,
+        obj_path: &Path,
+        exe_path: &Path,
+        extra_libs: &[PathBuf],
+        options: NativeLinkOptions,
+    ) -> Result<(), String> {
+        match &self.strategy {
+            NativeLinkerStrategy::RustcDriver {
+                command,
+                linker_override,
+            } => link_with_rustc_driver(
+                command,
+                linker_override.as_deref(),
+                obj_path,
+                exe_path,
+                extra_libs,
+                options,
+            ),
+            NativeLinkerStrategy::RawNativeCommand { command } => {
+                link_with_raw_native_command(command, obj_path, exe_path, extra_libs, options)
+            }
+        }
+    }
+}
+
 /// Link `obj_path` into an executable at `exe_path`.
-/// `extra_libs`: additional static libraries to link (e.g., libori_rt.a).
-pub fn link(
-    obj_path: &std::path::Path,
-    exe_path: &std::path::Path,
-    extra_libs: &[std::path::PathBuf],
+/// `extra_libs`: additional static libraries to link, usually `ori-runtime`.
+pub fn link(obj_path: &Path, exe_path: &Path, extra_libs: &[PathBuf]) -> Result<(), String> {
+    link_with_options(obj_path, exe_path, extra_libs, NativeLinkOptions::default())
+}
+
+pub fn link_with_options(
+    obj_path: &Path,
+    exe_path: &Path,
+    extra_libs: &[PathBuf],
+    options: NativeLinkOptions,
 ) -> Result<(), String> {
-    let mut cmd = std::process::Command::new("cc");
-    cmd.arg("-o").arg(exe_path).arg(obj_path);
+    NativeLinker::discover()?.link(obj_path, exe_path, extra_libs, options)
+}
+
+const NATIVE_LINKER_MISSING: &str = "native.linker_missing";
+const NATIVE_LINK_FAILED: &str = "native.link_failed";
+const NATIVE_RUNTIME_SYMBOL_MISSING: &str = "native.runtime_symbol_missing";
+
+fn link_with_rustc_driver(
+    command: &Path,
+    linker_override: Option<&Path>,
+    obj_path: &Path,
+    exe_path: &Path,
+    extra_libs: &[PathBuf],
+    options: NativeLinkOptions,
+) -> Result<(), String> {
+    static NEXT_LINK_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+    let id = NEXT_LINK_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let shim = std::env::temp_dir().join(format!("ori_link_shim_{}_{}.rs", std::process::id(), id));
+    std::fs::write(&shim, "#![no_main]\n")
+        .map_err(|e| format!("failed to write native linker shim {}: {e}", shim.display()))?;
+
+    let mut cmd = std::process::Command::new(command);
+    cmd.arg("--edition=2021")
+        .arg("--crate-name")
+        .arg(format!("ori_link_shim_{id}"))
+        .arg(&shim)
+        .arg("-o")
+        .arg(exe_path)
+        .arg("-C")
+        .arg(format!("link-arg={}", obj_path.display()));
+
+    if let Some(linker) = linker_override {
+        cmd.arg("-C").arg(format!("linker={}", linker.display()));
+    }
+
+    for lib in extra_libs {
+        cmd.arg("-C").arg(format!("link-arg={}", lib.display()));
+    }
+
+    let output = cmd.output().map_err(|e| {
+        format!(
+            "{NATIVE_LINKER_MISSING}: could not invoke native linker driver `{}`: {e}",
+            command.display()
+        )
+    });
+    let _ = std::fs::remove_file(&shim);
+    let output = output?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format_native_link_failure(
+            "driver",
+            command,
+            output.status,
+            &output.stdout,
+            &output.stderr,
+            options,
+        ))
+    }
+}
+
+fn rust_lld_override(rustc: &Path) -> Result<Option<PathBuf>, String> {
+    if std::env::var("ORI_USE_RUST_LLD").is_err() {
+        return Ok(None);
+    }
+
+    if let Ok(path) = std::env::var("ORI_RUST_LLD") {
+        let path = path.trim();
+        if path.is_empty() {
+            return Err("ORI_RUST_LLD is set but empty".to_string());
+        }
+        return Ok(Some(PathBuf::from(path)));
+    }
+
+    if let Some(path) = discover_rust_lld_from_rustc(rustc) {
+        return Ok(Some(path));
+    }
+
+    Ok(Some(PathBuf::from(if cfg!(windows) {
+        "rust-lld.exe"
+    } else {
+        "rust-lld"
+    })))
+}
+
+fn discover_rust_lld_from_rustc(rustc: &Path) -> Option<PathBuf> {
+    let sysroot = std::process::Command::new(rustc)
+        .args(["--print", "sysroot"])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())?;
+    let host = rustc_host_triple(rustc)?;
+    let exe = if cfg!(windows) {
+        "rust-lld.exe"
+    } else {
+        "rust-lld"
+    };
+    let candidate = PathBuf::from(sysroot)
+        .join("lib")
+        .join("rustlib")
+        .join(host)
+        .join("bin")
+        .join(exe);
+    candidate.is_file().then_some(candidate)
+}
+
+fn rustc_host_triple(rustc: &Path) -> Option<String> {
+    let output = std::process::Command::new(rustc).arg("-vV").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .find_map(|line| {
+            line.strip_prefix("host:")
+                .map(|host| host.trim().to_string())
+        })
+}
+
+fn link_with_raw_native_command(
+    command: &Path,
+    obj_path: &Path,
+    exe_path: &Path,
+    extra_libs: &[PathBuf],
+    options: NativeLinkOptions,
+) -> Result<(), String> {
+    let mut cmd = std::process::Command::new(command);
+    if cfg!(windows) {
+        cmd.arg("/NOLOGO")
+            .arg(format!("/OUT:{}", exe_path.display()))
+            .arg(obj_path);
+    } else {
+        cmd.arg("-o").arg(exe_path).arg(obj_path);
+    }
     for lib in extra_libs {
         cmd.arg(lib);
     }
-    let status = cmd
-        .status()
-        .map_err(|e| format!("could not invoke cc: {e}"))?;
-    if status.success() {
+
+    let output = cmd.output().map_err(|e| {
+        format!(
+            "{NATIVE_LINKER_MISSING}: could not invoke native linker `{}` from ORI_NATIVE_LINKER: {e}",
+            command.display()
+        )
+    })?;
+    if output.status.success() {
         Ok(())
     } else {
-        Err(format!(
-            "linker exited with code {}",
-            status.code().unwrap_or(-1)
+        Err(format_native_link_failure(
+            "",
+            command,
+            output.status,
+            &output.stdout,
+            &output.stderr,
+            options,
         ))
+    }
+}
+
+fn format_native_link_failure(
+    kind: &str,
+    command: &Path,
+    status: impl std::fmt::Display,
+    stdout: &[u8],
+    stderr: &[u8],
+    options: NativeLinkOptions,
+) -> String {
+    let stdout_text = String::from_utf8_lossy(stdout);
+    let stderr_text = String::from_utf8_lossy(stderr);
+    let stdout_trimmed = stdout_text.trim();
+    let stderr_trimmed = stderr_text.trim();
+    let label = if kind.trim().is_empty() {
+        "native linker".to_string()
+    } else {
+        format!("native linker {kind}")
+    };
+    let missing_symbol = looks_like_missing_native_symbol(stdout_trimmed)
+        || looks_like_missing_native_symbol(stderr_trimmed);
+    let mut message = String::new();
+    if missing_symbol {
+        message.push_str(
+            &format!("{NATIVE_RUNTIME_SYMBOL_MISSING}: native link failed because at least one native symbol was not resolved.\n"),
+        );
+        message.push_str(
+            "Check whether the packaged ori-runtime was staged for the same compiler version, target and ABI, and whether the runtime exports every symbol used by the native backend.\n",
+        );
+    } else {
+        message.push_str(&format!("{NATIVE_LINK_FAILED}: native linker failed.\n"));
+    }
+    message.push_str(&format!(
+        "{label} `{}` failed with status {status}",
+        command.display()
+    ));
+    if let Some(first_error) = first_non_empty_linker_line(stderr_trimmed, stdout_trimmed) {
+        message.push_str(&format!("\nfirst linker message: {first_error}"));
+    }
+    if options.raw_diagnostics {
+        message.push_str(&format!(
+            "\nstdout:\n{}\nstderr:\n{}",
+            stdout_trimmed, stderr_trimmed
+        ));
+    } else {
+        message.push_str("\nuse `ori compile --native-raw` to print full linker stdout/stderr");
+    }
+    message
+}
+
+fn first_non_empty_linker_line<'a>(stderr: &'a str, stdout: &'a str) -> Option<&'a str> {
+    stderr
+        .lines()
+        .chain(stdout.lines())
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+}
+
+fn looks_like_missing_native_symbol(text: &str) -> bool {
+    let text = text.to_ascii_lowercase();
+    [
+        "unresolved external symbol",
+        "undefined reference",
+        "undefined symbol",
+        "symbol(s) not found",
+        "unresolved symbol",
+        "lnk2001",
+        "lnk2019",
+    ]
+    .iter()
+    .any(|needle| text.contains(needle))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ori_diagnostics::Span;
+    use ori_types::{stdlib::stdlib_native_abi, DefId};
+    use std::collections::{BTreeSet, HashSet};
+
+    struct NativeHirCoverage {
+        variant: &'static str,
+        evidence: &'static [&'static str],
+        note: &'static str,
+    }
+
+    const NATIVE_EXPR_COVERAGE: &[NativeHirCoverage] = &[
+        NativeHirCoverage {
+            variant: "BoolLit",
+            evidence: &["HirExprKind::BoolLit"],
+            note: "literal bool direto",
+        },
+        NativeHirCoverage {
+            variant: "IntLit",
+            evidence: &["HirExprKind::IntLit"],
+            note: "literal inteiro direto",
+        },
+        NativeHirCoverage {
+            variant: "FloatLit",
+            evidence: &["HirExprKind::FloatLit"],
+            note: "literal float direto",
+        },
+        NativeHirCoverage {
+            variant: "StrLit",
+            evidence: &["HirExprKind::StrLit"],
+            note: "string constante gerenciada pelo runtime",
+        },
+        NativeHirCoverage {
+            variant: "InterpolatedStr",
+            evidence: &["HirExprKind::InterpolatedStr"],
+            note: "interpolacao via helper de partes string",
+        },
+        NativeHirCoverage {
+            variant: "BytesLit",
+            evidence: &["HirExprKind::BytesLit"],
+            note: "bytes gerenciados pelo runtime",
+        },
+        NativeHirCoverage {
+            variant: "Unit",
+            evidence: &["HirExprKind::Unit"],
+            note: "valor direto sem payload",
+        },
+        NativeHirCoverage {
+            variant: "Var",
+            evidence: &["HirExprKind::Var"],
+            note: "local, global ou constante",
+        },
+        NativeHirCoverage {
+            variant: "Binary",
+            evidence: &["HirExprKind::Binary"],
+            note: "operadores escalares e chamadas auxiliares",
+        },
+        NativeHirCoverage {
+            variant: "Unary",
+            evidence: &["HirExprKind::Unary"],
+            note: "negacao numerica e logica",
+        },
+        NativeHirCoverage {
+            variant: "Field",
+            evidence: &["HirExprKind::Field"],
+            note: "load por layout nativo de struct",
+        },
+        NativeHirCoverage {
+            variant: "Index",
+            evidence: &["HirExprKind::Index"],
+            note: "list, string e bytes",
+        },
+        NativeHirCoverage {
+            variant: "TupleIndex",
+            evidence: &["HirExprKind::TupleIndex"],
+            note: "load por layout nativo de tuple",
+        },
+        NativeHirCoverage {
+            variant: "Call",
+            evidence: &["HirExprKind::Call"],
+            note: "funcoes Ori, runtime e closures",
+        },
+        NativeHirCoverage {
+            variant: "MethodCall",
+            evidence: &["HirExprKind::MethodCall"],
+            note: "slice, trait object e chamada resolvida",
+        },
+        NativeHirCoverage {
+            variant: "StructLit",
+            evidence: &["HirExprKind::StructLit"],
+            note: "alloc + stores por layout nativo",
+        },
+        NativeHirCoverage {
+            variant: "EnumVariant",
+            evidence: &["HirExprKind::EnumVariant"],
+            note: "tag + payload por layout nativo",
+        },
+        NativeHirCoverage {
+            variant: "ListLit",
+            evidence: &["HirExprKind::ListLit"],
+            note: "ori.list runtime",
+        },
+        NativeHirCoverage {
+            variant: "ListSpreadLit",
+            evidence: &["HirExprKind::ListSpreadLit"],
+            note: "ori.list runtime com spread",
+        },
+        NativeHirCoverage {
+            variant: "TupleLit",
+            evidence: &["HirExprKind::TupleLit"],
+            note: "alloc + stores por layout nativo",
+        },
+        NativeHirCoverage {
+            variant: "Some_",
+            evidence: &["HirExprKind::Some_"],
+            note: "optional runtime-managed",
+        },
+        NativeHirCoverage {
+            variant: "None_",
+            evidence: &["HirExprKind::None_"],
+            note: "optional runtime-managed sem payload",
+        },
+        NativeHirCoverage {
+            variant: "Ok_",
+            evidence: &["HirExprKind::Ok_"],
+            note: "result runtime-managed ok",
+        },
+        NativeHirCoverage {
+            variant: "Err_",
+            evidence: &["HirExprKind::Err_"],
+            note: "result runtime-managed err",
+        },
+        NativeHirCoverage {
+            variant: "Propagate",
+            evidence: &["HirExprKind::Propagate"],
+            note: "`?` em optional/result",
+        },
+        NativeHirCoverage {
+            variant: "Await",
+            evidence: &["HirExprKind::Await"],
+            note: "executor minimo atual",
+        },
+        NativeHirCoverage {
+            variant: "IfExpr",
+            evidence: &["HirExprKind::IfExpr"],
+            note: "select Cranelift",
+        },
+        NativeHirCoverage {
+            variant: "Range",
+            evidence: &["HirExprKind::Range"],
+            note: "handle runtime-managed start/end",
+        },
+        NativeHirCoverage {
+            variant: "MapLit",
+            evidence: &["HirExprKind::MapLit"],
+            note: "ori.map runtime",
+        },
+        NativeHirCoverage {
+            variant: "SetLit",
+            evidence: &["HirExprKind::SetLit"],
+            note: "ori.set runtime",
+        },
+        NativeHirCoverage {
+            variant: "StructUpdate",
+            evidence: &["HirExprKind::StructUpdate"],
+            note: "copy + override por layout nativo",
+        },
+        NativeHirCoverage {
+            variant: "Closure",
+            evidence: &["HirExprKind::Closure"],
+            note: "closure object com ambiente capturado",
+        },
+        NativeHirCoverage {
+            variant: "IsCheck",
+            evidence: &["HirExprKind::IsCheck"],
+            note: "`is` estatico ou via vtable any<Trait>",
+        },
+    ];
+
+    fn hir_expr(kind: HirExprKind, ty: Ty) -> HirExpr {
+        HirExpr {
+            kind,
+            ty,
+            span: Span::DUMMY,
+        }
+    }
+
+    fn simple_async_func(stmts: Vec<HirStmt>) -> HirFunc {
+        HirFunc {
+            def_id: DefId(0),
+            name: SmolStr::new("app.delayed"),
+            params: Vec::new(),
+            return_ty: Ty::Future(Box::new(Ty::Int)),
+            body: HirBlock {
+                stmts,
+                span: Span::DUMMY,
+            },
+            closure_captures: Vec::new(),
+            is_public: false,
+            is_async: true,
+            is_mut: false,
+            span: Span::DUMMY,
+        }
+    }
+
+    #[test]
+    fn simple_async_state_machine_plan_accepts_single_await_call_then_return() {
+        let callee = hir_expr(HirExprKind::Var(SmolStr::new("task.sleep")), Ty::Int);
+        let await_future = hir_expr(
+            HirExprKind::Call {
+                callee: Box::new(callee),
+                args: Vec::new(),
+            },
+            Ty::Future(Box::new(Ty::Void)),
+        );
+        let await_expr = hir_expr(HirExprKind::Await(Box::new(await_future)), Ty::Void);
+        let ret = hir_expr(HirExprKind::IntLit(41), Ty::Int);
+        let func = simple_async_func(vec![
+            HirStmt::Expr(await_expr),
+            HirStmt::Return(Some(ret), Span::DUMMY),
+        ]);
+
+        let plan = simple_async_state_machine_plan(&func).expect("simple async state machine plan");
+        assert_eq!(plan.inner_ty, Ty::Int);
+        assert_eq!(plan.awaits.len(), 1);
+        assert!(matches!(
+            plan.awaits[0].await_future.kind,
+            HirExprKind::Call { .. }
+        ));
+        assert!(matches!(
+            plan.return_expr.as_ref().map(|expr| &expr.kind),
+            Some(HirExprKind::IntLit(41))
+        ));
+    }
+
+    #[test]
+    fn simple_async_state_machine_plan_accepts_scalar_await_binding_then_return() {
+        let callee = hir_expr(HirExprKind::Var(SmolStr::new("delayed")), Ty::Int);
+        let await_future = hir_expr(
+            HirExprKind::Call {
+                callee: Box::new(callee),
+                args: Vec::new(),
+            },
+            Ty::Future(Box::new(Ty::Int)),
+        );
+        let await_expr = hir_expr(HirExprKind::Await(Box::new(await_future)), Ty::Int);
+        let ret = hir_expr(HirExprKind::Var(SmolStr::new("value")), Ty::Int);
+        let func = simple_async_func(vec![
+            HirStmt::Let {
+                name: SmolStr::new("value"),
+                ty: Ty::Int,
+                mutable: false,
+                value: await_expr,
+                span: Span::DUMMY,
+            },
+            HirStmt::Return(Some(ret), Span::DUMMY),
+        ]);
+
+        let plan = simple_async_state_machine_plan(&func).expect("simple async state machine plan");
+        let binding = plan.awaits[0].binding.as_ref().expect("await binding");
+        assert_eq!(binding.name.as_str(), "value");
+        assert_eq!(binding.ty, Ty::Int);
+    }
+
+    #[test]
+    fn simple_async_state_machine_plan_accepts_two_scalar_await_bindings_then_return() {
+        let left_call = hir_expr(
+            HirExprKind::Call {
+                callee: Box::new(hir_expr(HirExprKind::Var(SmolStr::new("left")), Ty::Int)),
+                args: Vec::new(),
+            },
+            Ty::Future(Box::new(Ty::Int)),
+        );
+        let right_call = hir_expr(
+            HirExprKind::Call {
+                callee: Box::new(hir_expr(HirExprKind::Var(SmolStr::new("right")), Ty::Int)),
+                args: Vec::new(),
+            },
+            Ty::Future(Box::new(Ty::Int)),
+        );
+        let ret = hir_expr(
+            HirExprKind::Binary {
+                op: BinaryOp::Add,
+                lhs: Box::new(hir_expr(HirExprKind::Var(SmolStr::new("a")), Ty::Int)),
+                rhs: Box::new(hir_expr(HirExprKind::Var(SmolStr::new("b")), Ty::Int)),
+            },
+            Ty::Int,
+        );
+        let func = simple_async_func(vec![
+            HirStmt::Let {
+                name: SmolStr::new("a"),
+                ty: Ty::Int,
+                mutable: false,
+                value: hir_expr(HirExprKind::Await(Box::new(left_call)), Ty::Int),
+                span: Span::DUMMY,
+            },
+            HirStmt::Let {
+                name: SmolStr::new("b"),
+                ty: Ty::Int,
+                mutable: false,
+                value: hir_expr(HirExprKind::Await(Box::new(right_call)), Ty::Int),
+                span: Span::DUMMY,
+            },
+            HirStmt::Return(Some(ret), Span::DUMMY),
+        ]);
+
+        let plan = simple_async_state_machine_plan(&func).expect("simple async state machine plan");
+        assert_eq!(plan.awaits.len(), 2);
+        assert_eq!(plan.awaits[0].binding.as_ref().unwrap().name.as_str(), "a");
+        assert_eq!(plan.awaits[1].binding.as_ref().unwrap().name.as_str(), "b");
+    }
+
+    #[test]
+    fn simple_async_state_machine_plan_accepts_void_tail_expression() {
+        let await_future = hir_expr(
+            HirExprKind::Call {
+                callee: Box::new(hir_expr(
+                    HirExprKind::Var(SmolStr::new("task.sleep")),
+                    Ty::Int,
+                )),
+                args: Vec::new(),
+            },
+            Ty::Future(Box::new(Ty::Void)),
+        );
+        let func = HirFunc {
+            def_id: DefId(0),
+            name: SmolStr::new("app.main"),
+            params: Vec::new(),
+            return_ty: Ty::Future(Box::new(Ty::Void)),
+            body: HirBlock {
+                stmts: vec![
+                    HirStmt::Expr(hir_expr(
+                        HirExprKind::Await(Box::new(await_future)),
+                        Ty::Void,
+                    )),
+                    HirStmt::Expr(hir_expr(HirExprKind::Unit, Ty::Void)),
+                ],
+                span: Span::DUMMY,
+            },
+            closure_captures: Vec::new(),
+            is_public: false,
+            is_async: true,
+            is_mut: false,
+            span: Span::DUMMY,
+        };
+
+        let plan = simple_async_state_machine_plan(&func).expect("simple async state machine plan");
+        assert_eq!(plan.awaits.len(), 1);
+        assert!(plan.tail_expr.is_some());
+    }
+
+    #[test]
+    fn simple_async_state_machine_plan_accepts_prefix_local_and_tail_control_flow() {
+        let await_future = hir_expr(
+            HirExprKind::Call {
+                callee: Box::new(hir_expr(
+                    HirExprKind::Var(SmolStr::new("task.sleep")),
+                    Ty::Int,
+                )),
+                args: Vec::new(),
+            },
+            Ty::Future(Box::new(Ty::Void)),
+        );
+        let func = HirFunc {
+            def_id: DefId(0),
+            name: SmolStr::new("app.main"),
+            params: Vec::new(),
+            return_ty: Ty::Future(Box::new(Ty::Void)),
+            body: HirBlock {
+                stmts: vec![
+                    HirStmt::Let {
+                        name: SmolStr::new("label"),
+                        ty: Ty::String,
+                        mutable: false,
+                        value: hir_expr(HirExprKind::StrLit(SmolStr::new("ready")), Ty::String),
+                        span: Span::DUMMY,
+                    },
+                    HirStmt::Expr(hir_expr(
+                        HirExprKind::Await(Box::new(await_future)),
+                        Ty::Void,
+                    )),
+                    HirStmt::If {
+                        cond: hir_expr(HirExprKind::BoolLit(true), Ty::Bool),
+                        then: HirBlock {
+                            stmts: vec![HirStmt::Expr(hir_expr(
+                                HirExprKind::Var(SmolStr::new("label")),
+                                Ty::String,
+                            ))],
+                            span: Span::DUMMY,
+                        },
+                        else_ifs: Vec::new(),
+                        else_: None,
+                        span: Span::DUMMY,
+                    },
+                ],
+                span: Span::DUMMY,
+            },
+            closure_captures: Vec::new(),
+            is_public: false,
+            is_async: true,
+            is_mut: false,
+            span: Span::DUMMY,
+        };
+
+        let plan = simple_async_state_machine_plan(&func).expect("simple async state machine plan");
+        assert_eq!(plan.locals.len(), 1);
+        assert_eq!(plan.locals[0].name.as_str(), "label");
+        assert_eq!(plan.awaits.len(), 1);
+        assert_eq!(plan.tail_stmts.len(), 1);
+        assert!(plan.tail_expr.is_some());
+    }
+
+    #[test]
+    fn simple_async_state_machine_plan_accepts_scalar_params() {
+        let await_future = hir_expr(
+            HirExprKind::Call {
+                callee: Box::new(hir_expr(
+                    HirExprKind::Var(SmolStr::new("task.sleep")),
+                    Ty::Int,
+                )),
+                args: Vec::new(),
+            },
+            Ty::Future(Box::new(Ty::Void)),
+        );
+        let ret = hir_expr(HirExprKind::Var(SmolStr::new("base")), Ty::Int);
+        let mut func = simple_async_func(vec![
+            HirStmt::Expr(hir_expr(
+                HirExprKind::Await(Box::new(await_future)),
+                Ty::Void,
+            )),
+            HirStmt::Return(Some(ret), Span::DUMMY),
+        ]);
+        func.params.push(HirParam {
+            name: SmolStr::new("base"),
+            ty: Ty::Int,
+            default: None,
+            contract: None,
+            variadic: false,
+            span: Span::DUMMY,
+        });
+
+        let plan = simple_async_state_machine_plan(&func).expect("simple async state machine plan");
+        assert_eq!(plan.params.len(), 1);
+        assert_eq!(plan.params[0].name.as_str(), "base");
+    }
+
+    #[test]
+    fn simple_async_state_machine_plan_accepts_managed_param_and_binding() {
+        let await_future = hir_expr(
+            HirExprKind::Call {
+                callee: Box::new(hir_expr(HirExprKind::Var(SmolStr::new("load")), Ty::String)),
+                args: Vec::new(),
+            },
+            Ty::Future(Box::new(Ty::String)),
+        );
+        let mut func = simple_async_func(vec![
+            HirStmt::Let {
+                name: SmolStr::new("loaded"),
+                ty: Ty::String,
+                mutable: false,
+                value: hir_expr(HirExprKind::Await(Box::new(await_future)), Ty::String),
+                span: Span::DUMMY,
+            },
+            HirStmt::Return(
+                Some(hir_expr(
+                    HirExprKind::Var(SmolStr::new("loaded")),
+                    Ty::String,
+                )),
+                Span::DUMMY,
+            ),
+        ]);
+        func.return_ty = Ty::Future(Box::new(Ty::String));
+        func.params.push(HirParam {
+            name: SmolStr::new("prefix"),
+            ty: Ty::String,
+            default: None,
+            contract: None,
+            variadic: false,
+            span: Span::DUMMY,
+        });
+
+        let plan = simple_async_state_machine_plan(&func).expect("simple async state machine plan");
+        assert_eq!(plan.params[0].ty, Ty::String);
+        assert_eq!(plan.awaits[0].binding.as_ref().unwrap().ty, Ty::String);
+    }
+
+    #[test]
+    fn simple_async_liveness_marks_dead_and_live_frame_values_after_await() {
+        let first_call = hir_expr(
+            HirExprKind::Call {
+                callee: Box::new(hir_expr(HirExprKind::Var(SmolStr::new("load")), Ty::String)),
+                args: Vec::new(),
+            },
+            Ty::Future(Box::new(Ty::String)),
+        );
+        let second_call = hir_expr(
+            HirExprKind::Call {
+                callee: Box::new(hir_expr(
+                    HirExprKind::Var(SmolStr::new("consume")),
+                    Ty::String,
+                )),
+                args: vec![HirArg {
+                    label: None,
+                    spread: false,
+                    value: hir_expr(HirExprKind::Var(SmolStr::new("first")), Ty::String),
+                }],
+            },
+            Ty::Future(Box::new(Ty::String)),
+        );
+        let mut func = simple_async_func(vec![
+            HirStmt::Let {
+                name: SmolStr::new("dead_before_resume"),
+                ty: Ty::String,
+                mutable: false,
+                value: hir_expr(HirExprKind::StrLit(SmolStr::new("drop")), Ty::String),
+                span: Span::DUMMY,
+            },
+            HirStmt::Let {
+                name: SmolStr::new("first"),
+                ty: Ty::String,
+                mutable: false,
+                value: hir_expr(HirExprKind::Await(Box::new(first_call)), Ty::String),
+                span: Span::DUMMY,
+            },
+            HirStmt::Let {
+                name: SmolStr::new("second"),
+                ty: Ty::String,
+                mutable: false,
+                value: hir_expr(HirExprKind::Await(Box::new(second_call)), Ty::String),
+                span: Span::DUMMY,
+            },
+            HirStmt::Return(
+                Some(hir_expr(
+                    HirExprKind::Var(SmolStr::new("second")),
+                    Ty::String,
+                )),
+                Span::DUMMY,
+            ),
+        ]);
+        func.return_ty = Ty::Future(Box::new(Ty::String));
+        func.params.push(HirParam {
+            name: SmolStr::new("unused_param"),
+            ty: Ty::String,
+            default: None,
+            contract: None,
+            variadic: false,
+            span: Span::DUMMY,
+        });
+
+        let plan = simple_async_state_machine_plan(&func).expect("simple async state machine plan");
+        assert!(!simple_async_name_used_after_await(
+            &plan,
+            &SmolStr::new("dead_before_resume"),
+            0
+        ));
+        assert!(!simple_async_name_used_after_await(
+            &plan,
+            &SmolStr::new("unused_param"),
+            0
+        ));
+        assert!(simple_async_name_used_after_await(
+            &plan,
+            &SmolStr::new("first"),
+            0
+        ));
+        assert!(!simple_async_name_used_after_await(
+            &plan,
+            &SmolStr::new("first"),
+            1
+        ));
+        assert!(simple_async_name_used_after_await(
+            &plan,
+            &SmolStr::new("second"),
+            1
+        ));
+    }
+
+    #[test]
+    fn simple_async_state_machine_plan_rejects_non_tail_nested_await_return() {
+        let callee = hir_expr(HirExprKind::Var(SmolStr::new("compute")), Ty::Int);
+        let awaited_value = hir_expr(
+            HirExprKind::Await(Box::new(hir_expr(
+                HirExprKind::Call {
+                    callee: Box::new(callee),
+                    args: Vec::new(),
+                },
+                Ty::Future(Box::new(Ty::Int)),
+            ))),
+            Ty::Int,
+        );
+        let awaited_return = hir_expr(
+            HirExprKind::Binary {
+                op: BinaryOp::Add,
+                lhs: Box::new(awaited_value),
+                rhs: Box::new(hir_expr(HirExprKind::IntLit(1), Ty::Int)),
+            },
+            Ty::Int,
+        );
+        let first_await = hir_expr(
+            HirExprKind::Await(Box::new(hir_expr(
+                HirExprKind::Call {
+                    callee: Box::new(hir_expr(
+                        HirExprKind::Var(SmolStr::new("task.sleep")),
+                        Ty::Int,
+                    )),
+                    args: Vec::new(),
+                },
+                Ty::Future(Box::new(Ty::Void)),
+            ))),
+            Ty::Void,
+        );
+        let func = simple_async_func(vec![
+            HirStmt::Expr(first_await),
+            HirStmt::Return(Some(awaited_return), Span::DUMMY),
+        ]);
+
+        assert!(simple_async_state_machine_plan(&func).is_none());
+    }
+
+    #[test]
+    fn simple_async_state_machine_plan_accepts_return_await_call() {
+        let callee = hir_expr(HirExprKind::Var(SmolStr::new("compute")), Ty::Int);
+        let awaited_return = hir_expr(
+            HirExprKind::Await(Box::new(hir_expr(
+                HirExprKind::Call {
+                    callee: Box::new(callee),
+                    args: Vec::new(),
+                },
+                Ty::Future(Box::new(Ty::Int)),
+            ))),
+            Ty::Int,
+        );
+        let func = simple_async_func(vec![HirStmt::Return(Some(awaited_return), Span::DUMMY)]);
+
+        let plan = simple_async_state_machine_plan(&func).expect("simple async state machine plan");
+        assert_eq!(plan.awaits.len(), 1);
+
+        let first_await = hir_expr(
+            HirExprKind::Await(Box::new(hir_expr(
+                HirExprKind::Call {
+                    callee: Box::new(hir_expr(
+                        HirExprKind::Var(SmolStr::new("task.sleep")),
+                        Ty::Int,
+                    )),
+                    args: Vec::new(),
+                },
+                Ty::Future(Box::new(Ty::Void)),
+            ))),
+            Ty::Void,
+        );
+        let func = simple_async_func(vec![
+            HirStmt::Expr(first_await),
+            HirStmt::Return(
+                Some(hir_expr(
+                    HirExprKind::Await(Box::new(hir_expr(
+                        HirExprKind::Call {
+                            callee: Box::new(hir_expr(
+                                HirExprKind::Var(SmolStr::new("compute")),
+                                Ty::Int,
+                            )),
+                            args: Vec::new(),
+                        },
+                        Ty::Future(Box::new(Ty::Int)),
+                    ))),
+                    Ty::Int,
+                )),
+                Span::DUMMY,
+            ),
+        ]);
+
+        let plan = simple_async_state_machine_plan(&func).expect("simple async state machine plan");
+        assert_eq!(plan.awaits.len(), 2);
+        assert!(matches!(
+            plan.return_expr.as_ref().map(|expr| &expr.kind),
+            Some(HirExprKind::Var(name)) if name.as_str() == ".__async_return_value"
+        ));
+    }
+
+    #[test]
+    fn simple_async_state_machine_plan_accepts_await_result_question_mark_binding() {
+        let result_ty = Ty::Result(Box::new(Ty::Int), Box::new(Ty::String));
+        let await_future = hir_expr(
+            HirExprKind::Call {
+                callee: Box::new(hir_expr(
+                    HirExprKind::Var(SmolStr::new("compute")),
+                    result_ty.clone(),
+                )),
+                args: Vec::new(),
+            },
+            Ty::Future(Box::new(result_ty.clone())),
+        );
+        let await_expr = hir_expr(
+            HirExprKind::Await(Box::new(await_future)),
+            result_ty.clone(),
+        );
+        let propagate = hir_expr(HirExprKind::Propagate(Box::new(await_expr)), Ty::Int);
+        let ret = hir_expr(
+            HirExprKind::Ok_(Box::new(hir_expr(
+                HirExprKind::Var(SmolStr::new("value")),
+                Ty::Int,
+            ))),
+            result_ty.clone(),
+        );
+        let mut func = simple_async_func(vec![
+            HirStmt::Let {
+                name: SmolStr::new("value"),
+                ty: Ty::Int,
+                mutable: false,
+                value: propagate,
+                span: Span::DUMMY,
+            },
+            HirStmt::Return(Some(ret), Span::DUMMY),
+        ]);
+        func.return_ty = Ty::Future(Box::new(result_ty));
+
+        let plan = simple_async_state_machine_plan(&func).expect("simple async state machine plan");
+        assert_eq!(plan.awaits.len(), 1);
+        assert!(plan.awaits[0].propagate_result_ty.is_some());
+    }
+
+    const NATIVE_STMT_COVERAGE: &[NativeHirCoverage] = &[
+        NativeHirCoverage {
+            variant: "Let",
+            evidence: &["HirStmt::Let"],
+            note: "binding local com ARC lexical",
+        },
+        NativeHirCoverage {
+            variant: "Assign",
+            evidence: &["HirStmt::Assign"],
+            note: "var, campo e indice list",
+        },
+        NativeHirCoverage {
+            variant: "Return",
+            evidence: &["HirStmt::Return"],
+            note: "retorno direto, future ready e cleanup",
+        },
+        NativeHirCoverage {
+            variant: "Break",
+            evidence: &["HirStmt::Break"],
+            note: "salto com cleanup de escopo",
+        },
+        NativeHirCoverage {
+            variant: "Continue",
+            evidence: &["HirStmt::Continue"],
+            note: "salto com cleanup de escopo",
+        },
+        NativeHirCoverage {
+            variant: "Expr",
+            evidence: &["HirStmt::Expr"],
+            note: "expressao com descarte do resultado",
+        },
+        NativeHirCoverage {
+            variant: "If",
+            evidence: &["HirStmt::If"],
+            note: "branches nativos",
+        },
+        NativeHirCoverage {
+            variant: "While",
+            evidence: &["HirStmt::While"],
+            note: "loop condicional",
+        },
+        NativeHirCoverage {
+            variant: "For",
+            evidence: &["HirStmt::For"],
+            note: "range, list, set, map, string e bytes",
+        },
+        NativeHirCoverage {
+            variant: "Loop",
+            evidence: &["HirStmt::Loop"],
+            note: "loop infinito com break/continue",
+        },
+        NativeHirCoverage {
+            variant: "Repeat",
+            evidence: &["HirStmt::Repeat"],
+            note: "contador i64 com trap para negativo",
+        },
+        NativeHirCoverage {
+            variant: "Match",
+            evidence: &["HirStmt::Match"],
+            note: "patterns HIR suportados pelo binder nativo",
+        },
+        NativeHirCoverage {
+            variant: "IfSome",
+            evidence: &["HirStmt::IfSome"],
+            note: "desempacotamento optional",
+        },
+        NativeHirCoverage {
+            variant: "WhileSome",
+            evidence: &["HirStmt::WhileSome"],
+            note: "loop optional",
+        },
+        NativeHirCoverage {
+            variant: "Using",
+            evidence: &["HirStmt::Using"],
+            note: "cleanup lexical de recurso",
+        },
+        NativeHirCoverage {
+            variant: "Check",
+            evidence: &["HirStmt::Check"],
+            note: "runtime trap em contrato/check",
+        },
+    ];
+
+    #[test]
+    fn native_backend_declares_manifest_runtime_symbols() {
+        let mut checked = HashSet::new();
+        let mut missing = Vec::new();
+        for entry in stdlib_runtime_functions()
+            .iter()
+            .filter(|entry| entry.native_runtime)
+        {
+            if checked.insert(entry.runtime_symbol)
+                && stdlib_native_abi(entry.runtime_symbol).is_none()
+            {
+                missing.push(entry.runtime_symbol);
+            }
+        }
+
+        assert!(
+            missing.is_empty(),
+            "manifest runtime symbols missing native backend ABI metadata: {missing:#?}"
+        );
+    }
+
+    #[test]
+    fn direct_internal_runtime_imports_are_documented() {
+        let source = include_str!("native_backend.rs");
+        let manifest_symbols: HashSet<_> = stdlib_runtime_functions()
+            .iter()
+            .filter(|entry| entry.native_runtime)
+            .map(|entry| entry.runtime_symbol)
+            .collect();
+        let internal_symbols: HashSet<_> =
+            INTERNAL_NATIVE_RUNTIME_IMPORTS.iter().copied().collect();
+        let direct_imports = direct_declared_runtime_symbols(source);
+        let mut undocumented = Vec::new();
+
+        for symbol in direct_imports {
+            if symbol.starts_with("ori_")
+                && !manifest_symbols.contains(symbol.as_str())
+                && !internal_symbols.contains(symbol.as_str())
+            {
+                undocumented.push(symbol);
+            }
+        }
+
+        undocumented.sort();
+        undocumented.dedup();
+        assert!(
+            undocumented.is_empty(),
+            "direct native runtime imports outside the stdlib manifest must be documented as internal helpers: {undocumented:#?}"
+        );
+    }
+
+    #[test]
+    fn native_runtime_imports_are_deduplicated_before_cranelift_declaration() {
+        let source = include_str!("native_backend.rs");
+        let dedup = source
+            .find("if let Some(existing) = declared_imports.get(name).copied()")
+            .expect("declare_stdlib must check for existing native imports");
+        let declaration = source
+            .find(".declare_function(name, Linkage::Import, &sig)")
+            .expect("declare_stdlib must declare Cranelift imports");
+
+        assert!(
+            dedup < declaration,
+            "native runtime imports must be deduplicated before calling Cranelift declare_function"
+        );
+    }
+
+    fn direct_declared_runtime_symbols(source: &str) -> Vec<String> {
+        let mut symbols = Vec::new();
+        let mut rest = source;
+        while let Some(index) = rest.find("decl(") {
+            rest = &rest[index + "decl(".len()..];
+            let after_decl = rest.trim_start();
+            let Some(after_quote) = after_decl.strip_prefix('"') else {
+                continue;
+            };
+            if let Some((symbol, tail)) = after_quote.split_once('"') {
+                symbols.push(symbol.to_string());
+                rest = tail;
+            } else {
+                break;
+            }
+        }
+        symbols
+    }
+
+    #[test]
+    fn native_hir_expression_coverage_matrix_matches_hir_enum() {
+        let hir_source = include_str!("../../ori-hir/src/hir.rs");
+        let actual = enum_variant_names(hir_source, "HirExprKind");
+        let documented = coverage_variants(NATIVE_EXPR_COVERAGE);
+
+        assert_eq!(
+            documented, actual,
+            "native HIR expression coverage must be updated when HirExprKind changes"
+        );
+    }
+
+    #[test]
+    fn native_hir_statement_coverage_matrix_matches_hir_enum() {
+        let hir_source = include_str!("../../ori-hir/src/hir.rs");
+        let actual = enum_variant_names(hir_source, "HirStmt");
+        let documented = coverage_variants(NATIVE_STMT_COVERAGE);
+
+        assert_eq!(
+            documented, actual,
+            "native HIR statement coverage must be updated when HirStmt changes"
+        );
+    }
+
+    #[test]
+    fn native_hir_expression_coverage_has_codegen_evidence() {
+        let source = include_str!("native_backend.rs");
+        let emit_expr = source_section(source, "fn emit_expr(", "fn str_len_from_ptr");
+
+        for entry in NATIVE_EXPR_COVERAGE {
+            assert!(
+                !entry.note.trim().is_empty(),
+                "missing note for {}",
+                entry.variant
+            );
+            for marker in entry.evidence {
+                assert!(
+                    emit_expr.contains(marker),
+                    "coverage entry `{}` points at missing native expression marker `{}`",
+                    entry.variant,
+                    marker
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn native_hir_statement_coverage_has_codegen_evidence() {
+        let source = include_str!("native_backend.rs");
+        let emit_stmt = source_section(source, "fn emit_stmt(", "fn emit_if(");
+
+        for entry in NATIVE_STMT_COVERAGE {
+            assert!(
+                !entry.note.trim().is_empty(),
+                "missing note for {}",
+                entry.variant
+            );
+            for marker in entry.evidence {
+                assert!(
+                    emit_stmt.contains(marker),
+                    "coverage entry `{}` points at missing native statement marker `{}`",
+                    entry.variant,
+                    marker
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn native_string_collectors_are_exhaustive_over_hir_shapes() {
+        let source = include_str!("native_backend.rs");
+        let expr_collector = source_section(
+            source,
+            "fn collect_strings_expr",
+            "fn collect_strings_block",
+        );
+        let stmt_collector =
+            source_section(source, "fn collect_strings_stmt", "fn collect_all_strings");
+        let pattern_collector = source_section(
+            source,
+            "fn collect_strings_pattern",
+            "// == Type mapping ==",
+        );
+
+        for (name, section) in [
+            ("collect_strings_expr", expr_collector),
+            ("collect_strings_stmt", stmt_collector),
+            ("collect_strings_pattern", pattern_collector),
+        ] {
+            assert!(
+                !section
+                    .lines()
+                    .any(|line| line.trim_start().starts_with("_ =>")),
+                "{name} must stay exhaustive; wildcard arms silently hide new HIR variants"
+            );
+        }
+    }
+
+    #[test]
+    fn native_codegen_unsupported_errors_are_coded() {
+        let message = native_codegen_unsupported("example native gap");
+        assert!(
+            message.starts_with("backend.native_unsupported:"),
+            "{message}"
+        );
+
+        let source = source_section(
+            include_str!("native_backend.rs"),
+            "fn collect_strings_expr",
+            "#[cfg(test)]",
+        );
+        for raw in [
+            "\"unsupported indexed assignment base",
+            "\"unsupported `for` iterable type",
+            "\"unsupported map runtime call",
+            "\"unsupported set runtime call",
+        ] {
+            assert!(
+                !source.contains(raw),
+                "native unsupported path must use backend.native_unsupported helper: {raw}"
+            );
+        }
+    }
+
+    fn coverage_variants(entries: &[NativeHirCoverage]) -> BTreeSet<String> {
+        entries
+            .iter()
+            .map(|entry| entry.variant.to_string())
+            .collect()
+    }
+
+    fn enum_variant_names(source: &str, enum_name: &str) -> BTreeSet<String> {
+        let marker = format!("pub enum {enum_name} {{");
+        let start = source
+            .find(&marker)
+            .unwrap_or_else(|| panic!("enum `{enum_name}` not found"));
+        let body_start = start + marker.len();
+        let body_end = matching_brace(source, body_start - 1)
+            .unwrap_or_else(|| panic!("enum `{enum_name}` has no matching closing brace"));
+        let body = strip_rust_line_comments(&source[body_start..body_end]);
+        split_top_level_enum_items(&body)
+            .into_iter()
+            .filter_map(|item| leading_identifier(&item))
+            .collect()
+    }
+
+    fn strip_rust_line_comments(source: &str) -> String {
+        source
+            .lines()
+            .map(|line| line.split_once("//").map(|(code, _)| code).unwrap_or(line))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn matching_brace(source: &str, open_index: usize) -> Option<usize> {
+        let mut depth = 0usize;
+        for (offset, ch) in source[open_index..].char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth = depth.checked_sub(1)?;
+                    if depth == 0 {
+                        return Some(open_index + offset);
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    fn split_top_level_enum_items(body: &str) -> Vec<String> {
+        let mut items = Vec::new();
+        let mut current = String::new();
+        let mut brace_depth = 0usize;
+        let mut paren_depth = 0usize;
+        let mut bracket_depth = 0usize;
+
+        for ch in body.chars() {
+            match ch {
+                '{' => brace_depth += 1,
+                '}' => brace_depth = brace_depth.saturating_sub(1),
+                '(' => paren_depth += 1,
+                ')' => paren_depth = paren_depth.saturating_sub(1),
+                '[' => bracket_depth += 1,
+                ']' => bracket_depth = bracket_depth.saturating_sub(1),
+                ',' if brace_depth == 0 && paren_depth == 0 && bracket_depth == 0 => {
+                    if !current.trim().is_empty() {
+                        items.push(current.clone());
+                    }
+                    current.clear();
+                    continue;
+                }
+                _ => {}
+            }
+            current.push(ch);
+        }
+
+        if !current.trim().is_empty() {
+            items.push(current);
+        }
+        items
+    }
+
+    fn leading_identifier(item: &str) -> Option<String> {
+        let cleaned = item
+            .lines()
+            .map(str::trim)
+            .filter(|line| {
+                !line.is_empty()
+                    && !line.starts_with("//")
+                    && !line.starts_with("///")
+                    && !line.starts_with("#[")
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+        let mut ident = String::new();
+        for ch in cleaned.chars().skip_while(|ch| ch.is_whitespace()) {
+            if ident.is_empty() {
+                if ch == '_' || ch.is_ascii_alphabetic() {
+                    ident.push(ch);
+                } else {
+                    return None;
+                }
+            } else if ch == '_' || ch.is_ascii_alphanumeric() {
+                ident.push(ch);
+            } else {
+                break;
+            }
+        }
+        (!ident.is_empty()).then_some(ident)
+    }
+
+    #[test]
+    fn missing_raw_native_linker_reports_native_linker_not_c_compiler() {
+        let err = link_with_raw_native_command(
+            Path::new("__ori_missing_native_linker_for_test__"),
+            Path::new("input.o"),
+            Path::new("output.exe"),
+            &[],
+            NativeLinkOptions::default(),
+        )
+        .expect_err("missing raw linker should produce an error");
+
+        assert!(err.contains("native.linker_missing"), "{err}");
+        assert!(err.contains("native linker"), "{err}");
+        assert!(!err.contains("C compiler"), "{err}");
+        assert!(!err.contains("C toolchain"), "{err}");
+    }
+
+    #[test]
+    fn unresolved_native_symbol_error_adds_runtime_abi_hint() {
+        let err = format_native_link_failure(
+            "driver",
+            Path::new("rustc"),
+            "exit status: 1",
+            b"",
+            b"error LNK2019: unresolved external symbol ori_missing_runtime_func referenced in function ORI__main",
+            NativeLinkOptions::default(),
+        );
+
+        assert!(err.contains("native.runtime_symbol_missing"), "{err}");
+        assert!(err.contains("native symbol was not resolved"), "{err}");
+        assert!(err.contains("ori-runtime"), "{err}");
+        assert!(err.contains("target and ABI"), "{err}");
+        assert!(err.contains("ori_missing_runtime_func"), "{err}");
+        assert!(err.contains("--native-raw"), "{err}");
+        assert!(!err.contains("C compiler"), "{err}");
+    }
+
+    #[test]
+    fn raw_native_link_failure_includes_full_streams() {
+        let err = format_native_link_failure(
+            "driver",
+            Path::new("rustc"),
+            "exit status: 1",
+            b"raw stdout line",
+            b"raw stderr line",
+            NativeLinkOptions {
+                raw_diagnostics: true,
+            },
+        );
+
+        assert!(err.contains("native.link_failed"), "{err}");
+        assert!(err.contains("stdout:\nraw stdout line"), "{err}");
+        assert!(err.contains("stderr:\nraw stderr line"), "{err}");
+    }
+
+    #[test]
+    fn native_hir_validator_rejects_invalid_logical_operands() {
+        let hir = module_with_body(vec![HirStmt::Expr(HirExpr {
+            kind: HirExprKind::Binary {
+                op: BinaryOp::And,
+                lhs: Box::new(int_expr(1, 10)),
+                rhs: Box::new(int_expr(2, 12)),
+            },
+            ty: Ty::Bool,
+            span: Span::new(10, 13),
+        })]);
+
+        let err = validate_native_hir(&hir).expect_err("invalid HIR should fail preflight");
+
+        assert!(err.contains("invalid HIR for native backend"));
+        assert!(err.contains("logical operator left operand must be bool"));
+        assert!(
+            !err.contains("Cranelift"),
+            "preflight error should not leak verifier details: {err}"
+        );
+    }
+
+    #[test]
+    fn native_hir_validator_accepts_valid_logical_operands() {
+        let hir = module_with_body(vec![HirStmt::Expr(HirExpr {
+            kind: HirExprKind::Binary {
+                op: BinaryOp::And,
+                lhs: Box::new(bool_expr(true, 10)),
+                rhs: Box::new(bool_expr(false, 17)),
+            },
+            ty: Ty::Bool,
+            span: Span::new(10, 22),
+        })]);
+
+        validate_native_hir(&hir).expect("valid bool HIR should pass preflight");
+    }
+
+    #[test]
+    fn option_and_result_layouts_are_stable_for_native_abi() {
+        let ptr_ty = types::I64;
+
+        assert_eq!(optional_layout(&Ty::Int, ptr_ty), (8, 16));
+        assert_eq!(optional_layout(&Ty::Bool, ptr_ty), (1, 2));
+        assert_eq!(optional_layout(&Ty::String, ptr_ty), (8, 16));
+
+        assert_eq!(result_layout(&Ty::Int, &Ty::String, ptr_ty), (8, 8, 16));
+        assert_eq!(result_layout(&Ty::String, &Ty::String, ptr_ty), (8, 8, 16));
+    }
+
+    #[test]
+    fn tuple_and_closure_layouts_are_stable_for_native_abi() {
+        let ptr_ty = types::I64;
+        let (tuple_fields, tuple_size, tuple_align) =
+            tuple_layout(&[Ty::Int, Ty::Bool, Ty::String], ptr_ty);
+
+        assert_eq!(tuple_fields.len(), 3);
+        assert_eq!(tuple_fields[0].0, 0);
+        assert_eq!(tuple_fields[1].0, 8);
+        assert_eq!(tuple_fields[2].0, 16);
+        assert_eq!(tuple_size, 24);
+        assert_eq!(tuple_align, 8);
+
+        let captures = vec![
+            HirClosureCapture {
+                name: "count".into(),
+                ty: Ty::Int,
+            },
+            HirClosureCapture {
+                name: "label".into(),
+                ty: Ty::String,
+            },
+        ];
+        let (capture_offsets, capture_size) = closure_env_layout(&captures, ptr_ty);
+
+        assert_eq!(capture_offsets, vec![0, 8]);
+        assert_eq!(capture_size, 16);
+    }
+
+    #[test]
+    fn async_and_concurrency_handle_layouts_are_native_pointers() {
+        let ptr_ty = types::I64;
+
+        assert_eq!(
+            cl_type(&Ty::Future(Box::new(Ty::Int)), ptr_ty),
+            Some(ptr_ty)
+        );
+        assert_eq!(
+            cl_type(&Ty::TaskJob(Box::new(Ty::Int)), ptr_ty),
+            Some(ptr_ty)
+        );
+        assert_eq!(
+            cl_type(&Ty::Channel(Box::new(Ty::Int)), ptr_ty),
+            Some(ptr_ty)
+        );
+        assert_eq!(cl_type(&Ty::AtomicInt, ptr_ty), Some(ptr_ty));
+        assert_eq!(lazy_layout(&Ty::Int, ptr_ty), (16, 24));
+    }
+
+    #[test]
+    fn managed_type_audit_matches_native_abi_contract() {
+        let managed = vec![
+            Ty::String,
+            Ty::Bytes,
+            Ty::List(Box::new(Ty::Int)),
+            Ty::Map(Box::new(Ty::String), Box::new(Ty::Int)),
+            Ty::Set(Box::new(Ty::String)),
+            Ty::Range(Box::new(Ty::Int)),
+            Ty::Optional(Box::new(Ty::String)),
+            Ty::Result(Box::new(Ty::String), Box::new(Ty::String)),
+            Ty::Tuple(vec![Ty::Int, Ty::String]),
+            Ty::Named(DefId(42), Vec::new()),
+            Ty::Any(DefId(7)),
+            Ty::Func {
+                params: vec![Ty::String],
+                ret: Box::new(Ty::Void),
+            },
+            Ty::Lazy(Box::new(Ty::String)),
+            Ty::Future(Box::new(Ty::String)),
+            Ty::TaskJob(Box::new(Ty::Int)),
+            Ty::Channel(Box::new(Ty::String)),
+            Ty::AtomicInt,
+            Ty::TaskJoinError,
+            Ty::ChannelSendError,
+            Ty::ChannelReceiveError,
+        ];
+        let direct = vec![
+            Ty::Bool,
+            Ty::Int,
+            Ty::Int8,
+            Ty::Int16,
+            Ty::Int32,
+            Ty::Int64,
+            Ty::U8,
+            Ty::U16,
+            Ty::U32,
+            Ty::U64,
+            Ty::Float,
+            Ty::Float32,
+            Ty::Float64,
+            Ty::Void,
+            Ty::Never,
+            Ty::Error,
+            Ty::Param {
+                index: 0,
+                name: "T".into(),
+            },
+            Ty::Infer(0),
+        ];
+
+        for ty in managed {
+            assert!(is_managed_ty(&ty), "`{}` must be managed", ty.display());
+        }
+        for ty in direct {
+            assert!(
+                !is_managed_ty(&ty),
+                "`{}` must remain a direct/non-managed value",
+                ty.display()
+            );
+        }
+    }
+
+    #[test]
+    fn managed_return_retain_happens_before_scope_cleanup() {
+        let source = include_str!("native_backend.rs");
+        let emit_return = source_section(source, "fn emit_return", "fn emit_future_ready");
+        let future_return = source_section(
+            emit_return,
+            "if let Ty::Future(inner) = return_ty",
+            "let return_value = val",
+        );
+        let normal_return = source_section(emit_return, "let return_value = val", "Ok(())");
+
+        assert_order(
+            normal_return,
+            "self.emit_arc_retain_if_managed(&return_ty, value)?;",
+            "self.emit_scope_cleanup_calls_from(0, 0)?;",
+        );
+        assert_order(
+            future_return,
+            "self.emit_arc_retain_if_managed(&Ty::Future(Box::new(inner_ty)), future)?;",
+            "self.emit_scope_cleanup_calls_from(0, 0)?;",
+        );
+    }
+
+    #[test]
+    fn simple_async_state_machine_cleans_frame_on_terminal_paths() {
+        let source = include_str!("native_backend.rs");
+        let step = source_section(
+            source,
+            "fn emit_simple_async_step(",
+            "fn emit_simple_async_frame_cleanup(",
+        );
+        let cleanup = source_section(
+            source,
+            "fn emit_simple_async_frame_cleanup(",
+            "fn emit_await(",
+        );
+
+        assert_eq!(
+            step.matches("self.emit_simple_async_frame_cleanup(plan, frame, index, true)?;")
+                .count(),
+            3,
+            "step cleanup must run on `?`, failed future and cancelled future paths"
+        );
+        assert!(
+            step.contains("self.emit_simple_async_frame_cleanup(plan, frame, await_count, true)?;"),
+            "normal completion must cleanup the async frame"
+        );
+        for expected in [
+            "ASYNC_FRAME_RESULT_OFFSET",
+            "simple_async_frame_param_offset",
+            "simple_async_frame_local_offset",
+            "simple_async_frame_binding_offset",
+            "self.emit_arc_unregister_edge(frame, result_future)?;",
+            "self.emit_arc_unregister_edge(frame, value)?;",
+        ] {
+            assert!(cleanup.contains(expected), "missing `{expected}`");
+        }
+    }
+
+    #[test]
+    fn simple_async_state_machine_releases_dead_managed_frame_values_after_resume() {
+        let source = include_str!("native_backend.rs");
+        let step = source_section(
+            source,
+            "fn emit_simple_async_step(",
+            "fn emit_simple_async_frame_cleanup(",
+        );
+        let drop_dead = source_section(
+            source,
+            "fn emit_simple_async_drop_dead_frame_values_after_await(",
+            "fn emit_await(",
+        );
+
+        assert!(
+            step.matches("emit_simple_async_drop_dead_frame_values_after_await")
+                .count()
+                >= 2,
+            "state machine must release dead frame edges on pending and ready paths"
+        );
+        assert!(
+            drop_dead.contains("simple_async_uses_after_await(plan, await_index)"),
+            "drop logic must be driven by calculated liveness after each await"
+        );
+        assert!(
+            drop_dead.contains("self.emit_simple_async_drop_frame_edge(frame"),
+            "drop logic must unregister frame ARC edges"
+        );
+        assert!(
+            drop_dead.contains("self.emit_arc_collect_cycles()?;"),
+            "drop logic must allow cycle collection after early frame releases"
+        );
+    }
+
+    #[test]
+    fn native_await_lowering_no_longer_uses_task_block_on() {
+        let source = include_str!("native_backend.rs");
+        let emit_await = source_section(source, "fn emit_await(", "fn emit_never_call_stmt(");
+        let async_wrapper = source_section(
+            source,
+            "fn emit_async_wrapper(",
+            "fn emit_simple_async_state_machine_wrapper(",
+        );
+
+        assert!(
+            !emit_await.contains("ori_task_block_on"),
+            "`emit_await` must not lower to the synchronous block_on bridge"
+        );
+        assert!(
+            !async_wrapper.contains("ori_async_spawn"),
+            "async wrappers must not use executor-backed spawn fallback"
+        );
+    }
+
+    #[test]
+    fn managed_assignment_updates_arc_before_overwrite() {
+        let source = include_str!("native_backend.rs");
+        let emit_stmt = source_section(source, "fn emit_stmt(", "fn emit_if(");
+        let assign = source_section(
+            emit_stmt,
+            "HirStmt::Assign { lvalue, value, .. } =>",
+            "HirStmt::Return",
+        );
+
+        assert_order(
+            assign,
+            "self.emit_arc_retain_if_managed(&ty, val)?;",
+            "self.emit_arc_release_if_managed(&ty, old)?;",
+        );
+        assert_order(
+            assign,
+            "self.emit_arc_release_if_managed(&ty, old)?;",
+            "self.builder.def_var(var, val);",
+        );
+        assert_order(
+            assign,
+            "self.emit_arc_update_edge_if_managed(&elem_ty, container, old, val)?;",
+            ".get(\"ori_list_set\")",
+        );
+        assert_order(
+            assign,
+            "self.emit_arc_update_edge_if_managed(&field_layout.ty, owner, old, val)?;",
+            ".store(MemFlags::new(), val, addr, 0);",
+        );
+    }
+
+    #[test]
+    fn managed_aggregate_literals_register_arc_edges() {
+        let source = include_str!("native_backend.rs");
+        let expr_codegen = source_section(source, "fn emit_expr(", "fn emit_interpolated_string");
+        let list_push = source_section(
+            source,
+            "fn emit_list_push_value",
+            "fn emit_list_extend_from",
+        );
+
+        for expected in [
+            "self.emit_arc_register_edge_if_managed(inner_ty, base, val)?;",
+            "self.emit_arc_register_edge_if_managed(ok_ty, base, val)?;",
+            "self.emit_arc_register_edge_if_managed(err_ty, base, val)?;",
+            "self.emit_arc_register_edge_if_managed(&fi.ty, base, val)?;",
+            "self.emit_arc_register_edge_if_managed(&elem_ty, base, v)?;",
+            "self.emit_arc_register_edge_if_managed(&key_ty, map_ptr, key_value)?;",
+            "self.emit_arc_register_edge_if_managed(&value_ty, map_ptr, map_value)?;",
+            "self.emit_arc_register_edge_if_managed(&elem.ty, set_ptr, v)?;",
+        ] {
+            assert!(expr_codegen.contains(expected), "missing `{expected}`");
+        }
+        assert!(
+            list_push.contains("self.emit_arc_register_edge_if_managed(elem_ty, list, value)?;"),
+            "{list_push}"
+        );
+    }
+
+    #[test]
+    fn managed_closure_captures_are_retained_and_edge_registered() {
+        let source = include_str!("native_backend.rs");
+        let prologue = source_section(
+            source,
+            "fn emit_closure_capture_prologue",
+            "fn emit_value_contract",
+        );
+        let capture_object =
+            source_section(source, "fn emit_closure_value", "fn emit_closure_call");
+
+        assert!(prologue.contains("self.emit_arc_retain_if_managed(&capture.ty, value)?;"));
+        assert!(prologue.contains("self.managed_stack.push(ManagedCleanup"));
+        assert!(
+            capture_object
+                .contains("self.emit_arc_register_edge_if_managed(&capture.ty, env, value)?;"),
+            "{capture_object}"
+        );
+    }
+
+    fn source_section<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+        let start_index = source
+            .find(start)
+            .unwrap_or_else(|| panic!("source marker `{start}` not found"));
+        let tail = &source[start_index..];
+        let end_index = tail
+            .find(end)
+            .unwrap_or_else(|| panic!("source marker `{end}` not found after `{start}`"));
+        &tail[..end_index]
+    }
+
+    fn assert_order(source: &str, before: &str, after: &str) {
+        let before_index = source
+            .find(before)
+            .unwrap_or_else(|| panic!("marker `{before}` not found in source section"));
+        let after_index = source
+            .find(after)
+            .unwrap_or_else(|| panic!("marker `{after}` not found in source section"));
+        assert!(
+            before_index < after_index,
+            "`{before}` must appear before `{after}`"
+        );
+    }
+
+    fn module_with_body(stmts: Vec<HirStmt>) -> HirModule {
+        HirModule {
+            namespace: "test".into(),
+            structs: Vec::new(),
+            enums: Vec::new(),
+            traits: Vec::new(),
+            trait_impls: Vec::new(),
+            funcs: vec![HirFunc {
+                def_id: DefId(0),
+                name: "main".into(),
+                params: Vec::new(),
+                return_ty: Ty::Void,
+                body: HirBlock {
+                    stmts,
+                    span: Span::new(0, 30),
+                },
+                closure_captures: Vec::new(),
+                is_public: true,
+                is_async: false,
+                is_mut: false,
+                span: Span::new(0, 30),
+            }],
+            consts: Vec::new(),
+            externs: Vec::new(),
+        }
+    }
+
+    fn int_expr(value: i64, start: usize) -> HirExpr {
+        HirExpr {
+            kind: HirExprKind::IntLit(value),
+            ty: Ty::Int,
+            span: Span::new(start, start + 1),
+        }
+    }
+
+    fn bool_expr(value: bool, start: usize) -> HirExpr {
+        HirExpr {
+            kind: HirExprKind::BoolLit(value),
+            ty: Ty::Bool,
+            span: Span::new(start, start + if value { 4 } else { 5 }),
+        }
     }
 }

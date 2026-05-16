@@ -93,6 +93,36 @@ func main()
 end
 ```
 
+### Namespaces and Imports
+
+Current compiler behavior:
+
+- Every source file starts with one `namespace` declaration.
+- `import app.util` creates the local alias `util`.
+- `import app.util as tools` creates the local alias `tools`.
+- `public import app.util as tools` re-exports that alias through the current
+  namespace.
+- Imports are resolved from namespace-like paths to matching `.orl` files near
+  the importing file.
+- An import cycle is rejected with `bind.import_cycle`.
+- If a resolved file declares a different namespace, the compiler emits
+  `bind.import_namespace_mismatch`.
+- Known but unfinished standard-library modules are rejected with
+  `bind.stdlib_module_unavailable`.
+- Unknown `ori.*` modules are rejected with `bind.stdlib_module_unknown`.
+
+### Visibility
+
+Current visibility rules:
+
+- Top-level declarations are private by default.
+- `public` makes a declaration visible to other namespaces.
+- Private declarations remain usable inside the namespace that defines them.
+- Accessing a private imported declaration emits `name.private`.
+- `public import` re-exports a public alias; plain `import` does not.
+- For public functions, parameter names are part of the public API because
+  named arguments may use them at call sites.
+
 The common path through Ori code:
 
 1. Define data shapes with `struct` and `enum`.
@@ -136,7 +166,7 @@ end
 
 func main() -> result<void, string>
     const user: User = load_user(1)?
-    io.print(user.display())?
+    io.print(user.display())
     return success()
 end
 ```

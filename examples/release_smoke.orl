@@ -1,0 +1,7 @@
+namespace examples.release_smoke
+
+import ori.io as io
+
+func main()
+    io.print("ori release smoke")
+end

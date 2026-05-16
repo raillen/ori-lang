@@ -1,4 +1,5 @@
 use crate::parser::Parser;
+use ori_ast::common::Name;
 use ori_ast::expr::Expr;
 use ori_ast::stmt::{
     AssignStmt, Block, CheckStmt, CompoundAssignStmt, CompoundOp, ForStmt, IfSomeStmt, IfStmt,
@@ -61,9 +62,10 @@ impl<'src> Parser<'src> {
                 // Check for assignment operators
                 if let Some(op) = self.peek_compound_assign_op() {
                     self.advance();
+                    let target_span = expr_lvalue_span(&expr);
                     let value = self.parse_expr()?;
-                    let span = expr_lvalue_span(&expr).cover(value.span());
-                    let lvalue = expr_to_lvalue(expr)?;
+                    let span = target_span.cover(value.span());
+                    let lvalue = self.expr_to_lvalue_or_error(expr)?;
                     return Some(Stmt::CompoundAssign(CompoundAssignStmt {
                         lvalue,
                         op,
@@ -73,9 +75,10 @@ impl<'src> Parser<'src> {
                 }
                 if self.at(&TokenKind::Eq) {
                     self.advance();
+                    let target_span = expr_lvalue_span(&expr);
                     let value = self.parse_expr()?;
-                    let span = expr_lvalue_span(&expr).cover(value.span());
-                    let lvalue = expr_to_lvalue(expr)?;
+                    let span = target_span.cover(value.span());
+                    let lvalue = self.expr_to_lvalue_or_error(expr)?;
                     return Some(Stmt::Assign(AssignStmt {
                         lvalue,
                         value: Box::new(value),
@@ -251,8 +254,6 @@ impl<'src> Parser<'src> {
                 self.advance();
             }
         }
-        // Also handle reserved `times` keyword
-        self.eat(&TokenKind::Times);
         let body = self.parse_block()?;
         let end = self.expect(&TokenKind::End)?;
         Some(Stmt::Repeat(RepeatStmt {
@@ -379,17 +380,44 @@ impl<'src> Parser<'src> {
             _ => None,
         }
     }
+
+    fn expr_to_lvalue_or_error(&mut self, expr: Expr) -> Option<LValue> {
+        let span = expr_lvalue_span(&expr);
+        match expr_to_lvalue(expr) {
+            Some(lvalue) => Some(lvalue),
+            None => {
+                self.error(
+                    "parse.invalid_lvalue",
+                    "expected an assignable target",
+                    span,
+                );
+                None
+            }
+        }
+    }
 }
 
 fn expr_to_lvalue(expr: Expr) -> Option<LValue> {
     match expr {
+        Expr::SelfExpr(span) => Some(LValue::Ident(Name::new("self", span))),
         Expr::Ident(n) => Some(LValue::Ident(n)),
-        // Single-segment qualified names are simple identifiers (the parser always
-        // produces QualifiedIdent for bare names). Multi-segment paths reject below.
-        Expr::QualifiedIdent(q) if q.parts.len() == 1 => {
-            Some(LValue::Ident(q.parts.into_iter().next().unwrap()))
+        // The expression parser folds dotted names like `box.value` into a
+        // QualifiedIdent. Rebuild them as nested field lvalues for assignment.
+        Expr::QualifiedIdent(q) => {
+            let mut parts = q.parts.into_iter();
+            let first = parts.next()?;
+            let mut span = first.span;
+            let mut lvalue = LValue::Ident(first);
+            for field in parts {
+                span = span.cover(field.span);
+                lvalue = LValue::Field {
+                    base: Box::new(lvalue),
+                    field,
+                    span,
+                };
+            }
+            Some(lvalue)
         }
-        Expr::QualifiedIdent(_) => None, // multi-segment paths are not lvalues
         Expr::Field {
             object,
             field,

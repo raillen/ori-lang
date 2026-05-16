@@ -1,0 +1,14 @@
+namespace examples.async_demo
+
+import ori.io as io
+import ori.task as task
+
+async func delayed_answer() -> int
+    await task.sleep(1)
+    return 42
+end
+
+async func main()
+    const answer: int = await delayed_answer()
+    io.print(string(answer))
+end

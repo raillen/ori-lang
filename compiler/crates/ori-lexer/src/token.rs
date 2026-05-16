@@ -149,8 +149,7 @@ pub enum TokenKind {
     #[token("void")]
     Void,
 
-    // Keywords used in grammar but not in the spec reserved list yet.
-    // Treated as reserved here; spec will be updated.
+    // Keywords used by statement, expression, and type grammar.
     #[token("using")]
     Using,
     #[token("check")]
@@ -163,8 +162,6 @@ pub enum TokenKind {
     Tuple,
     #[token("lazy")]
     Lazy,
-    #[token("times")]
-    Times, // contextual, but reserved at lexer level for safety
 
     // ── Primitive type names (also reserved) ─────────────────────────────────
     #[token("bool")]
@@ -199,9 +196,10 @@ pub enum TokenKind {
     BytesTy,
 
     // ── Identifiers ──────────────────────────────────────────────────────────
-    /// A user-defined name: `[a-zA-Z_][a-zA-Z0-9_]*`.
+    /// A user-defined name: Unicode letter or `_`, followed by letters,
+    /// decimal digits, or `_`.
     /// Keywords above have higher priority and are matched first.
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*")]
+    #[regex(r"[_\p{L}][_\p{L}\p{Nd}]*")]
     Ident,
 
     // ── Integer literals ─────────────────────────────────────────────────────
@@ -247,6 +245,8 @@ pub enum TokenKind {
     // ── Operators (longer tokens declared first for priority) ────────────────
     #[token("-->")]
     Uninhabited, // intentionally unused; prevents `->` + `-` ambiguity notes
+    #[token("...")]
+    Ellipsis,
     #[token("..")]
     DotDot,
     #[token("->")]
@@ -385,7 +385,6 @@ impl TokenKind {
             TokenKind::Then => "`then`",
             TokenKind::Tuple => "`tuple`",
             TokenKind::Lazy => "`lazy`",
-            TokenKind::Times => "`times`",
             TokenKind::BoolTy => "`bool`",
             TokenKind::IntTy => "`int`",
             TokenKind::Int8Ty => "`int8`",
@@ -401,6 +400,7 @@ impl TokenKind {
             TokenKind::Float64Ty => "`float64`",
             TokenKind::StringTy => "`string`",
             TokenKind::BytesTy => "`bytes`",
+            TokenKind::Ellipsis => "`...`",
             TokenKind::DotDot => "`..`",
             TokenKind::Arrow => "`->`",
             TokenKind::FatArrow => "`=>`",

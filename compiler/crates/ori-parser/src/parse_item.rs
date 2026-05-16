@@ -7,6 +7,7 @@ use ori_ast::item::{
 };
 use ori_diagnostics::Span;
 use ori_lexer::TokenKind;
+use std::collections::HashSet;
 
 impl<'src> Parser<'src> {
     /// Entry point: parse a full source file.
@@ -29,9 +30,13 @@ impl<'src> Parser<'src> {
         }
         let mut items = Vec::new();
         while !self.at_eof() {
+            let before = self.pos;
             if let Some(item) = self.parse_item_with_attrs() {
                 items.push(item);
             } else {
+                if self.pos == before {
+                    self.advance();
+                }
                 self.synchronize(&[
                     TokenKind::Func,
                     TokenKind::Public,
@@ -43,6 +48,7 @@ impl<'src> Parser<'src> {
                     TokenKind::Const,
                     TokenKind::Var,
                     TokenKind::Extern,
+                    TokenKind::Ident,
                     TokenKind::At,
                 ]);
             }
@@ -75,7 +81,15 @@ impl<'src> Parser<'src> {
         self.expect(&TokenKind::Import)?;
         let path = self.parse_qualified_name()?;
         let alias = if self.eat(&TokenKind::As) {
-            Some(self.parse_name()?)
+            match self.parse_name() {
+                Some(alias) => Some(alias),
+                None => {
+                    if !self.at_eof() && !is_import_alias_recovery_boundary(self.peek_kind()) {
+                        self.advance();
+                    }
+                    return None;
+                }
+            }
         } else {
             None
         };
@@ -149,6 +163,9 @@ impl<'src> Parser<'src> {
 
     fn parse_item(&mut self) -> Option<Item> {
         let vis = self.parse_visibility();
+        if self.at_contextual("async") {
+            return Some(Item::Func(self.parse_func_decl(vis)?));
+        }
         match self.peek_kind()? {
             TokenKind::Func | TokenKind::Mut => Some(Item::Func(self.parse_func_decl(vis)?)),
             TokenKind::Struct => Some(Item::Struct(self.parse_struct_decl(vis)?)),
@@ -171,7 +188,7 @@ impl<'src> Parser<'src> {
 
     pub fn parse_func_decl(&mut self, vis: Visibility) -> Option<FuncDecl> {
         let start = self.current_span();
-        let is_mut = self.eat(&TokenKind::Mut);
+        let (is_async, is_mut) = self.parse_func_modifiers();
         self.expect(&TokenKind::Func)?;
         let name = self.parse_name()?;
         let type_params = self.parse_type_params_opt();
@@ -186,6 +203,7 @@ impl<'src> Parser<'src> {
         let end = self.expect(&TokenKind::End)?;
         Some(FuncDecl {
             visibility: vis,
+            is_async,
             is_mut,
             name,
             type_params,
@@ -199,7 +217,7 @@ impl<'src> Parser<'src> {
 
     fn parse_func_signature(&mut self, vis: Visibility) -> Option<FuncSignature> {
         let start = self.current_span();
-        let is_mut = self.eat(&TokenKind::Mut);
+        let (is_async, is_mut) = self.parse_func_modifiers();
         self.expect(&TokenKind::Func)?;
         let name = self.parse_name()?;
         let type_params = self.parse_type_params_opt();
@@ -213,6 +231,7 @@ impl<'src> Parser<'src> {
         let end = return_ty.as_ref().map(|t| t.span()).unwrap_or(name.span);
         Some(FuncSignature {
             visibility: vis,
+            is_async,
             is_mut,
             name,
             type_params,
@@ -233,7 +252,25 @@ impl<'src> Parser<'src> {
             }
         }
         self.expect(&TokenKind::RParen)?;
+        self.validate_param_list(&params);
         Some(params)
+    }
+
+    fn parse_func_modifiers(&mut self) -> (bool, bool) {
+        let mut is_async = false;
+        let mut is_mut = false;
+        for _ in 0..2 {
+            if !is_async && self.eat_contextual("async") {
+                is_async = true;
+                continue;
+            }
+            if !is_mut && self.eat(&TokenKind::Mut) {
+                is_mut = true;
+                continue;
+            }
+            break;
+        }
+        (is_async, is_mut)
     }
 
     fn parse_param(&mut self) -> Option<Param> {
@@ -254,8 +291,11 @@ impl<'src> Parser<'src> {
         let name = self.parse_name()?;
         self.expect(&TokenKind::Colon)?;
         let ty = self.parse_type()?;
-        // Variadic: `name: Type...`
-        if self.eat(&TokenKind::DotDot) {
+        // Variadic: `name: Type...`.
+        //
+        // `Type..` is accepted for compatibility with early fixtures, but new
+        // code should use the documented `Type...` form.
+        if self.eat(&TokenKind::Ellipsis) || self.eat(&TokenKind::DotDot) {
             let span = start.cover(self.current_span());
             return Some(Param {
                 name,
@@ -264,16 +304,14 @@ impl<'src> Parser<'src> {
                 span,
             });
         }
-        // Contract: `name: Type if it > 0`
-        let has_contract = self.at(&TokenKind::If);
-        let contract = if has_contract {
-            self.advance(); // if
+        // Default: `name: Type = expr`
+        let default = if self.eat(&TokenKind::Eq) {
             Some(Box::new(self.parse_expr()?))
         } else {
             None
         };
-        // Default: `name: Type = expr`
-        let default = if self.eat(&TokenKind::Eq) {
+        // Contract: `name: Type if it > 0`
+        let contract = if self.eat(&TokenKind::If) {
             Some(Box::new(self.parse_expr()?))
         } else {
             None
@@ -293,6 +331,31 @@ impl<'src> Parser<'src> {
         })
     }
 
+    fn validate_param_list(&mut self, params: &[Param]) {
+        let mut seen_default = false;
+        for (index, param) in params.iter().enumerate() {
+            if matches!(param.kind, ParamKind::Variadic) && index + 1 != params.len() {
+                self.error(
+                    "parse.variadic_not_last",
+                    "variadic parameter must be the last parameter",
+                    param.span,
+                );
+            }
+
+            if seen_default && param_is_required(&param.kind) {
+                self.error(
+                    "parse.default_before_required",
+                    "required parameter cannot follow a default parameter",
+                    param.span,
+                );
+            }
+
+            if param_has_default(&param.kind) {
+                seen_default = true;
+            }
+        }
+    }
+
     // ── Structs ───────────────────────────────────────────────────────────────
 
     fn parse_struct_decl(&mut self, vis: Visibility) -> Option<StructDecl> {
@@ -301,10 +364,19 @@ impl<'src> Parser<'src> {
         let type_params = self.parse_type_params_opt();
         let where_clause = self.parse_where_clause_opt();
         let mut fields = Vec::new();
+        let mut field_names = HashSet::new();
         let mut methods = Vec::new();
         // Fields: ident : type [if expr]
         while self.at(&TokenKind::Ident) {
-            fields.push(self.parse_struct_field()?);
+            let field = self.parse_struct_field()?;
+            if !field_names.insert(field.name.text.clone()) {
+                self.error(
+                    "bind.duplicate_field",
+                    format!("duplicate struct field `{}`", field.name.text),
+                    field.name.span,
+                );
+            }
+            fields.push(field);
         }
         // Methods: [public] [mut] func …
         while !self.at(&TokenKind::End) && !self.at_eof() {
@@ -349,8 +421,17 @@ impl<'src> Parser<'src> {
         let name = self.parse_name()?;
         let type_params = self.parse_type_params_opt();
         let mut variants = Vec::new();
+        let mut variant_names = HashSet::new();
         while !self.at(&TokenKind::End) && !self.at_eof() {
-            variants.push(self.parse_enum_variant()?);
+            let variant = self.parse_enum_variant()?;
+            if !variant_names.insert(variant.name.text.clone()) {
+                self.error(
+                    "bind.duplicate_variant",
+                    format!("duplicate enum variant `{}`", variant.name.text),
+                    variant.name.span,
+                );
+            }
+            variants.push(variant);
         }
         let end = self.expect(&TokenKind::End)?;
         Some(EnumDecl {
@@ -404,6 +485,24 @@ impl<'src> Parser<'src> {
         let where_clause = self.parse_where_clause_opt();
         let mut members = Vec::new();
         while !self.at(&TokenKind::End) && !self.at_eof() {
+            let associated_type = self
+                .peek()
+                .is_some_and(|tok| tok.kind == TokenKind::Ident && self.slice(tok.span) == "type");
+            if associated_type {
+                self.error(
+                    "generic.unsupported_associated_type",
+                    "associated types are not supported yet; use a trait type parameter instead",
+                    self.current_span(),
+                );
+                self.advance();
+                self.synchronize(&[
+                    TokenKind::Func,
+                    TokenKind::Public,
+                    TokenKind::Mut,
+                    TokenKind::End,
+                ]);
+                continue;
+            }
             let mvis = self.parse_visibility();
             let is_mut = self.at(&TokenKind::Mut);
             // Peek: is there a body? Advance copy of pos to find out
@@ -421,6 +520,7 @@ impl<'src> Parser<'src> {
                 let end = self.expect(&TokenKind::End)?;
                 let decl = FuncDecl {
                     visibility: sig.visibility,
+                    is_async: sig.is_async,
                     is_mut: sig.is_mut,
                     name: sig.name.clone(),
                     type_params: sig.type_params.clone(),
@@ -597,4 +697,33 @@ impl<'src> Parser<'src> {
             None
         }
     }
+}
+
+fn is_import_alias_recovery_boundary(kind: Option<&TokenKind>) -> bool {
+    matches!(
+        kind,
+        Some(TokenKind::Namespace)
+            | Some(TokenKind::Import)
+            | Some(TokenKind::Public)
+            | Some(TokenKind::Func)
+            | Some(TokenKind::Struct)
+            | Some(TokenKind::Enum)
+            | Some(TokenKind::Trait)
+            | Some(TokenKind::Implement)
+            | Some(TokenKind::Alias)
+            | Some(TokenKind::Const)
+            | Some(TokenKind::Var)
+            | Some(TokenKind::Extern)
+    )
+}
+
+fn param_has_default(kind: &ParamKind) -> bool {
+    matches!(
+        kind,
+        ParamKind::Default(_) | ParamKind::DefaultAndContract(_, _)
+    )
+}
+
+fn param_is_required(kind: &ParamKind) -> bool {
+    matches!(kind, ParamKind::Required | ParamKind::Contract(_))
 }

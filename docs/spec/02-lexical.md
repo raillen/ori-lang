@@ -10,6 +10,7 @@
 Ori source files are UTF-8 encoded. The `.orl` extension is canonical.
 
 A byte order mark (BOM) at the start of a file is accepted and ignored.
+A BOM anywhere else is a lexical error (`lex.unexpected_character`).
 
 ---
 
@@ -45,11 +46,21 @@ It spans multiple lines.
 `--|` opens a block comment. `|--` closes it. Block comments do not nest.
 The tokens `--|` and `|--` are mirrored by design — they cannot appear inside
 normal code because `|--` is not valid syntax anywhere else.
+An unclosed block comment is a lexical error (`lex.unclosed_block_comment`).
 
 ### Documentation Comments
 
-A block comment placed immediately before a `public` declaration is a
-**documentation comment** processed by `ori doc`:
+Current implementation status:
+
+- The lexer emits `--| ... |--` as `BlockComment` trivia.
+- The parser skips this trivia for normal compilation.
+- `ori doc <file>` extracts immediately leading documentation comments as
+  Markdown.
+- `@param` tags are validated against documented function parameters and emit
+  `doc.param_name_mismatch` when a tag names a missing parameter.
+
+A block comment placed immediately before a declaration is treated as a
+**documentation comment** for `ori doc`:
 
 ```ori
 --|
@@ -65,18 +76,15 @@ public func area(width: int, height: int) -> int
 end
 ```
 
-Doc comment tags:
+Recognized doc comment tags:
 
 | Tag | Description |
 |---|---|
 | `@param name description` | Documents a parameter |
 | `@returns description` | Documents the return value |
-| `@example` | Code block that follows is an example |
-| `@deprecated message` | Marks as deprecated with a reason |
-| `@since version` | Version when the declaration was added |
 
-The compiler validates that `@param` names match actual parameter names.
-A mismatch emits `doc.param_name_mismatch`.
+Other tags are preserved as plain text until richer documentation tooling is
+implemented.
 
 ---
 
@@ -97,6 +105,7 @@ true       false      none       success    error    some
 mut        self       attr       extern
 any        optional   result     list       map      set
 range      void
+using      check      with       then       tuple    lazy
 ```
 
 Note: `times` was removed from the reserved list. See Contextual Keywords below.
@@ -251,12 +260,11 @@ Prefix `b` produces a `bytes` literal. No Unicode escapes in `b"..."`.
 ```ori
 0..9        -- range<int>: 0, 1, 2, ..., 9  (inclusive both ends)
 5..3        -- range<int>: 5, 4, 3          (descending, inclusive)
-0.0..1.0    -- range<float>
 ```
 
 Ranges are always inclusive on both ends. Direction is determined by whether
 `start <= end` (ascending) or `start > end` (descending). Equal endpoints
-yield a range of exactly one element.
+yield a range of exactly one element. Current ranges use `int` endpoints only.
 
 ---
 
@@ -297,7 +305,17 @@ The indices are zero-based and must be valid compile-time integer literals.
 
 ### Attribute Annotations
 
-Attributes annotate declarations:
+Current implementation status:
+
+- Attribute syntax is parsed on top-level declarations and stored in the AST.
+- Built-in attribute names, targets, duplicate uses, and argument shapes are validated.
+- `@deprecated("message")` emits `attr.deprecated` warnings at use sites.
+- `@test` marks concrete no-arg/no-return test functions for `ori test`.
+- `@inline`, `@no_inline`, and `@cfg` are validated but not acted on by the compiler yet.
+- Unknown attributes are rejected with `attr.unknown`.
+- The emitted attribute diagnostics are listed in `docs/spec/13-error-catalog.md`.
+
+Attributes are reserved for declaration metadata:
 
 ```ori
 @test
@@ -316,15 +334,16 @@ end
 
 Built-in attributes:
 
-| Attribute | Applies to | Effect |
-|---|---|---|
-| `@test` | `func` | Marks as a test function, run by `ori test` |
-| `@deprecated(msg)` | any declaration | Emits `attr.deprecated` warning at use sites |
-| `@inline` | `func` | Hint to inline at call sites |
-| `@no_inline` | `func` | Prohibit inlining |
-| `@cfg(condition)` | any declaration | Conditionally include based on build config |
+| Attribute | Applies to | Current validation | Planned effect |
+|---|---|---|---|
+| `@test` | `func` | no arguments; function must have no type parameters, no value parameters, and no return value | Runs through `ori test` |
+| `@deprecated("msg")` | any declaration | exactly one string argument | Emits `attr.deprecated` warning at use sites |
+| `@inline` | `func` | no arguments | Hint to inline at call sites |
+| `@no_inline` | `func` | no arguments | Prohibit inlining |
+| `@cfg("condition")` or `@cfg(key: value)` | any declaration | exactly one string or named argument | Conditionally include based on build config |
 
-Custom attributes are not supported in v1.
+Custom attributes are not part of the planned v1 contract. They are rejected
+with `attr.unknown`.
 
 ---
 

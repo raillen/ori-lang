@@ -76,7 +76,7 @@ Type parameters may be constrained to require specific trait implementations:
 ```ori
 func max<T>(a: T, b: T) -> T
     where T is Comparable
-    if a.compare(b) == Order.Greater
+    if a.compare(b) > 0
         return a
     end
     return b
@@ -95,12 +95,13 @@ func sorted_keys<K, V>(m: map<K, V>) -> list<K>
 end
 ```
 
-### Inline `where` on Parameters
+### Inline Value Contracts on Parameters
 
-Value contracts on individual parameters use `where` inline:
+Value contracts on individual parameters use `if` after the type or after a
+default value:
 
 ```ori
-func sqrt(value: float where value >= 0.0) -> float
+func sqrt(value: float if it >= 0.0) -> float
 ```
 
 This is a value contract (checked at runtime), not a type constraint.
@@ -167,7 +168,7 @@ error[generic.constraint_not_satisfied]: T does not satisfy constraint
    |                          ^^^^^^^^^^^^^^^^
    |
    = why: K = User, but User does not implement Comparable
-   = action: add 'implement Comparable for User' with func compare(other: User) -> Order
+   = action: add 'implement Comparable for User' with func compare(other: User) -> int
 ```
 
 ---
@@ -197,8 +198,8 @@ end
 ## Generic Type Aliases
 
 ```ori
-alias StringMap<V> = map<string, V>
-alias Callback<T>  = func(T) -> bool
+alias IntMap<V>   = map<int, V>
+alias Callback<T> = func(T) -> bool
 ```
 
 ---

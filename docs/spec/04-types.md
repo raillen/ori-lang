@@ -126,12 +126,12 @@ These types are built into the language and require no import.
 | Type | Description |
 |---|---|
 | `list<T>` | Ordered, resizable sequence |
-| `map<K, V>` | Key-value mapping, keys must implement `Hashable` |
-| `set<T>` | Unordered unique values, elements must implement `Hashable` |
+| `map<K, V>` | Key-value mapping. Current runtime supports `int`, `string`, and user-defined keys that implement `Hashable` and `Equatable` |
+| `set<T>` | Unordered unique values. Current runtime supports `int`, `string`, and user-defined elements that implement `Hashable` and `Equatable` |
 | `optional<T>` | A value that may be absent |
 | `result<T, E>` | A value that represents success or failure |
 | `range<T>` | An inclusive range of ordered values |
-| `lazy<T>` | A value computed at most once, on first access |
+| `lazy<T>` | Lazy value computed at most once through `lazy.once` and `lazy.force` |
 | `any<Trait>` | Dynamic dispatch over a trait |
 
 ---
@@ -147,12 +147,16 @@ const empty: optional<string> = none
 
 Constructors: `some(value)` and `none`.
 
-Operations:
+Planned operations:
 
 ```ori
 value.or(fallback)         -- unwrap or use fallback
 value.or_return(expr)      -- unwrap or return expr from enclosing function
 ```
+
+Current status: use `?`, `if some(...) = ...`, or `match`. The `.or(...)`
+and `.or_return(...)` helpers are planned and are not accepted by the current
+checker/runtime.
 
 Pattern matching over `optional<T>`:
 
@@ -186,11 +190,14 @@ const bad: result<int, string> = error("something went wrong")
 
 Constructors: `success(value)` and `error(value)`.
 
-Operations:
+Planned operations:
 
 ```ori
 value.or_wrap("context message")    -- keep success, add context to error
 ```
+
+Current status: use `?` or `match`. The `.or_wrap(...)` helper is planned and
+is not accepted by the current checker/runtime.
 
 Pattern matching:
 
@@ -231,14 +238,22 @@ r.contains(v) -- bool: true if v is in the range
 
 ## Lazy
 
-`lazy<T>` computes its value at most once, the first time it is accessed.
-
 ```ori
 const expensive: lazy<int> = lazy.once(do() => compute_heavy_value())
 const value: int = lazy.force(expensive)
 ```
 
-A `lazy<T>` is consumed once. Accessing it a second time returns the cached value.
+`lazy<T>` stores a zero-argument function that produces a `T`.
+
+Rules:
+
+- `lazy.once(do() => value)` creates a lazy value.
+- `lazy.force(expensive)` returns the computed `T`.
+- The thunk runs at most once.
+- Later `lazy.force` calls return the cached value.
+
+This is useful when a value is expensive, optional in practice, or should be
+computed only if another path needs it.
 
 ---
 
@@ -280,7 +295,7 @@ A callable with no return value: `func(string)` (void return implied).
 
 ```ori
 alias UserId   = int
-alias UserMap  = map<string, User>
+alias UserMap  = map<int, User>
 alias Callback = func(string) -> bool
 ```
 
@@ -310,24 +325,40 @@ when the expected type is not `result<void, _>`.
 
 ---
 
-## Structural Equality (`==`)
+## Equality (`==`)
 
-All types support `==` and `!=` by default using structural equality:
+Current implementation status:
 
-| Type | `==` behavior |
+- `==` and `!=` are implemented for numeric types, `bool`, and `string`.
+- Function values are not comparable.
+- `any<Trait>` values are not comparable.
+- Structural equality for structs, tuples, collections, `optional`, `result`,
+  and `bytes` is planned, not implemented.
+
+| Type | Current `==` behavior |
 |---|---|
-| `bool`, `int`, `float`, `string`, `bytes` | Value equality |
-| `list<T>` | Same length and each element `==` in order |
-| `map<K, V>` | Same key-value pairs (order irrelevant) |
-| `set<T>` | Same elements (order irrelevant) |
-| `optional<T>` | `none == none`; `some(a) == some(b)` iff `a == b` |
-| `result<T, E>` | `success(a) == success(b)` iff `a == b`; same for `error` |
-| `tuple<...>` | Field-by-field in declaration order |
-| `struct` | Field-by-field (deep structural equality) |
-| `any<Trait>` | **Compile error.** Equality on dynamic dispatch is not defined. |
-| `func(...)` | **Compile error.** Function values are not comparable. |
+| numeric types | Value equality |
+| `bool` | Value equality |
+| `string` | UTF-8 text equality |
+| `bytes` | Planned |
+| `list<T>` | Planned |
+| `map<K, V>` | Planned |
+| `set<T>` | Planned |
+| `optional<T>` | Planned |
+| `result<T, E>` | Planned |
+| `tuple<...>` | Planned |
+| `struct` | Planned |
+| `any<Trait>` | Compile error |
+| `func(...)` | Compile error |
 
-**Override with `Equatable`:** implement `Equatable for T` to provide custom equality:
+Planned structural equality rules:
+
+- Lists compare length and elements in order.
+- Maps compare key-value pairs independent of insertion order.
+- Sets compare elements independent of insertion order.
+- Tuples and structs compare fields in declaration order.
+
+**`Equatable` override:** implement `Equatable for T` to provide custom equality:
 
 ```ori
 implement Equatable for User
@@ -337,10 +368,11 @@ implement Equatable for User
 end
 ```
 
-When `Equatable` is implemented, `==` and `!=` use `equals()`.
+For user-defined types, `==` and `!=` use `equals()` when the type implements
+`ori.core.Equatable`.
 
-**Structs with incomparable fields:** if a struct contains a `func` or `any<Trait>`
-field, using `==` on that struct is a compile error.
+**Planned rule for structs with incomparable fields:** if a struct contains a
+`func` or `any<Trait>` field, using `==` on that struct will be a compile error.
 
 ---
 
@@ -356,11 +388,13 @@ const b: u8   = u8(n)         -- explicit narrowing (runtime check)
 const w: int64 = int64(n)     -- explicit widening
 ```
 
-**String conversion:** any type implementing `Displayable` can be converted:
+**String conversion:** the current compiler accepts built-in scalar values.
+Trait-driven `Displayable` conversion is planned, but not implemented yet.
 
 ```ori
 const s: string = string(42)
 const t: string = string(3.14)
+const b: string = string(true)
 ```
 
 **Type checking at runtime** (for `any<Trait>`):

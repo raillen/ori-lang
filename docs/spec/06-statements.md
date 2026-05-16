@@ -167,8 +167,18 @@ for item in items
 end
 ```
 
-Iterates over any value implementing `Iterable<Item>`. Built-in iterables:
-`list<T>`, `map<K, V>`, `set<T>`, `string` (iterates over characters), `range<T>`.
+Iterates over built-in iterables or a value that implements `core.Iterable`.
+
+Built-in iterables: `list<T>`, `map<K, V>`, `set<T>`, `string`, `bytes`,
+and `range<int>`.
+
+Custom iterable contract:
+
+- import the core trait namespace, usually `import ori.core as core`;
+- implement `core.Iterable` for the concrete type;
+- provide `mut func next() -> optional<T>`;
+- the `for` binding has type `T`;
+- the second binding is the zero-based `int` index.
 
 **With index:**
 
@@ -178,18 +188,19 @@ for item, index in items
 end
 ```
 
-For `list<T>` and `string`: second binding is the `int` index.
+For `list<T>`, `set<T>`, `string`, `bytes`, ranges, and custom iterables:
+second binding is the `int` index.
 For `map<K, V>`: second binding is the value `V` (first is the key `K`).
 
 **Range iteration:**
 
 ```ori
 for i in 0..9
-    io.print(string(i))?
+    io.print(string(i))
 end
 
 for i in 9..0          -- descending: 9, 8, ..., 0
-    io.print(string(i))?
+    io.print(string(i))
 end
 ```
 
@@ -358,7 +369,7 @@ Any expression may appear as a statement. The value is discarded.
 The most common use is a function call with side effects:
 
 ```ori
-io.print("hello")?
+io.print("hello")
 counter.increment()
 list.push(item)
 ```

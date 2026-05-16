@@ -67,6 +67,11 @@ a >= b      -- greater than or equal
 
 All comparison expressions produce `bool`.
 
+For user-defined types:
+
+- `==` and `!=` require `ori.core.Equatable.equals`.
+- `<`, `<=`, `>`, and `>=` require `ori.core.Comparable.compare`.
+
 **Comparison chaining is a compile error:**
 
 ```ori
@@ -109,15 +114,16 @@ Field access on an enum variant's payload uses the variant's field names.
 
 ```ori
 items[0]          -- index: returns element type T
-items[2..5]       -- slice: returns list<T>, elements at 2, 3, 4, 5
+items[2..5]       -- slice: returns list<T>, elements at 2, 3, 4
 items[2..]        -- slice from index 2 to end
 items[..5]        -- slice from start to index 5
 items[..]         -- full copy
-text[0..3]        -- string slice: characters at 0, 1, 2, 3
+text[0..3]        -- string slice: characters at 0, 1, 2
 ```
 
 Index bounds are checked at runtime. Out-of-bounds is a runtime panic.
-Slice bounds are validated: `start` and `end` must be within `0..len-1`.
+Slice bounds are checked at runtime and use an exclusive end:
+`0 <= start <= end <= len`. Invalid bounds are a runtime panic.
 
 ---
 
@@ -145,6 +151,38 @@ be named.
 const parts: list<string> = ["a", "b", "c"]
 concat(..parts)
 ```
+
+---
+
+## Await Expression
+
+```ori
+const value: int = await compute()
+await task.sleep(1)
+```
+
+`await expr` waits for a `future<T>` and produces `T`.
+
+Rules:
+- `await` is a contextual prefix operator.
+- It is valid only inside an `async func`.
+- Awaiting a non-`future<T>` value is a compile-time error.
+- Awaiting `future<void>` is normally used as an expression statement.
+
+The current native backend implements supported `async func` bodies with a
+native state machine. Calling an `async func` creates and returns a `future<T>`
+before the function body finishes. The generated frame is scheduled on the
+native executor.
+
+Supported `await` shapes use poll + continuation lowering:
+`ori_future_poll`, `ori_future_value_*`, and `ori_future_on_ready`. They do not
+call `task.block_on`. Unsupported nested shapes fail with
+`backend.native_unsupported` before native code generation.
+
+Failed or cancelled future states observed by the state machine are propagated
+by the generated async wrapper. They must not be silently converted to a
+default value. Public cancellation tokens are intentionally outside the v1
+surface.
 
 ---
 
@@ -266,10 +304,10 @@ Rules:
 Creates a new struct value with selected fields overridden:
 
 ```ori
-const updated: Config = original with
-    verbose: true
-    timeout: 60
-end
+const updated: Config = original with {
+    verbose: true,
+    timeout: 60,
+} end
 ```
 
 All fields not mentioned keep their original values.
@@ -312,7 +350,7 @@ It follows the same type-inference rules.
 const names: list<string> = ["Ana", "Bo", "Cara"]
 
 -- map
-const ages: map<string, int> = {"Ana": 31, "Bo": 25}
+const ages_by_id: map<int, int> = {1: 31, 2: 25}
 
 -- set
 const ids: set<int> = set{1, 2, 3}
@@ -325,7 +363,7 @@ Empty collections must have their type annotated:
 
 ```ori
 const empty: list<int> = []
-const empty_map: map<string, int> = {}
+const empty_map: map<int, int> = {}
 ```
 
 ---
@@ -335,11 +373,13 @@ const empty_map: map<string, int> = {}
 ```ori
 0..9        -- range<int>: 0 to 9 inclusive
 5..3        -- range<int>: 5, 4, 3 (descending)
-0.0..1.0    -- range<float>
 ```
 
-The type of a range literal is `range<T>` where `T` is the type of the endpoints.
-Endpoints must have the same type.
+The type of a range literal is `range<int>`.
+Endpoints must be `int`.
+
+Float ranges are not part of the current language. Use an explicit loop or
+iterator helper when a floating-point step is needed.
 
 ---
 

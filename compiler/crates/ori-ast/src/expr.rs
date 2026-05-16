@@ -128,6 +128,11 @@ pub enum Expr {
         expr: Box<Expr>,
         span: Span,
     },
+    /// `await expr` waits for a `future<T>` and produces `T`.
+    Await {
+        expr: Box<Expr>,
+        span: Span,
+    },
     /// `a |> f` — pipe into function.
     Pipe {
         value: Box<Expr>,
@@ -191,6 +196,7 @@ impl Expr {
             | Expr::Call { span, .. }
             | Expr::Index { span, .. }
             | Expr::Try { span, .. }
+            | Expr::Await { span, .. }
             | Expr::Pipe { span, .. }
             | Expr::IfExpr { span, .. }
             | Expr::StructUpdate { span, .. }

@@ -8,6 +8,8 @@ Cargo.lock
 *.orl.o
 dist/
 build/
+runtime/**/ori_runtime.lib
+runtime/**/libori_runtime.a
 
 # Scratch test files at repo root
 /t*.orl
@@ -43,4 +45,3 @@ Thumbs.db
 
 node_modules/
 *.lock
-

@@ -64,10 +64,55 @@ The compiler inserts retain/release calls at compile time based on lexical scope
 Rules:
 - A reference is retained when it is stored in a binding or passed to a function.
 - A reference is released when the binding goes out of scope.
-- Retain/release are atomic for thread safety.
+- In the Rust runtime used by the native backend, retain/release use atomic
+  reference counts.
+- The native backend links against the Rust `ori-runtime` static library. That
+  runtime is the source of truth for managed values, ARC behavior, and runtime
+  symbols used by `ori compile` and `ori test`.
 
-**Cycle detection:** the runtime includes a cycle collector. Reference cycles
-in managed types are collected by the runtime, not by the programmer.
+**Cycle detection:** the native runtime tracks compiler-registered strong edges
+between managed heap objects. `ori_arc_collect_cycles()` reclaims unreachable
+cycles from that registered graph. The return value is the number of heap
+objects reclaimed in the pass.
+
+### Backend Status
+
+- The native backend inserts ARC retain/release calls for managed values.
+- The Rust `ori-runtime` crate provides the runtime symbols consumed by the
+  native backend.
+- The standalone C backend remains a debug/transpile backend with partial
+  feature parity. Its inline ARC runtime exists only for generated C output and
+  does not define core language semantics.
+
+---
+
+## Async and ARC
+
+Managed values that remain live across an `await` must stay retained until the
+async continuation can use them again.
+
+Current native status:
+
+- `await` is accepted only inside `async func`.
+- The runtime has pollable `future<T>` values, continuation registration, a FIFO
+  executor queue, failed/cancelled internal states, and non-blocking timers.
+- The current backend creates a `future<T>` immediately when an `async func` is
+  called, allocates a native async frame, and schedules the generated `step`
+  function on the native executor.
+- Supported source-level `await` shapes suspend through `ori_future_poll` and
+  `ori_future_on_ready`; they do not call `task.block_on`.
+- Managed params, pre-await locals and await bindings stored in the frame have
+  ARC edges. The state machine calculates liveness after each `await`, releases
+  dead managed frame values after resumption, and still runs terminal cleanup.
+- Failed/cancelled future states observed by the state machine are propagated by
+  the generated async wrapper.
+- `using` inside `async func` is rejected with `async.using_unsupported` until
+  the compiler can guarantee deterministic cleanup across every suspension,
+  return, failed future, and cancelled future path.
+
+Async shapes outside the current state-machine subset are rejected before
+Cranelift with `backend.native_unsupported` instead of falling back to a sync
+bridge.
 
 ---
 
@@ -170,14 +215,20 @@ See the FFI documentation for detailed ABI shapes.
 
 ---
 
-## `std.mem`
+## `ori.mem`
 
-The `ori.mem` module provides explicit memory inspection utilities:
+`ori.mem` provides explicit memory inspection utilities:
 
 ```ori
-ori.mem.size_of<T>()       -- size in bytes of type T
-ori.mem.align_of<T>()      -- alignment in bytes of type T
+import ori.mem as mem
+
+mem.size_of(value)         -- size in bytes of value's static type
+mem.align_of(value)        -- alignment in bytes of value's static type
 ```
 
-These are compile-time constants for primitive types and structs.
-They are not needed in ordinary code.
+These are compile-time constants. The argument is used as a type witness and
+is not needed in ordinary code.
+
+Current status: `ori.mem` is importable. The current parser does not support
+type-argument call syntax such as `size_of<T>()`, so code should use the
+expression-based form above.

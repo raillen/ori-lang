@@ -1,0 +1,197 @@
+#!/usr/bin/env sh
+set -eu
+
+target=""
+profile="debug"
+output_root=""
+skip_build=0
+
+usage() {
+    cat <<'USAGE'
+Usage: tools/stage_native_runtime.sh [--target TRIPLE] [--profile debug|release] [--output-root DIR] [--skip-build]
+
+Stages the Rust ori-runtime static library into:
+
+  runtime/{target-triple}/{runtime-artifact}
+
+and writes runtime-link.json next to it.
+USAGE
+}
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --target)
+            target="${2:-}"
+            shift 2
+            ;;
+        --profile)
+            profile="${2:-}"
+            shift 2
+            ;;
+        --output-root)
+            output_root="${2:-}"
+            shift 2
+            ;;
+        --skip-build)
+            skip_build=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "unknown argument: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+if [ "$profile" != "debug" ] && [ "$profile" != "release" ]; then
+    echo "--profile must be debug or release" >&2
+    exit 2
+fi
+
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
+
+host_triple() {
+    rustc -vV | awk -F': ' '/^host:/ { print $2; exit }'
+}
+
+workspace_version() {
+    awk '
+        /^\[workspace\.package\]/ { in_section=1; next }
+        in_section && /^\[/ { exit }
+        in_section && /^[[:space:]]*version[[:space:]]*=/ {
+            gsub(/"/, "", $3)
+            print $3
+            exit
+        }
+    ' "$repo_root/Cargo.toml"
+}
+
+ori_abi_version() {
+    sed -n 's/.*pub const ORI_ABI_VERSION[[:space:]]*:[[:space:]]*&str[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' \
+        "$repo_root/compiler/crates/ori-runtime/src/lib.rs" | head -n 1
+}
+
+runtime_artifact_name() {
+    case "$1" in
+        *windows-msvc*) printf '%s\n' "ori_runtime.lib" ;;
+        *) printf '%s\n' "libori_runtime.a" ;;
+    esac
+}
+
+fallback_native_static_libs() {
+    case "$1" in
+        *linux*) printf '%s\n' "pthread dl m" ;;
+        *apple-darwin*) printf '%s\n' "System" ;;
+        *windows-msvc*) printf '%s\n' "legacy_stdio_definitions.lib kernel32.lib ntdll.lib userenv.lib ws2_32.lib dbghelp.lib /defaultlib:msvcrt" ;;
+        *) printf '\n' ;;
+    esac
+}
+
+native_static_libs() {
+    profile_args=""
+    if [ "$profile" = "release" ]; then
+        profile_args="--release"
+    fi
+
+    set +e
+    output=$(cd "$repo_root" && cargo rustc -p ori-runtime --lib --target "$target" $profile_args -- --print native-static-libs 2>&1)
+    status=$?
+    set -e
+    if [ "$status" -eq 0 ]; then
+        libs=$(printf '%s\n' "$output" | sed -n 's/.*native-static-libs:[[:space:]]*//p' | tail -n 1)
+        if [ -n "$libs" ]; then
+            printf '%s\n' "$libs"
+            return
+        fi
+    fi
+
+    fallback_native_static_libs "$target"
+}
+
+json_array_from_words() {
+    first=1
+    printf '['
+    for item in $1; do
+        if [ "$first" -eq 0 ]; then
+            printf ', '
+        fi
+        first=0
+        escaped=$(printf '%s' "$item" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        printf '"%s"' "$escaped"
+    done
+    printf ']'
+}
+
+if [ -z "$target" ]; then
+    target=$(host_triple)
+fi
+if [ -z "$target" ]; then
+    echo "could not detect Rust host target; pass --target explicitly" >&2
+    exit 2
+fi
+
+ori_version=$(workspace_version)
+abi_version=$(ori_abi_version)
+if [ -z "$ori_version" ]; then
+    echo "could not read workspace package version from Cargo.toml" >&2
+    exit 2
+fi
+if [ -z "$abi_version" ]; then
+    echo "could not read ORI_ABI_VERSION from ori-runtime" >&2
+    exit 2
+fi
+
+artifact=$(runtime_artifact_name "$target")
+profile_args=""
+if [ "$profile" = "release" ]; then
+    profile_args="--release"
+fi
+
+if [ "$skip_build" -eq 0 ]; then
+    (cd "$repo_root" && cargo build -p ori-runtime --lib --target "$target" $profile_args)
+fi
+
+target_root="${CARGO_TARGET_DIR:-$repo_root/target}"
+source="$target_root/$target/$profile/$artifact"
+if [ ! -f "$source" ]; then
+    source="$target_root/$profile/$artifact"
+fi
+if [ ! -f "$source" ]; then
+    echo "Runtime artifact $artifact was not found after build." >&2
+    exit 1
+fi
+
+if [ -z "$output_root" ]; then
+    stage_root="$repo_root/runtime"
+else
+    stage_root="$output_root"
+fi
+target_dir="$stage_root/$target"
+mkdir -p "$target_dir"
+
+dest="$target_dir/$artifact"
+cp "$source" "$dest"
+
+libs=$(native_static_libs)
+libs_json=$(json_array_from_words "$libs")
+metadata_path="$target_dir/runtime-link.json"
+cat > "$metadata_path" <<JSON
+{
+  "target": "$target",
+  "runtime": "$artifact",
+  "ori_version": "$ori_version",
+  "abi_version": "$abi_version",
+  "profile": "$profile",
+  "native_static_libs": $libs_json,
+  "generated_by": "tools/stage_native_runtime.sh"
+}
+JSON
+
+printf 'staged runtime: %s\n' "$dest"
+printf 'metadata: %s\n' "$metadata_path"

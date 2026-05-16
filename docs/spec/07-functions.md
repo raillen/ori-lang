@@ -27,6 +27,52 @@ Rules:
 
 ---
 
+## Async Functions
+
+```ori
+import ori.task as task
+
+async func load_count() -> int
+    await task.sleep(1)
+    return 41
+end
+
+async func main()
+    const count: int = await load_count()
+end
+```
+
+Rules:
+- `async func f(...) -> T` has call type `future<T>`.
+- Inside the function body, `return value` still returns a `T`.
+- `await expr` may appear only inside an `async func`.
+- `await` requires `expr` to have type `future<T>` and produces `T`.
+- `async func main()` is allowed in the native backend. The generated entry
+  point waits for its returned future through the native executor.
+- `using` is rejected inside `async func` until cleanup across suspension is
+  specified and implemented safely.
+
+Implementation status:
+- The native runtime has pollable futures, failed/cancelled internal states,
+  continuation scheduling, a FIFO executor queue, and non-blocking timers for
+  `task.sleep`.
+- Current native lowering creates a `future<T>` as soon as an `async func` is
+  called. Supported bodies are lowered to a generated native state machine and
+  scheduled on the native executor.
+- Source-level `await` in the supported subset uses `ori_future_poll`,
+  `ori_future_value_*`, and `ori_future_on_ready`; it does not use
+  `task.block_on`.
+- Async shapes outside the current state-machine subset fail with
+  `backend.native_unsupported` before Cranelift.
+- Failed and cancelled future states observed by the state machine are
+  propagated by generated async wrappers instead of becoming silent default
+  values.
+- Public cancellation tokens are not part of the v1 language surface. Failed
+  and cancelled future states are runtime-internal until a public cancellation
+  API is specified.
+
+---
+
 ## Parameters
 
 ### Required Parameters
@@ -108,7 +154,7 @@ end
 ```ori
 func print_all(items: list<string>)
     for item in items
-        io.print(item)?
+        io.print(item)
     end
 end
 ```

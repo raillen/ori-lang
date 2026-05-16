@@ -155,29 +155,34 @@ end
 
 ## Operator Traits
 
+Current implementation status:
+
+- Primitive numeric operators are implemented directly by the checker/codegen.
+- String `+` is implemented as concatenation.
+- User-defined `+`, `-`, `==`, `!=`, `<`, `<=`, `>`, and `>=` lower to
+  trait methods when the concrete type implements the matching `ori.core`
+  trait.
+- The fixed trait set below is the supported contract.
+
 Ori allows operator overloading only for the following fixed set:
 
 | Operator | Trait | Method |
 |---|---|---|
 | `+` | `Addable` | `func add(other: Self) -> Self` |
 | `-` | `Subtractable` | `func subtract(other: Self) -> Self` |
-| `<`, `<=`, `>`, `>=` | `Comparable` | `func compare(other: Self) -> Order` |
+| `<`, `<=`, `>`, `>=` | `Comparable` | `func compare(other: Self) -> int` |
 | `==`, `!=` | `Equatable` | `func equals(other: Self) -> bool` |
 
-No other operators may be overloaded. This is a deliberate design limit.
+No other operators will be overloadable. This is a deliberate design limit.
 
-`Order` is a built-in enum:
+`Comparable.compare` follows the same sign convention used by sort callbacks:
+return a negative integer when `self < other`, `0` when equal, and a positive
+integer when `self > other`.
 
-```ori
-enum Order
-    Less
-    Equal
-    Greater
-end
-```
+Behavior:
 
-`Comparable` provides `<`, `<=`, `>`, `>=` by deriving from `compare()`.
-`Equatable` provides `==` and `!=` by deriving from `equals()`.
+- `Comparable` provides `<`, `<=`, `>`, `>=` by deriving from `compare()`.
+- `Equatable` provides `==` and `!=` by deriving from `equals()`.
 
 ---
 
@@ -189,10 +194,10 @@ Core traits defined in `ori.core`:
 |---|---|
 | `Displayable` | `func to_string() -> string` — converts to string representation |
 | `Equatable` | Custom equality via `func equals(other: Self) -> bool` |
-| `Comparable` | Ordering via `func compare(other: Self) -> Order` |
+| `Comparable` | Ordering via `func compare(other: Self) -> int` |
 | `Hashable` | Hash for map/set keys via `func hash() -> u64` |
 | `Disposable` | Cleanup via `mut func dispose()` — used by `using` |
-| `Iterable<Item>` | Iteration via `mut func next() -> optional<Item>` |
+| `Iterable` | Iteration via `mut func next() -> optional<T>` |
 | `Default` | Zero-argument construction via `func default() -> Self` |
 | `From<Other>` | Explicit conversion from `Other` to `Self` |
 | `Error` | Error display via `func message() -> string` |
@@ -200,12 +205,17 @@ Core traits defined in `ori.core`:
 
 ---
 
-## `Iterable<Item>` and `for` Loops
+## `Iterable` and `for` Loops
 
-Any type implementing `Iterable<Item>` can be used in a `for` loop:
+Any type implementing `core.Iterable` can be used in a `for` loop if its
+implementation provides `mut func next() -> optional<T>`.
+
+The item type is inferred from the `optional<T>` returned by `next`.
 
 ```ori
-implement Iterable<int> for CountUp
+import ori.core as core
+
+implement core.Iterable for CountUp
     mut func next() -> optional<int>
         if self.current > self.limit
             return none
@@ -217,9 +227,13 @@ implement Iterable<int> for CountUp
 end
 
 for n in CountUp(current: 1, limit: 5)
-    io.print(string(n))?  -- 1 2 3 4 5
+    io.print(string(n))  -- 1 2 3 4 5
 end
 ```
+
+Current limitation: `implement Iterable<int> for Type` syntax is not part of
+the parser yet. Use `implement core.Iterable for Type` and let `next` define
+the item type.
 
 ---
 

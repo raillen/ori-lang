@@ -1,5 +1,5 @@
 use crate::def::DefMap;
-use crate::ty::Ty;
+use crate::ty::{OpaqueTy, Ty};
 use ori_ast::common::QualifiedName;
 use ori_ast::ty::Type as AstType;
 use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label};
@@ -153,10 +153,76 @@ fn lower_named(
             };
         }
     }
+    let expanded = expand_alias(&name.to_string(), aliases);
+    if let Some(ty) = lower_builtin_concurrency_type(&expanded, args) {
+        return ty;
+    }
     let span = name.span;
     match resolve_name(name, module_path, def_map, file_id, span, sink, aliases) {
         Some(id) => Ty::Named(id, args.to_vec()),
         None => Ty::Error,
+    }
+}
+
+fn lower_builtin_concurrency_type(path: &str, args: &[Ty]) -> Option<Ty> {
+    match path {
+        "future" => Some(Ty::Future(Box::new(
+            args.first().cloned().unwrap_or(Ty::Infer(0)),
+        ))),
+        "ori.task.Job" => Some(Ty::TaskJob(Box::new(
+            args.first().cloned().unwrap_or(Ty::Infer(0)),
+        ))),
+        "ori.task.JoinError" => Some(Ty::TaskJoinError),
+        "ori.channel.Channel" => Some(Ty::Channel(Box::new(
+            args.first().cloned().unwrap_or(Ty::Infer(0)),
+        ))),
+        "ori.channel.SendError" => Some(Ty::ChannelSendError),
+        "ori.channel.ReceiveError" => Some(Ty::ChannelReceiveError),
+        "ori.atomic.AtomicInt" => Some(Ty::AtomicInt),
+        "ori.deque.Deque" => Some(Ty::Opaque {
+            kind: OpaqueTy::Deque,
+            args: vec![args.first().cloned().unwrap_or(Ty::Infer(0))],
+        }),
+        "ori.queue.Queue" => Some(Ty::Opaque {
+            kind: OpaqueTy::Queue,
+            args: vec![args.first().cloned().unwrap_or(Ty::Infer(0))],
+        }),
+        "ori.stack.Stack" => Some(Ty::Opaque {
+            kind: OpaqueTy::Stack,
+            args: vec![args.first().cloned().unwrap_or(Ty::Infer(0))],
+        }),
+        "ori.linked_list.LinkedList" => Some(Ty::Opaque {
+            kind: OpaqueTy::LinkedList,
+            args: vec![args.first().cloned().unwrap_or(Ty::Infer(0))],
+        }),
+        "ori.doubly_linked_list.DoublyLinkedList" => Some(Ty::Opaque {
+            kind: OpaqueTy::DoublyLinkedList,
+            args: vec![args.first().cloned().unwrap_or(Ty::Infer(0))],
+        }),
+        "ori.tree.Tree" => Some(Ty::Opaque {
+            kind: OpaqueTy::Tree,
+            args: vec![args.first().cloned().unwrap_or(Ty::Infer(0))],
+        }),
+        "ori.tree.NodeId" => Some(Ty::Opaque {
+            kind: OpaqueTy::NodeId,
+            args: vec![],
+        }),
+        "ori.hash_table.HashTable" => Some(Ty::Opaque {
+            kind: OpaqueTy::HashTable,
+            args: vec![
+                args.first().cloned().unwrap_or(Ty::Infer(0)),
+                args.get(1).cloned().unwrap_or(Ty::Infer(1)),
+            ],
+        }),
+        "ori.graph.Graph" => Some(Ty::Opaque {
+            kind: OpaqueTy::Graph,
+            args: vec![args.first().cloned().unwrap_or(Ty::Infer(0))],
+        }),
+        "ori.heap.Heap" => Some(Ty::Opaque {
+            kind: OpaqueTy::Heap,
+            args: vec![args.first().cloned().unwrap_or(Ty::Infer(0))],
+        }),
+        _ => None,
     }
 }
 

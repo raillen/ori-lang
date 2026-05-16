@@ -109,6 +109,19 @@ impl<'src> Parser<'src> {
             self.advance(); // (
             let mut fields = Vec::new();
             while !self.at(&TokenKind::RParen) && !self.at_eof() {
+                if !matches!(self.peek_kind(), Some(TokenKind::Ident)) {
+                    let span = self.current_span();
+                    self.error(
+                        "parse.expected_identifier",
+                        "expected variant payload field name",
+                        span,
+                    );
+                    self.recover_variant_pattern_field();
+                    if !self.eat(&TokenKind::Comma) {
+                        break;
+                    }
+                    continue;
+                }
                 let field_name = self.parse_name()?;
                 let pattern = if self.eat(&TokenKind::Colon) {
                     self.parse_pattern()?
@@ -139,6 +152,28 @@ impl<'src> Parser<'src> {
                 shorthand,
                 span: start,
             })
+        }
+    }
+
+    fn recover_variant_pattern_field(&mut self) {
+        let mut paren_depth = 0usize;
+        while !self.at_eof() {
+            match self.peek_kind() {
+                Some(TokenKind::LParen) => {
+                    paren_depth += 1;
+                    self.advance();
+                }
+                Some(TokenKind::RParen) if paren_depth == 0 => break,
+                Some(TokenKind::RParen) => {
+                    paren_depth -= 1;
+                    self.advance();
+                }
+                Some(TokenKind::Comma) if paren_depth == 0 => break,
+                Some(_) => {
+                    self.advance();
+                }
+                None => break,
+            }
         }
     }
 }

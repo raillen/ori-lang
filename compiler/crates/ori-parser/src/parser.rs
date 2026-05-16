@@ -53,6 +53,13 @@ impl<'src> Parser<'src> {
         self.peek_kind().map_or(false, |k| kinds.contains(k))
     }
 
+    pub fn at_contextual(&self, keyword: &str) -> bool {
+        self.peek_kind() == Some(&TokenKind::Ident)
+            && self
+                .peek()
+                .is_some_and(|tok| self.slice(tok.span) == keyword)
+    }
+
     pub fn at_eof(&self) -> bool {
         self.pos >= self.tokens.len()
     }
@@ -113,12 +120,12 @@ impl<'src> Parser<'src> {
         }
     }
 
-    /// Eat and return the span if matching.
-    pub fn eat_span(&mut self, kind: &TokenKind) -> Option<Span> {
-        if self.peek_kind() == Some(kind) {
-            Some(self.advance().unwrap().span)
+    pub fn eat_contextual(&mut self, keyword: &str) -> bool {
+        if self.at_contextual(keyword) {
+            self.advance();
+            true
         } else {
-            None
+            false
         }
     }
 
@@ -197,8 +204,25 @@ impl<'src> Parser<'src> {
             if self.at_eof() || self.at(&TokenKind::Gt) {
                 break;
             }
+            if self.at(&TokenKind::Const) {
+                self.error(
+                    "generic.unsupported_const_generic",
+                    "const generics are not supported yet",
+                    self.current_span(),
+                );
+                self.synchronize(&[TokenKind::Gt]);
+                break;
+            }
             if let Some(name) = self.parse_name() {
                 params.push(TypeParam { name });
+                if self.at(&TokenKind::Lt) {
+                    self.error(
+                        "generic.unsupported_hkt",
+                        "higher-kinded type parameters are not supported yet",
+                        self.current_span(),
+                    );
+                    self.skip_angle_group();
+                }
             } else {
                 break;
             }
@@ -210,6 +234,29 @@ impl<'src> Parser<'src> {
         params
     }
 
+    fn skip_angle_group(&mut self) {
+        if !self.at(&TokenKind::Lt) {
+            return;
+        }
+        let mut depth = 0usize;
+        while !self.at_eof() {
+            if self.at(&TokenKind::Lt) {
+                depth += 1;
+                self.advance();
+                continue;
+            }
+            if self.at(&TokenKind::Gt) {
+                self.advance();
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    break;
+                }
+                continue;
+            }
+            self.advance();
+        }
+    }
+
     /// Parse optional `where T is Trait, U is not Trait` clause.
     pub fn parse_where_clause_opt(&mut self) -> Option<WhereClause> {
         if !self.at(&TokenKind::Where) {
@@ -217,7 +264,11 @@ impl<'src> Parser<'src> {
         }
         let start = self.advance().unwrap().span; // `where`
         let mut constraints = Vec::new();
+        let grouped = self.eat(&TokenKind::LParen);
         loop {
+            if grouped && self.at(&TokenKind::RParen) {
+                break;
+            }
             let param = self.parse_name()?;
             let negated = if self.eat(&TokenKind::Is) {
                 let neg = self.eat(&TokenKind::Not);
@@ -233,13 +284,17 @@ impl<'src> Parser<'src> {
             } else {
                 constraints.push(WhereConstraint::Is { param, bound, span });
             }
-            if !self.eat(&TokenKind::Comma) {
+            if self.eat(&TokenKind::Comma) || self.eat(&TokenKind::And) {
+                if grouped && self.at(&TokenKind::RParen) {
+                    break;
+                }
+                continue;
+            } else {
                 break;
             }
-            // Stop if next token is not an Ident (end of where clause)
-            if !self.at(&TokenKind::Ident) {
-                break;
-            }
+        }
+        if grouped {
+            self.expect(&TokenKind::RParen)?;
         }
         let end = constraints
             .last()

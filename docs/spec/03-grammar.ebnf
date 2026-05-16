@@ -584,7 +584,7 @@ if_expr
 
 struct_update_expr
     = expression "with"
-      { IDENT ":" expression }
+      "{" [ field_init { "," field_init } [ "," ] ] "}"
       "end"
     ;
 

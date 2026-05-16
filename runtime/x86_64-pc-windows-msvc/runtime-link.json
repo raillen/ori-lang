@@ -1,0 +1,17 @@
+﻿{
+    "target":  "x86_64-pc-windows-msvc",
+    "runtime":  "ori_runtime.lib",
+    "ori_version":  "0.1.0",
+    "abi_version":  "ori-native-abi-1",
+    "profile":  "debug",
+    "native_static_libs":  [
+                               "legacy_stdio_definitions.lib",
+                               "kernel32.lib",
+                               "ntdll.lib",
+                               "userenv.lib",
+                               "ws2_32.lib",
+                               "dbghelp.lib",
+                               "/defaultlib:msvcrt"
+                           ],
+    "generated_by":  "tools/stage_native_runtime.ps1"
+}

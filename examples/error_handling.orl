@@ -1,0 +1,43 @@
+namespace app.errors
+
+import ori.io as io
+
+func divide(a: int, b: int) -> result<int, string>
+    if b == 0
+        return error("Division by zero")
+    end
+    return success(a / b)
+end
+
+func calculate(numerator: int, denominator: int) -> result<int, string>
+    io.print(f"Calculating {numerator} / {denominator}...")
+    
+    -- Using the ? operator for early return on error
+    const val: int = divide(numerator, denominator)?
+    
+    -- If we get here, the division succeeded
+    return success(val * 2)
+end
+
+func main()
+    io.print("Error Handling Demonstration")
+    io.print("----------------------------")
+
+    -- Test case 1: Success
+    match calculate(10, 2)
+        case success(val):
+            io.print(f"Success! Doubled result: {val}")
+        case error(msg):
+            io.print(f"Error occurred: {msg}")
+    end
+    
+    io.print("")
+
+    -- Test case 2: Failure
+    match calculate(10, 0)
+        case success(val):
+            io.print(f"Success! Doubled result: {val}")
+        case error(msg):
+            io.print(f"Error occurred: {msg}")
+    end
+end

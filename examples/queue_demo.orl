@@ -1,0 +1,27 @@
+namespace examples.queue_demo
+
+import ori.io as io
+import ori.queue as queue
+
+func main()
+    const jobs: queue.Queue<string> = queue.new()
+    queue.enqueue(jobs, "parse")
+    queue.enqueue(jobs, "check")
+    queue.enqueue(jobs, "compile")
+
+    match queue.peek(jobs)
+        case some(job):
+            io.print(job)
+        case none:
+            io.print("empty")
+    end
+
+    match queue.dequeue(jobs)
+        case some(job):
+            io.print(job)
+        case none:
+            io.print("empty")
+    end
+
+    io.print(string(queue.len(jobs)))
+end

@@ -1,10 +1,15 @@
-﻿// ori-runtime implementation
+// ori-runtime implementation
 
+pub const ORI_ABI_VERSION: &str = "ori-native-abi-1";
+
+use std::cell::Cell;
+use std::collections::VecDeque;
 use std::ffi::{CStr, CString};
 use std::io::Write;
 use std::os::raw::{c_char, c_uchar};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-// ── Non-atomic ARC ──────────────────────────────────────────────────────────
+// ── Atomic ARC ──────────────────────────────────────────────────────────────
 //
 // Every heap-allocated managed object starts with an 8-byte ArcHeader:
 //   [ref_count: u32][type_tag: u32][... payload ...]
@@ -12,7 +17,8 @@ use std::os::raw::{c_char, c_uchar};
 //
 // Type tags identify the object kind so the correct destructor is called.
 
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::sync::{Condvar, Mutex, OnceLock};
 
 #[repr(C)]
 pub struct OriHeapHeader {
@@ -20,15 +26,123 @@ pub struct OriHeapHeader {
     pub destructor: Option<unsafe extern "C" fn(*mut u8)>,
 }
 
+#[derive(Clone, Copy)]
+struct ArcAllocation {
+    payload: usize,
+    header: usize,
+}
+
+#[derive(Clone, Copy)]
+struct ArcEdge {
+    owner: usize,
+    child: usize,
+}
+
+#[derive(Default)]
+struct ArcState {
+    allocations: Vec<ArcAllocation>,
+    edges: Vec<ArcEdge>,
+}
+
+static ARC_STATE: OnceLock<Mutex<ArcState>> = OnceLock::new();
+
+thread_local! {
+    static TASK_LAST_AWAIT_STATUS: Cell<i64> = const { Cell::new(1) };
+}
+
+fn arc_state() -> &'static Mutex<ArcState> {
+    ARC_STATE.get_or_init(|| Mutex::new(ArcState::default()))
+}
+
+unsafe fn header_for_registered(ptr: *mut u8) -> Option<*mut OriHeapHeader> {
+    if ptr.is_null() {
+        return None;
+    }
+    let payload = ptr as usize;
+    let state = arc_state().lock().ok()?;
+    state
+        .allocations
+        .iter()
+        .find(|allocation| allocation.payload == payload)
+        .map(|allocation| allocation.header as *mut OriHeapHeader)
+}
+
+unsafe fn register_allocation(header: *mut OriHeapHeader, payload: *mut u8) {
+    if let Ok(mut state) = arc_state().lock() {
+        state.allocations.push(ArcAllocation {
+            payload: payload as usize,
+            header: header as usize,
+        });
+    }
+}
+
+unsafe fn unregister_allocation(ptr: *mut u8) -> Option<*mut OriHeapHeader> {
+    let payload = ptr as usize;
+    let mut state = arc_state().lock().ok()?;
+    let index = state
+        .allocations
+        .iter()
+        .position(|allocation| allocation.payload == payload)?;
+    Some(state.allocations.swap_remove(index).header as *mut OriHeapHeader)
+}
+
+unsafe fn remove_incoming_edges(ptr: *mut u8) {
+    let payload = ptr as usize;
+    if let Ok(mut state) = arc_state().lock() {
+        state.edges.retain(|edge| edge.child != payload);
+    }
+}
+
+unsafe fn take_owned_edges(ptr: *mut u8) -> Vec<*mut u8> {
+    let owner = ptr as usize;
+    let mut children = Vec::new();
+    if let Ok(mut state) = arc_state().lock() {
+        let mut index = 0;
+        while index < state.edges.len() {
+            if state.edges[index].owner == owner {
+                children.push(state.edges.swap_remove(index).child as *mut u8);
+            } else {
+                index += 1;
+            }
+        }
+    }
+    children
+}
+
+unsafe fn free_registered_object(ptr: *mut u8, release_owned_edges: bool) {
+    let Some(header) = unregister_allocation(ptr) else {
+        return;
+    };
+    let children = if release_owned_edges {
+        take_owned_edges(ptr)
+    } else {
+        Vec::new()
+    };
+    remove_incoming_edges(ptr);
+    if let Some(dtor) = (*header).destructor {
+        dtor(ptr);
+    }
+    std::ptr::drop_in_place(&mut (*header).refcount);
+    libc::free(header as *mut libc::c_void);
+    for child in children {
+        ori_arc_release(child);
+    }
+}
+
 #[no_mangle]
-pub unsafe extern "C" fn ori_alloc(size: usize, destructor: Option<unsafe extern "C" fn(*mut u8)>) -> *mut u8 {
+pub unsafe extern "C" fn ori_alloc(
+    size: usize,
+    destructor: Option<unsafe extern "C" fn(*mut u8)>,
+) -> *mut u8 {
     let total = size + std::mem::size_of::<OriHeapHeader>();
     let ptr = libc::malloc(total) as *mut u8;
     if !ptr.is_null() {
         let header = ptr as *mut OriHeapHeader;
         std::ptr::write(&mut (*header).refcount, AtomicI64::new(1));
         (*header).destructor = destructor;
-        ptr.add(std::mem::size_of::<OriHeapHeader>())
+        let payload = ptr.add(std::mem::size_of::<OriHeapHeader>());
+        register_allocation(header, payload);
+        payload
     } else {
         ptr
     }
@@ -41,7 +155,9 @@ pub unsafe extern "C" fn ori_arc_retain(ptr: *mut u8) {
     if ptr.is_null() {
         return;
     }
-    let header = ptr.sub(std::mem::size_of::<OriHeapHeader>()) as *mut OriHeapHeader;
+    let Some(header) = header_for_registered(ptr) else {
+        return;
+    };
     (*header).refcount.fetch_add(1, Ordering::Relaxed);
 }
 
@@ -51,22 +167,1212 @@ pub unsafe extern "C" fn ori_arc_release(ptr: *mut u8) {
     if ptr.is_null() {
         return;
     }
-    let header = ptr.sub(std::mem::size_of::<OriHeapHeader>()) as *mut OriHeapHeader;
+    let Some(header) = header_for_registered(ptr) else {
+        return;
+    };
     if (*header).refcount.fetch_sub(1, Ordering::Release) == 1 {
         (*header).refcount.load(Ordering::Acquire); // synchronize
+        free_registered_object(ptr, true);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_arc_register_edge(owner: *mut u8, child: *mut u8) {
+    if owner.is_null() || child.is_null() {
+        return;
+    }
+    let owner_key = owner as usize;
+    let child_key = child as usize;
+    let Some(child_header) = header_for_registered(child) else {
+        return;
+    };
+    if header_for_registered(owner).is_none() {
+        return;
+    }
+    if let Ok(mut state) = arc_state().lock() {
+        if state
+            .edges
+            .iter()
+            .any(|edge| edge.owner == owner_key && edge.child == child_key)
+        {
+            return;
+        }
+        state.edges.push(ArcEdge {
+            owner: owner_key,
+            child: child_key,
+        });
+        (*child_header).refcount.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+// -- Native concurrency -----------------------------------------------------
+
+#[repr(C)]
+pub struct OriTaskJob {
+    handle: Mutex<Option<std::thread::JoinHandle<i64>>>,
+}
+
+#[repr(C)]
+pub struct OriChannel {
+    state: Mutex<OriChannelState>,
+    available: Condvar,
+}
+
+struct OriChannelState {
+    queue: VecDeque<i64>,
+    closed: bool,
+}
+
+#[repr(C)]
+pub struct OriAtomicInt {
+    value: AtomicI64,
+}
+
+#[repr(C)]
+pub struct OriFuture {
+    state: Mutex<OriFutureState>,
+    ready: Condvar,
+}
+
+#[repr(C)]
+struct OriAsyncSpawnJob {
+    runner: unsafe fn(usize, usize, usize),
+    closure: usize,
+    future: usize,
+}
+
+struct OriFutureState {
+    status: OriFutureStatus,
+    value: i64,
+    value_is_managed: bool,
+    waiters: VecDeque<usize>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OriFutureStatus {
+    Pending,
+    Ready,
+    Failed,
+    Cancelled,
+}
+
+struct OriExecutor {
+    queue: Mutex<VecDeque<usize>>,
+    available: Condvar,
+}
+
+struct OriTimerState {
+    timers: Vec<TimerEntry>,
+}
+
+#[derive(Clone, Copy)]
+struct TimerEntry {
+    due: Instant,
+    future: usize,
+}
+
+static EXECUTOR: OnceLock<OriExecutor> = OnceLock::new();
+static TIMER_STATE: OnceLock<(Mutex<OriTimerState>, Condvar)> = OnceLock::new();
+static TIMER_THREAD: OnceLock<()> = OnceLock::new();
+
+fn executor() -> &'static OriExecutor {
+    EXECUTOR.get_or_init(|| OriExecutor {
+        queue: Mutex::new(VecDeque::new()),
+        available: Condvar::new(),
+    })
+}
+
+fn timer_state() -> &'static (Mutex<OriTimerState>, Condvar) {
+    TIMER_STATE.get_or_init(|| {
+        (
+            Mutex::new(OriTimerState { timers: Vec::new() }),
+            Condvar::new(),
+        )
+    })
+}
+
+fn ensure_timer_thread() {
+    TIMER_THREAD.get_or_init(|| {
+        let _ = std::thread::Builder::new()
+            .name("ori-runtime-timer".to_string())
+            .spawn(timer_loop);
+    });
+}
+
+fn timer_loop() {
+    loop {
+        let ready = {
+            let (lock, cvar) = timer_state();
+            let mut guard = match lock.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            loop {
+                if guard.timers.is_empty() {
+                    guard = match cvar.wait(guard) {
+                        Ok(guard) => guard,
+                        Err(poisoned) => poisoned.into_inner(),
+                    };
+                    continue;
+                }
+
+                guard.timers.sort_by_key(|entry| entry.due);
+                let now = Instant::now();
+                let next_due = guard.timers[0].due;
+                if next_due <= now {
+                    let mut ready = Vec::new();
+                    let mut index = 0;
+                    while index < guard.timers.len() {
+                        if guard.timers[index].due <= now {
+                            ready.push(guard.timers.swap_remove(index));
+                        } else {
+                            index += 1;
+                        }
+                    }
+                    break ready;
+                }
+
+                let wait = next_due.saturating_duration_since(now);
+                guard = match cvar.wait_timeout(guard, wait) {
+                    Ok((guard, _)) => guard,
+                    Err(poisoned) => poisoned.into_inner().0,
+                };
+            }
+        };
+
+        for entry in ready {
+            unsafe {
+                complete_future_owned(entry.future as *mut OriFuture, OriFutureStatus::Ready, 0);
+            }
+        }
+    }
+}
+
+unsafe fn schedule_executor_task_owned(closure_addr: usize) {
+    if closure_addr == 0 {
+        return;
+    }
+    let exec = executor();
+    let mut guard = match exec.queue.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.push_back(closure_addr);
+    exec.available.notify_one();
+}
+
+unsafe fn pop_executor_task() -> Option<usize> {
+    let exec = executor();
+    let mut guard = match exec.queue.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.pop_front()
+}
+
+unsafe fn run_executor_task(closure_addr: usize) {
+    if closure_addr == 0 {
+        return;
+    }
+    let closure = closure_addr as *mut u8;
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let fn_addr = *(closure as *const usize);
+    let env_addr = *(closure.add(ptr_size) as *const usize);
+    type TaskFn = unsafe extern "C" fn(*mut u8) -> i64;
+    let task_fn: TaskFn = std::mem::transmute(fn_addr);
+    let _ = task_fn(env_addr as *mut u8);
+    ori_arc_release(closure);
+}
+
+unsafe fn schedule_sleep_timer(future: *mut OriFuture, ms: i64) {
+    if future.is_null() {
+        return;
+    }
+    ensure_timer_thread();
+    let duration = Duration::from_millis(ms.max(0) as u64);
+    let now = Instant::now();
+    let due = now.checked_add(duration).unwrap_or(now);
+    let (lock, cvar) = timer_state();
+    let mut guard = match lock.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.timers.push(TimerEntry {
+        due,
+        future: future as usize,
+    });
+    cvar.notify_one();
+}
+
+unsafe extern "C" fn ori_task_job_dtor(ptr: *mut u8) {
+    std::ptr::drop_in_place(ptr as *mut OriTaskJob);
+}
+
+unsafe extern "C" fn ori_channel_dtor(ptr: *mut u8) {
+    std::ptr::drop_in_place(ptr as *mut OriChannel);
+}
+
+unsafe extern "C" fn ori_atomic_int_dtor(ptr: *mut u8) {
+    std::ptr::drop_in_place(ptr as *mut OriAtomicInt);
+}
+
+unsafe extern "C" fn ori_future_dtor(ptr: *mut u8) {
+    let future = ptr as *mut OriFuture;
+    let (waiters, managed_value) = match (*future).state.lock() {
+        Ok(mut guard) => {
+            let managed_value = if guard.status == OriFutureStatus::Ready && guard.value_is_managed
+            {
+                Some(guard.value as *mut u8)
+            } else {
+                None
+            };
+            let waiters = guard.waiters.drain(..).collect::<Vec<_>>();
+            guard.value_is_managed = false;
+            (waiters, managed_value)
+        }
+        Err(poisoned) => {
+            let mut guard = poisoned.into_inner();
+            let managed_value = if guard.status == OriFutureStatus::Ready && guard.value_is_managed
+            {
+                Some(guard.value as *mut u8)
+            } else {
+                None
+            };
+            let waiters = guard.waiters.drain(..).collect::<Vec<_>>();
+            guard.value_is_managed = false;
+            (waiters, managed_value)
+        }
+    };
+    for waiter in waiters {
+        ori_arc_release(waiter as *mut u8);
+    }
+    if let Some(value) = managed_value {
+        ori_arc_release(value);
+    }
+    std::ptr::drop_in_place(future);
+}
+
+unsafe extern "C" fn ori_async_spawn_job_dtor(ptr: *mut u8) {
+    let job = ptr as *mut OriAsyncSpawnJob;
+    let closure = (*job).closure;
+    let future = (*job).future;
+    (*job).closure = 0;
+    (*job).future = 0;
+    if closure != 0 {
+        ori_arc_release(closure as *mut u8);
+    }
+    if future != 0 {
+        ori_arc_release(future as *mut u8);
+    }
+    std::ptr::drop_in_place(job);
+}
+
+unsafe fn alloc_task_job(job: OriTaskJob) -> *mut OriTaskJob {
+    let ptr =
+        ori_alloc(std::mem::size_of::<OriTaskJob>(), Some(ori_task_job_dtor)) as *mut OriTaskJob;
+    if !ptr.is_null() {
+        std::ptr::write(ptr, job);
+    }
+    ptr
+}
+
+unsafe fn alloc_channel(channel: OriChannel) -> *mut OriChannel {
+    let ptr =
+        ori_alloc(std::mem::size_of::<OriChannel>(), Some(ori_channel_dtor)) as *mut OriChannel;
+    if !ptr.is_null() {
+        std::ptr::write(ptr, channel);
+    }
+    ptr
+}
+
+unsafe fn alloc_atomic_int(value: i64) -> *mut OriAtomicInt {
+    let ptr = ori_alloc(
+        std::mem::size_of::<OriAtomicInt>(),
+        Some(ori_atomic_int_dtor),
+    ) as *mut OriAtomicInt;
+    if !ptr.is_null() {
+        std::ptr::write(
+            ptr,
+            OriAtomicInt {
+                value: AtomicI64::new(value),
+            },
+        );
+    }
+    ptr
+}
+
+unsafe fn alloc_future(future: OriFuture) -> *mut OriFuture {
+    let ptr = ori_alloc(std::mem::size_of::<OriFuture>(), Some(ori_future_dtor)) as *mut OriFuture;
+    if !ptr.is_null() {
+        std::ptr::write(ptr, future);
+    }
+    ptr
+}
+
+unsafe fn alloc_ready_future(value: i64) -> *mut OriFuture {
+    alloc_future(OriFuture {
+        state: Mutex::new(OriFutureState {
+            status: OriFutureStatus::Ready,
+            value,
+            value_is_managed: false,
+            waiters: VecDeque::new(),
+        }),
+        ready: Condvar::new(),
+    })
+}
+
+unsafe fn alloc_ready_future_ptr(value: *mut u8) -> *mut OriFuture {
+    let value_is_managed = retain_registered_future_payload(value);
+    alloc_future(OriFuture {
+        state: Mutex::new(OriFutureState {
+            status: OriFutureStatus::Ready,
+            value: value as i64,
+            value_is_managed,
+            waiters: VecDeque::new(),
+        }),
+        ready: Condvar::new(),
+    })
+}
+
+unsafe fn alloc_pending_future() -> *mut OriFuture {
+    alloc_future(OriFuture {
+        state: Mutex::new(OriFutureState {
+            status: OriFutureStatus::Pending,
+            value: 0,
+            value_is_managed: false,
+            waiters: VecDeque::new(),
+        }),
+        ready: Condvar::new(),
+    })
+}
+
+unsafe fn retain_registered_future_payload(value: *mut u8) -> bool {
+    if header_for_registered(value).is_none() {
+        return false;
+    }
+    ori_arc_retain(value);
+    true
+}
+
+fn future_status_code(status: OriFutureStatus) -> i64 {
+    match status {
+        OriFutureStatus::Pending => 0,
+        OriFutureStatus::Ready => 1,
+        OriFutureStatus::Failed => 2,
+        OriFutureStatus::Cancelled => 3,
+    }
+}
+
+fn set_task_last_await_status(status: OriFutureStatus) {
+    let code = future_status_code(status);
+    TASK_LAST_AWAIT_STATUS.with(|cell| cell.set(code));
+}
+
+fn take_task_last_await_status() -> i64 {
+    TASK_LAST_AWAIT_STATUS.with(|cell| {
+        let status = cell.get();
+        cell.set(future_status_code(OriFutureStatus::Ready));
+        status
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn ori_task_last_await_status() -> i64 {
+    TASK_LAST_AWAIT_STATUS.with(Cell::get)
+}
+
+unsafe fn set_future_status(
+    future: *mut OriFuture,
+    status: OriFutureStatus,
+    value: i64,
+    value_is_managed: bool,
+) -> Vec<usize> {
+    if future.is_null() {
+        if value_is_managed {
+            ori_arc_release(value as *mut u8);
+        }
+        return Vec::new();
+    }
+    let mut guard = match (*future).state.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if guard.status != OriFutureStatus::Pending {
+        if value_is_managed {
+            ori_arc_release(value as *mut u8);
+        }
+        return Vec::new();
+    }
+    let waiters = guard.waiters.drain(..).collect::<Vec<_>>();
+    guard.status = status;
+    guard.value = value;
+    guard.value_is_managed = status == OriFutureStatus::Ready && value_is_managed;
+    (*future).ready.notify_all();
+    waiters
+}
+
+unsafe fn schedule_future_waiters(waiters: Vec<usize>) {
+    for waiter in waiters {
+        schedule_executor_task_owned(waiter);
+    }
+}
+
+unsafe fn complete_future_owned(future: *mut OriFuture, status: OriFutureStatus, value: i64) {
+    let waiters = set_future_status(future, status, value, false);
+    schedule_future_waiters(waiters);
+    ori_arc_release(future as *mut u8);
+}
+
+unsafe fn complete_future_owned_ptr(
+    future: *mut OriFuture,
+    status: OriFutureStatus,
+    value: *mut u8,
+) {
+    let value_is_managed =
+        status == OriFutureStatus::Ready && header_for_registered(value).is_some();
+    let waiters = set_future_status(future, status, value as i64, value_is_managed);
+    schedule_future_waiters(waiters);
+    ori_arc_release(future as *mut u8);
+}
+
+unsafe extern "C" fn async_spawn_job_entry(env: *mut u8) -> i64 {
+    if env.is_null() {
+        return 0;
+    }
+    let job = env as *mut OriAsyncSpawnJob;
+    let runner = (*job).runner;
+    let closure = (*job).closure;
+    let future = (*job).future;
+    (*job).closure = 0;
+    (*job).future = 0;
+    if closure == 0 || future == 0 {
+        if closure != 0 {
+            ori_arc_release(closure as *mut u8);
+        }
+        if future != 0 {
+            complete_future_owned(future as *mut OriFuture, OriFutureStatus::Failed, 0);
+        }
+        return 0;
+    }
+    runner(closure, future, 0);
+    0
+}
+
+unsafe fn alloc_executor_closure(
+    entry: unsafe extern "C" fn(*mut u8) -> i64,
+    env: *mut u8,
+) -> *mut u8 {
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let closure = ori_alloc(ptr_size * 2, None);
+    if closure.is_null() {
+        return closure;
+    }
+    *(closure as *mut usize) = entry as *const () as usize;
+    *(closure.add(ptr_size) as *mut usize) = env as usize;
+    if !env.is_null() {
+        ori_arc_register_edge(closure, env);
+        ori_arc_release(env);
+    }
+    closure
+}
+
+unsafe fn alloc_async_spawn_job(
+    runner: unsafe fn(usize, usize, usize),
+    closure: *mut u8,
+    future: *mut OriFuture,
+) -> *mut OriAsyncSpawnJob {
+    let job = ori_alloc(
+        std::mem::size_of::<OriAsyncSpawnJob>(),
+        Some(ori_async_spawn_job_dtor),
+    ) as *mut OriAsyncSpawnJob;
+    if !job.is_null() {
+        std::ptr::write(
+            job,
+            OriAsyncSpawnJob {
+                runner,
+                closure: closure as usize,
+                future: future as usize,
+            },
+        );
+    }
+    job
+}
+
+unsafe fn new_result_raw(is_ok: bool, raw: i64) -> *mut u8 {
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let total = ptr_size * 2;
+    let ptr = libc::malloc(total) as *mut u8;
+    if ptr.is_null() {
+        return ptr;
+    }
+    std::ptr::write_bytes(ptr, 0, total);
+    *ptr = u8::from(is_ok);
+    std::ptr::write_unaligned(ptr.add(ptr_size) as *mut i64, raw);
+    ptr
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_task_spawn(closure: *mut u8) -> *mut OriTaskJob {
+    if closure.is_null() {
+        return alloc_task_job(OriTaskJob {
+            handle: Mutex::new(None),
+        });
+    }
+
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let fn_addr = *(closure as *const usize);
+    let env_addr = *(closure.add(ptr_size) as *const usize);
+    let closure_addr = closure as usize;
+    let handle = std::thread::spawn(move || {
+        type TaskFn = unsafe extern "C" fn(*mut u8) -> i64;
+        let task_fn: TaskFn = unsafe { std::mem::transmute(fn_addr) };
+        let value = unsafe { task_fn(env_addr as *mut u8) };
+        unsafe {
+            ori_arc_release(closure_addr as *mut u8);
+        }
+        value
+    });
+
+    alloc_task_job(OriTaskJob {
+        handle: Mutex::new(Some(handle)),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_task_join(job: *mut OriTaskJob) -> *mut u8 {
+    if job.is_null() {
+        return new_result_raw(false, 0);
+    }
+    let handle = match (*job).handle.lock() {
+        Ok(mut guard) => guard.take(),
+        Err(poisoned) => poisoned.into_inner().take(),
+    };
+    let Some(handle) = handle else {
+        return new_result_raw(false, 0);
+    };
+    match handle.join() {
+        Ok(value) => new_result_raw(true, value),
+        Err(_) => new_result_raw(false, 0),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_task_detach(job: *mut OriTaskJob) {
+    if job.is_null() {
+        return;
+    }
+    match (*job).handle.lock() {
+        Ok(mut guard) => {
+            guard.take();
+        }
+        Err(poisoned) => {
+            poisoned.into_inner().take();
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_task_sleep(ms: i64) -> *mut OriFuture {
+    let future = alloc_pending_future();
+    if future.is_null() {
+        return future;
+    }
+
+    ori_arc_retain(future as *mut u8);
+    schedule_sleep_timer(future, ms);
+    future
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_pending() -> *mut OriFuture {
+    alloc_pending_future()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_ready_i64(value: i64) -> *mut OriFuture {
+    alloc_ready_future(value)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_ready_f64(value: f64) -> *mut OriFuture {
+    alloc_ready_future(value.to_bits() as i64)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_ready_ptr(value: *mut u8) -> *mut OriFuture {
+    alloc_ready_future_ptr(value)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_ready_void() -> *mut OriFuture {
+    alloc_ready_future(0)
+}
+
+unsafe fn async_spawn_with_runner(
+    closure: *mut u8,
+    runner: unsafe fn(usize, usize, usize),
+) -> *mut OriFuture {
+    let future = alloc_pending_future();
+    if future.is_null() {
+        if !closure.is_null() {
+            ori_arc_release(closure);
+        }
+        return future;
+    }
+    if closure.is_null() {
+        ori_future_cancel(future);
+        return future;
+    }
+
+    ori_arc_retain(future as *mut u8);
+    let job = alloc_async_spawn_job(runner, closure, future);
+    if job.is_null() {
+        ori_arc_release(closure);
+        complete_future_owned(future, OriFutureStatus::Failed, 0);
+        return future;
+    }
+    let executor_closure = alloc_executor_closure(async_spawn_job_entry, job as *mut u8);
+    if executor_closure.is_null() {
+        ori_future_fail(future);
+        ori_arc_release(job as *mut u8);
+        return future;
+    }
+    schedule_executor_task_owned(executor_closure as usize);
+    future
+}
+
+unsafe fn complete_future_from_task_status(future: *mut OriFuture, ready_value: i64) {
+    match take_task_last_await_status() {
+        2 => complete_future_owned(future, OriFutureStatus::Failed, 0),
+        3 => complete_future_owned(future, OriFutureStatus::Cancelled, 0),
+        _ => complete_future_owned(future, OriFutureStatus::Ready, ready_value),
+    }
+}
+
+unsafe fn complete_future_ptr_from_task_status(future: *mut OriFuture, ready_value: *mut u8) {
+    match take_task_last_await_status() {
+        2 => complete_future_owned(future, OriFutureStatus::Failed, 0),
+        3 => complete_future_owned(future, OriFutureStatus::Cancelled, 0),
+        _ => complete_future_owned_ptr(future, OriFutureStatus::Ready, ready_value),
+    }
+}
+
+unsafe fn async_runner_i64(closure_addr: usize, future_addr: usize, _: usize) {
+    let closure = closure_addr as *mut u8;
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let fn_addr = *(closure as *const usize);
+    let env_addr = *(closure.add(ptr_size) as *const usize);
+    type AsyncFn = unsafe extern "C" fn(*mut u8) -> i64;
+    let async_fn: AsyncFn = std::mem::transmute(fn_addr);
+    let value = async_fn(env_addr as *mut u8);
+    ori_arc_release(closure);
+    complete_future_from_task_status(future_addr as *mut OriFuture, value);
+}
+
+unsafe fn async_runner_f64(closure_addr: usize, future_addr: usize, _: usize) {
+    let closure = closure_addr as *mut u8;
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let fn_addr = *(closure as *const usize);
+    let env_addr = *(closure.add(ptr_size) as *const usize);
+    type AsyncFn = unsafe extern "C" fn(*mut u8) -> f64;
+    let async_fn: AsyncFn = std::mem::transmute(fn_addr);
+    let value = async_fn(env_addr as *mut u8);
+    ori_arc_release(closure);
+    complete_future_from_task_status(future_addr as *mut OriFuture, value.to_bits() as i64);
+}
+
+unsafe fn async_runner_ptr(closure_addr: usize, future_addr: usize, _: usize) {
+    let closure = closure_addr as *mut u8;
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let fn_addr = *(closure as *const usize);
+    let env_addr = *(closure.add(ptr_size) as *const usize);
+    type AsyncFn = unsafe extern "C" fn(*mut u8) -> *mut u8;
+    let async_fn: AsyncFn = std::mem::transmute(fn_addr);
+    let value = async_fn(env_addr as *mut u8);
+    ori_arc_release(closure);
+    complete_future_ptr_from_task_status(future_addr as *mut OriFuture, value);
+}
+
+unsafe fn async_runner_void(closure_addr: usize, future_addr: usize, _: usize) {
+    let closure = closure_addr as *mut u8;
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let fn_addr = *(closure as *const usize);
+    let env_addr = *(closure.add(ptr_size) as *const usize);
+    type AsyncFn = unsafe extern "C" fn(*mut u8);
+    let async_fn: AsyncFn = std::mem::transmute(fn_addr);
+    async_fn(env_addr as *mut u8);
+    ori_arc_release(closure);
+    complete_future_from_task_status(future_addr as *mut OriFuture, 0);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_async_spawn_i64(closure: *mut u8) -> *mut OriFuture {
+    async_spawn_with_runner(closure, async_runner_i64)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_async_spawn_f64(closure: *mut u8) -> *mut OriFuture {
+    async_spawn_with_runner(closure, async_runner_f64)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_async_spawn_ptr(closure: *mut u8) -> *mut OriFuture {
+    async_spawn_with_runner(closure, async_runner_ptr)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_async_spawn_void(closure: *mut u8) -> *mut OriFuture {
+    async_spawn_with_runner(closure, async_runner_void)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_poll(future: *mut OriFuture) -> i64 {
+    if future.is_null() {
+        return future_status_code(OriFutureStatus::Cancelled);
+    }
+    let guard = match (*future).state.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    future_status_code(guard.status)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_value_i64(future: *mut OriFuture) -> i64 {
+    if future.is_null() {
+        return 0;
+    }
+    let guard = match (*future).state.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.value
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_value_f64(future: *mut OriFuture) -> f64 {
+    f64::from_bits(ori_future_value_i64(future) as u64)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_value_ptr(future: *mut OriFuture) -> *mut u8 {
+    ori_future_value_i64(future) as *mut u8
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_on_ready(future: *mut OriFuture, closure: *mut u8) {
+    if closure.is_null() {
+        return;
+    }
+    if future.is_null() {
+        ori_arc_release(closure);
+        return;
+    }
+
+    let mut schedule_now = false;
+    {
+        let mut guard = match (*future).state.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if guard.status == OriFutureStatus::Pending {
+            guard.waiters.push_back(closure as usize);
+        } else {
+            schedule_now = true;
+        }
+    }
+
+    if schedule_now {
+        schedule_executor_task_owned(closure as usize);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_complete_i64(future: *mut OriFuture, value: i64) {
+    let waiters = set_future_status(future, OriFutureStatus::Ready, value, false);
+    schedule_future_waiters(waiters);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_complete_f64(future: *mut OriFuture, value: f64) {
+    ori_future_complete_i64(future, value.to_bits() as i64);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_complete_ptr(future: *mut OriFuture, value: *mut u8) {
+    let value_is_managed = retain_registered_future_payload(value);
+    let waiters = set_future_status(
+        future,
+        OriFutureStatus::Ready,
+        value as i64,
+        value_is_managed,
+    );
+    schedule_future_waiters(waiters);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_complete_void(future: *mut OriFuture) {
+    ori_future_complete_i64(future, 0);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_fail(future: *mut OriFuture) {
+    let waiters = set_future_status(future, OriFutureStatus::Failed, 0, false);
+    schedule_future_waiters(waiters);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_future_cancel(future: *mut OriFuture) {
+    let waiters = set_future_status(future, OriFutureStatus::Cancelled, 0, false);
+    schedule_future_waiters(waiters);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_executor_schedule(closure: *mut u8) {
+    schedule_executor_task_owned(closure as usize);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_executor_run_one() -> i64 {
+    let Some(closure_addr) = pop_executor_task() else {
+        return 0;
+    };
+    run_executor_task(closure_addr);
+    1
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_executor_drain() -> i64 {
+    let mut ran = 0;
+    while ori_executor_run_one() != 0 {
+        ran += 1;
+    }
+    ran
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_task_block_on(future: *mut OriFuture) -> i64 {
+    if future.is_null() {
+        set_task_last_await_status(OriFutureStatus::Cancelled);
+        return 0;
+    }
+
+    loop {
+        {
+            let guard = match (*future).state.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            match guard.status {
+                OriFutureStatus::Ready => {
+                    set_task_last_await_status(OriFutureStatus::Ready);
+                    return guard.value;
+                }
+                OriFutureStatus::Failed => {
+                    set_task_last_await_status(OriFutureStatus::Failed);
+                    return 0;
+                }
+                OriFutureStatus::Cancelled => {
+                    set_task_last_await_status(OriFutureStatus::Cancelled);
+                    return 0;
+                }
+                OriFutureStatus::Pending => {}
+            }
+        }
+
+        while ori_executor_run_one() != 0 {}
+
+        let guard = match (*future).state.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        if guard.status == OriFutureStatus::Pending {
+            drop(
+                match (*future)
+                    .ready
+                    .wait_timeout(guard, Duration::from_millis(1))
+                {
+                    Ok((guard, _)) => guard,
+                    Err(poisoned) => poisoned.into_inner().0,
+                },
+            );
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_task_block_on_f64(future: *mut OriFuture) -> f64 {
+    f64::from_bits(ori_task_block_on(future) as u64)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_task_block_on_ptr(future: *mut OriFuture) -> *mut u8 {
+    ori_task_block_on(future) as *mut u8
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_channel_create() -> *mut OriChannel {
+    alloc_channel(OriChannel {
+        state: Mutex::new(OriChannelState {
+            queue: VecDeque::new(),
+            closed: false,
+        }),
+        available: Condvar::new(),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_channel_send(channel: *mut OriChannel, value: i64) -> *mut u8 {
+    if channel.is_null() {
+        return new_result_raw(false, 0);
+    }
+    let mut guard = match (*channel).state.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if guard.closed {
+        return new_result_raw(false, 0);
+    }
+    guard.queue.push_back(value);
+    (*channel).available.notify_one();
+    new_result_raw(true, 0)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_channel_receive(channel: *mut OriChannel) -> *mut u8 {
+    if channel.is_null() {
+        return new_result_raw(false, 0);
+    }
+    let mut guard = match (*channel).state.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    loop {
+        if let Some(value) = guard.queue.pop_front() {
+            return new_result_raw(true, value);
+        }
+        if guard.closed {
+            return new_result_raw(false, 0);
+        }
+        guard = match (*channel).available.wait(guard) {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_channel_close(channel: *mut OriChannel) {
+    if channel.is_null() {
+        return;
+    }
+    let mut guard = match (*channel).state.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.closed = true;
+    (*channel).available.notify_all();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_atomic_new(value: i64) -> *mut OriAtomicInt {
+    alloc_atomic_int(value)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_atomic_load(value: *mut OriAtomicInt) -> i64 {
+    if value.is_null() {
+        return 0;
+    }
+    (*value).value.load(Ordering::SeqCst)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_atomic_store(value: *mut OriAtomicInt, next: i64) {
+    if value.is_null() {
+        return;
+    }
+    (*value).value.store(next, Ordering::SeqCst);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_atomic_add(value: *mut OriAtomicInt, delta: i64) -> i64 {
+    if value.is_null() {
+        return 0;
+    }
+    (*value).value.fetch_add(delta, Ordering::SeqCst) + delta
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_arc_unregister_edge(owner: *mut u8, child: *mut u8) {
+    if owner.is_null() || child.is_null() {
+        return;
+    }
+    let owner_key = owner as usize;
+    let child_key = child as usize;
+    let mut removed = false;
+    if let Ok(mut state) = arc_state().lock() {
+        if let Some(index) = state
+            .edges
+            .iter()
+            .position(|edge| edge.owner == owner_key && edge.child == child_key)
+        {
+            state.edges.swap_remove(index);
+            removed = true;
+        }
+    }
+    if removed {
+        ori_arc_release(child);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_arc_update_edge(
+    owner: *mut u8,
+    old_child: *mut u8,
+    new_child: *mut u8,
+) {
+    if old_child == new_child {
+        return;
+    }
+    ori_arc_unregister_edge(owner, old_child);
+    ori_arc_register_edge(owner, new_child);
+}
+
+/// Collects cycles whose strong edges were registered by generated code.
+/// Returns the number of reclaimed heap objects.
+#[no_mangle]
+pub unsafe extern "C" fn ori_arc_collect_cycles() -> i64 {
+    #[derive(Clone)]
+    struct Mark {
+        payload: usize,
+        header: usize,
+        trial_count: i64,
+        marked: bool,
+        collect: bool,
+    }
+
+    fn mark_reachable(index: usize, marks: &mut [Mark], edges: &[ArcEdge]) {
+        if marks[index].marked {
+            return;
+        }
+        marks[index].marked = true;
+        let payload = marks[index].payload;
+        let children: Vec<usize> = edges
+            .iter()
+            .filter(|edge| edge.owner == payload)
+            .map(|edge| edge.child)
+            .collect();
+        for child in children {
+            if let Some(child_index) = marks.iter().position(|mark| mark.payload == child) {
+                mark_reachable(child_index, marks, edges);
+            }
+        }
+    }
+
+    let mut marks = {
+        let Ok(state) = arc_state().lock() else {
+            return 0;
+        };
+        let mut marks: Vec<Mark> = state
+            .allocations
+            .iter()
+            .map(|allocation| {
+                let header = allocation.header as *mut OriHeapHeader;
+                Mark {
+                    payload: allocation.payload,
+                    header: allocation.header,
+                    trial_count: (*header).refcount.load(Ordering::Acquire),
+                    marked: false,
+                    collect: false,
+                }
+            })
+            .collect();
+        for edge in &state.edges {
+            let owner_known = marks.iter().any(|mark| mark.payload == edge.owner);
+            if owner_known {
+                if let Some(child) = marks.iter_mut().find(|mark| mark.payload == edge.child) {
+                    child.trial_count -= 1;
+                }
+            }
+        }
+        let edges = state.edges.clone();
+        for index in 0..marks.len() {
+            if marks[index].trial_count > 0 {
+                mark_reachable(index, &mut marks, &edges);
+            }
+        }
+        marks
+    };
+
+    let mut collected = 0;
+    for mark in &mut marks {
+        if !mark.marked {
+            mark.collect = true;
+            collected += 1;
+        }
+    }
+    if collected == 0 {
+        return 0;
+    }
+
+    let collected_payloads: Vec<usize> = marks
+        .iter()
+        .filter(|mark| mark.collect)
+        .map(|mark| mark.payload)
+        .collect();
+    let collected_pairs: Vec<(usize, usize)> = marks
+        .iter()
+        .filter(|mark| mark.collect)
+        .map(|mark| (mark.payload, mark.header))
+        .collect();
+    let mut children_to_release = Vec::new();
+
+    if let Ok(mut state) = arc_state().lock() {
+        state
+            .allocations
+            .retain(|allocation| !collected_payloads.contains(&allocation.payload));
+        let mut index = 0;
+        while index < state.edges.len() {
+            let edge = state.edges[index];
+            let owner_collected = collected_payloads.contains(&edge.owner);
+            let child_collected = collected_payloads.contains(&edge.child);
+            if owner_collected || child_collected {
+                state.edges.swap_remove(index);
+                if owner_collected && !child_collected {
+                    children_to_release.push(edge.child as *mut u8);
+                }
+            } else {
+                index += 1;
+            }
+        }
+    }
+
+    for (payload, header) in collected_pairs {
+        let payload = payload as *mut u8;
+        let header = header as *mut OriHeapHeader;
+        (*header).refcount.store(0, Ordering::Release);
         if let Some(dtor) = (*header).destructor {
-            dtor(ptr);
+            dtor(payload);
         }
         std::ptr::drop_in_place(&mut (*header).refcount);
         libc::free(header as *mut libc::c_void);
     }
+
+    for child in children_to_release {
+        ori_arc_release(child);
+    }
+
+    collected
 }
 
-/// Cycle collection stub — non-atomic single-threaded ARC does not detect cycles.
-/// Returns number of objects collected (always 0 for now).
 #[no_mangle]
-pub unsafe extern "C" fn ori_arc_collect_cycles() -> i64 {
-    0
+pub extern "C" fn ori_arc_live_allocations() -> i64 {
+    arc_state()
+        .lock()
+        .map(|state| state.allocations.len() as i64)
+        .unwrap_or(0)
 }
 
 // ── ori.io ────────────────────────────────────────────────────────────────────
@@ -130,8 +1436,38 @@ pub unsafe extern "C" fn ori_to_string(n: i64) -> *mut u8 {
 }
 
 #[no_mangle]
+pub extern "C" fn ori_to_int(value: i64) -> i64 {
+    value
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn ori_to_string_parts(n: i64, out_ptr: *mut *mut u8, out_len: *mut i64) {
-    let body = n.to_string();
+    write_string_parts(n.to_string(), out_ptr, out_len);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_float_to_string_parts(
+    value: f64,
+    out_ptr: *mut *mut u8,
+    out_len: *mut i64,
+) {
+    write_string_parts(value.to_string(), out_ptr, out_len);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_bool_to_string_parts(
+    value: c_uchar,
+    out_ptr: *mut *mut u8,
+    out_len: *mut i64,
+) {
+    write_string_parts(
+        if value != 0 { "true" } else { "false" }.to_string(),
+        out_ptr,
+        out_len,
+    );
+}
+
+unsafe fn write_string_parts(body: String, out_ptr: *mut *mut u8, out_len: *mut i64) {
     let ptr = cstring_from_str(&body);
     if !out_ptr.is_null() {
         *out_ptr = ptr;
@@ -176,9 +1512,16 @@ pub unsafe extern "C" fn ori_string_concat_parts(
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_string_slice(s: *const u8, start: i64, end: i64) -> *mut u8 {
+    if s.is_null() {
+        abort_bounds("ori string slice bounds out of range");
+    }
     let s = cstr_bytes(s);
-    let start = start.max(0).min(s.len() as i64) as usize;
-    let end = end.max(start as i64).min(s.len() as i64) as usize;
+    let (start, end) = checked_slice_bounds(
+        s.len() as i64,
+        start,
+        end,
+        "ori string slice bounds out of range",
+    );
     cstring_from_bytes(s[start..end].to_vec())
 }
 
@@ -206,6 +1549,16 @@ pub unsafe extern "C" fn ori_string_ends_with(s: *const u8, suffix: *const u8) -
 #[no_mangle]
 pub unsafe extern "C" fn ori_string_trim(s: *const u8) -> *mut u8 {
     cstring_from_str(cstr_str(s).trim())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_string_trim_start(s: *const u8) -> *mut u8 {
+    cstring_from_str(cstr_str(s).trim_start())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_string_trim_end(s: *const u8) -> *mut u8 {
+    cstring_from_str(cstr_str(s).trim_end())
 }
 
 #[no_mangle]
@@ -306,9 +1659,46 @@ fn cstring_from_str(s: &str) -> *mut u8 {
 }
 
 fn cstring_from_bytes(bytes: Vec<u8>) -> *mut u8 {
-    CString::new(bytes)
-        .unwrap_or_else(|_| CString::new("").unwrap())
-        .into_raw() as *mut u8
+    let cstring = CString::new(bytes).unwrap_or_else(|_| CString::new("").unwrap());
+    let bytes_with_nul = cstring.as_bytes_with_nul();
+    unsafe {
+        let ptr = ori_alloc(bytes_with_nul.len(), None);
+        if ptr.is_null() {
+            return ptr;
+        }
+        std::ptr::copy_nonoverlapping(bytes_with_nul.as_ptr(), ptr, bytes_with_nul.len());
+        ptr
+    }
+}
+
+unsafe fn ori_list_push_owned_managed(list: *mut OriList, value: *mut u8) {
+    if list.is_null() {
+        ori_arc_release(value);
+        return;
+    }
+    ori_list_push_borrowed_maybe_managed(list, value as i64);
+    ori_arc_release(value);
+}
+
+unsafe fn ori_list_push_borrowed_maybe_managed(list: *mut OriList, value: i64) {
+    if list.is_null() {
+        return;
+    }
+    ori_list_push(list, value);
+    ori_arc_register_edge(list as *mut u8, value as *mut u8);
+}
+
+unsafe fn ori_set_register_borrowed_maybe_managed(set: *mut OriSet, value: i64) {
+    ori_arc_register_edge(set as *mut u8, value as *mut u8);
+}
+
+unsafe fn ori_map_register_borrowed_key_value_maybe_managed(
+    map: *mut OriMap,
+    key: i64,
+    value: i64,
+) {
+    ori_arc_register_edge(map as *mut u8, key as *mut u8);
+    ori_arc_register_edge(map as *mut u8, value as *mut u8);
 }
 
 fn pad_string(s: &str, target_len: i64, fill: &str, left: bool) -> *mut u8 {
@@ -373,7 +1763,7 @@ pub unsafe extern "C" fn ori_list_push(list: *mut OriList, value: i64) {
 #[no_mangle]
 pub unsafe extern "C" fn ori_list_get(list: *mut OriList, index: i64) -> i64 {
     if list.is_null() || index < 0 || index >= (*list).len {
-        return 0;
+        abort_bounds("ori list index out of bounds");
     }
     *(*list).data.add(index as usize)
 }
@@ -474,14 +1864,590 @@ pub unsafe extern "C" fn ori_list_reverse(list: *mut OriList) {
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_list_slice(list: *mut OriList, start: i64, end: i64) -> *mut OriList {
-    let out = ori_list_new();
     if list.is_null() {
+        abort_bounds("ori list slice bounds out of range");
+    }
+    let out = ori_list_new();
+    let (start, end) = checked_slice_bounds(
+        (*list).len,
+        start,
+        end,
+        "ori list slice bounds out of range",
+    );
+    for i in start..end {
+        ori_list_push_borrowed_maybe_managed(out, *(*list).data.add(i as usize));
+    }
+    out
+}
+
+unsafe fn list_optional_at(list: *mut OriList, index: i64) -> *mut u8 {
+    if list.is_null() || index < 0 || index >= (*list).len {
+        return alloc_optional_int(0, 0) as *mut u8;
+    }
+    alloc_optional_int(1, *(*list).data.add(index as usize)) as *mut u8
+}
+
+unsafe fn list_clear(list: *mut OriList) {
+    if !list.is_null() {
+        (*list).len = 0;
+    }
+}
+
+unsafe fn list_copy(list: *mut OriList) -> *mut OriList {
+    if list.is_null() {
+        return ori_list_new();
+    }
+    ori_list_slice(list, 0, (*list).len)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_new() -> *mut OriList {
+    ori_list_new()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_push_front(deque: *mut OriList, value: i64) {
+    ori_list_insert(deque, 0, value);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_push_back(deque: *mut OriList, value: i64) {
+    ori_list_push(deque, value);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_pop_front(deque: *mut OriList) -> *mut u8 {
+    if deque.is_null() || (*deque).len <= 0 {
+        return alloc_optional_int(0, 0) as *mut u8;
+    }
+    let value = *(*deque).data;
+    ori_list_remove(deque, 0);
+    alloc_optional_int(1, value) as *mut u8
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_pop_back(deque: *mut OriList) -> *mut u8 {
+    if deque.is_null() || (*deque).len <= 0 {
+        return alloc_optional_int(0, 0) as *mut u8;
+    }
+    alloc_optional_int(1, ori_list_pop(deque)) as *mut u8
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_front(deque: *mut OriList) -> *mut u8 {
+    list_optional_at(deque, 0)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_back(deque: *mut OriList) -> *mut u8 {
+    if deque.is_null() {
+        return alloc_optional_int(0, 0) as *mut u8;
+    }
+    list_optional_at(deque, (*deque).len - 1)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_len(deque: *mut OriList) -> i64 {
+    ori_list_len(deque)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_is_empty(deque: *mut OriList) -> c_uchar {
+    u8::from(ori_list_len(deque) == 0) as c_uchar
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_clear(deque: *mut OriList) {
+    list_clear(deque);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_to_list(deque: *mut OriList) -> *mut OriList {
+    list_copy(deque)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_queue_new() -> *mut OriList {
+    ori_deque_new()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_queue_enqueue(queue: *mut OriList, value: i64) {
+    ori_deque_push_back(queue, value);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_queue_dequeue(queue: *mut OriList) -> *mut u8 {
+    ori_deque_pop_front(queue)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_queue_peek(queue: *mut OriList) -> *mut u8 {
+    ori_deque_front(queue)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_queue_len(queue: *mut OriList) -> i64 {
+    ori_deque_len(queue)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_queue_is_empty(queue: *mut OriList) -> c_uchar {
+    ori_deque_is_empty(queue)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_queue_clear(queue: *mut OriList) {
+    ori_deque_clear(queue);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_queue_to_list(queue: *mut OriList) -> *mut OriList {
+    ori_deque_to_list(queue)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_stack_new() -> *mut OriList {
+    ori_deque_new()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_stack_push(stack: *mut OriList, value: i64) {
+    ori_deque_push_back(stack, value);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_stack_pop(stack: *mut OriList) -> *mut u8 {
+    ori_deque_pop_back(stack)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_stack_peek(stack: *mut OriList) -> *mut u8 {
+    ori_deque_back(stack)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_stack_len(stack: *mut OriList) -> i64 {
+    ori_deque_len(stack)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_stack_is_empty(stack: *mut OriList) -> c_uchar {
+    ori_deque_is_empty(stack)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_stack_clear(stack: *mut OriList) {
+    ori_deque_clear(stack);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_stack_to_list(stack: *mut OriList) -> *mut OriList {
+    ori_deque_to_list(stack)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_linked_list_new() -> *mut OriList {
+    ori_deque_new()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_linked_list_push_front(list: *mut OriList, value: i64) {
+    ori_deque_push_front(list, value);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_linked_list_push_back(list: *mut OriList, value: i64) {
+    ori_deque_push_back(list, value);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_linked_list_pop_front(list: *mut OriList) -> *mut u8 {
+    ori_deque_pop_front(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_linked_list_front(list: *mut OriList) -> *mut u8 {
+    ori_deque_front(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_linked_list_len(list: *mut OriList) -> i64 {
+    ori_deque_len(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_linked_list_is_empty(list: *mut OriList) -> c_uchar {
+    ori_deque_is_empty(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_linked_list_clear(list: *mut OriList) {
+    ori_deque_clear(list);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_linked_list_to_list(list: *mut OriList) -> *mut OriList {
+    ori_deque_to_list(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_new() -> *mut OriList {
+    ori_deque_new()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_push_front(list: *mut OriList, value: i64) {
+    ori_deque_push_front(list, value);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_push_back(list: *mut OriList, value: i64) {
+    ori_deque_push_back(list, value);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_pop_front(list: *mut OriList) -> *mut u8 {
+    ori_deque_pop_front(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_pop_back(list: *mut OriList) -> *mut u8 {
+    ori_deque_pop_back(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_front(list: *mut OriList) -> *mut u8 {
+    ori_deque_front(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_back(list: *mut OriList) -> *mut u8 {
+    ori_deque_back(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_len(list: *mut OriList) -> i64 {
+    ori_deque_len(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_is_empty(list: *mut OriList) -> c_uchar {
+    ori_deque_is_empty(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_clear(list: *mut OriList) {
+    ori_deque_clear(list);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_to_list(list: *mut OriList) -> *mut OriList {
+    ori_deque_to_list(list)
+}
+
+#[repr(C)]
+pub struct OriTree {
+    values: *mut i64,
+    parents: *mut i64,
+    children: *mut *mut OriList,
+    alive: *mut c_uchar,
+    nodes_len: i64,
+    len: i64,
+    cap: i64,
+    root: i64,
+}
+
+unsafe extern "C" fn ori_tree_dtor(ptr: *mut u8) {
+    let tree = ptr as *mut OriTree;
+    if tree.is_null() {
+        return;
+    }
+    if !(*tree).children.is_null() {
+        for i in 0..(*tree).nodes_len {
+            let children = *(*tree).children.add(i as usize);
+            if !children.is_null() {
+                ori_arc_release(children as *mut u8);
+            }
+        }
+    }
+    if !(*tree).values.is_null() {
+        libc::free((*tree).values as *mut libc::c_void);
+    }
+    if !(*tree).parents.is_null() {
+        libc::free((*tree).parents as *mut libc::c_void);
+    }
+    if !(*tree).children.is_null() {
+        libc::free((*tree).children as *mut libc::c_void);
+    }
+    if !(*tree).alive.is_null() {
+        libc::free((*tree).alive as *mut libc::c_void);
+    }
+}
+
+unsafe fn tree_realloc_i64(ptr: *mut i64, cap: i64) -> *mut i64 {
+    let bytes = cap as usize * std::mem::size_of::<i64>();
+    libc::realloc(ptr as *mut libc::c_void, bytes) as *mut i64
+}
+
+unsafe fn tree_realloc_children(ptr: *mut *mut OriList, cap: i64) -> *mut *mut OriList {
+    let bytes = cap as usize * std::mem::size_of::<*mut OriList>();
+    libc::realloc(ptr as *mut libc::c_void, bytes) as *mut *mut OriList
+}
+
+unsafe fn tree_realloc_alive(ptr: *mut c_uchar, cap: i64) -> *mut c_uchar {
+    let bytes = cap as usize * std::mem::size_of::<c_uchar>();
+    libc::realloc(ptr as *mut libc::c_void, bytes) as *mut c_uchar
+}
+
+unsafe fn tree_reserve(tree: *mut OriTree, min_cap: i64) {
+    if tree.is_null() || (*tree).cap >= min_cap {
+        return;
+    }
+    let old_cap = (*tree).cap;
+    let mut next_cap = if old_cap <= 0 { 8 } else { old_cap * 2 };
+    while next_cap < min_cap {
+        next_cap *= 2;
+    }
+    (*tree).values = tree_realloc_i64((*tree).values, next_cap);
+    (*tree).parents = tree_realloc_i64((*tree).parents, next_cap);
+    (*tree).children = tree_realloc_children((*tree).children, next_cap);
+    (*tree).alive = tree_realloc_alive((*tree).alive, next_cap);
+    for i in old_cap..next_cap {
+        *(*tree).values.add(i as usize) = 0;
+        *(*tree).parents.add(i as usize) = -1;
+        *(*tree).children.add(i as usize) = std::ptr::null_mut();
+        *(*tree).alive.add(i as usize) = 0;
+    }
+    (*tree).cap = next_cap;
+}
+
+unsafe fn tree_push_node(tree: *mut OriTree, parent: i64, value: i64) -> i64 {
+    tree_reserve(tree, (*tree).nodes_len + 1);
+    let id = (*tree).nodes_len;
+    *(*tree).values.add(id as usize) = value;
+    *(*tree).parents.add(id as usize) = parent;
+    *(*tree).children.add(id as usize) = ori_list_new();
+    *(*tree).alive.add(id as usize) = 1;
+    (*tree).nodes_len += 1;
+    (*tree).len += 1;
+    id
+}
+
+unsafe fn tree_valid_node(tree: *mut OriTree, node: i64) -> usize {
+    if tree.is_null()
+        || node < 0
+        || node >= (*tree).nodes_len
+        || *(*tree).alive.add(node as usize) == 0
+    {
+        abort_bounds("ori tree node id is invalid");
+    }
+    node as usize
+}
+
+unsafe fn tree_remove_child_ref(tree: *mut OriTree, parent: i64, child: i64) {
+    if parent < 0 || parent >= (*tree).nodes_len {
+        return;
+    }
+    let children = *(*tree).children.add(parent as usize);
+    if children.is_null() {
+        return;
+    }
+    for i in 0..(*children).len {
+        if *(*children).data.add(i as usize) == child {
+            ori_list_remove(children, i);
+            return;
+        }
+    }
+}
+
+unsafe fn tree_remove_subtree_inner(tree: *mut OriTree, node: i64) {
+    if node < 0 || node >= (*tree).nodes_len || *(*tree).alive.add(node as usize) == 0 {
+        return;
+    }
+    let children = *(*tree).children.add(node as usize);
+    if !children.is_null() {
+        let child_ids = list_copy(children);
+        for i in 0..(*child_ids).len {
+            tree_remove_subtree_inner(tree, *(*child_ids).data.add(i as usize));
+        }
+        ori_arc_release(child_ids as *mut u8);
+        ori_arc_release(children as *mut u8);
+        *(*tree).children.add(node as usize) = std::ptr::null_mut();
+    }
+    let value = *(*tree).values.add(node as usize);
+    ori_arc_unregister_edge(tree as *mut u8, value as *mut u8);
+    *(*tree).alive.add(node as usize) = 0;
+    (*tree).len -= 1;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_tree_new(root_value: i64) -> *mut OriTree {
+    let tree = ori_alloc(std::mem::size_of::<OriTree>(), Some(ori_tree_dtor)) as *mut OriTree;
+    if tree.is_null() {
+        return tree;
+    }
+    (*tree).values = std::ptr::null_mut();
+    (*tree).parents = std::ptr::null_mut();
+    (*tree).children = std::ptr::null_mut();
+    (*tree).alive = std::ptr::null_mut();
+    (*tree).nodes_len = 0;
+    (*tree).len = 0;
+    (*tree).cap = 0;
+    (*tree).root = -1;
+    let root = tree_push_node(tree, -1, root_value);
+    (*tree).root = root;
+    tree
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_tree_root(tree: *mut OriTree) -> i64 {
+    if tree.is_null()
+        || (*tree).root < 0
+        || (*tree).root >= (*tree).nodes_len
+        || *(*tree).alive.add((*tree).root as usize) == 0
+    {
+        abort_bounds("ori tree root is missing");
+    }
+    (*tree).root
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_tree_value(tree: *mut OriTree, node: i64) -> i64 {
+    let index = tree_valid_node(tree, node);
+    *(*tree).values.add(index)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_tree_add_child(tree: *mut OriTree, parent: i64, value: i64) -> i64 {
+    tree_valid_node(tree, parent);
+    let child = tree_push_node(tree, parent, value);
+    let children = *(*tree).children.add(parent as usize);
+    ori_list_push(children, child);
+    child
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_tree_children(tree: *mut OriTree, node: i64) -> *mut OriList {
+    let index = tree_valid_node(tree, node);
+    list_copy(*(*tree).children.add(index))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_tree_parent(tree: *mut OriTree, node: i64) -> *mut OriOptionalInt {
+    let index = tree_valid_node(tree, node);
+    let parent = *(*tree).parents.add(index);
+    if parent < 0 {
+        alloc_optional_int(0, 0)
+    } else {
+        alloc_optional_int(1, parent)
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_tree_remove_subtree(tree: *mut OriTree, node: i64) {
+    let index = tree_valid_node(tree, node);
+    let parent = *(*tree).parents.add(index);
+    if parent >= 0 {
+        tree_remove_child_ref(tree, parent, node);
+    }
+    tree_remove_subtree_inner(tree, node);
+    if node == (*tree).root {
+        (*tree).root = -1;
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_tree_len(tree: *mut OriTree) -> i64 {
+    if tree.is_null() {
+        0
+    } else {
+        (*tree).len
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_tree_depth(tree: *mut OriTree, node: i64) -> i64 {
+    let mut index = tree_valid_node(tree, node) as i64;
+    let mut depth = 0;
+    loop {
+        let parent = *(*tree).parents.add(index as usize);
+        if parent < 0 {
+            return depth;
+        }
+        tree_valid_node(tree, parent);
+        depth += 1;
+        index = parent;
+    }
+}
+
+unsafe fn tree_pre_order(tree: *mut OriTree, node: i64, out: *mut OriList) {
+    if node < 0 || node >= (*tree).nodes_len || *(*tree).alive.add(node as usize) == 0 {
+        return;
+    }
+    ori_list_push(out, node);
+    let children = *(*tree).children.add(node as usize);
+    if children.is_null() {
+        return;
+    }
+    for i in 0..(*children).len {
+        tree_pre_order(tree, *(*children).data.add(i as usize), out);
+    }
+}
+
+unsafe fn tree_post_order(tree: *mut OriTree, node: i64, out: *mut OriList) {
+    if node < 0 || node >= (*tree).nodes_len || *(*tree).alive.add(node as usize) == 0 {
+        return;
+    }
+    let children = *(*tree).children.add(node as usize);
+    if !children.is_null() {
+        for i in 0..(*children).len {
+            tree_post_order(tree, *(*children).data.add(i as usize), out);
+        }
+    }
+    ori_list_push(out, node);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_tree_pre_order(tree: *mut OriTree) -> *mut OriList {
+    let out = ori_list_new();
+    if tree.is_null() || (*tree).root < 0 {
         return out;
     }
-    let start = start.max(0).min((*list).len);
-    let end = end.max(start).min((*list).len);
-    for i in start..end {
-        ori_list_push(out, *(*list).data.add(i as usize));
+    tree_pre_order(tree, (*tree).root, out);
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_tree_post_order(tree: *mut OriTree) -> *mut OriList {
+    let out = ori_list_new();
+    if tree.is_null() || (*tree).root < 0 {
+        return out;
+    }
+    tree_post_order(tree, (*tree).root, out);
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_tree_breadth_first(tree: *mut OriTree) -> *mut OriList {
+    let out = ori_list_new();
+    if tree.is_null() || (*tree).root < 0 {
+        return out;
+    }
+    let mut queue = VecDeque::new();
+    queue.push_back((*tree).root);
+    while let Some(node) = queue.pop_front() {
+        if node < 0 || node >= (*tree).nodes_len || *(*tree).alive.add(node as usize) == 0 {
+            continue;
+        }
+        ori_list_push(out, node);
+        let children = *(*tree).children.add(node as usize);
+        if children.is_null() {
+            continue;
+        }
+        for i in 0..(*children).len {
+            queue.push_back(*(*children).data.add(i as usize));
+        }
     }
     out
 }
@@ -503,11 +2469,10 @@ pub unsafe extern "C" fn ori_list_map(
     if list.is_null() || fn_ptr.is_null() {
         return out;
     }
-    let f: unsafe extern "C" fn(*const std::ffi::c_void, i64) -> i64 =
-        std::mem::transmute(fn_ptr);
+    let f: unsafe extern "C" fn(*const std::ffi::c_void, i64) -> i64 = std::mem::transmute(fn_ptr);
     for i in 0..(*list).len {
         let elem = *(*list).data.add(i as usize);
-        ori_list_push(out, f(env_ptr, elem));
+        ori_list_push_owned_managed(out, f(env_ptr, elem) as *mut u8);
     }
     out
 }
@@ -523,12 +2488,450 @@ pub unsafe extern "C" fn ori_list_filter(
     if list.is_null() || fn_ptr.is_null() {
         return out;
     }
-    let f: unsafe extern "C" fn(*const std::ffi::c_void, i64) -> i64 =
+    let f: unsafe extern "C" fn(*const std::ffi::c_void, i64) -> c_uchar =
         std::mem::transmute(fn_ptr);
     for i in 0..(*list).len {
         let elem = *(*list).data.add(i as usize);
         if f(env_ptr, elem) != 0 {
-            ori_list_push(out, elem);
+            ori_list_push_borrowed_maybe_managed(out, elem);
+        }
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_flat_map(
+    list: *mut OriList,
+    fn_ptr: *const std::ffi::c_void,
+    env_ptr: *const std::ffi::c_void,
+) -> *mut OriList {
+    let out = ori_list_new();
+    if list.is_null() || fn_ptr.is_null() {
+        return out;
+    }
+    let f: unsafe extern "C" fn(*const std::ffi::c_void, i64) -> *mut OriList =
+        std::mem::transmute(fn_ptr);
+    for i in 0..(*list).len {
+        let elem = *(*list).data.add(i as usize);
+        let inner = f(env_ptr, elem);
+        if inner.is_null() {
+            continue;
+        }
+        for j in 0..(*inner).len {
+            ori_list_push_borrowed_maybe_managed(out, *(*inner).data.add(j as usize));
+        }
+        ori_arc_release(inner as *mut u8);
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_any(
+    list: *mut OriList,
+    fn_ptr: *const std::ffi::c_void,
+    env_ptr: *const std::ffi::c_void,
+) -> c_uchar {
+    if list.is_null() || fn_ptr.is_null() {
+        return 0;
+    }
+    let f: unsafe extern "C" fn(*const std::ffi::c_void, i64) -> c_uchar =
+        std::mem::transmute(fn_ptr);
+    for i in 0..(*list).len {
+        let elem = *(*list).data.add(i as usize);
+        if f(env_ptr, elem) != 0 {
+            return 1;
+        }
+    }
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_all(
+    list: *mut OriList,
+    fn_ptr: *const std::ffi::c_void,
+    env_ptr: *const std::ffi::c_void,
+) -> c_uchar {
+    if list.is_null() || fn_ptr.is_null() {
+        return 0;
+    }
+    let f: unsafe extern "C" fn(*const std::ffi::c_void, i64) -> c_uchar =
+        std::mem::transmute(fn_ptr);
+    for i in 0..(*list).len {
+        let elem = *(*list).data.add(i as usize);
+        if f(env_ptr, elem) == 0 {
+            return 0;
+        }
+    }
+    1
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_count_where(
+    list: *mut OriList,
+    fn_ptr: *const std::ffi::c_void,
+    env_ptr: *const std::ffi::c_void,
+) -> i64 {
+    if list.is_null() || fn_ptr.is_null() {
+        return 0;
+    }
+    let f: unsafe extern "C" fn(*const std::ffi::c_void, i64) -> c_uchar =
+        std::mem::transmute(fn_ptr);
+    let mut count = 0;
+    for i in 0..(*list).len {
+        let elem = *(*list).data.add(i as usize);
+        if f(env_ptr, elem) != 0 {
+            count += 1;
+        }
+    }
+    count
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_take(list: *mut OriList, n: i64) -> *mut OriList {
+    let out = ori_list_new();
+    if list.is_null() || n <= 0 {
+        return out;
+    }
+    let limit = std::cmp::min(n as usize, (*list).len as usize);
+    for i in 0..limit {
+        ori_list_push_borrowed_maybe_managed(out, *(*list).data.add(i));
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_skip(list: *mut OriList, n: i64) -> *mut OriList {
+    let out = ori_list_new();
+    if list.is_null() {
+        return out;
+    }
+    let start = if n <= 0 {
+        0
+    } else {
+        std::cmp::min(n as usize, (*list).len as usize)
+    };
+    for i in start..(*list).len as usize {
+        ori_list_push_borrowed_maybe_managed(out, *(*list).data.add(i));
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_reverse(list: *mut OriList) -> *mut OriList {
+    let out = ori_list_new();
+    if list.is_null() {
+        return out;
+    }
+    for i in (0..(*list).len as usize).rev() {
+        ori_list_push_borrowed_maybe_managed(out, *(*list).data.add(i));
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_reduce(
+    list: *mut OriList,
+    initial: i64,
+    fn_ptr: *const std::ffi::c_void,
+    env_ptr: *const std::ffi::c_void,
+) -> i64 {
+    if list.is_null() || fn_ptr.is_null() {
+        return initial;
+    }
+    let f: unsafe extern "C" fn(*const std::ffi::c_void, i64, i64) -> i64 =
+        std::mem::transmute(fn_ptr);
+    let mut acc = initial;
+    for i in 0..(*list).len {
+        let elem = *(*list).data.add(i as usize);
+        acc = f(env_ptr, acc, elem);
+    }
+    acc
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_find(
+    list: *mut OriList,
+    fn_ptr: *const std::ffi::c_void,
+    env_ptr: *const std::ffi::c_void,
+) -> *mut OriOptionalInt {
+    if list.is_null() || fn_ptr.is_null() {
+        return alloc_optional_int(0, 0);
+    }
+    let f: unsafe extern "C" fn(*const std::ffi::c_void, i64) -> c_uchar =
+        std::mem::transmute(fn_ptr);
+    for i in 0..(*list).len {
+        let elem = *(*list).data.add(i as usize);
+        if f(env_ptr, elem) != 0 {
+            return alloc_optional_int(1, elem);
+        }
+    }
+    alloc_optional_int(0, 0)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_sort(list: *mut OriList) -> *mut OriList {
+    let out = ori_list_new();
+    if list.is_null() {
+        return out;
+    }
+    for i in 0..(*list).len as usize {
+        ori_list_push_borrowed_maybe_managed(out, *(*list).data.add(i));
+    }
+    if out.is_null() || (*out).len <= 1 {
+        return out;
+    }
+    for i in 1..(*out).len as usize {
+        let value = *(*out).data.add(i);
+        let mut j = i;
+        while j > 0 {
+            let prev = *(*out).data.add(j - 1);
+            if prev <= value {
+                break;
+            }
+            *(*out).data.add(j) = prev;
+            j -= 1;
+        }
+        *(*out).data.add(j) = value;
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_sort_string(list: *mut OriList) -> *mut OriList {
+    let out = ori_list_new();
+    if list.is_null() {
+        return out;
+    }
+    for i in 0..(*list).len as usize {
+        ori_list_push_borrowed_maybe_managed(out, *(*list).data.add(i));
+    }
+    if out.is_null() || (*out).len <= 1 {
+        return out;
+    }
+    for i in 1..(*out).len as usize {
+        let value = *(*out).data.add(i);
+        let mut j = i;
+        while j > 0 {
+            let prev = *(*out).data.add(j - 1);
+            if cstr_str(prev as *const u8) <= cstr_str(value as *const u8) {
+                break;
+            }
+            *(*out).data.add(j) = prev;
+            j -= 1;
+        }
+        *(*out).data.add(j) = value;
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_sort_by(
+    list: *mut OriList,
+    fn_ptr: *const std::ffi::c_void,
+    env_ptr: *const std::ffi::c_void,
+) -> *mut OriList {
+    let out = ori_list_new();
+    if list.is_null() {
+        return out;
+    }
+    for i in 0..(*list).len as usize {
+        ori_list_push_borrowed_maybe_managed(out, *(*list).data.add(i));
+    }
+    if out.is_null() || (*out).len <= 1 || fn_ptr.is_null() {
+        return out;
+    }
+    let compare: unsafe extern "C" fn(*const std::ffi::c_void, i64, i64) -> i64 =
+        std::mem::transmute(fn_ptr);
+    for i in 1..(*out).len as usize {
+        let value = *(*out).data.add(i);
+        let mut j = i;
+        while j > 0 {
+            let prev = *(*out).data.add(j - 1);
+            if compare(env_ptr, prev, value) <= 0 {
+                break;
+            }
+            *(*out).data.add(j) = prev;
+            j -= 1;
+        }
+        *(*out).data.add(j) = value;
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_unique(list: *mut OriList) -> *mut OriList {
+    let out = ori_list_new();
+    if list.is_null() {
+        return out;
+    }
+    for i in 0..(*list).len as usize {
+        let elem = *(*list).data.add(i);
+        let mut seen = false;
+        for j in 0..(*out).len as usize {
+            if *(*out).data.add(j) == elem {
+                seen = true;
+                break;
+            }
+        }
+        if !seen {
+            ori_list_push_borrowed_maybe_managed(out, elem);
+        }
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_unique_string(list: *mut OriList) -> *mut OriList {
+    let out = ori_list_new();
+    if list.is_null() {
+        return out;
+    }
+    for i in 0..(*list).len as usize {
+        let elem = *(*list).data.add(i);
+        let mut seen = false;
+        for j in 0..(*out).len as usize {
+            if cstr_str(*(*out).data.add(j) as *const u8) == cstr_str(elem as *const u8) {
+                seen = true;
+                break;
+            }
+        }
+        if !seen {
+            ori_list_push_borrowed_maybe_managed(out, elem);
+        }
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_zip(left: *mut OriList, right: *mut OriList) -> *mut OriList {
+    let out = ori_list_new();
+    if left.is_null() || right.is_null() {
+        return out;
+    }
+    let limit = std::cmp::min((*left).len, (*right).len);
+    for i in 0..limit as usize {
+        let pair = ori_alloc(16, None) as *mut i64;
+        if pair.is_null() {
+            continue;
+        }
+        *pair = *(*left).data.add(i);
+        *pair.add(1) = *(*right).data.add(i);
+        ori_arc_register_edge(pair as *mut u8, *pair as *mut u8);
+        ori_arc_register_edge(pair as *mut u8, *pair.add(1) as *mut u8);
+        ori_list_push_owned_managed(out, pair as *mut u8);
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_partition(
+    list: *mut OriList,
+    fn_ptr: *const std::ffi::c_void,
+    env_ptr: *const std::ffi::c_void,
+) -> *mut u8 {
+    let tuple = ori_alloc(16, None) as *mut i64;
+    if tuple.is_null() {
+        return std::ptr::null_mut();
+    }
+    let matches = ori_list_new();
+    let rest = ori_list_new();
+    *tuple = matches as i64;
+    *tuple.add(1) = rest as i64;
+    ori_arc_register_edge(tuple as *mut u8, matches as *mut u8);
+    ori_arc_register_edge(tuple as *mut u8, rest as *mut u8);
+    ori_arc_release(matches as *mut u8);
+    ori_arc_release(rest as *mut u8);
+    if list.is_null() || fn_ptr.is_null() {
+        return tuple as *mut u8;
+    }
+    let f: unsafe extern "C" fn(*const std::ffi::c_void, i64) -> c_uchar =
+        std::mem::transmute(fn_ptr);
+    for i in 0..(*list).len {
+        let elem = *(*list).data.add(i as usize);
+        if f(env_ptr, elem) != 0 {
+            ori_list_push_borrowed_maybe_managed(matches, elem);
+        } else {
+            ori_list_push_borrowed_maybe_managed(rest, elem);
+        }
+    }
+    tuple as *mut u8
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_group_by(
+    list: *mut OriList,
+    fn_ptr: *const std::ffi::c_void,
+    env_ptr: *const std::ffi::c_void,
+) -> *mut OriMap {
+    let out = ori_map_new();
+    if list.is_null() || fn_ptr.is_null() {
+        return out;
+    }
+    let key_fn: unsafe extern "C" fn(*const std::ffi::c_void, i64) -> i64 =
+        std::mem::transmute(fn_ptr);
+    for i in 0..(*list).len {
+        let elem = *(*list).data.add(i as usize);
+        let key = key_fn(env_ptr, elem);
+        let bucket = if ori_map_contains(out, key) != 0 {
+            ori_map_get(out, key) as *mut OriList
+        } else {
+            let bucket = ori_list_new();
+            ori_map_set(out, key, bucket as i64);
+            ori_map_register_borrowed_key_value_maybe_managed(out, key, bucket as i64);
+            ori_arc_release(bucket as *mut u8);
+            bucket
+        };
+        ori_list_push_borrowed_maybe_managed(bucket, elem);
+        if ori_map_contains(out, key) != 0 {
+            ori_arc_release(key as *mut u8);
+        }
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_group_by_string(
+    list: *mut OriList,
+    fn_ptr: *const std::ffi::c_void,
+    env_ptr: *const std::ffi::c_void,
+) -> *mut OriMap {
+    let out = ori_map_new();
+    if list.is_null() || fn_ptr.is_null() {
+        return out;
+    }
+    let key_fn: unsafe extern "C" fn(*const std::ffi::c_void, i64) -> i64 =
+        std::mem::transmute(fn_ptr);
+    for i in 0..(*list).len {
+        let elem = *(*list).data.add(i as usize);
+        let key = key_fn(env_ptr, elem) as *const u8;
+        let bucket = if ori_map_contains_string(out, key) != 0 {
+            ori_map_get_string(out, key) as *mut OriList
+        } else {
+            let bucket = ori_list_new();
+            ori_map_set_string(out, key, bucket as i64);
+            ori_map_register_borrowed_key_value_maybe_managed(out, key as i64, bucket as i64);
+            ori_arc_release(bucket as *mut u8);
+            bucket
+        };
+        ori_list_push_borrowed_maybe_managed(bucket, elem);
+        ori_arc_release(key as *mut u8);
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_iter_flatten(nested: *mut OriList) -> *mut OriList {
+    let out = ori_list_new();
+    if nested.is_null() {
+        return out;
+    }
+    for i in 0..(*nested).len as usize {
+        let inner = *(*nested).data.add(i) as *mut OriList;
+        if inner.is_null() {
+            continue;
+        }
+        for j in 0..(*inner).len as usize {
+            ori_list_push_borrowed_maybe_managed(out, *(*inner).data.add(j));
         }
     }
     out
@@ -541,11 +2944,11 @@ pub unsafe extern "C" fn ori_string_split(s: *const u8, sep: *const u8) -> *mut 
     let sep = cstr_str(sep);
     if sep.is_empty() {
         for ch in text.chars() {
-            ori_list_push(list, cstring_from_str(&ch.to_string()) as i64);
+            ori_list_push_owned_managed(list, cstring_from_str(&ch.to_string()));
         }
     } else {
         for part in text.split(sep) {
-            ori_list_push(list, cstring_from_str(part) as i64);
+            ori_list_push_owned_managed(list, cstring_from_str(part));
         }
     }
     list
@@ -555,102 +2958,400 @@ pub unsafe extern "C" fn ori_string_split(s: *const u8, sep: *const u8) -> *mut 
 pub unsafe extern "C" fn ori_string_chars(s: *const u8) -> *mut OriList {
     let list = ori_list_new();
     for ch in cstr_str(s).chars() {
-        ori_list_push(list, cstring_from_str(&ch.to_string()) as i64);
+        ori_list_push_owned_managed(list, cstring_from_str(&ch.to_string()));
     }
     list
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn ori_set_new() -> *mut OriList {
-    ori_list_new()
+// ── Hash helpers (splitmix64) ─────────────────────────────────────────────────
+
+const HT_EMPTY: i64 = -1;
+const HT_TOMB: i64 = -2;
+
+fn hash_i64(k: i64) -> usize {
+    let x = k as u64;
+    let x = x ^ (x >> 30);
+    let x = x.wrapping_mul(0xbf58476d1ce4e5b9_u64);
+    let x = x ^ (x >> 27);
+    let x = x.wrapping_mul(0x94d049bb133111eb_u64);
+    (x ^ (x >> 31)) as usize
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn ori_set_add(set: *mut OriList, value: i64) {
-    if ori_set_contains(set, value) == 0 {
-        ori_list_push(set, value);
+fn hash_bytes(bytes: &[u8]) -> usize {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash as usize
+}
+
+// ── ori.set — open-addressing hash set with dense item array ─────────────────
+//
+// Layout prefix is identical to OriList (items/len/cap at offsets 0/8/16) so
+// that the native-backend for-loop can call ori_list_len / ori_list_get on a
+// *OriSet pointer without knowing about the extra hash fields.
+
+#[repr(C)]
+pub struct OriSet {
+    pub items: *mut i64, // dense elements [0..len); same offset as OriList.data
+    pub len: i64,        // element count;           same offset as OriList.len
+    pub cap: i64,        // dense array capacity;    same offset as OriList.cap
+    pub ht: *mut i64,    // hash table slots (HT_EMPTY / HT_TOMB / dense_index)
+    pub ht_cap: i64,     // hash table capacity (power of 2)
+    pub item_kind: u8,
+}
+
+unsafe extern "C" fn ori_set_dtor(ptr: *mut u8) {
+    let set = ptr as *mut OriSet;
+    if !(*set).items.is_null() {
+        libc::free((*set).items as *mut libc::c_void);
+    }
+    if !(*set).ht.is_null() {
+        libc::free((*set).ht as *mut libc::c_void);
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn ori_set_contains(set: *mut OriList, value: i64) -> c_uchar {
-    if set.is_null() {
-        return 0;
+const INITIAL_SET_HT_CAP: usize = 16;
+const SET_ITEM_UNKNOWN: u8 = 0;
+const SET_ITEM_INT: u8 = 1;
+const SET_ITEM_STRING: u8 = 2;
+
+unsafe fn cstr_value_bytes(value: i64) -> &'static [u8] {
+    if value == 0 {
+        &[]
+    } else {
+        CStr::from_ptr(value as *const c_char).to_bytes()
     }
-    for i in 0..(*set).len {
-        if *(*set).data.add(i as usize) == value {
-            return 1;
+}
+
+unsafe fn set_item_hash(kind: u8, value: i64) -> usize {
+    if kind == SET_ITEM_STRING {
+        hash_bytes(cstr_value_bytes(value))
+    } else {
+        hash_i64(value)
+    }
+}
+
+unsafe fn set_item_equals(kind: u8, stored: i64, query: i64) -> bool {
+    if kind == SET_ITEM_STRING {
+        cstr_value_bytes(stored) == cstr_value_bytes(query)
+    } else {
+        stored == query
+    }
+}
+
+unsafe fn ht_lookup_set(
+    ht: *mut i64,
+    ht_cap: usize,
+    items: *mut i64,
+    item_kind: u8,
+    value: i64,
+) -> usize {
+    let mask = ht_cap - 1;
+    let mut slot = set_item_hash(item_kind, value) & mask;
+    loop {
+        let v = *ht.add(slot);
+        if v == HT_EMPTY {
+            return usize::MAX;
         }
+        if v != HT_TOMB && set_item_equals(item_kind, *items.add(v as usize), value) {
+            return slot;
+        }
+        slot = (slot + 1) & mask;
     }
-    0
+}
+
+unsafe fn ht_find_insert_slot_set(ht: *mut i64, ht_cap: usize, item_kind: u8, value: i64) -> usize {
+    let mask = ht_cap - 1;
+    let mut slot = set_item_hash(item_kind, value) & mask;
+    loop {
+        let v = *ht.add(slot);
+        if v == HT_EMPTY || v == HT_TOMB {
+            return slot;
+        }
+        slot = (slot + 1) & mask;
+    }
+}
+
+unsafe fn set_prepare_item_kind(set: *mut OriSet, item_kind: u8) -> bool {
+    if (*set).item_kind == SET_ITEM_UNKNOWN {
+        (*set).item_kind = item_kind;
+        return true;
+    }
+    (*set).item_kind == item_kind
+}
+
+unsafe fn set_alloc() -> *mut OriSet {
+    let set = ori_alloc(std::mem::size_of::<OriSet>(), Some(ori_set_dtor)) as *mut OriSet;
+    if !set.is_null() {
+        let items = libc::malloc(8 * std::mem::size_of::<i64>()) as *mut i64;
+        let ht_bytes = INITIAL_SET_HT_CAP * std::mem::size_of::<i64>();
+        let ht = libc::malloc(ht_bytes) as *mut i64;
+        std::ptr::write_bytes(ht as *mut u8, 0xFF, ht_bytes); // fill with -1
+        (*set).items = items;
+        (*set).len = 0;
+        (*set).cap = 8;
+        (*set).ht = ht;
+        (*set).ht_cap = INITIAL_SET_HT_CAP as i64;
+        (*set).item_kind = SET_ITEM_UNKNOWN;
+    }
+    set
+}
+
+unsafe fn set_rebuild_ht(set: *mut OriSet) {
+    let ht_cap = (*set).ht_cap as usize;
+    std::ptr::write_bytes(
+        (*set).ht as *mut u8,
+        0xFF,
+        ht_cap * std::mem::size_of::<i64>(),
+    );
+    for i in 0..(*set).len as usize {
+        let item = *(*set).items.add(i);
+        let slot = ht_find_insert_slot_set((*set).ht, ht_cap, (*set).item_kind, item);
+        *(*set).ht.add(slot) = i as i64;
+    }
+}
+
+unsafe fn set_grow(set: *mut OriSet) {
+    let new_ht_cap = (*set).ht_cap as usize * 2;
+    let ht_bytes = new_ht_cap * std::mem::size_of::<i64>();
+    let new_ht = libc::realloc((*set).ht as *mut libc::c_void, ht_bytes) as *mut i64;
+    (*set).ht = new_ht;
+    (*set).ht_cap = new_ht_cap as i64;
+    set_rebuild_ht(set);
+}
+
+unsafe fn set_reserve_capacity(set: *mut OriSet, capacity: i64) {
+    if set.is_null() || capacity <= (*set).cap {
+        return;
+    }
+    let target_cap = capacity.max(1);
+    (*set).items = libc::realloc(
+        (*set).items as *mut libc::c_void,
+        target_cap as usize * std::mem::size_of::<i64>(),
+    ) as *mut i64;
+    (*set).cap = target_cap;
+
+    let mut target_ht_cap = INITIAL_SET_HT_CAP;
+    let required_slots = (target_cap as usize).saturating_mul(2).max(1);
+    while target_ht_cap < required_slots {
+        target_ht_cap = target_ht_cap.saturating_mul(2);
+    }
+    if target_ht_cap > (*set).ht_cap as usize {
+        let ht_bytes = target_ht_cap * std::mem::size_of::<i64>();
+        (*set).ht = libc::realloc((*set).ht as *mut libc::c_void, ht_bytes) as *mut i64;
+        (*set).ht_cap = target_ht_cap as i64;
+        set_rebuild_ht(set);
+    }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_set_remove(set: *mut OriList, value: i64) {
+pub unsafe extern "C" fn ori_set_new() -> *mut OriSet {
+    set_alloc()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_set_add(set: *mut OriSet, value: i64) {
+    ori_set_add_raw(set, value, SET_ITEM_INT);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_set_add_string(set: *mut OriSet, value: *const u8) {
+    ori_set_add_raw(set, value as i64, SET_ITEM_STRING);
+}
+
+unsafe fn ori_set_add_raw(set: *mut OriSet, value: i64, item_kind: u8) {
     if set.is_null() {
         return;
     }
-    let index = ori_list_index_of(set, value);
-    if index >= 0 {
-        ori_list_remove(set, index);
+    if !set_prepare_item_kind(set, item_kind) {
+        return;
+    }
+    let ht_cap = (*set).ht_cap as usize;
+    if ht_lookup_set((*set).ht, ht_cap, (*set).items, item_kind, value) != usize::MAX {
+        return; // already present
+    }
+    // Grow dense array if full
+    if (*set).len >= (*set).cap {
+        let new_cap = (*set).cap * 2;
+        (*set).items = libc::realloc(
+            (*set).items as *mut libc::c_void,
+            new_cap as usize * std::mem::size_of::<i64>(),
+        ) as *mut i64;
+        (*set).cap = new_cap;
+    }
+    // Grow hash table at 50% load
+    if (*set).len as usize * 2 >= ht_cap {
+        set_grow(set);
+    }
+    let dense_idx = (*set).len as usize;
+    *(*set).items.add(dense_idx) = value;
+    (*set).len += 1;
+    let ht_cap = (*set).ht_cap as usize;
+    let slot = ht_find_insert_slot_set((*set).ht, ht_cap, item_kind, value);
+    *(*set).ht.add(slot) = dense_idx as i64;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_set_contains(set: *mut OriSet, value: i64) -> c_uchar {
+    ori_set_contains_raw(set, value, SET_ITEM_INT)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_set_contains_string(set: *mut OriSet, value: *const u8) -> c_uchar {
+    ori_set_contains_raw(set, value as i64, SET_ITEM_STRING)
+}
+
+unsafe fn ori_set_contains_raw(set: *mut OriSet, value: i64, item_kind: u8) -> c_uchar {
+    if set.is_null() {
+        return 0;
+    }
+    if (*set).item_kind != SET_ITEM_UNKNOWN && (*set).item_kind != item_kind {
+        return 0;
+    }
+    let ht_cap = (*set).ht_cap as usize;
+    u8::from(ht_lookup_set((*set).ht, ht_cap, (*set).items, item_kind, value) != usize::MAX)
+        as c_uchar
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_set_remove(set: *mut OriSet, value: i64) {
+    ori_set_remove_raw(set, value, SET_ITEM_INT);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_set_remove_string(set: *mut OriSet, value: *const u8) {
+    ori_set_remove_raw(set, value as i64, SET_ITEM_STRING);
+}
+
+unsafe fn ori_set_remove_raw(set: *mut OriSet, value: i64, item_kind: u8) {
+    if set.is_null() {
+        return;
+    }
+    if (*set).item_kind != SET_ITEM_UNKNOWN && (*set).item_kind != item_kind {
+        return;
+    }
+    let ht_cap = (*set).ht_cap as usize;
+    let slot = ht_lookup_set((*set).ht, ht_cap, (*set).items, item_kind, value);
+    if slot == usize::MAX {
+        return;
+    }
+    let dense_idx = *(*set).ht.add(slot) as usize;
+    *(*set).ht.add(slot) = HT_TOMB;
+    let last_idx = (*set).len as usize - 1;
+    if dense_idx != last_idx {
+        let last_val = *(*set).items.add(last_idx);
+        *(*set).items.add(dense_idx) = last_val;
+        // Update hash slot pointing to last_idx → now points to dense_idx
+        let last_slot = ht_lookup_set((*set).ht, ht_cap, (*set).items, item_kind, last_val);
+        if last_slot != usize::MAX {
+            *(*set).ht.add(last_slot) = dense_idx as i64;
+        }
+    }
+    (*set).len -= 1;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_set_len(set: *mut OriSet) -> i64 {
+    if set.is_null() {
+        0
+    } else {
+        (*set).len
     }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_set_len(set: *mut OriList) -> i64 {
-    ori_list_len(set)
+pub unsafe extern "C" fn ori_set_capacity(set: *mut OriSet) -> i64 {
+    if set.is_null() {
+        0
+    } else {
+        (*set).cap
+    }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_set_free(set: *mut OriList) {
-    ori_list_free(set);
+pub unsafe extern "C" fn ori_set_reserve(set: *mut OriSet, capacity: i64) {
+    set_reserve_capacity(set, capacity);
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_set_union(a: *mut OriList, b: *mut OriList) -> *mut OriList {
+pub unsafe extern "C" fn ori_set_clear(set: *mut OriSet) {
+    if set.is_null() {
+        return;
+    }
+    (*set).len = 0;
+    (*set).item_kind = SET_ITEM_UNKNOWN;
+    std::ptr::write_bytes(
+        (*set).ht as *mut u8,
+        0xFF,
+        (*set).ht_cap as usize * std::mem::size_of::<i64>(),
+    );
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_set_free(set: *mut OriSet) {
+    ori_arc_release(set as *mut u8);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_set_union(a: *mut OriSet, b: *mut OriSet) -> *mut OriSet {
     let out = ori_set_new();
     if !a.is_null() {
-        for i in 0..(*a).len {
-            ori_set_add(out, *(*a).data.add(i as usize));
+        for i in 0..(*a).len as usize {
+            let value = *(*a).items.add(i);
+            ori_set_add_raw(out, value, (*a).item_kind);
+            ori_set_register_borrowed_maybe_managed(out, value);
         }
     }
     if !b.is_null() {
-        for i in 0..(*b).len {
-            ori_set_add(out, *(*b).data.add(i as usize));
+        for i in 0..(*b).len as usize {
+            let value = *(*b).items.add(i);
+            ori_set_add_raw(out, value, (*b).item_kind);
+            ori_set_register_borrowed_maybe_managed(out, value);
         }
     }
     out
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_set_intersection(a: *mut OriList, b: *mut OriList) -> *mut OriList {
+pub unsafe extern "C" fn ori_set_intersection(a: *mut OriSet, b: *mut OriSet) -> *mut OriSet {
     let out = ori_set_new();
     if a.is_null() || b.is_null() {
         return out;
     }
-    for i in 0..(*a).len {
-        let v = *(*a).data.add(i as usize);
-        if ori_set_contains(b, v) != 0 {
-            ori_set_add(out, v);
+    for i in 0..(*a).len as usize {
+        let v = *(*a).items.add(i);
+        if ori_set_contains_raw(b, v, (*a).item_kind) != 0 {
+            ori_set_add_raw(out, v, (*a).item_kind);
+            ori_set_register_borrowed_maybe_managed(out, v);
         }
     }
     out
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_set_difference(a: *mut OriList, b: *mut OriList) -> *mut OriList {
+pub unsafe extern "C" fn ori_set_difference(a: *mut OriSet, b: *mut OriSet) -> *mut OriSet {
     let out = ori_set_new();
     if a.is_null() {
         return out;
     }
-    for i in 0..(*a).len {
-        let v = *(*a).data.add(i as usize);
-        if b.is_null() || ori_set_contains(b, v) == 0 {
-            ori_set_add(out, v);
+    for i in 0..(*a).len as usize {
+        let v = *(*a).items.add(i);
+        if b.is_null() || ori_set_contains_raw(b, v, (*a).item_kind) == 0 {
+            ori_set_add_raw(out, v, (*a).item_kind);
+            ori_set_register_borrowed_maybe_managed(out, v);
         }
     }
     out
 }
+
+// ── ori.map — open-addressing hash map with dense key/value arrays ────────────
+//
+// keys[0..len) and values[0..len) are dense (no gaps).
+// ht[] stores dense indices for O(1) lookup; HT_EMPTY / HT_TOMB as sentinels.
+// ori_map_key_at / ori_map_value_at iterate over the dense arrays directly,
+// so for-loops remain O(n) without touching the hash table.
 
 #[repr(C)]
 pub struct OriMap {
@@ -658,6 +3359,9 @@ pub struct OriMap {
     pub values: *mut i64,
     pub len: i64,
     pub cap: i64,
+    pub ht: *mut i64, // hash table slots (HT_EMPTY / HT_TOMB / dense_index)
+    pub ht_cap: i64,  // hash table capacity (power of 2)
+    pub key_kind: u8,
 }
 
 unsafe extern "C" fn ori_map_dtor(ptr: *mut u8) {
@@ -668,86 +3372,285 @@ unsafe extern "C" fn ori_map_dtor(ptr: *mut u8) {
     if !(*map).values.is_null() {
         libc::free((*map).values as *mut libc::c_void);
     }
+    if !(*map).ht.is_null() {
+        libc::free((*map).ht as *mut libc::c_void);
+    }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn ori_map_new() -> *mut OriMap {
+const INITIAL_MAP_HT_CAP: usize = 16;
+const MAP_KEY_UNKNOWN: u8 = 0;
+const MAP_KEY_INT: u8 = 1;
+const MAP_KEY_STRING: u8 = 2;
+
+unsafe fn cstr_key_bytes(key: i64) -> &'static [u8] {
+    if key == 0 {
+        &[]
+    } else {
+        CStr::from_ptr(key as *const c_char).to_bytes()
+    }
+}
+
+unsafe fn map_key_hash(kind: u8, key: i64) -> usize {
+    if kind == MAP_KEY_STRING {
+        hash_bytes(cstr_key_bytes(key))
+    } else {
+        hash_i64(key)
+    }
+}
+
+unsafe fn map_key_equals(kind: u8, stored: i64, query: i64) -> bool {
+    if kind == MAP_KEY_STRING {
+        cstr_key_bytes(stored) == cstr_key_bytes(query)
+    } else {
+        stored == query
+    }
+}
+
+unsafe fn ht_lookup_map(
+    ht: *mut i64,
+    ht_cap: usize,
+    keys: *mut i64,
+    key_kind: u8,
+    key: i64,
+) -> usize {
+    let mask = ht_cap - 1;
+    let mut slot = map_key_hash(key_kind, key) & mask;
+    loop {
+        let v = *ht.add(slot);
+        if v == HT_EMPTY {
+            return usize::MAX;
+        }
+        if v != HT_TOMB && map_key_equals(key_kind, *keys.add(v as usize), key) {
+            return slot;
+        }
+        slot = (slot + 1) & mask;
+    }
+}
+
+unsafe fn ht_find_insert_slot_map(ht: *mut i64, ht_cap: usize, key_kind: u8, key: i64) -> usize {
+    let mask = ht_cap - 1;
+    let mut slot = map_key_hash(key_kind, key) & mask;
+    loop {
+        let v = *ht.add(slot);
+        if v == HT_EMPTY || v == HT_TOMB {
+            return slot;
+        }
+        slot = (slot + 1) & mask;
+    }
+}
+
+unsafe fn map_prepare_key_kind(map: *mut OriMap, key_kind: u8) -> bool {
+    if (*map).key_kind == MAP_KEY_UNKNOWN {
+        (*map).key_kind = key_kind;
+        return true;
+    }
+    (*map).key_kind == key_kind
+}
+
+unsafe fn map_alloc() -> *mut OriMap {
     let cap = 8_i64;
     let bytes = cap as usize * std::mem::size_of::<i64>();
+    let ht_bytes = INITIAL_MAP_HT_CAP * std::mem::size_of::<i64>();
     let map = ori_alloc(std::mem::size_of::<OriMap>(), Some(ori_map_dtor)) as *mut OriMap;
     if !map.is_null() {
+        let ht = libc::malloc(ht_bytes) as *mut i64;
+        std::ptr::write_bytes(ht as *mut u8, 0xFF, ht_bytes); // fill with -1
         (*map).keys = libc::malloc(bytes) as *mut i64;
         (*map).values = libc::malloc(bytes) as *mut i64;
         (*map).len = 0;
         (*map).cap = cap;
+        (*map).ht = ht;
+        (*map).ht_cap = INITIAL_MAP_HT_CAP as i64;
+        (*map).key_kind = MAP_KEY_UNKNOWN;
     }
     map
 }
 
+unsafe fn map_rebuild_ht(map: *mut OriMap) {
+    let ht_cap = (*map).ht_cap as usize;
+    std::ptr::write_bytes(
+        (*map).ht as *mut u8,
+        0xFF,
+        ht_cap * std::mem::size_of::<i64>(),
+    );
+    let key_kind = if (*map).key_kind == MAP_KEY_UNKNOWN {
+        MAP_KEY_INT
+    } else {
+        (*map).key_kind
+    };
+    for i in 0..(*map).len as usize {
+        let key = *(*map).keys.add(i);
+        let slot = ht_find_insert_slot_map((*map).ht, ht_cap, key_kind, key);
+        *(*map).ht.add(slot) = i as i64;
+    }
+}
+
+unsafe fn map_grow(map: *mut OriMap) {
+    let new_ht_cap = (*map).ht_cap as usize * 2;
+    let ht_bytes = new_ht_cap * std::mem::size_of::<i64>();
+    let new_ht = libc::realloc((*map).ht as *mut libc::c_void, ht_bytes) as *mut i64;
+    (*map).ht = new_ht;
+    (*map).ht_cap = new_ht_cap as i64;
+    map_rebuild_ht(map);
+}
+
+unsafe fn map_reserve_capacity(map: *mut OriMap, capacity: i64) {
+    if map.is_null() || capacity <= (*map).cap {
+        return;
+    }
+    let target_cap = capacity.max(1);
+    let bytes = target_cap as usize * std::mem::size_of::<i64>();
+    (*map).keys = libc::realloc((*map).keys as *mut libc::c_void, bytes) as *mut i64;
+    (*map).values = libc::realloc((*map).values as *mut libc::c_void, bytes) as *mut i64;
+    (*map).cap = target_cap;
+
+    let mut target_ht_cap = INITIAL_MAP_HT_CAP;
+    let required_slots = (target_cap as usize).saturating_mul(2).max(1);
+    while target_ht_cap < required_slots {
+        target_ht_cap = target_ht_cap.saturating_mul(2);
+    }
+    if target_ht_cap > (*map).ht_cap as usize {
+        let ht_bytes = target_ht_cap * std::mem::size_of::<i64>();
+        (*map).ht = libc::realloc((*map).ht as *mut libc::c_void, ht_bytes) as *mut i64;
+        (*map).ht_cap = target_ht_cap as i64;
+        map_rebuild_ht(map);
+    }
+}
+
 #[no_mangle]
-pub unsafe extern "C" fn ori_map_set(map: *mut OriMap, key: i64, value: i64) {
+pub unsafe extern "C" fn ori_map_new() -> *mut OriMap {
+    map_alloc()
+}
+
+unsafe fn ori_map_set_raw(map: *mut OriMap, key: i64, value: i64, key_kind: u8) {
     if map.is_null() {
         return;
     }
-    for i in 0..(*map).len {
-        if *(*map).keys.add(i as usize) == key {
-            *(*map).values.add(i as usize) = value;
-            return;
-        }
+    if !map_prepare_key_kind(map, key_kind) {
+        return;
     }
+    let ht_cap = (*map).ht_cap as usize;
+    let existing = ht_lookup_map((*map).ht, ht_cap, (*map).keys, key_kind, key);
+    if existing != usize::MAX {
+        let dense_idx = *(*map).ht.add(existing) as usize;
+        *(*map).values.add(dense_idx) = value;
+        return;
+    }
+    // Grow dense arrays if needed
     if (*map).len >= (*map).cap {
-        let next_cap = ((*map).cap * 2).max(1);
-        let bytes = next_cap as usize * std::mem::size_of::<i64>();
+        let new_cap = (*map).cap * 2;
+        let bytes = new_cap as usize * std::mem::size_of::<i64>();
         (*map).keys = libc::realloc((*map).keys as *mut libc::c_void, bytes) as *mut i64;
         (*map).values = libc::realloc((*map).values as *mut libc::c_void, bytes) as *mut i64;
-        (*map).cap = next_cap;
+        (*map).cap = new_cap;
     }
-    *(*map).keys.add((*map).len as usize) = key;
-    *(*map).values.add((*map).len as usize) = value;
+    // Grow hash table at 50% load
+    if (*map).len as usize * 2 >= ht_cap {
+        map_grow(map);
+    }
+    let dense_idx = (*map).len as usize;
+    *(*map).keys.add(dense_idx) = key;
+    *(*map).values.add(dense_idx) = value;
     (*map).len += 1;
+    let ht_cap = (*map).ht_cap as usize;
+    let slot = ht_find_insert_slot_map((*map).ht, ht_cap, key_kind, key);
+    *(*map).ht.add(slot) = dense_idx as i64;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_set(map: *mut OriMap, key: i64, value: i64) {
+    ori_map_set_raw(map, key, value, MAP_KEY_INT);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_set_string(map: *mut OriMap, key: *const u8, value: i64) {
+    ori_map_set_raw(map, key as i64, value, MAP_KEY_STRING);
+}
+
+unsafe fn ori_map_get_raw(map: *mut OriMap, key: i64, key_kind: u8) -> i64 {
+    if map.is_null() {
+        return 0;
+    }
+    if (*map).key_kind != MAP_KEY_UNKNOWN && (*map).key_kind != key_kind {
+        return 0;
+    }
+    let ht_cap = (*map).ht_cap as usize;
+    let slot = ht_lookup_map((*map).ht, ht_cap, (*map).keys, key_kind, key);
+    if slot == usize::MAX {
+        return 0;
+    }
+    let dense_idx = *(*map).ht.add(slot) as usize;
+    *(*map).values.add(dense_idx)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_map_get(map: *mut OriMap, key: i64) -> i64 {
+    ori_map_get_raw(map, key, MAP_KEY_INT)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_get_string(map: *mut OriMap, key: *const u8) -> i64 {
+    ori_map_get_raw(map, key as i64, MAP_KEY_STRING)
+}
+
+unsafe fn ori_map_contains_raw(map: *mut OriMap, key: i64, key_kind: u8) -> c_uchar {
     if map.is_null() {
         return 0;
     }
-    for i in 0..(*map).len {
-        if *(*map).keys.add(i as usize) == key {
-            return *(*map).values.add(i as usize);
-        }
+    if (*map).key_kind != MAP_KEY_UNKNOWN && (*map).key_kind != key_kind {
+        return 0;
     }
-    0
+    let ht_cap = (*map).ht_cap as usize;
+    u8::from(ht_lookup_map((*map).ht, ht_cap, (*map).keys, key_kind, key) != usize::MAX) as c_uchar
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_map_contains(map: *mut OriMap, key: i64) -> c_uchar {
+    ori_map_contains_raw(map, key, MAP_KEY_INT)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_contains_string(map: *mut OriMap, key: *const u8) -> c_uchar {
+    ori_map_contains_raw(map, key as i64, MAP_KEY_STRING)
+}
+
+unsafe fn ori_map_remove_raw(map: *mut OriMap, key: i64, key_kind: u8) {
     if map.is_null() {
-        return 0;
+        return;
     }
-    for i in 0..(*map).len {
-        if *(*map).keys.add(i as usize) == key {
-            return 1;
+    if (*map).key_kind != MAP_KEY_UNKNOWN && (*map).key_kind != key_kind {
+        return;
+    }
+    let ht_cap = (*map).ht_cap as usize;
+    let slot = ht_lookup_map((*map).ht, ht_cap, (*map).keys, key_kind, key);
+    if slot == usize::MAX {
+        return;
+    }
+    let dense_idx = *(*map).ht.add(slot) as usize;
+    *(*map).ht.add(slot) = HT_TOMB;
+    let last_idx = (*map).len as usize - 1;
+    if dense_idx != last_idx {
+        let last_key = *(*map).keys.add(last_idx);
+        let last_val = *(*map).values.add(last_idx);
+        *(*map).keys.add(dense_idx) = last_key;
+        *(*map).values.add(dense_idx) = last_val;
+        // Update hash slot that pointed to last_idx → now points to dense_idx
+        let last_slot = ht_lookup_map((*map).ht, ht_cap, (*map).keys, key_kind, last_key);
+        if last_slot != usize::MAX {
+            *(*map).ht.add(last_slot) = dense_idx as i64;
         }
     }
-    0
+    (*map).len -= 1;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_map_remove(map: *mut OriMap, key: i64) {
-    if map.is_null() {
-        return;
-    }
-    for i in 0..(*map).len {
-        if *(*map).keys.add(i as usize) == key {
-            for j in i..((*map).len - 1) {
-                *(*map).keys.add(j as usize) = *(*map).keys.add((j + 1) as usize);
-                *(*map).values.add(j as usize) = *(*map).values.add((j + 1) as usize);
-            }
-            (*map).len -= 1;
-            return;
-        }
-    }
+    ori_map_remove_raw(map, key, MAP_KEY_INT);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_remove_string(map: *mut OriMap, key: *const u8) {
+    ori_map_remove_raw(map, key as i64, MAP_KEY_STRING);
 }
 
 #[no_mangle]
@@ -757,7 +3660,7 @@ pub unsafe extern "C" fn ori_map_keys(map: *mut OriMap) -> *mut OriList {
         return out;
     }
     for i in 0..(*map).len {
-        ori_list_push(out, *(*map).keys.add(i as usize));
+        ori_list_push_borrowed_maybe_managed(out, *(*map).keys.add(i as usize));
     }
     out
 }
@@ -769,7 +3672,7 @@ pub unsafe extern "C" fn ori_map_values(map: *mut OriMap) -> *mut OriList {
         return out;
     }
     for i in 0..(*map).len {
-        ori_list_push(out, *(*map).values.add(i as usize));
+        ori_list_push_borrowed_maybe_managed(out, *(*map).values.add(i as usize));
     }
     out
 }
@@ -781,10 +3684,15 @@ pub unsafe extern "C" fn ori_map_entries(map: *mut OriMap) -> *mut OriList {
         return out;
     }
     for i in 0..(*map).len {
-        let tuple = libc::calloc(1, 16) as *mut i64;
+        let tuple = ori_alloc(16, None) as *mut i64;
+        if tuple.is_null() {
+            continue;
+        }
         *tuple.add(0) = *(*map).keys.add(i as usize);
         *tuple.add(1) = *(*map).values.add(i as usize);
-        ori_list_push(out, tuple as i64);
+        ori_arc_register_edge(tuple as *mut u8, *tuple.add(0) as *mut u8);
+        ori_arc_register_edge(tuple as *mut u8, *tuple.add(1) as *mut u8);
+        ori_list_push_owned_managed(out, tuple as *mut u8);
     }
     out
 }
@@ -796,6 +3704,20 @@ pub unsafe extern "C" fn ori_map_len(map: *mut OriMap) -> i64 {
     } else {
         (*map).len
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_capacity(map: *mut OriMap) -> i64 {
+    if map.is_null() {
+        0
+    } else {
+        (*map).cap
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_reserve(map: *mut OriMap, capacity: i64) {
+    map_reserve_capacity(map, capacity);
 }
 
 #[no_mangle]
@@ -815,8 +3737,872 @@ pub unsafe extern "C" fn ori_map_value_at(map: *mut OriMap, index: i64) -> i64 {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn ori_map_clear(map: *mut OriMap) {
+    if map.is_null() {
+        return;
+    }
+    (*map).len = 0;
+    (*map).key_kind = MAP_KEY_UNKNOWN;
+    std::ptr::write_bytes(
+        (*map).ht as *mut u8,
+        0xFF,
+        (*map).ht_cap as usize * std::mem::size_of::<i64>(),
+    );
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn ori_map_free(map: *mut OriMap) {
     ori_arc_release(map as *mut u8);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_new() -> *mut OriMap {
+    ori_map_new()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_with_capacity(capacity: i64) -> *mut OriMap {
+    let table = ori_map_new();
+    ori_map_reserve(table, capacity);
+    table
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_set(table: *mut OriMap, key: i64, value: i64) {
+    ori_map_set(table, key, value);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_set_string(table: *mut OriMap, key: *const u8, value: i64) {
+    ori_map_set_string(table, key, value);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_get(table: *mut OriMap, key: i64) -> *mut OriOptionalInt {
+    if ori_map_contains(table, key) == 0 {
+        alloc_optional_int(0, 0)
+    } else {
+        alloc_optional_int(1, ori_map_get(table, key))
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_get_string(
+    table: *mut OriMap,
+    key: *const u8,
+) -> *mut OriOptionalInt {
+    if ori_map_contains_string(table, key) == 0 {
+        alloc_optional_int(0, 0)
+    } else {
+        alloc_optional_int(1, ori_map_get_string(table, key))
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_remove(
+    table: *mut OriMap,
+    key: i64,
+) -> *mut OriOptionalInt {
+    if ori_map_contains(table, key) == 0 {
+        alloc_optional_int(0, 0)
+    } else {
+        let value = ori_map_get(table, key);
+        ori_map_remove(table, key);
+        alloc_optional_int(1, value)
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_remove_string(
+    table: *mut OriMap,
+    key: *const u8,
+) -> *mut OriOptionalInt {
+    if ori_map_contains_string(table, key) == 0 {
+        alloc_optional_int(0, 0)
+    } else {
+        let value = ori_map_get_string(table, key);
+        ori_map_remove_string(table, key);
+        alloc_optional_int(1, value)
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_contains(table: *mut OriMap, key: i64) -> c_uchar {
+    ori_map_contains(table, key)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_contains_string(
+    table: *mut OriMap,
+    key: *const u8,
+) -> c_uchar {
+    ori_map_contains_string(table, key)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_len(table: *mut OriMap) -> i64 {
+    ori_map_len(table)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_capacity(table: *mut OriMap) -> i64 {
+    ori_map_capacity(table)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_reserve(table: *mut OriMap, capacity: i64) {
+    ori_map_reserve(table, capacity);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_clear(table: *mut OriMap) {
+    ori_map_clear(table);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_keys(table: *mut OriMap) -> *mut OriList {
+    ori_map_keys(table)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_values(table: *mut OriMap) -> *mut OriList {
+    ori_map_values(table)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_hash_table_entries(table: *mut OriMap) -> *mut OriList {
+    ori_map_entries(table)
+}
+
+#[repr(C)]
+pub struct OriGraph {
+    nodes: *mut i64,
+    len: i64,
+    cap: i64,
+    edge_from: *mut i64,
+    edge_to: *mut i64,
+    edge_len: i64,
+    edge_cap: i64,
+    directed: c_uchar,
+    node_kind: u8,
+}
+
+unsafe extern "C" fn ori_graph_dtor(ptr: *mut u8) {
+    let graph = ptr as *mut OriGraph;
+    if graph.is_null() {
+        return;
+    }
+    if !(*graph).nodes.is_null() {
+        libc::free((*graph).nodes as *mut libc::c_void);
+    }
+    if !(*graph).edge_from.is_null() {
+        libc::free((*graph).edge_from as *mut libc::c_void);
+    }
+    if !(*graph).edge_to.is_null() {
+        libc::free((*graph).edge_to as *mut libc::c_void);
+    }
+}
+
+unsafe fn graph_alloc_array(cap: i64) -> *mut i64 {
+    libc::calloc(cap as usize, std::mem::size_of::<i64>()) as *mut i64
+}
+
+unsafe fn graph_reserve_nodes(graph: *mut OriGraph, min_cap: i64) {
+    if graph.is_null() || (*graph).cap >= min_cap {
+        return;
+    }
+    let mut next_cap = if (*graph).cap <= 0 {
+        8
+    } else {
+        (*graph).cap * 2
+    };
+    while next_cap < min_cap {
+        next_cap *= 2;
+    }
+    let bytes = next_cap as usize * std::mem::size_of::<i64>();
+    (*graph).nodes = libc::realloc((*graph).nodes as *mut libc::c_void, bytes) as *mut i64;
+    (*graph).cap = next_cap;
+}
+
+unsafe fn graph_reserve_edges(graph: *mut OriGraph, min_cap: i64) {
+    if graph.is_null() || (*graph).edge_cap >= min_cap {
+        return;
+    }
+    let mut next_cap = if (*graph).edge_cap <= 0 {
+        8
+    } else {
+        (*graph).edge_cap * 2
+    };
+    while next_cap < min_cap {
+        next_cap *= 2;
+    }
+    let bytes = next_cap as usize * std::mem::size_of::<i64>();
+    (*graph).edge_from = libc::realloc((*graph).edge_from as *mut libc::c_void, bytes) as *mut i64;
+    (*graph).edge_to = libc::realloc((*graph).edge_to as *mut libc::c_void, bytes) as *mut i64;
+    (*graph).edge_cap = next_cap;
+}
+
+unsafe fn graph_prepare_kind(graph: *mut OriGraph, node_kind: u8) -> bool {
+    if graph.is_null() {
+        return false;
+    }
+    if (*graph).node_kind == MAP_KEY_UNKNOWN {
+        (*graph).node_kind = node_kind;
+        return true;
+    }
+    (*graph).node_kind == node_kind
+}
+
+unsafe fn graph_value_equals(kind: u8, stored: i64, query: i64) -> bool {
+    if kind == MAP_KEY_STRING {
+        cstr_key_bytes(stored) == cstr_key_bytes(query)
+    } else {
+        stored == query
+    }
+}
+
+unsafe fn graph_find_node(graph: *mut OriGraph, node: i64, node_kind: u8) -> i64 {
+    if graph.is_null() || ((*graph).node_kind != MAP_KEY_UNKNOWN && (*graph).node_kind != node_kind)
+    {
+        return -1;
+    }
+    let kind = if (*graph).node_kind == MAP_KEY_UNKNOWN {
+        node_kind
+    } else {
+        (*graph).node_kind
+    };
+    for i in 0..(*graph).len {
+        if graph_value_equals(kind, *(*graph).nodes.add(i as usize), node) {
+            return i;
+        }
+    }
+    -1
+}
+
+unsafe fn graph_edge_matches(
+    graph: *mut OriGraph,
+    index: i64,
+    from: i64,
+    to: i64,
+    node_kind: u8,
+) -> bool {
+    let stored_from = *(*graph).edge_from.add(index as usize);
+    let stored_to = *(*graph).edge_to.add(index as usize);
+    graph_value_equals(node_kind, stored_from, from) && graph_value_equals(node_kind, stored_to, to)
+}
+
+unsafe fn graph_has_edge_raw(graph: *mut OriGraph, from: i64, to: i64, node_kind: u8) -> c_uchar {
+    if graph.is_null() || ((*graph).node_kind != MAP_KEY_UNKNOWN && (*graph).node_kind != node_kind)
+    {
+        return 0;
+    }
+    let kind = if (*graph).node_kind == MAP_KEY_UNKNOWN {
+        node_kind
+    } else {
+        (*graph).node_kind
+    };
+    for i in 0..(*graph).edge_len {
+        if graph_edge_matches(graph, i, from, to, kind)
+            || ((*graph).directed == 0 && graph_edge_matches(graph, i, to, from, kind))
+        {
+            return 1;
+        }
+    }
+    0
+}
+
+unsafe fn graph_add_node_raw(graph: *mut OriGraph, node: i64, node_kind: u8) {
+    if !graph_prepare_kind(graph, node_kind) || graph_find_node(graph, node, node_kind) >= 0 {
+        return;
+    }
+    graph_reserve_nodes(graph, (*graph).len + 1);
+    *(*graph).nodes.add((*graph).len as usize) = node;
+    (*graph).len += 1;
+}
+
+unsafe fn graph_add_edge_raw(graph: *mut OriGraph, from: i64, to: i64, node_kind: u8) {
+    if !graph_prepare_kind(graph, node_kind) {
+        return;
+    }
+    graph_add_node_raw(graph, from, node_kind);
+    graph_add_node_raw(graph, to, node_kind);
+    if graph_has_edge_raw(graph, from, to, node_kind) != 0 {
+        return;
+    }
+    graph_reserve_edges(graph, (*graph).edge_len + 1);
+    *(*graph).edge_from.add((*graph).edge_len as usize) = from;
+    *(*graph).edge_to.add((*graph).edge_len as usize) = to;
+    (*graph).edge_len += 1;
+}
+
+unsafe fn graph_remove_edge_at(graph: *mut OriGraph, index: i64) {
+    if graph.is_null() || index < 0 || index >= (*graph).edge_len {
+        return;
+    }
+    for i in index..((*graph).edge_len - 1) {
+        let next = (i + 1) as usize;
+        *(*graph).edge_from.add(i as usize) = *(*graph).edge_from.add(next);
+        *(*graph).edge_to.add(i as usize) = *(*graph).edge_to.add(next);
+    }
+    (*graph).edge_len -= 1;
+}
+
+unsafe fn graph_remove_edge_raw(graph: *mut OriGraph, from: i64, to: i64, node_kind: u8) {
+    if graph.is_null() || ((*graph).node_kind != MAP_KEY_UNKNOWN && (*graph).node_kind != node_kind)
+    {
+        return;
+    }
+    let kind = if (*graph).node_kind == MAP_KEY_UNKNOWN {
+        node_kind
+    } else {
+        (*graph).node_kind
+    };
+    let mut i = 0;
+    while i < (*graph).edge_len {
+        if graph_edge_matches(graph, i, from, to, kind)
+            || ((*graph).directed == 0 && graph_edge_matches(graph, i, to, from, kind))
+        {
+            graph_remove_edge_at(graph, i);
+        } else {
+            i += 1;
+        }
+    }
+}
+
+unsafe fn graph_remove_node_raw(graph: *mut OriGraph, node: i64, node_kind: u8) {
+    let index = graph_find_node(graph, node, node_kind);
+    if index < 0 {
+        return;
+    }
+    let stored = *(*graph).nodes.add(index as usize);
+    ori_arc_unregister_edge(graph as *mut u8, stored as *mut u8);
+    for i in index..((*graph).len - 1) {
+        *(*graph).nodes.add(i as usize) = *(*graph).nodes.add((i + 1) as usize);
+    }
+    (*graph).len -= 1;
+    let mut edge = 0;
+    let kind = (*graph).node_kind;
+    while edge < (*graph).edge_len {
+        let from = *(*graph).edge_from.add(edge as usize);
+        let to = *(*graph).edge_to.add(edge as usize);
+        if graph_value_equals(kind, from, node) || graph_value_equals(kind, to, node) {
+            graph_remove_edge_at(graph, edge);
+        } else {
+            edge += 1;
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_new(directed: c_uchar) -> *mut OriGraph {
+    let graph = ori_alloc(std::mem::size_of::<OriGraph>(), Some(ori_graph_dtor)) as *mut OriGraph;
+    if !graph.is_null() {
+        (*graph).nodes = graph_alloc_array(8);
+        (*graph).len = 0;
+        (*graph).cap = 8;
+        (*graph).edge_from = graph_alloc_array(8);
+        (*graph).edge_to = graph_alloc_array(8);
+        (*graph).edge_len = 0;
+        (*graph).edge_cap = 8;
+        (*graph).directed = u8::from(directed != 0) as c_uchar;
+        (*graph).node_kind = MAP_KEY_UNKNOWN;
+    }
+    graph
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_add_node(graph: *mut OriGraph, node: i64) {
+    graph_add_node_raw(graph, node, MAP_KEY_INT);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_add_node_string(graph: *mut OriGraph, node: *const u8) {
+    graph_add_node_raw(graph, node as i64, MAP_KEY_STRING);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_remove_node(graph: *mut OriGraph, node: i64) {
+    graph_remove_node_raw(graph, node, MAP_KEY_INT);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_remove_node_string(graph: *mut OriGraph, node: *const u8) {
+    graph_remove_node_raw(graph, node as i64, MAP_KEY_STRING);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_add_edge(graph: *mut OriGraph, from: i64, to: i64) {
+    graph_add_edge_raw(graph, from, to, MAP_KEY_INT);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_add_edge_string(
+    graph: *mut OriGraph,
+    from: *const u8,
+    to: *const u8,
+) {
+    graph_add_edge_raw(graph, from as i64, to as i64, MAP_KEY_STRING);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_remove_edge(graph: *mut OriGraph, from: i64, to: i64) {
+    graph_remove_edge_raw(graph, from, to, MAP_KEY_INT);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_remove_edge_string(
+    graph: *mut OriGraph,
+    from: *const u8,
+    to: *const u8,
+) {
+    graph_remove_edge_raw(graph, from as i64, to as i64, MAP_KEY_STRING);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_has_node(graph: *mut OriGraph, node: i64) -> c_uchar {
+    u8::from(graph_find_node(graph, node, MAP_KEY_INT) >= 0) as c_uchar
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_has_node_string(
+    graph: *mut OriGraph,
+    node: *const u8,
+) -> c_uchar {
+    u8::from(graph_find_node(graph, node as i64, MAP_KEY_STRING) >= 0) as c_uchar
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_has_edge(graph: *mut OriGraph, from: i64, to: i64) -> c_uchar {
+    graph_has_edge_raw(graph, from, to, MAP_KEY_INT)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_has_edge_string(
+    graph: *mut OriGraph,
+    from: *const u8,
+    to: *const u8,
+) -> c_uchar {
+    graph_has_edge_raw(graph, from as i64, to as i64, MAP_KEY_STRING)
+}
+
+unsafe fn graph_neighbors_raw(graph: *mut OriGraph, node: i64, node_kind: u8) -> *mut OriList {
+    let out = ori_list_new();
+    if graph_find_node(graph, node, node_kind) < 0 {
+        return out;
+    }
+    let kind = (*graph).node_kind;
+    for i in 0..(*graph).edge_len {
+        let from = *(*graph).edge_from.add(i as usize);
+        let to = *(*graph).edge_to.add(i as usize);
+        if graph_value_equals(kind, from, node) {
+            ori_list_push_borrowed_maybe_managed(out, to);
+        } else if (*graph).directed == 0 && graph_value_equals(kind, to, node) {
+            ori_list_push_borrowed_maybe_managed(out, from);
+        }
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_neighbors(graph: *mut OriGraph, node: i64) -> *mut OriList {
+    graph_neighbors_raw(graph, node, MAP_KEY_INT)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_neighbors_string(
+    graph: *mut OriGraph,
+    node: *const u8,
+) -> *mut OriList {
+    graph_neighbors_raw(graph, node as i64, MAP_KEY_STRING)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_nodes(graph: *mut OriGraph) -> *mut OriList {
+    let out = ori_list_new();
+    if graph.is_null() {
+        return out;
+    }
+    for i in 0..(*graph).len {
+        ori_list_push_borrowed_maybe_managed(out, *(*graph).nodes.add(i as usize));
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_edges(graph: *mut OriGraph) -> *mut OriList {
+    let out = ori_list_new();
+    if graph.is_null() {
+        return out;
+    }
+    for i in 0..(*graph).edge_len {
+        let tuple = ori_alloc(16, None) as *mut i64;
+        if tuple.is_null() {
+            continue;
+        }
+        *tuple.add(0) = *(*graph).edge_from.add(i as usize);
+        *tuple.add(1) = *(*graph).edge_to.add(i as usize);
+        ori_arc_register_edge(tuple as *mut u8, *tuple.add(0) as *mut u8);
+        ori_arc_register_edge(tuple as *mut u8, *tuple.add(1) as *mut u8);
+        ori_list_push_owned_managed(out, tuple as *mut u8);
+    }
+    out
+}
+
+unsafe fn graph_neighbor_indices(graph: *mut OriGraph, node_index: usize) -> Vec<usize> {
+    let mut out = Vec::new();
+    let node = *(*graph).nodes.add(node_index);
+    let kind = (*graph).node_kind;
+    for edge in 0..(*graph).edge_len {
+        let from = *(*graph).edge_from.add(edge as usize);
+        let to = *(*graph).edge_to.add(edge as usize);
+        if graph_value_equals(kind, from, node) {
+            let idx = graph_find_node(graph, to, kind);
+            if idx >= 0 {
+                out.push(idx as usize);
+            }
+        } else if (*graph).directed == 0 && graph_value_equals(kind, to, node) {
+            let idx = graph_find_node(graph, from, kind);
+            if idx >= 0 {
+                out.push(idx as usize);
+            }
+        }
+    }
+    out
+}
+
+unsafe fn graph_bfs_raw(graph: *mut OriGraph, start: i64, node_kind: u8) -> *mut OriList {
+    let out = ori_list_new();
+    let start_idx = graph_find_node(graph, start, node_kind);
+    if graph.is_null() || start_idx < 0 {
+        return out;
+    }
+    let mut visited = vec![false; (*graph).len as usize];
+    let mut queue = VecDeque::new();
+    visited[start_idx as usize] = true;
+    queue.push_back(start_idx as usize);
+    while let Some(index) = queue.pop_front() {
+        ori_list_push_borrowed_maybe_managed(out, *(*graph).nodes.add(index));
+        for next in graph_neighbor_indices(graph, index) {
+            if !visited[next] {
+                visited[next] = true;
+                queue.push_back(next);
+            }
+        }
+    }
+    out
+}
+
+unsafe fn graph_dfs_raw(graph: *mut OriGraph, start: i64, node_kind: u8) -> *mut OriList {
+    let out = ori_list_new();
+    let start_idx = graph_find_node(graph, start, node_kind);
+    if graph.is_null() || start_idx < 0 {
+        return out;
+    }
+    let mut visited = vec![false; (*graph).len as usize];
+    let mut stack = vec![start_idx as usize];
+    while let Some(index) = stack.pop() {
+        if visited[index] {
+            continue;
+        }
+        visited[index] = true;
+        ori_list_push_borrowed_maybe_managed(out, *(*graph).nodes.add(index));
+        let mut neighbors = graph_neighbor_indices(graph, index);
+        neighbors.reverse();
+        for next in neighbors {
+            if !visited[next] {
+                stack.push(next);
+            }
+        }
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_bfs(graph: *mut OriGraph, start: i64) -> *mut OriList {
+    graph_bfs_raw(graph, start, MAP_KEY_INT)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_bfs_string(
+    graph: *mut OriGraph,
+    start: *const u8,
+) -> *mut OriList {
+    graph_bfs_raw(graph, start as i64, MAP_KEY_STRING)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_dfs(graph: *mut OriGraph, start: i64) -> *mut OriList {
+    graph_dfs_raw(graph, start, MAP_KEY_INT)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_dfs_string(
+    graph: *mut OriGraph,
+    start: *const u8,
+) -> *mut OriList {
+    graph_dfs_raw(graph, start as i64, MAP_KEY_STRING)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_topological_sort(graph: *mut OriGraph) -> *mut OriList {
+    let out = ori_list_new();
+    if graph.is_null() || (*graph).directed == 0 {
+        return out;
+    }
+    let len = (*graph).len as usize;
+    let mut indegree = vec![0_i64; len];
+    for edge in 0..(*graph).edge_len {
+        let to = *(*graph).edge_to.add(edge as usize);
+        let to_idx = graph_find_node(graph, to, (*graph).node_kind);
+        if to_idx >= 0 {
+            indegree[to_idx as usize] += 1;
+        }
+    }
+    let mut queue = VecDeque::new();
+    for (index, degree) in indegree.iter().enumerate() {
+        if *degree == 0 {
+            queue.push_back(index);
+        }
+    }
+    while let Some(index) = queue.pop_front() {
+        ori_list_push_borrowed_maybe_managed(out, *(*graph).nodes.add(index));
+        for next in graph_neighbor_indices(graph, index) {
+            indegree[next] -= 1;
+            if indegree[next] == 0 {
+                queue.push_back(next);
+            }
+        }
+    }
+    if (*out).len != (*graph).len {
+        (*out).len = 0;
+    }
+    out
+}
+
+#[repr(C)]
+pub struct OriHeap {
+    data: *mut i64,
+    len: i64,
+    cap: i64,
+    item_kind: u8,
+    compare_fn: *const std::ffi::c_void,
+}
+
+const HEAP_ITEM_INT: u8 = 1;
+const HEAP_ITEM_STRING: u8 = 2;
+const HEAP_ITEM_CUSTOM: u8 = 3;
+const HEAP_ITEM_UNKNOWN: u8 = 0;
+
+type HeapCompareFn = unsafe extern "C" fn(i64, i64) -> i64;
+
+unsafe extern "C" fn ori_heap_dtor(ptr: *mut u8) {
+    let heap = ptr as *mut OriHeap;
+    if heap.is_null() {
+        return;
+    }
+    if !(*heap).data.is_null() {
+        libc::free((*heap).data as *mut libc::c_void);
+    }
+}
+
+unsafe fn heap_new_with(kind: u8, compare_fn: *const std::ffi::c_void) -> *mut OriHeap {
+    let heap = ori_alloc(std::mem::size_of::<OriHeap>(), Some(ori_heap_dtor)) as *mut OriHeap;
+    if heap.is_null() {
+        return heap;
+    }
+    let cap = 8_i64;
+    (*heap).data = libc::calloc(cap as usize, std::mem::size_of::<i64>()) as *mut i64;
+    (*heap).len = 0;
+    (*heap).cap = cap;
+    (*heap).item_kind = kind;
+    (*heap).compare_fn = compare_fn;
+    heap
+}
+
+unsafe fn heap_compare(heap: *mut OriHeap, left: i64, right: i64) -> i64 {
+    if heap.is_null() {
+        return match left.cmp(&right) {
+            std::cmp::Ordering::Less => -1,
+            std::cmp::Ordering::Equal => 0,
+            std::cmp::Ordering::Greater => 1,
+        };
+    }
+    match (*heap).item_kind {
+        HEAP_ITEM_STRING => match cstr_str(left as *const u8).cmp(cstr_str(right as *const u8)) {
+            std::cmp::Ordering::Less => -1,
+            std::cmp::Ordering::Equal => 0,
+            std::cmp::Ordering::Greater => 1,
+        },
+        HEAP_ITEM_CUSTOM if !(*heap).compare_fn.is_null() => {
+            let compare: HeapCompareFn = std::mem::transmute((*heap).compare_fn);
+            ori_arc_retain(left as *mut u8);
+            ori_arc_retain(right as *mut u8);
+            compare(left, right)
+        }
+        _ => match left.cmp(&right) {
+            std::cmp::Ordering::Less => -1,
+            std::cmp::Ordering::Equal => 0,
+            std::cmp::Ordering::Greater => 1,
+        },
+    }
+}
+
+unsafe fn heap_reserve(heap: *mut OriHeap, min_cap: i64) {
+    if heap.is_null() || (*heap).cap >= min_cap {
+        return;
+    }
+    let mut next_cap = if (*heap).cap <= 0 { 8 } else { (*heap).cap * 2 };
+    while next_cap < min_cap {
+        next_cap *= 2;
+    }
+    let bytes = next_cap as usize * std::mem::size_of::<i64>();
+    (*heap).data = libc::realloc((*heap).data as *mut libc::c_void, bytes) as *mut i64;
+    (*heap).cap = next_cap;
+}
+
+unsafe fn heap_sift_up(heap: *mut OriHeap, mut index: i64) {
+    while index > 0 {
+        let parent = (index - 1) / 2;
+        let value = *(*heap).data.add(index as usize);
+        let parent_value = *(*heap).data.add(parent as usize);
+        if heap_compare(heap, parent_value, value) <= 0 {
+            break;
+        }
+        *(*heap).data.add(index as usize) = parent_value;
+        *(*heap).data.add(parent as usize) = value;
+        index = parent;
+    }
+}
+
+unsafe fn heap_sift_down(heap: *mut OriHeap, mut index: i64) {
+    loop {
+        let left = index * 2 + 1;
+        let right = left + 1;
+        let mut smallest = index;
+        if left < (*heap).len {
+            let left_value = *(*heap).data.add(left as usize);
+            let current = *(*heap).data.add(smallest as usize);
+            if heap_compare(heap, left_value, current) < 0 {
+                smallest = left;
+            }
+        }
+        if right < (*heap).len {
+            let right_value = *(*heap).data.add(right as usize);
+            let current = *(*heap).data.add(smallest as usize);
+            if heap_compare(heap, right_value, current) < 0 {
+                smallest = right;
+            }
+        }
+        if smallest == index {
+            break;
+        }
+        let value = *(*heap).data.add(index as usize);
+        let next = *(*heap).data.add(smallest as usize);
+        *(*heap).data.add(index as usize) = next;
+        *(*heap).data.add(smallest as usize) = value;
+        index = smallest;
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_heap_new() -> *mut OriHeap {
+    heap_new_with(HEAP_ITEM_UNKNOWN, std::ptr::null())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_heap_new_string() -> *mut OriHeap {
+    heap_new_with(HEAP_ITEM_STRING, std::ptr::null())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_heap_new_custom(compare_fn: *const std::ffi::c_void) -> *mut OriHeap {
+    heap_new_with(HEAP_ITEM_CUSTOM, compare_fn)
+}
+
+unsafe fn heap_prepare_kind(
+    heap: *mut OriHeap,
+    item_kind: u8,
+    compare_fn: *const std::ffi::c_void,
+) -> bool {
+    if heap.is_null() {
+        return false;
+    }
+    if (*heap).item_kind == HEAP_ITEM_UNKNOWN {
+        (*heap).item_kind = item_kind;
+        (*heap).compare_fn = compare_fn;
+        return true;
+    }
+    (*heap).item_kind == item_kind
+}
+
+unsafe fn heap_push_raw(
+    heap: *mut OriHeap,
+    value: i64,
+    item_kind: u8,
+    compare_fn: *const std::ffi::c_void,
+) {
+    if !heap_prepare_kind(heap, item_kind, compare_fn) {
+        return;
+    }
+    heap_reserve(heap, (*heap).len + 1);
+    *(*heap).data.add((*heap).len as usize) = value;
+    (*heap).len += 1;
+    heap_sift_up(heap, (*heap).len - 1);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_heap_push(heap: *mut OriHeap, value: i64) {
+    heap_push_raw(heap, value, HEAP_ITEM_INT, std::ptr::null());
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_heap_push_string(heap: *mut OriHeap, value: *const u8) {
+    heap_push_raw(heap, value as i64, HEAP_ITEM_STRING, std::ptr::null());
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_heap_push_custom(
+    heap: *mut OriHeap,
+    value: i64,
+    compare_fn: *const std::ffi::c_void,
+) {
+    heap_push_raw(heap, value, HEAP_ITEM_CUSTOM, compare_fn);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_heap_pop(heap: *mut OriHeap) -> *mut OriOptionalInt {
+    if heap.is_null() || (*heap).len == 0 {
+        return alloc_optional_int(0, 0);
+    }
+    let root = *(*heap).data;
+    (*heap).len -= 1;
+    if (*heap).len > 0 {
+        *(*heap).data = *(*heap).data.add((*heap).len as usize);
+        heap_sift_down(heap, 0);
+    }
+    alloc_optional_int(1, root)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_heap_peek(heap: *mut OriHeap) -> *mut OriOptionalInt {
+    if heap.is_null() || (*heap).len == 0 {
+        return alloc_optional_int(0, 0);
+    }
+    alloc_optional_int(1, *(*heap).data)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_heap_len(heap: *mut OriHeap) -> i64 {
+    if heap.is_null() {
+        0
+    } else {
+        (*heap).len
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_heap_is_empty(heap: *mut OriHeap) -> c_uchar {
+    u8::from(heap.is_null() || (*heap).len == 0) as c_uchar
 }
 
 #[no_mangle]
@@ -850,6 +4636,11 @@ pub extern "C" fn ori_math_log(value: f64) -> f64 {
 }
 
 #[no_mangle]
+pub extern "C" fn ori_math_log2(value: f64) -> f64 {
+    value.log2()
+}
+
+#[no_mangle]
 pub extern "C" fn ori_math_sin(value: f64) -> f64 {
     value.sin()
 }
@@ -870,13 +4661,438 @@ pub extern "C" fn ori_math_abs(value: i64) -> i64 {
 }
 
 #[no_mangle]
+pub extern "C" fn ori_math_abs_float(value: f64) -> f64 {
+    value.abs()
+}
+
+#[no_mangle]
 pub extern "C" fn ori_math_min(a: i64, b: i64) -> i64 {
+    a.min(b)
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_min_float(a: f64, b: f64) -> f64 {
     a.min(b)
 }
 
 #[no_mangle]
 pub extern "C" fn ori_math_max(a: i64, b: i64) -> i64 {
     a.max(b)
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_max_float(a: f64, b: f64) -> f64 {
+    a.max(b)
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_clamp(value: i64, min: i64, max: i64) -> i64 {
+    value.clamp(min, max)
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_is_nan(value: f64) -> c_uchar {
+    u8::from(value.is_nan()) as c_uchar
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_is_infinite(value: f64) -> c_uchar {
+    u8::from(value.is_infinite()) as c_uchar
+}
+
+#[no_mangle]
+pub extern "C" fn ori_time_now() -> i64 {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_millis();
+    millis.min(i64::MAX as u128) as i64
+}
+
+#[no_mangle]
+pub extern "C" fn ori_time_sleep(millis: i64) {
+    if millis > 0 {
+        std::thread::sleep(Duration::from_millis(millis as u64));
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ori_time_duration_ms(start: i64, end: i64) -> i64 {
+    end - start
+}
+
+#[no_mangle]
+pub extern "C" fn ori_format_number(value: f64, decimals: i64) -> *mut u8 {
+    cstring_from_str(&format_float_fixed(value, decimals))
+}
+
+#[no_mangle]
+pub extern "C" fn ori_format_percent(value: f64, decimals: i64) -> *mut u8 {
+    cstring_from_str(&format!("{}%", format_float_fixed(value * 100.0, decimals)))
+}
+
+#[no_mangle]
+pub extern "C" fn ori_format_hex(value: i64) -> *mut u8 {
+    cstring_from_str(&format!("{value:x}"))
+}
+
+#[no_mangle]
+pub extern "C" fn ori_format_binary(value: i64) -> *mut u8 {
+    cstring_from_str(&format!("{value:b}"))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_format_date(millis: i64, style: *const u8) -> *mut u8 {
+    let _style = cstr_str(style);
+    let (year, month, day, _, _, _) = utc_parts_from_millis(millis);
+    cstring_from_str(&format!("{year:04}-{month:02}-{day:02}"))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_format_datetime(
+    millis: i64,
+    style: *const u8,
+    locale: *const u8,
+) -> *mut u8 {
+    let _style = cstr_str(style);
+    let _locale = cstr_str(locale);
+    let (year, month, day, hour, minute, second) = utc_parts_from_millis(millis);
+    cstring_from_str(&format!(
+        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z"
+    ))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_format_bytes_size(bytes: i64, style: *const u8) -> *mut u8 {
+    let binary = cstr_str(style).eq_ignore_ascii_case("binary");
+    let units = if binary {
+        ["B", "KiB", "MiB", "GiB", "TiB"]
+    } else {
+        ["B", "KB", "MB", "GB", "TB"]
+    };
+    let base = if binary { 1024.0 } else { 1000.0 };
+    let sign = if bytes < 0 { "-" } else { "" };
+    let mut value = (bytes as f64).abs();
+    let mut unit = 0usize;
+    while value >= base && unit + 1 < units.len() {
+        value /= base;
+        unit += 1;
+    }
+    let text = if unit == 0 {
+        format!("{sign}{} {}", value as i64, units[unit])
+    } else {
+        format!("{sign}{value:.1} {}", units[unit])
+    };
+    cstring_from_str(&text)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_os_set_args(_argc: i32, _argv: *mut *mut c_char) {}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_os_args() -> *mut OriList {
+    let list = ori_list_new();
+    for arg in std::env::args() {
+        ori_list_push_owned_managed(list, cstring_from_str(&arg));
+    }
+    list
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_os_env(name: *const u8) -> *mut u8 {
+    match std::env::var(cstr_str(name)) {
+        Ok(value) => new_optional_ptr(true, cstring_from_str(&value)),
+        Err(_) => new_optional_ptr(false, std::ptr::null_mut()),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ori_os_exit(code: i64) {
+    std::process::exit(code as i32);
+}
+
+#[no_mangle]
+pub extern "C" fn ori_os_pid() -> i64 {
+    i64::from(std::process::id())
+}
+
+#[no_mangle]
+pub extern "C" fn ori_os_platform() -> *mut u8 {
+    let name = match std::env::consts::OS {
+        "windows" => "windows",
+        "macos" => "macos",
+        "linux" => "linux",
+        _ => "unknown",
+    };
+    cstring_from_str(name)
+}
+
+#[no_mangle]
+pub extern "C" fn ori_os_arch() -> *mut u8 {
+    let name = match std::env::consts::ARCH {
+        "x86_64" => "x86_64",
+        "aarch64" => "aarch64",
+        "x86" => "x86",
+        "arm" => "arm",
+        _ => "unknown",
+    };
+    cstring_from_str(name)
+}
+
+static RANDOM_STATE: AtomicU64 = AtomicU64::new(0);
+
+fn random_seed() -> u64 {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO)
+        .as_nanos() as u64;
+    let addr = (&RANDOM_STATE as *const AtomicU64 as usize) as u64;
+    let seed = nanos ^ u64::from(std::process::id()) ^ addr;
+    if seed == 0 {
+        0x9e37_79b9_7f4a_7c15
+    } else {
+        seed
+    }
+}
+
+fn random_next_u64() -> u64 {
+    loop {
+        let current = RANDOM_STATE.load(Ordering::Relaxed);
+        let state = if current == 0 { random_seed() } else { current };
+        let next = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        if RANDOM_STATE
+            .compare_exchange(current, next, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+        {
+            return next;
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ori_random_int(mut min: i64, mut max: i64) -> i64 {
+    if max < min {
+        std::mem::swap(&mut min, &mut max);
+    }
+    let span = (max as u64).wrapping_sub(min as u64).wrapping_add(1);
+    let offset = if span == 0 {
+        random_next_u64()
+    } else {
+        random_next_u64() % span
+    };
+    (min as u64).wrapping_add(offset) as i64
+}
+
+fn random_unit_float() -> f64 {
+    ((random_next_u64() >> 11) as f64) * (1.0 / 9_007_199_254_740_992.0)
+}
+
+#[no_mangle]
+pub extern "C" fn ori_random_float(mut min: f64, mut max: f64) -> f64 {
+    if max < min {
+        std::mem::swap(&mut min, &mut max);
+    }
+    min + (max - min) * random_unit_float()
+}
+
+#[no_mangle]
+pub extern "C" fn ori_random_bool() -> c_uchar {
+    u8::from((random_next_u64() & 1) != 0) as c_uchar
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_random_choice(items: *mut OriList) -> *mut OriOptionalInt {
+    if items.is_null() || (*items).len <= 0 {
+        return alloc_optional_int(0, 0);
+    }
+    let index = (random_next_u64() % (*items).len as u64) as usize;
+    alloc_optional_int(1, *(*items).data.add(index))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_random_shuffle(items: *mut OriList) -> *mut OriList {
+    let out = ori_list_new();
+    if items.is_null() {
+        return out;
+    }
+    for i in 0..(*items).len as usize {
+        ori_list_push_borrowed_maybe_managed(out, *(*items).data.add(i));
+    }
+    let mut remaining = (*out).len as usize;
+    while remaining > 1 {
+        let j = (random_next_u64() % remaining as u64) as usize;
+        let last = remaining - 1;
+        let a = *(*out).data.add(last);
+        let b = *(*out).data.add(j);
+        *(*out).data.add(last) = b;
+        *(*out).data.add(j) = a;
+        remaining -= 1;
+    }
+    out
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_json_parse(text: *const u8) -> *mut u8 {
+    match serde_json::from_str::<serde_json::Value>(cstr_str(text)) {
+        Ok(value) => new_result(true, cstring_from_str(&value.to_string())),
+        Err(error) => new_result(false, cstring_from_str(&error.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_json_stringify(value: *const u8) -> *mut u8 {
+    match serde_json::from_str::<serde_json::Value>(cstr_str(value)) {
+        Ok(value) => cstring_from_str(&value.to_string()),
+        Err(_) => match serde_json::to_string(cstr_str(value)) {
+            Ok(quoted) => cstring_from_str(&quoted),
+            Err(_) => cstring_from_str("null"),
+        },
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_json_stringify_pretty(value: *const u8) -> *mut u8 {
+    match serde_json::from_str::<serde_json::Value>(cstr_str(value)) {
+        Ok(value) => match serde_json::to_string_pretty(&value) {
+            Ok(text) => cstring_from_str(&text),
+            Err(_) => cstring_from_str("null"),
+        },
+        Err(_) => match serde_json::to_string_pretty(cstr_str(value)) {
+            Ok(quoted) => cstring_from_str(&quoted),
+            Err(_) => cstring_from_str("null"),
+        },
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_test_assert(condition: c_uchar, message: *const u8) {
+    if condition == 0 {
+        eprintln!("ori test assertion failed: {}", cstr_str(message));
+        std::process::abort();
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_test_assert_eq(left: i64, right: i64) {
+    if left != right {
+        eprintln!("ori test assert_eq failed: {left} != {right}");
+        std::process::abort();
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_test_assert_ne(left: i64, right: i64) {
+    if left == right {
+        eprintln!("ori test assert_ne failed: both values are {left}");
+        std::process::abort();
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_test_assert_eq_float(left: f64, right: f64) {
+    if left != right {
+        eprintln!("ori test assert_eq failed: {left} != {right}");
+        std::process::abort();
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_test_assert_ne_float(left: f64, right: f64) {
+    if left == right {
+        eprintln!("ori test assert_ne failed: both values are {left}");
+        std::process::abort();
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_test_assert_eq_bool(left: c_uchar, right: c_uchar) {
+    if (left != 0) != (right != 0) {
+        eprintln!("ori test assert_eq failed: bool values differ");
+        std::process::abort();
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_test_assert_ne_bool(left: c_uchar, right: c_uchar) {
+    if (left != 0) == (right != 0) {
+        eprintln!("ori test assert_ne failed: bool values are equal");
+        std::process::abort();
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_test_assert_eq_string(left: *const u8, right: *const u8) {
+    if cstr_str(left) != cstr_str(right) {
+        eprintln!("ori test assert_eq failed: strings differ");
+        std::process::abort();
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_test_assert_ne_string(left: *const u8, right: *const u8) {
+    if cstr_str(left) == cstr_str(right) {
+        eprintln!("ori test assert_ne failed: strings are equal");
+        std::process::abort();
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_test_fail(message: *const u8) {
+    eprintln!("ori test failure: {}", cstr_str(message));
+    std::process::abort();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_panic(message: *const u8) {
+    eprintln!("ori panic: {}", cstr_str(message));
+    std::process::abort();
+}
+
+unsafe fn new_optional_ptr(has_value: bool, payload: *mut u8) -> *mut u8 {
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let total = ptr_size * 2;
+    let ptr = ori_alloc(total, None);
+    if ptr.is_null() {
+        return ptr;
+    }
+    std::ptr::write_bytes(ptr, 0, total);
+    *ptr = u8::from(has_value);
+    *(ptr.add(ptr_size) as *mut *mut u8) = payload;
+    ptr
+}
+
+fn format_float_fixed(value: f64, decimals: i64) -> String {
+    let precision = decimals.clamp(0, 15) as usize;
+    format!("{value:.precision$}")
+}
+
+fn utc_parts_from_millis(millis: i64) -> (i64, u32, u32, u32, u32, u32) {
+    let seconds = millis.div_euclid(1000);
+    let days = seconds.div_euclid(86_400);
+    let second_of_day = seconds.rem_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    let hour = (second_of_day / 3600) as u32;
+    let minute = ((second_of_day % 3600) / 60) as u32;
+    let second = (second_of_day % 60) as u32;
+    (year, month, day, hour, minute, second)
+}
+
+fn civil_from_days(days_since_unix_epoch: i64) -> (i64, u32, u32) {
+    let z = days_since_unix_epoch + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 }.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096).div_euclid(365);
+    let mut year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2).div_euclid(153);
+    let day = doy - (153 * mp + 2).div_euclid(5) + 1;
+    let month = mp + if mp < 10 { 3 } else { -9 };
+    if month <= 2 {
+        year += 1;
+    }
+    (year, month as u32, day as u32)
 }
 
 #[repr(C)]
@@ -891,9 +5107,32 @@ pub struct OriOptionalFloat {
     value: f64,
 }
 
+unsafe fn alloc_optional_int(has_value: c_uchar, value: i64) -> *mut OriOptionalInt {
+    let ptr = ori_alloc(std::mem::size_of::<OriOptionalInt>(), None) as *mut OriOptionalInt;
+    if !ptr.is_null() {
+        (*ptr).has_value = has_value;
+        (*ptr).value = value;
+    }
+    ptr
+}
+
+unsafe fn alloc_optional_float(has_value: c_uchar, value: f64) -> *mut OriOptionalFloat {
+    let ptr = ori_alloc(std::mem::size_of::<OriOptionalFloat>(), None) as *mut OriOptionalFloat;
+    if !ptr.is_null() {
+        (*ptr).has_value = has_value;
+        (*ptr).value = value;
+    }
+    ptr
+}
+
 #[no_mangle]
 pub extern "C" fn ori_float_to_string(value: f64) -> *mut u8 {
     cstring_from_str(&value.to_string())
+}
+
+#[no_mangle]
+pub extern "C" fn ori_to_float(value: i64) -> f64 {
+    value as f64
 }
 
 #[no_mangle]
@@ -904,29 +5143,1444 @@ pub extern "C" fn ori_bool_to_string(value: c_uchar) -> *mut u8 {
 #[no_mangle]
 pub unsafe extern "C" fn ori_string_to_int(s: *const u8) -> *mut OriOptionalInt {
     let parsed = cstr_str(s).trim().parse::<i64>().ok();
-    Box::into_raw(Box::new(match parsed {
-        Some(value) => OriOptionalInt {
-            has_value: 1,
-            value,
-        },
-        None => OriOptionalInt {
-            has_value: 0,
-            value: 0,
-        },
-    }))
+    match parsed {
+        Some(value) => alloc_optional_int(1, value),
+        None => alloc_optional_int(0, 0),
+    }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_string_to_float(s: *const u8) -> *mut OriOptionalFloat {
     let parsed = cstr_str(s).trim().parse::<f64>().ok();
-    Box::into_raw(Box::new(match parsed {
-        Some(value) => OriOptionalFloat {
-            has_value: 1,
-            value,
-        },
-        None => OriOptionalFloat {
-            has_value: 0,
-            value: 0.0,
-        },
-    }))
+    match parsed {
+        Some(value) => alloc_optional_float(1, value),
+        None => alloc_optional_float(0, 0.0),
+    }
+}
+
+// ── ori.files ─────────────────────────────────────────────────────────────────
+//
+// result<T, string> layout (matches native_backend result_layout):
+//   offset 0              : is_ok (u8)
+//   offset 1..ptr_size-1  : padding
+//   offset ptr_size       : payload (*mut u8 — string or list pointer)
+//
+// Both ok and err payloads are pointer-sized, so the same helper covers
+// result<string, string> AND result<list<string>, string>.
+
+unsafe fn new_result(is_ok: bool, payload: *mut u8) -> *mut u8 {
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let total = ptr_size * 2;
+    let ptr = libc::malloc(total) as *mut u8;
+    if ptr.is_null() {
+        return ptr;
+    }
+    std::ptr::write_bytes(ptr, 0, total);
+    *ptr = u8::from(is_ok);
+    *(ptr.add(ptr_size) as *mut *mut u8) = payload;
+    ptr
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_new_result(is_ok: c_uchar, payload: *mut u8) -> *mut u8 {
+    new_result(is_ok != 0, payload)
+}
+
+unsafe fn new_result_i64_ok(value: i64) -> *mut u8 {
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let total = ptr_size * 2;
+    let ptr = libc::malloc(total) as *mut u8;
+    if ptr.is_null() {
+        return ptr;
+    }
+    std::ptr::write_bytes(ptr, 0, total);
+    *ptr = 1;
+    std::ptr::write_unaligned(ptr.add(ptr_size) as *mut i64, value);
+    ptr
+}
+
+unsafe fn new_result_f64_ok(value: f64) -> *mut u8 {
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let total = ptr_size * 2;
+    let ptr = libc::malloc(total) as *mut u8;
+    if ptr.is_null() {
+        return ptr;
+    }
+    std::ptr::write_bytes(ptr, 0, total);
+    *ptr = 1;
+    std::ptr::write_unaligned(ptr.add(ptr_size) as *mut f64, value);
+    ptr
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_string_parse_int(s: *const u8) -> *mut u8 {
+    match cstr_str(s).trim().parse::<i64>() {
+        Ok(value) => new_result_i64_ok(value),
+        Err(_) => new_result(false, cstring_from_str("invalid int")),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_string_parse_float(s: *const u8) -> *mut u8 {
+    match cstr_str(s).trim().parse::<f64>() {
+        Ok(value) => new_result_f64_ok(value),
+        Err(_) => new_result(false, cstring_from_str("invalid float")),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_read_text(path: *const u8) -> *mut u8 {
+    let path_str = cstr_str(path);
+    match std::fs::read_to_string(path_str) {
+        Ok(content) => new_result(true, cstring_from_str(&content)),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_write_text(path: *const u8, content: *const u8) -> *mut u8 {
+    let path_str = cstr_str(path);
+    let content_str = cstr_str(content);
+    match std::fs::write(path_str, content_str.as_bytes()) {
+        Ok(_) => new_result(true, cstring_from_str("")),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_read_bytes(path: *const u8) -> *mut u8 {
+    let path_str = cstr_str(path);
+    match std::fs::read(path_str) {
+        Ok(content) if content.contains(&0) => new_result(
+            false,
+            cstring_from_str("bytes containing NUL are not supported by the current bytes ABI"),
+        ),
+        Ok(content) => new_result(true, cstring_from_bytes(content)),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_write_bytes(path: *const u8, content: *const u8) -> *mut u8 {
+    let path_str = cstr_str(path);
+    match std::fs::write(path_str, cstr_bytes(content)) {
+        Ok(_) => new_result(true, cstring_from_str("")),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_read_all(path: *const u8) -> *mut u8 {
+    ori_files_read_text(path)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_read_text_async(path: *const u8) -> *mut OriFuture {
+    let path_str = cstr_str(path).to_string();
+    let future = alloc_pending_future();
+    if future.is_null() {
+        return future;
+    }
+
+    ori_arc_retain(future as *mut u8);
+    let future_addr = future as usize;
+    std::thread::spawn(move || {
+        let result = match std::fs::read_to_string(path_str) {
+            Ok(content) => unsafe { new_result(true, cstring_from_str(&content)) },
+            Err(e) => unsafe { new_result(false, cstring_from_str(&e.to_string())) },
+        };
+        unsafe {
+            complete_future_owned(
+                future_addr as *mut OriFuture,
+                OriFutureStatus::Ready,
+                result as i64,
+            );
+        }
+    });
+    future
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_write_text_async(
+    path: *const u8,
+    content: *const u8,
+) -> *mut OriFuture {
+    let path_str = cstr_str(path).to_string();
+    let content_str = cstr_str(content).to_string();
+    let future = alloc_pending_future();
+    if future.is_null() {
+        return future;
+    }
+
+    ori_arc_retain(future as *mut u8);
+    let future_addr = future as usize;
+    std::thread::spawn(move || {
+        let result = match std::fs::write(path_str, content_str.as_bytes()) {
+            Ok(_) => unsafe { new_result(true, cstring_from_str("")) },
+            Err(e) => unsafe { new_result(false, cstring_from_str(&e.to_string())) },
+        };
+        unsafe {
+            complete_future_owned(
+                future_addr as *mut OriFuture,
+                OriFutureStatus::Ready,
+                result as i64,
+            );
+        }
+    });
+    future
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_append_text(path: *const u8, content: *const u8) -> c_uchar {
+    use std::io::Write;
+    let path_str = cstr_str(path);
+    let content_str = cstr_str(content);
+    let result = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path_str)
+        .and_then(|mut f| f.write_all(content_str.as_bytes()));
+    u8::from(result.is_ok()) as c_uchar
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_exists(path: *const u8) -> c_uchar {
+    u8::from(std::path::Path::new(cstr_str(path)).exists()) as c_uchar
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_delete(path: *const u8) -> c_uchar {
+    let p = std::path::Path::new(cstr_str(path));
+    let result = if p.is_dir() {
+        std::fs::remove_dir_all(p)
+    } else {
+        std::fs::remove_file(p)
+    };
+    u8::from(result.is_ok()) as c_uchar
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_list_dir(path: *const u8) -> *mut u8 {
+    let path_str = cstr_str(path);
+    match std::fs::read_dir(path_str) {
+        Ok(entries) => {
+            let list = ori_list_new();
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                ori_list_push_owned_managed(list, cstring_from_str(&name));
+            }
+            new_result(true, list as *mut u8)
+        }
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_create_dir(path: *const u8) -> c_uchar {
+    u8::from(std::fs::create_dir_all(cstr_str(path)).is_ok()) as c_uchar
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_is_file(path: *const u8) -> c_uchar {
+    u8::from(std::path::Path::new(cstr_str(path)).is_file()) as c_uchar
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_is_dir(path: *const u8) -> c_uchar {
+    u8::from(std::path::Path::new(cstr_str(path)).is_dir()) as c_uchar
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_copy(src: *const u8, dst: *const u8) -> c_uchar {
+    u8::from(std::fs::copy(cstr_str(src), cstr_str(dst)).is_ok()) as c_uchar
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_rename(src: *const u8, dst: *const u8) -> c_uchar {
+    u8::from(std::fs::rename(cstr_str(src), cstr_str(dst)).is_ok()) as c_uchar
+}
+
+// ── ori.bytes ─────────────────────────────────────────────────────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_bytes_len(ptr: *const u8) -> i64 {
+    ori_len(ptr)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_bytes_concat(a: *const u8, b: *const u8) -> *mut u8 {
+    ori_string_concat(a, b)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_bytes_slice(ptr: *const u8, start: i64, end: i64) -> *mut u8 {
+    if ptr.is_null() {
+        abort_bounds("ori bytes slice bounds out of range");
+    }
+    let bytes = cstr_bytes(ptr);
+    let (start, end) = checked_slice_bounds(
+        bytes.len() as i64,
+        start,
+        end,
+        "ori bytes slice bounds out of range",
+    );
+    cstring_from_bytes(bytes[start..end].to_vec())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_bytes_to_hex(ptr: *const u8) -> *mut u8 {
+    let bytes = cstr_bytes(ptr);
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        use std::fmt::Write;
+        let _ = write!(&mut hex, "{:02x}", b);
+    }
+    cstring_from_str(&hex)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_bytes_from_hex(ptr: *const u8) -> *mut u8 {
+    let s = cstr_str(ptr);
+    if s.len() % 2 != 0 {
+        return new_result(false, cstring_from_str("Invalid hex string length"));
+    }
+    let mut bytes = Vec::with_capacity(s.len() / 2);
+    let chars = s.as_bytes();
+    for chunk in chars.chunks(2) {
+        let str_chunk = unsafe { std::str::from_utf8_unchecked(chunk) };
+        match u8::from_str_radix(str_chunk, 16) {
+            Ok(b) => bytes.push(b),
+            Err(_) => return new_result(false, cstring_from_str("Invalid hex character")),
+        }
+    }
+    new_result(true, cstring_from_bytes(bytes))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_bytes_decode_utf8(ptr: *const u8) -> *mut u8 {
+    let bytes = cstr_bytes(ptr);
+    match std::str::from_utf8(bytes) {
+        Ok(s) => new_result(true, cstring_from_str(s)),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_bytes_get(ptr: *const u8, index: i64) -> u8 {
+    let bytes = cstr_bytes(ptr);
+    if index < 0 || index as usize >= bytes.len() {
+        abort_bounds("ori bytes index out of bounds");
+    } else {
+        bytes[index as usize]
+    }
+}
+
+fn abort_bounds(message: &str) -> ! {
+    eprintln!("{message}");
+    std::process::abort();
+}
+
+fn checked_slice_bounds(len: i64, start: i64, end: i64, message: &str) -> (usize, usize) {
+    if start < 0 || end < start || end > len {
+        abort_bounds(message);
+    }
+    (start as usize, end as usize)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_string_to_bytes(ptr: *const u8) -> *mut u8 {
+    ori_arc_retain(ptr as *mut u8);
+    ptr as *mut u8
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_string_from_bytes(ptr: *const u8) -> *mut u8 {
+    let bytes = cstr_bytes(ptr);
+    match std::str::from_utf8(bytes) {
+        Ok(_) => {
+            ori_arc_retain(ptr as *mut u8);
+            new_result(true, ptr as *mut u8)
+        }
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ori_types::stdlib::stdlib_runtime_functions;
+    use std::collections::HashSet;
+    use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+    use std::sync::Mutex;
+
+    static TEST_DTOR_CALLS: AtomicUsize = AtomicUsize::new(0);
+    static TEST_EXECUTOR_CALLBACKS: AtomicUsize = AtomicUsize::new(0);
+    static TEST_ARC_LOCK: Mutex<()> = Mutex::new(());
+
+    unsafe extern "C" fn test_destructor(_ptr: *mut u8) {
+        TEST_DTOR_CALLS.fetch_add(1, AtomicOrdering::SeqCst);
+    }
+
+    unsafe fn header_for(ptr: *mut u8) -> *mut OriHeapHeader {
+        ptr.sub(std::mem::size_of::<OriHeapHeader>()) as *mut OriHeapHeader
+    }
+
+    unsafe fn result_flag(ptr: *mut u8) -> u8 {
+        *ptr
+    }
+
+    unsafe fn result_i64_payload(ptr: *mut u8) -> i64 {
+        std::ptr::read_unaligned(ptr.add(std::mem::size_of::<*mut u8>()) as *const i64)
+    }
+
+    unsafe fn free_result(ptr: *mut u8) {
+        libc::free(ptr as *mut libc::c_void);
+    }
+
+    unsafe extern "C" fn test_task_entry(_env: *mut u8) -> i64 {
+        41
+    }
+
+    unsafe extern "C" fn test_counting_async_entry(_env: *mut u8) -> i64 {
+        TEST_EXECUTOR_CALLBACKS.fetch_add(1, AtomicOrdering::SeqCst);
+        123
+    }
+
+    unsafe extern "C" fn test_failed_await_entry(_env: *mut u8) -> i64 {
+        let failed = alloc_pending_future();
+        ori_future_fail(failed);
+        let _ = ori_task_block_on(failed);
+        ori_arc_release(failed as *mut u8);
+        99
+    }
+
+    unsafe extern "C" fn test_cancelled_await_entry(_env: *mut u8) -> i64 {
+        let cancelled = alloc_pending_future();
+        ori_future_cancel(cancelled);
+        let _ = ori_task_block_on(cancelled);
+        ori_arc_release(cancelled as *mut u8);
+        99
+    }
+
+    unsafe extern "C" fn test_executor_entry(_env: *mut u8) -> i64 {
+        TEST_EXECUTOR_CALLBACKS.fetch_add(1, AtomicOrdering::SeqCst);
+        0
+    }
+
+    unsafe fn test_closure_object() -> *mut u8 {
+        let ptr_size = std::mem::size_of::<*mut u8>();
+        let closure = ori_alloc(ptr_size * 2, None);
+        *(closure as *mut usize) = test_task_entry as *const () as usize;
+        *(closure.add(ptr_size) as *mut usize) = 0;
+        closure
+    }
+
+    unsafe fn test_counting_async_closure_object() -> *mut u8 {
+        let ptr_size = std::mem::size_of::<*mut u8>();
+        let closure = ori_alloc(ptr_size * 2, None);
+        *(closure as *mut usize) = test_counting_async_entry as *const () as usize;
+        *(closure.add(ptr_size) as *mut usize) = 0;
+        closure
+    }
+
+    unsafe fn test_failed_await_closure_object() -> *mut u8 {
+        let ptr_size = std::mem::size_of::<*mut u8>();
+        let closure = ori_alloc(ptr_size * 2, None);
+        *(closure as *mut usize) = test_failed_await_entry as *const () as usize;
+        *(closure.add(ptr_size) as *mut usize) = 0;
+        closure
+    }
+
+    unsafe fn test_cancelled_await_closure_object() -> *mut u8 {
+        let ptr_size = std::mem::size_of::<*mut u8>();
+        let closure = ori_alloc(ptr_size * 2, None);
+        *(closure as *mut usize) = test_cancelled_await_entry as *const () as usize;
+        *(closure.add(ptr_size) as *mut usize) = 0;
+        closure
+    }
+
+    unsafe fn test_executor_closure_object() -> *mut u8 {
+        let ptr_size = std::mem::size_of::<*mut u8>();
+        let closure = ori_alloc(ptr_size * 2, None);
+        *(closure as *mut usize) = test_executor_entry as *const () as usize;
+        *(closure.add(ptr_size) as *mut usize) = 0;
+        closure
+    }
+
+    #[test]
+    fn string_and_bytes_use_nul_terminated_payload_layout() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let text = cstring_from_str("ori");
+            assert_eq!(ori_len(text), 3);
+            assert_eq!(cstr_bytes(text), b"ori");
+            assert_eq!(*text.add(3), 0);
+            assert!(header_for_registered(text).is_some());
+            ori_arc_release(text);
+
+            let bytes = cstring_from_bytes(vec![1, 2, 3]);
+            assert_eq!(ori_bytes_len(bytes), 3);
+            assert_eq!(cstr_bytes(bytes), &[1, 2, 3]);
+            assert_eq!(*bytes.add(3), 0);
+            assert!(header_for_registered(bytes).is_some());
+            ori_arc_release(bytes);
+        }
+    }
+
+    #[test]
+    fn json_stringify_pretty_formats_valid_json() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let value = cstring_from_str("{\"name\":\"ori\",\"ok\":true}");
+            let compact = ori_json_stringify(value);
+            let pretty = ori_json_stringify_pretty(value);
+
+            assert_eq!(cstr_str(compact), "{\"name\":\"ori\",\"ok\":true}");
+            assert_eq!(
+                cstr_str(pretty),
+                "{\n  \"name\": \"ori\",\n  \"ok\": true\n}"
+            );
+
+            ori_arc_release(value);
+            ori_arc_release(compact);
+            ori_arc_release(pretty);
+        }
+    }
+
+    #[test]
+    fn list_map_and_set_layouts_keep_native_backend_offsets() {
+        let ptr_size = std::mem::size_of::<*mut i64>();
+
+        assert_eq!(std::mem::offset_of!(OriList, data), 0);
+        assert_eq!(std::mem::offset_of!(OriList, len), ptr_size);
+        assert_eq!(std::mem::offset_of!(OriList, cap), ptr_size + 8);
+
+        assert_eq!(std::mem::offset_of!(OriSet, items), 0);
+        assert_eq!(std::mem::offset_of!(OriSet, len), ptr_size);
+        assert_eq!(std::mem::offset_of!(OriSet, cap), ptr_size + 8);
+        assert_eq!(std::mem::offset_of!(OriSet, ht), ptr_size + 16);
+        assert_eq!(
+            std::mem::offset_of!(OriSet, ht_cap),
+            ptr_size + 16 + ptr_size
+        );
+
+        assert_eq!(std::mem::offset_of!(OriMap, keys), 0);
+        assert_eq!(std::mem::offset_of!(OriMap, values), ptr_size);
+        assert_eq!(std::mem::offset_of!(OriMap, len), ptr_size * 2);
+        assert_eq!(std::mem::offset_of!(OriMap, cap), ptr_size * 2 + 8);
+        assert_eq!(std::mem::offset_of!(OriMap, ht), ptr_size * 2 + 16);
+        assert_eq!(
+            std::mem::offset_of!(OriMap, ht_cap),
+            ptr_size * 2 + 16 + ptr_size
+        );
+    }
+
+    #[test]
+    fn list_backed_collection_handles_keep_list_layout_and_empty_optionals() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        let ptr_size = std::mem::size_of::<*mut i64>();
+
+        unsafe {
+            let deque = ori_deque_new();
+            ori_deque_push_back(deque, 10);
+            assert_eq!(std::mem::offset_of!(OriList, data), 0);
+            assert_eq!(std::mem::offset_of!(OriList, len), ptr_size);
+            assert_eq!(std::mem::offset_of!(OriList, cap), ptr_size + 8);
+            assert_eq!(ori_deque_len(deque), 1);
+            ori_deque_clear(deque);
+            assert_eq!(ori_deque_is_empty(deque), 1);
+            let empty = ori_deque_pop_front(deque) as *mut OriOptionalInt;
+            assert_eq!((*empty).has_value, 0);
+            ori_arc_release(empty as *mut u8);
+            ori_arc_release(deque as *mut u8);
+
+            let linked = ori_linked_list_new();
+            ori_linked_list_push_front(linked, 1);
+            ori_linked_list_push_back(linked, 2);
+            assert_eq!(ori_linked_list_len(linked), 2);
+            let linked_front = ori_linked_list_front(linked) as *mut OriOptionalInt;
+            assert_eq!((*linked_front).has_value, 1);
+            assert_eq!((*linked_front).value, 1);
+            let snapshot = ori_linked_list_to_list(linked);
+            assert_eq!(ori_list_get(snapshot, 1), 2);
+            ori_arc_release(linked_front as *mut u8);
+            ori_arc_release(snapshot as *mut u8);
+            ori_linked_list_clear(linked);
+            assert_eq!(ori_linked_list_is_empty(linked), 1);
+            ori_arc_release(linked as *mut u8);
+
+            let doubly = ori_doubly_linked_list_new();
+            for value in 0..128 {
+                ori_doubly_linked_list_push_back(doubly, value);
+            }
+            assert_eq!(ori_doubly_linked_list_len(doubly), 128);
+            ori_doubly_linked_list_clear(doubly);
+            assert_eq!(ori_doubly_linked_list_is_empty(doubly), 1);
+
+            ori_doubly_linked_list_push_front(doubly, 3);
+            ori_doubly_linked_list_push_back(doubly, 4);
+            let front = ori_doubly_linked_list_pop_front(doubly) as *mut OriOptionalInt;
+            let back = ori_doubly_linked_list_pop_back(doubly) as *mut OriOptionalInt;
+            assert_eq!((*front).has_value, 1);
+            assert_eq!((*front).value, 3);
+            assert_eq!((*back).has_value, 1);
+            assert_eq!((*back).value, 4);
+            assert_eq!(ori_doubly_linked_list_is_empty(doubly), 1);
+            ori_arc_release(front as *mut u8);
+            ori_arc_release(back as *mut u8);
+            ori_arc_release(doubly as *mut u8);
+        }
+    }
+
+    #[test]
+    fn deque_grows_and_preserves_front_back_order() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let deque = ori_deque_new();
+            for value in 0..80 {
+                if value % 2 == 0 {
+                    ori_deque_push_back(deque, value);
+                } else {
+                    ori_deque_push_front(deque, value);
+                }
+            }
+
+            assert_eq!(ori_deque_len(deque), 80);
+
+            let front = ori_deque_pop_front(deque) as *mut OriOptionalInt;
+            let back = ori_deque_pop_back(deque) as *mut OriOptionalInt;
+            assert_eq!((*front).has_value, 1);
+            assert_eq!((*front).value, 79);
+            assert_eq!((*back).has_value, 1);
+            assert_eq!((*back).value, 78);
+            assert_eq!(ori_deque_len(deque), 78);
+
+            ori_arc_release(front as *mut u8);
+            ori_arc_release(back as *mut u8);
+            ori_arc_release(deque as *mut u8);
+        }
+    }
+
+    #[test]
+    fn hash_table_wrappers_cover_collision_resize_and_optionals() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let table = ori_hash_table_with_capacity(1);
+            let mask = (*table).ht_cap as usize - 1;
+            let first = 1_i64;
+            let first_slot = hash_i64(first) & mask;
+            let second = (2_i64..10_000)
+                .find(|candidate| hash_i64(*candidate) & mask == first_slot)
+                .expect("expected a colliding key for the initial hash table");
+
+            ori_hash_table_set(table, first, 10);
+            ori_hash_table_set(table, second, 20);
+            let first_value = ori_hash_table_get(table, first);
+            let second_value = ori_hash_table_get(table, second);
+            assert_eq!((*first_value).has_value, 1);
+            assert_eq!((*first_value).value, 10);
+            assert_eq!((*second_value).has_value, 1);
+            assert_eq!((*second_value).value, 20);
+            ori_arc_release(first_value as *mut u8);
+            ori_arc_release(second_value as *mut u8);
+
+            for key in 10_000..10_040 {
+                ori_hash_table_set(table, key, key * 10);
+            }
+            assert!(ori_hash_table_capacity(table) >= 40);
+            assert_eq!(ori_hash_table_len(table), 42);
+
+            let removed = ori_hash_table_remove(table, second);
+            assert_eq!((*removed).has_value, 1);
+            assert_eq!(ori_hash_table_contains(table, second), 0);
+            ori_arc_release(removed as *mut u8);
+
+            let missing = ori_hash_table_get(table, second);
+            assert_eq!((*missing).has_value, 0);
+            ori_arc_release(missing as *mut u8);
+            ori_arc_release(table as *mut u8);
+        }
+    }
+
+    #[repr(C)]
+    struct TestScore {
+        value: i64,
+    }
+
+    unsafe extern "C" fn test_score_compare(left: i64, right: i64) -> i64 {
+        let left = &*(left as *const TestScore);
+        let right = &*(right as *const TestScore);
+        left.value - right.value
+    }
+
+    #[test]
+    fn heap_orders_int_string_and_custom_comparable_values() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let ints = ori_heap_new();
+            for value in [40, 10, 30, 20] {
+                ori_heap_push(ints, value);
+            }
+            assert_eq!(ori_heap_len(ints), 4);
+            let peek = ori_heap_peek(ints);
+            assert_eq!((*peek).has_value, 1);
+            assert_eq!((*peek).value, 10);
+            ori_arc_release(peek as *mut u8);
+            for expected in [10, 20, 30, 40] {
+                let item = ori_heap_pop(ints);
+                assert_eq!((*item).has_value, 1);
+                assert_eq!((*item).value, expected);
+                ori_arc_release(item as *mut u8);
+            }
+            let empty = ori_heap_pop(ints);
+            assert_eq!((*empty).has_value, 0);
+            ori_arc_release(empty as *mut u8);
+            ori_arc_release(ints as *mut u8);
+
+            let strings = ori_heap_new();
+            let pear = cstring_from_str("pear");
+            let apple = cstring_from_str("apple");
+            let orange = cstring_from_str("orange");
+            ori_heap_push_string(strings, pear);
+            ori_heap_push_string(strings, apple);
+            ori_heap_push_string(strings, orange);
+            let first = ori_heap_pop(strings);
+            assert_eq!((*first).value as *mut u8, apple);
+            ori_arc_release(first as *mut u8);
+            ori_arc_release(strings as *mut u8);
+            ori_arc_release(pear);
+            ori_arc_release(apple);
+            ori_arc_release(orange);
+
+            let custom = ori_heap_new();
+            let scores: Vec<*mut TestScore> = [5, 2, 7]
+                .into_iter()
+                .map(|value| Box::into_raw(Box::new(TestScore { value })))
+                .collect();
+            for score in &scores {
+                ori_heap_push_custom(
+                    custom,
+                    *score as i64,
+                    test_score_compare as *const std::ffi::c_void,
+                );
+            }
+            for expected in [2, 5, 7] {
+                let item = ori_heap_pop(custom);
+                let score = &*((*item).value as *const TestScore);
+                assert_eq!(score.value, expected);
+                ori_arc_release(item as *mut u8);
+            }
+            ori_arc_release(custom as *mut u8);
+            for score in scores {
+                drop(Box::from_raw(score));
+            }
+        }
+    }
+
+    #[test]
+    fn optional_and_result_layouts_match_native_backend() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        let ptr_size = std::mem::size_of::<*mut u8>();
+
+        assert_eq!(std::mem::offset_of!(OriOptionalInt, has_value), 0);
+        assert_eq!(std::mem::offset_of!(OriOptionalInt, value), 8);
+        assert_eq!(std::mem::size_of::<OriOptionalInt>(), 16);
+
+        assert_eq!(std::mem::offset_of!(OriOptionalFloat, has_value), 0);
+        assert_eq!(std::mem::offset_of!(OriOptionalFloat, value), 8);
+        assert_eq!(std::mem::size_of::<OriOptionalFloat>(), 16);
+
+        unsafe {
+            let payload = cstring_from_str("ok");
+            let result = new_result(true, payload);
+            assert_eq!(*result, 1);
+            assert_eq!(*(result.add(ptr_size) as *mut *mut u8), payload);
+            free_result(result);
+            ori_arc_release(payload);
+        }
+    }
+
+    #[test]
+    fn runtime_created_collection_snapshots_keep_managed_elements_alive() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let source = ori_list_new();
+            let item = cstring_from_str("item");
+            ori_list_push_borrowed_maybe_managed(source, item as i64);
+            ori_arc_release(item);
+
+            let slice = ori_list_slice(source, 0, 1);
+            let slice_item = ori_list_get(slice, 0) as *mut u8;
+            ori_arc_release(source as *mut u8);
+            assert_eq!(cstr_str(slice_item), "item");
+            ori_arc_release(slice as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+
+            let map = ori_map_new();
+            let key = cstring_from_str("key");
+            let value = cstring_from_str("value");
+            ori_map_set_string(map, key, value as i64);
+            ori_map_register_borrowed_key_value_maybe_managed(map, key as i64, value as i64);
+            ori_arc_release(key);
+            ori_arc_release(value);
+
+            let keys = ori_map_keys(map);
+            let values = ori_map_values(map);
+            let entries = ori_map_entries(map);
+            let key_snapshot = ori_list_get(keys, 0) as *mut u8;
+            let value_snapshot = ori_list_get(values, 0) as *mut u8;
+            let entry = ori_list_get(entries, 0) as *mut i64;
+            ori_arc_release(map as *mut u8);
+            assert_eq!(cstr_str(key_snapshot), "key");
+            assert_eq!(cstr_str(value_snapshot), "value");
+            assert_eq!(cstr_str(*entry as *mut u8), "key");
+            assert_eq!(cstr_str(*entry.add(1) as *mut u8), "value");
+            ori_arc_release(keys as *mut u8);
+            ori_arc_release(values as *mut u8);
+            ori_arc_release(entries as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+
+            let graph = ori_graph_new(1);
+            let from = cstring_from_str("from");
+            let to = cstring_from_str("to");
+            ori_graph_add_node_string(graph, from);
+            ori_graph_add_node_string(graph, to);
+            ori_graph_add_edge_string(graph, from, to);
+            ori_arc_register_edge(graph as *mut u8, from);
+            ori_arc_register_edge(graph as *mut u8, to);
+            ori_arc_release(from);
+            ori_arc_release(to);
+
+            let nodes = ori_graph_nodes(graph);
+            let lookup = cstring_from_str("from");
+            let neighbors = ori_graph_neighbors_string(graph, lookup);
+            ori_arc_release(lookup);
+            let edges = ori_graph_edges(graph);
+            let node_snapshot = ori_list_get(nodes, 0) as *mut u8;
+            let neighbor_snapshot = ori_list_get(neighbors, 0) as *mut u8;
+            let edge = ori_list_get(edges, 0) as *mut i64;
+            ori_arc_release(graph as *mut u8);
+            assert_eq!(cstr_str(node_snapshot), "from");
+            assert_eq!(cstr_str(neighbor_snapshot), "to");
+            assert_eq!(cstr_str(*edge as *mut u8), "from");
+            assert_eq!(cstr_str(*edge.add(1) as *mut u8), "to");
+            ori_arc_release(nodes as *mut u8);
+            ori_arc_release(neighbors as *mut u8);
+            ori_arc_release(edges as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn concurrency_handle_layouts_are_opaque_references() {
+        assert_eq!(std::mem::offset_of!(OriTaskJob, handle), 0);
+        assert_eq!(std::mem::offset_of!(OriChannel, state), 0);
+        assert_eq!(std::mem::offset_of!(OriAtomicInt, value), 0);
+        assert_eq!(std::mem::offset_of!(OriFuture, state), 0);
+        assert!(std::mem::size_of::<OriTaskJob>() > 0);
+        assert!(std::mem::size_of::<OriChannel>() > 0);
+        assert!(std::mem::size_of::<OriAtomicInt>() > 0);
+        assert!(std::mem::size_of::<OriFuture>() > 0);
+    }
+
+    #[test]
+    fn arc_retain_release_updates_refcount_and_runs_destructor() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+        TEST_DTOR_CALLS.store(0, AtomicOrdering::SeqCst);
+
+        unsafe {
+            let ptr = ori_alloc(8, Some(test_destructor));
+            assert!(!ptr.is_null());
+
+            let header = header_for(ptr);
+            assert_eq!((*header).refcount.load(AtomicOrdering::SeqCst), 1);
+
+            ori_arc_retain(ptr);
+            assert_eq!((*header).refcount.load(AtomicOrdering::SeqCst), 2);
+
+            ori_arc_release(ptr);
+            assert_eq!((*header).refcount.load(AtomicOrdering::SeqCst), 1);
+            assert_eq!(TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst), 0);
+
+            ori_arc_release(ptr);
+            assert_eq!(TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst), 1);
+        }
+    }
+
+    #[test]
+    fn arc_collect_cycles_reclaims_struct_like_registered_cycle() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+        TEST_DTOR_CALLS.store(0, AtomicOrdering::SeqCst);
+
+        unsafe {
+            let left = ori_alloc(8, Some(test_destructor));
+            let right = ori_alloc(8, Some(test_destructor));
+            assert!(!left.is_null());
+            assert!(!right.is_null());
+
+            ori_arc_register_edge(left, right);
+            ori_arc_register_edge(right, left);
+
+            assert_eq!((*header_for(left)).refcount.load(AtomicOrdering::SeqCst), 2);
+            assert_eq!(
+                (*header_for(right)).refcount.load(AtomicOrdering::SeqCst),
+                2
+            );
+
+            ori_arc_release(left);
+            ori_arc_release(right);
+
+            assert_eq!((*header_for(left)).refcount.load(AtomicOrdering::SeqCst), 1);
+            assert_eq!(
+                (*header_for(right)).refcount.load(AtomicOrdering::SeqCst),
+                1
+            );
+
+            assert_eq!(ori_arc_collect_cycles(), 2);
+            assert_eq!(TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst), 2);
+            assert_eq!(ori_arc_collect_cycles(), 0);
+        }
+    }
+
+    #[test]
+    fn arc_collect_cycles_reclaims_list_map_set_cycle() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let list = ori_list_new() as *mut u8;
+            let map = ori_map_new() as *mut u8;
+            let set = ori_set_new() as *mut u8;
+
+            ori_arc_register_edge(list, map);
+            ori_arc_register_edge(map, set);
+            ori_arc_register_edge(set, list);
+
+            ori_arc_release(list);
+            ori_arc_release(map);
+            ori_arc_release(set);
+
+            assert_eq!(ori_arc_collect_cycles(), 3);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn arc_collect_cycles_reclaims_graph_cycle() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let left = ori_graph_new(1) as *mut u8;
+            let right = ori_graph_new(1) as *mut u8;
+
+            ori_graph_add_node(left as *mut OriGraph, right as i64);
+            ori_graph_add_node(right as *mut OriGraph, left as i64);
+            ori_arc_register_edge(left, right);
+            ori_arc_register_edge(right, left);
+
+            ori_arc_release(left);
+            ori_arc_release(right);
+
+            assert_eq!(ori_arc_collect_cycles(), 2);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn arc_collect_cycles_reclaims_closure_environment_cycle() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let closure = test_closure_object();
+            let env = ori_alloc(8, None);
+
+            ori_arc_register_edge(closure, env);
+            ori_arc_register_edge(env, closure);
+
+            ori_arc_release(closure);
+            ori_arc_release(env);
+
+            assert_eq!(ori_arc_collect_cycles(), 2);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn arc_retain_release_stress_keeps_single_owner_alive() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+        TEST_DTOR_CALLS.store(0, AtomicOrdering::SeqCst);
+
+        unsafe {
+            let ptr = ori_alloc(8, Some(test_destructor));
+            for _ in 0..10_000 {
+                ori_arc_retain(ptr);
+            }
+            for _ in 0..10_000 {
+                ori_arc_release(ptr);
+            }
+
+            assert_eq!((*header_for(ptr)).refcount.load(AtomicOrdering::SeqCst), 1);
+            assert_eq!(TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst), 0);
+
+            ori_arc_release(ptr);
+            assert_eq!(TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst), 1);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn arc_retain_release_concurrency_stress_keeps_refcount_balanced() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+        TEST_DTOR_CALLS.store(0, AtomicOrdering::SeqCst);
+
+        unsafe {
+            let ptr = ori_alloc(8, Some(test_destructor));
+            let ptr_addr = ptr as usize;
+            let mut handles = Vec::new();
+            for _ in 0..8 {
+                handles.push(std::thread::spawn(move || {
+                    let ptr = ptr_addr as *mut u8;
+                    for _ in 0..2_000 {
+                        ori_arc_retain(ptr);
+                        ori_arc_release(ptr);
+                    }
+                }));
+            }
+            for handle in handles {
+                handle.join().unwrap();
+            }
+
+            assert_eq!((*header_for(ptr)).refcount.load(AtomicOrdering::SeqCst), 1);
+            assert_eq!(TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst), 0);
+
+            ori_arc_release(ptr);
+            assert_eq!(TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst), 1);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn task_spawn_join_returns_result_payload() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let closure = test_closure_object();
+            let job = ori_task_spawn(closure);
+            assert!(!job.is_null());
+            let result = ori_task_join(job);
+            assert_eq!(result_flag(result), 1);
+            assert_eq!(result_i64_payload(result), 41);
+            free_result(result);
+            ori_arc_release(job as *mut u8);
+        }
+    }
+
+    #[test]
+    fn channel_send_receive_uses_synchronized_queue() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let channel = ori_channel_create();
+            assert!(!channel.is_null());
+            let send = ori_channel_send(channel, 7);
+            assert_eq!(result_flag(send), 1);
+            free_result(send);
+
+            let received = ori_channel_receive(channel);
+            assert_eq!(result_flag(received), 1);
+            assert_eq!(result_i64_payload(received), 7);
+            free_result(received);
+
+            ori_channel_close(channel);
+            let closed = ori_channel_receive(channel);
+            assert_eq!(result_flag(closed), 0);
+            free_result(closed);
+            ori_arc_release(channel as *mut u8);
+        }
+    }
+
+    #[test]
+    fn atomic_int_load_store_and_add_are_thread_safe() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let value = ori_atomic_new(10);
+            assert_eq!(ori_atomic_load(value), 10);
+            ori_atomic_store(value, 12);
+            assert_eq!(ori_atomic_load(value), 12);
+            assert_eq!(ori_atomic_add(value, 5), 17);
+            assert_eq!(ori_atomic_load(value), 17);
+            ori_arc_release(value as *mut u8);
+        }
+    }
+
+    #[test]
+    fn executor_runs_scheduled_continuations() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+        unsafe {
+            ori_executor_drain();
+        }
+        TEST_EXECUTOR_CALLBACKS.store(0, AtomicOrdering::SeqCst);
+
+        unsafe {
+            let first = test_executor_closure_object();
+            let second = test_executor_closure_object();
+            ori_executor_schedule(first);
+            ori_executor_schedule(second);
+
+            assert_eq!(ori_executor_run_one(), 1);
+            assert_eq!(TEST_EXECUTOR_CALLBACKS.load(AtomicOrdering::SeqCst), 1);
+            assert_eq!(ori_executor_drain(), 1);
+            assert_eq!(TEST_EXECUTOR_CALLBACKS.load(AtomicOrdering::SeqCst), 2);
+            assert_eq!(ori_executor_run_one(), 0);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn future_poll_reports_ready_failed_and_cancelled_states() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let future = alloc_pending_future();
+            assert_eq!(ori_future_poll(future), 0);
+            ori_future_complete_i64(future, 42);
+            assert_eq!(ori_future_poll(future), 1);
+            assert_eq!(ori_future_value_i64(future), 42);
+            assert_eq!(ori_task_block_on(future), 42);
+            ori_arc_release(future as *mut u8);
+
+            let failed = alloc_pending_future();
+            ori_future_fail(failed);
+            assert_eq!(ori_future_poll(failed), 2);
+            assert_eq!(ori_task_block_on(failed), 0);
+            ori_arc_release(failed as *mut u8);
+
+            let cancelled = alloc_pending_future();
+            ori_future_cancel(cancelled);
+            assert_eq!(ori_future_poll(cancelled), 3);
+            assert_eq!(ori_task_block_on(cancelled), 0);
+            ori_arc_release(cancelled as *mut u8);
+        }
+    }
+
+    #[test]
+    fn future_pending_constructor_returns_pollable_pending_future() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let future = ori_future_pending();
+            assert!(!future.is_null());
+            assert_eq!(ori_future_poll(future), 0);
+            ori_future_complete_i64(future, 77);
+            assert_eq!(ori_future_poll(future), 1);
+            assert_eq!(ori_future_value_i64(future), 77);
+            ori_arc_release(future as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn future_complete_ptr_keeps_managed_payload_until_future_release() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let payload = ori_alloc(1, None);
+            let future = ori_future_pending();
+            assert_eq!(ori_arc_live_allocations(), 2);
+
+            ori_future_complete_ptr(future, payload);
+            ori_arc_release(payload);
+
+            assert_eq!(ori_future_poll(future), 1);
+            assert_eq!(ori_future_value_ptr(future), payload);
+            assert_eq!(ori_arc_live_allocations(), 2);
+
+            ori_arc_release(future as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn future_on_ready_schedules_registered_continuation() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+        unsafe {
+            ori_executor_drain();
+        }
+        TEST_EXECUTOR_CALLBACKS.store(0, AtomicOrdering::SeqCst);
+
+        unsafe {
+            let future = alloc_pending_future();
+            let continuation = test_executor_closure_object();
+            ori_future_on_ready(future, continuation);
+
+            assert_eq!(ori_executor_run_one(), 0);
+            ori_future_complete_void(future);
+            assert_eq!(ori_executor_run_one(), 1);
+            assert_eq!(TEST_EXECUTOR_CALLBACKS.load(AtomicOrdering::SeqCst), 1);
+            assert_eq!(ori_executor_run_one(), 0);
+            ori_arc_release(future as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn pending_future_continuation_does_not_block_executor_queue() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+        unsafe {
+            ori_executor_drain();
+        }
+        TEST_EXECUTOR_CALLBACKS.store(0, AtomicOrdering::SeqCst);
+
+        unsafe {
+            let future = alloc_pending_future();
+            let continuation = test_executor_closure_object();
+            ori_future_on_ready(future, continuation);
+
+            let independent = test_executor_closure_object();
+            ori_executor_schedule(independent);
+
+            assert_eq!(ori_executor_run_one(), 1);
+            assert_eq!(TEST_EXECUTOR_CALLBACKS.load(AtomicOrdering::SeqCst), 1);
+            assert_eq!(ori_executor_run_one(), 0);
+
+            ori_future_complete_void(future);
+            assert_eq!(ori_executor_run_one(), 1);
+            assert_eq!(TEST_EXECUTOR_CALLBACKS.load(AtomicOrdering::SeqCst), 2);
+
+            ori_arc_release(future as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn two_pending_futures_resume_in_ready_order() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+        unsafe {
+            ori_executor_drain();
+        }
+        TEST_EXECUTOR_CALLBACKS.store(0, AtomicOrdering::SeqCst);
+
+        unsafe {
+            let first = alloc_pending_future();
+            let second = alloc_pending_future();
+            ori_future_on_ready(first, test_executor_closure_object());
+            ori_future_on_ready(second, test_executor_closure_object());
+
+            assert_eq!(ori_executor_run_one(), 0);
+
+            ori_future_complete_void(second);
+            assert_eq!(ori_executor_run_one(), 1);
+            assert_eq!(TEST_EXECUTOR_CALLBACKS.load(AtomicOrdering::SeqCst), 1);
+            assert_eq!(ori_executor_run_one(), 0);
+
+            ori_future_complete_void(first);
+            assert_eq!(ori_executor_run_one(), 1);
+            assert_eq!(TEST_EXECUTOR_CALLBACKS.load(AtomicOrdering::SeqCst), 2);
+            assert_eq!(ori_executor_run_one(), 0);
+
+            ori_arc_release(first as *mut u8);
+            ori_arc_release(second as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn sleep_future_can_be_blocked_on() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let future = ori_task_sleep(25);
+            assert!(!future.is_null());
+            assert_eq!(ori_future_poll(future), 0);
+            assert_eq!(ori_task_block_on(future), 0);
+            assert_eq!(ori_future_poll(future), 1);
+            ori_arc_release(future as *mut u8);
+        }
+    }
+
+    #[test]
+    fn ready_futures_preserve_scalar_float_and_pointer_payloads() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let int_future = ori_future_ready_i64(42);
+            assert_eq!(ori_task_block_on(int_future), 42);
+            ori_arc_release(int_future as *mut u8);
+
+            let float_future = ori_future_ready_f64(3.5);
+            assert_eq!(ori_task_block_on_f64(float_future), 3.5);
+            ori_arc_release(float_future as *mut u8);
+
+            let payload = ori_alloc(1, None);
+            let ptr_future = ori_future_ready_ptr(payload);
+            assert_eq!(ori_task_block_on_ptr(ptr_future), payload);
+            ori_arc_release(ptr_future as *mut u8);
+            ori_arc_release(payload);
+        }
+    }
+
+    #[test]
+    fn async_spawn_i64_completes_future_from_native_closure() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let future = ori_async_spawn_i64(test_closure_object());
+            assert!(!future.is_null());
+
+            assert_eq!(ori_task_block_on(future), 41);
+
+            ori_arc_release(future as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn async_spawn_i64_runs_on_executor_without_running_immediately() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+        unsafe {
+            ori_executor_drain();
+        }
+        TEST_EXECUTOR_CALLBACKS.store(0, AtomicOrdering::SeqCst);
+
+        unsafe {
+            let future = ori_async_spawn_i64(test_counting_async_closure_object());
+            assert!(!future.is_null());
+            assert_eq!(ori_future_poll(future), 0);
+            assert_eq!(TEST_EXECUTOR_CALLBACKS.load(AtomicOrdering::SeqCst), 0);
+
+            assert_eq!(ori_executor_run_one(), 1);
+            assert_eq!(TEST_EXECUTOR_CALLBACKS.load(AtomicOrdering::SeqCst), 1);
+            assert_eq!(ori_future_poll(future), 1);
+            assert_eq!(ori_task_block_on(future), 123);
+            assert_eq!(ori_arc_live_allocations(), 1);
+
+            ori_arc_release(future as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn async_spawn_i64_propagates_failed_await_status() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let future = ori_async_spawn_i64(test_failed_await_closure_object());
+            assert!(!future.is_null());
+
+            assert_eq!(ori_task_block_on(future), 0);
+            assert_eq!(ori_task_last_await_status(), 2);
+
+            ori_arc_release(future as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn async_spawn_i64_propagates_cancelled_await_status() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let future = ori_async_spawn_i64(test_cancelled_await_closure_object());
+            assert!(!future.is_null());
+
+            assert_eq!(ori_task_block_on(future), 0);
+            assert_eq!(ori_task_last_await_status(), 3);
+
+            ori_arc_release(future as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn rust_runtime_exports_manifest_native_symbols() {
+        let source = include_str!("lib.rs");
+        let mut checked = HashSet::new();
+        let mut missing = Vec::new();
+        for entry in stdlib_runtime_functions()
+            .iter()
+            .filter(|entry| entry.native_runtime)
+        {
+            if checked.insert(entry.runtime_symbol) {
+                let needle = format!("fn {}", entry.runtime_symbol);
+                if !source.contains(&needle) {
+                    missing.push(entry.runtime_symbol);
+                }
+            }
+        }
+
+        assert!(
+            missing.is_empty(),
+            "manifest runtime symbols missing from Rust runtime: {missing:#?}"
+        );
+    }
 }

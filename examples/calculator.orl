@@ -1,0 +1,34 @@
+namespace app.calculator
+
+import ori.io as io
+
+func add(a: int, b: int) -> int
+    return a + b
+end
+
+func multiply(a: int, b: int) -> int
+    return a * b
+end
+
+
+
+func main()
+    const x: int = 10
+    const y: int = 5
+    
+    io.print("Simple Calculator")
+    io.print("-----------------")
+    
+    io.print(f"x = {x}")
+    io.print(f"y = {y}")
+    
+    const sum: int = add(x, y)
+    io.print(f"Sum: {sum}")
+    
+    const product: int = multiply(x, y)
+    io.print(f"Product: {product}")
+    
+    -- Demonstrate expression in print
+    io.print(f"Difference: {x - y}")
+    io.print(f"Division: {x / y}")
+end

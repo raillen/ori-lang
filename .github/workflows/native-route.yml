@@ -1,0 +1,77 @@
+name: native-route
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  native-route:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-msvc
+            os: windows-latest
+            toolchain: stable
+            smoke: powershell
+          - name: windows-gnu
+            os: windows-latest
+            toolchain: stable-x86_64-pc-windows-gnu
+            smoke: powershell
+          - name: linux-gnu
+            os: ubuntu-latest
+            toolchain: stable
+            smoke: sh
+          - name: macos-x86_64
+            os: macos-15-intel
+            toolchain: stable
+            smoke: sh
+          - name: macos-aarch64
+            os: macos-15
+            toolchain: stable
+            smoke: sh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install ${{ matrix.toolchain }}
+          rustup default ${{ matrix.toolchain }}
+          rustc -vV
+          cargo -V
+
+      - name: Configure Windows GNU linker
+        if: matrix.name == 'windows-gnu'
+        shell: pwsh
+        run: |
+          "ORI_USE_RUST_LLD=1" >> $env:GITHUB_ENV
+          "CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=rust-lld" >> $env:GITHUB_ENV
+
+      - name: Check compiler crates
+        run: cargo check -p ori-types -p ori-hir -p ori-codegen -p ori-driver -p ori-runtime
+
+      - name: Test runtime
+        run: cargo test -p ori-runtime
+
+      - name: Test native driver integration
+        run: cargo test -p ori-driver --test multifile_imports
+
+      - name: Test async diagnostics and runtime bridge
+        run: cargo test -p ori-driver --test concurrency_async
+
+      - name: Test diagnostic catalog
+        run: cargo test -p ori-driver --test diagnostic_catalog
+
+      - name: Native release smoke (Windows)
+        if: matrix.smoke == 'powershell'
+        run: .\tools\smoke_native_release.ps1
+
+      - name: Native release smoke (Unix)
+        if: matrix.smoke == 'sh'
+        run: sh tools/smoke_native_release.sh

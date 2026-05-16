@@ -1,0 +1,25 @@
+namespace app.graph_demo
+
+import ori.graph as graph
+import ori.io as io
+import ori.list as lists
+
+func main()
+    const tasks: graph.Graph<string> = graph.new(true)
+    graph.add_edge(tasks, "plan", "build")
+    graph.add_edge(tasks, "build", "test")
+    graph.add_edge(tasks, "test", "release")
+
+    const order: list<string> = graph.topological_sort(tasks)
+    io.print(string(lists.len(order)))
+    io.print(order[0])
+    io.print(order[1])
+    io.print(order[2])
+    io.print(order[3])
+
+    const walk: list<string> = graph.bfs(tasks, "plan")
+    io.print(walk[0])
+    io.print(walk[1])
+    io.print(walk[2])
+    io.print(walk[3])
+end

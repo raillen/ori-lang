@@ -1,283 +1,330 @@
-# Ori Language Specification — Chapter 13: Diagnostic Error Catalog
+# Ori Language Specification - Chapter 13: Diagnostic Error Catalog
 
-> Status: normative
+> Status: normative for emitted diagnostics; informative for planned diagnostics
 > Audience: compiler implementers, tool authors
 
 ---
 
 ## Overview
 
-Every diagnostic emitted by the Ori compiler has a unique code of the form:
+Every diagnostic emitted by the Ori compiler has a unique code:
 
-```
+```text
 category.specific_name
 ```
 
-Categories map to compiler phases and language areas.
-Diagnostics have a severity: `error` (blocks compilation) or `warning` (advisory).
+The tables below are split into two groups:
 
-All diagnostics follow the format:
+- **Emitted diagnostics**: codes that the compiler currently emits.
+- **Planned or reserved diagnostics**: codes kept for docs, tools, or future implementation.
 
-```
-severity[code]: short description
-  --> file.orl:line:col
-   |
-N  | source line
-   | ^^^^^^^^^^ annotation
-   |
-   = why: explanation of the rule
-   = action: what to do to fix it
-```
+The compiler test suite checks that every emitted code appears in the emitted
+section. If a code is documented as planned, it must move to the emitted section
+when the compiler starts producing it.
 
 ---
 
-## Category: `parse`
+## Emitted Diagnostics
 
-Errors produced by the parser.
-
-| Code | Severity | Description |
-|---|---|---|
-| `parse.namespace_missing` | error | File does not start with a `namespace` declaration |
-| `parse.namespace_not_first` | error | `namespace` appears after other declarations |
-| `parse.unexpected_token` | error | Unexpected token at this position |
-| `parse.unterminated_block` | error | Block is not closed with `end` |
-| `parse.unterminated_string` | error | String literal is not closed |
-| `parse.invalid_escape` | error | Unknown escape sequence in string literal |
-| `parse.import_after_declaration` | error | `import` appears after non-import declarations |
-| `parse.invalid_range` | error | Range expression has incompatible endpoint types |
-| `parse.variadic_not_last` | error | Variadic parameter `...` is not the last parameter |
-| `parse.chained_comparison` | error | Comparison chaining is not allowed (e.g. `a < b < c`) |
-| `parse.missing_else_in_if_expr` | error | Inline `if` expression requires an `else` branch |
-
----
-
-## Category: `type`
-
-Errors produced by the type checker.
+### `lex`
 
 | Code | Severity | Description |
 |---|---|---|
-| `type.mismatch` | error | Expression type does not match expected type |
-| `type.undefined` | error | Type name is not defined in scope |
-| `type.annotation_required` | error | Type annotation is required here (cannot be inferred) |
-| `type.return_mismatch` | error | Returned value type does not match function return type |
-| `type.void_return_value` | error | Returning a value from a `void` function |
-| `type.missing_return` | error | Function body may not return a value on all paths |
-| `type.constraint_not_satisfied` | error | Type argument does not satisfy `where` constraint |
-| `type.ambiguous_generic` | error | Type argument cannot be inferred; provide explicitly |
-| `type.comparison_not_supported` | error | `==` applied to a type without equality (e.g. `any<Trait>`, `func`) |
-| `type.equality_unsupported_field` | error | Struct contains a field type that does not support `==` |
-| `type.anon_struct_type_unknown` | error | `.{...}` used where the expected struct type cannot be inferred |
-| `type.anon_struct_field_mismatch` | error | Field in `.{...}` does not exist on the target struct type |
-| `type.struct_literal_named_fields_required` | error | Struct construction uses positional fields instead of named fields |
-| `type.missing_struct_field` | error | Struct construction does not provide a required field |
-| `type.enum_variant_named_fields_required` | error | Enum variant construction uses positional fields instead of named fields |
-| `type.invalid_is_check` | error | `is` check on a non-dynamic type |
-| `type.incompatible_result_error` | error | `?` used but error types are incompatible |
-| `type.propagation_context` | error | `?` used in a function that does not return `optional<_>` or `result<_,_>` |
-| `type.no_such_field` | error | Struct field does not exist |
-| `type.no_such_method` | error | Method not found for this type |
-| `type.ambiguous_method` | error | Method name matches multiple traits; use explicit disambiguation |
-| `type.callable_mismatch` | error | Argument types do not match closure or function signature |
-| `type.arg_count_mismatch` | error | Function call has too few or too many arguments |
+| `lex.unexpected_character` | error | Lexer found a character that is not valid in Ori source |
+| `lex.unclosed_block_comment` | error | Block comment starts with `--|` but is not closed with `|--` |
+
+### `parse`
+
+| Code | Severity | Description |
+|---|---|---|
+| `parse.byte_unicode_escape` | error | Byte string contains a Unicode escape; byte strings accept byte escapes only |
+| `parse.chained_comparison` | error | Comparison chaining is not allowed |
+| `parse.default_before_required` | error | Required parameter appears after a default parameter |
+| `parse.expected_declaration` | error | Parser expected a top-level declaration |
+| `parse.expected_expression` | error | Parser expected an expression |
+| `parse.expected_extern_member` | error | Parser expected a member inside an `extern` block |
+| `parse.expected_identifier` | error | Parser expected an identifier |
+| `parse.expected_pattern` | error | Parser expected a pattern |
+| `parse.expected_type` | error | Parser expected a type |
+| `parse.fstring_empty_expr` | error | Interpolated string contains an empty expression |
+| `parse.fstring_expr_trailing_tokens` | error | Interpolated string expression has extra tokens |
+| `parse.fstring_unclosed_expr` | error | Interpolated string expression is not closed |
+| `parse.fstring_unmatched_brace` | error | Interpolated string contains an unmatched brace |
+| `parse.invalid_escape` | error | String or byte literal contains an invalid escape |
+| `parse.invalid_lvalue` | error | Assignment target is not assignable |
+| `parse.tuple_arity` | error | Tuple type or expression has invalid arity |
+| `parse.unexpected_token` | error | Parser found a token that is not valid here |
+| `parse.variadic_not_last` | error | Variadic parameter is not the last parameter |
+
+### `type`
+
+| Code | Severity | Description |
+|---|---|---|
+| `type.ambiguous_method` | error | Method call matches more than one trait method for the receiver type |
+| `type.any_equality_unsupported` | error | Equality comparison (`==` or `!=`) on trait objects (`any<Trait>`) is not supported |
+| `type.anon_struct_field_mismatch` | error | Anonymous struct literal fields do not match the expected struct type |
+| `type.anon_struct_type_unknown` | error | Anonymous struct literal is used without an expected struct type |
+| `type.arg_count_mismatch` | error | Function call has the wrong number of arguments |
 | `type.arg_type_mismatch` | error | Function call argument type does not match the parameter type |
-| `type.unknown_arg_label` | error | Named call argument does not match any parameter name |
-| `type.duplicate_arg_label` | error | Named call argument is passed more than once |
+| `type.arithmetic_type_mismatch` | error | Arithmetic operator received incompatible operand types |
+| `type.comparison_not_supported` | error | Comparison operator is not supported for this type |
+| `type.comparison_type_mismatch` | error | Comparison operands have incompatible types |
+| `type.collection_comparable_unsupported` | error | Current ordered collection runtime does not support this element type without `Comparable` |
+| `type.collection_hash_unsupported` | error | Current `map`/`set` runtime does not support this key or element type yet |
+| `type.duplicate_arg_label` | error | Named argument is passed more than once |
+| `type.enum_variant_named_fields_required` | error | Enum variant construction requires named fields |
+| `type.expected_bool` | error | Expression must have type `bool` |
+| `type.field_on_non_struct` | error | Field access was used on a non-struct value |
+| `type.field_on_tuple_not_int` | error | Tuple field access must use an integer index |
+| `type.hash_key_not_supported` | error | Computed hash key type is not supported by the current runtime |
+| `type.if_branch_mismatch` | error | `if` branches produce incompatible types |
+| `type.ifsome_not_optional` | error | `if some` was used on a non-optional value |
+| `type.index_not_int` | error | Index expression must have type `int` |
+| `type.iterable_next_missing` | error | A type implements `Iterable` but does not provide `next` |
+| `type.iterable_next_signature` | error | `Iterable.next` does not match `mut func next() -> optional<T>` |
+| `type.is_target_not_type` | error | `is` target is not a valid type |
+| `type.list_element_mismatch` | error | List literal elements have incompatible types |
+| `type.map_key_mismatch` | error | Map literal keys have incompatible types |
+| `type.map_value_mismatch` | error | Map literal values have incompatible types |
+| `type.missing_return` | error | Non-void function may finish without returning a value |
+| `type.missing_struct_field` | error | Struct literal omits a required field |
+| `type.no_such_field` | error | Struct field does not exist |
+| `type.no_such_method` | error | Method does not exist for this receiver type |
+| `type.not_indexable` | error | Value cannot be indexed |
+| `type.not_iterable` | error | `for` loop received a value that is not iterable |
+| `type.not_sliceable` | error | Value cannot be sliced |
+| `type.numeric_literal_invalid` | error | Numeric literal syntax or suffix is invalid |
+| `type.numeric_literal_out_of_range` | error | Numeric literal does not fit its target type |
+| `type.pattern_mismatch` | error | Pattern is incompatible with the matched value type |
 | `type.positional_after_named_arg` | error | Positional argument appears after a named argument |
-| `type.index_non_indexable` | error | `[index]` applied to a non-indexable type |
-| `type.spread_non_list` | error | `..expr` spread used with a non-list value |
-| `type.spread_non_variadic` | error | `..expr` spread used outside a variadic argument position |
-| `type.unused_result` | warning | `result<T, E>` value is discarded without `?` or match |
+| `type.propagate_err_mismatch` | error | `?` would propagate an incompatible result error type |
+| `type.propagate_not_result_or_optional` | error | `?` was used on a value that is not `result` or `optional` |
+| `type.propagate_return_mismatch` | error | `?` was used in a function with an incompatible return type |
+| `type.repeat_count_not_int` | error | `repeat` count must be an `int` |
+| `type.return_mismatch` | error | Returned value type does not match function return type |
+| `type.spread_non_list` | error | Spread argument is not a list |
+| `type.spread_non_variadic` | error | Spread argument is used outside a variadic parameter |
+| `type.set_element_mismatch` | error | Set literal elements have incompatible types |
+| `type.struct_literal_named_fields_required` | error | Struct construction requires named fields |
+| `type.tuple_index_on_non_tuple` | error | Tuple index access was used on a non-tuple value |
+| `type.tuple_index_out_of_bounds` | error | Tuple index is outside the tuple arity |
+| `type.type_mismatch` | error | Value type does not match the expected type |
+| `type.unused_result` | warning | `result<T, E>` expression value is discarded |
+| `type.unary_neg_non_numeric` | error | Unary `-` was used on a non-numeric value |
+| `type.undefined_name` | error | Type name is not defined |
+| `type.unknown_arg_label` | error | Named argument does not match any parameter |
+| `type.unknown_enum_variant` | error | Enum variant does not exist |
+| `type.whilesome_not_optional` | error | `while some` was used on a non-optional value |
 
----
-
-## Category: `bind`
-
-Errors produced by the name resolution / binding phase.
+### `concurrency`
 
 | Code | Severity | Description |
 |---|---|---|
-| `bind.undefined` | error | Name is not defined in scope |
-| `bind.shadowing` | error | Binding shadows an existing binding in the same scope |
-| `bind.const_reassignment` | error | Reassigning a `const` binding |
-| `bind.import_not_found` | error | Imported namespace does not exist |
-| `bind.import_ambiguous` | error | Imported namespace matches more than one source file |
-| `bind.self_outside_method` | error | `self` used outside a method or `implement` block |
-| `bind.duplicate_field` | error | Struct or enum variant declares the same field name twice |
-| `bind.duplicate_variant` | error | Enum declares the same variant name twice |
-| `bind.duplicate_param` | error | Function declares the same parameter name twice |
-| `bind.duplicate_implement` | error | `implement Trait for Type` already exists in scope |
+| `concurrency.not_transferable` | error | Value cannot cross a task or channel boundary because it is not `Transferable` |
 
----
+### `contract`
 
-## Category: `match`
+| Code | Severity | Description |
+|---|---|---|
+| `contract.success_void_mismatch` | error | `success()` without a payload is used where the result success type is not `void` |
 
-Errors produced by exhaustiveness checking.
+### `async`
+
+| Code | Severity | Description |
+|---|---|---|
+| `async.capture_not_transferable` | error | Closure passed to `task.spawn` captures a value that is not `Transferable` |
+| `async.await_outside_async` | error | `await` was used outside an `async func` |
+| `async.await_non_future` | error | `await` was used on a value that is not `future<T>` |
+| `async.using_unsupported` | error | `using` was used inside an `async func` before cleanup across await is supported |
+
+### `backend`
+
+| Code | Severity | Description |
+|---|---|---|
+| `backend.c_unsupported` | error | C debug backend cannot generate code for a feature supported by the native route |
+| `backend.native_unsupported` | error | Native backend rejected a typed HIR shape before Cranelift because that codegen path is not implemented yet |
+
+### `native`
+
+| Code | Severity | Description |
+|---|---|---|
+| `native.abi_mismatch` | error | Packaged native runtime metadata uses an ABI version that does not match the driver |
+| `native.link_failed` | error | Native linker ran but failed to produce an executable |
+| `native.linker_missing` | error | Native linker driver or configured native linker could not be started |
+| `native.runtime_metadata_invalid` | error | Native runtime metadata is missing or malformed |
+| `native.runtime_metadata_mismatch` | error | Native runtime metadata targets a different compiler version, target, or artifact name |
+| `native.runtime_missing` | error | Native runtime library could not be found or built |
+| `native.runtime_symbol_missing` | error | Native linker reported an unresolved runtime/backend symbol |
+
+### `bind`
+
+| Code | Severity | Description |
+|---|---|---|
+| `bind.alias_shadows_local` | error | Import alias shadows a local definition |
+| `bind.alias_shadows_builtin_type` | error | Import alias shadows a built-in type name |
+| `bind.const_reassignment` | error | Code tries to reassign a `const` binding |
+| `bind.duplicate_alias` | error | More than one import uses the same alias |
+| `bind.duplicate_field` | error | Struct or enum variant field is declared more than once |
+| `bind.duplicate_implement` | error | Same trait/type implementation pair is declared twice |
+| `bind.duplicate_variant` | error | Enum variant is declared more than once |
+| `bind.import_ambiguous` | error | Import path matches more than one file |
+| `bind.import_cycle` | error | Local imports form a cycle |
+| `bind.import_namespace_mismatch` | error | Imported file declares a different namespace |
+| `bind.import_not_found` | error | Imported namespace could not be resolved to a file |
+| `bind.shadowing` | error | Binding shadows another binding in the same scope |
+| `bind.stdlib_module_unknown` | error | Standard library module name is unknown |
+| `bind.unused_import` | warning | Private import is not used |
+
+### `attr`
+
+| Code | Severity | Description |
+|---|---|---|
+| `attr.deprecated` | warning | Deprecated declaration is used |
+| `attr.duplicate` | warning | Attribute is repeated on the same declaration |
+| `attr.invalid_arg` | error | Attribute arguments do not match the supported form |
+| `attr.invalid_test_signature` | error | `@test` function has parameters, type parameters, or a return value |
+| `attr.invalid_target` | error | Attribute is applied to a declaration kind that does not support it |
+| `attr.unknown` | error | Attribute name is not part of the current built-in attribute set |
+
+### `doc`
+
+| Code | Severity | Description |
+|---|---|---|
+| `doc.param_name_mismatch` | warning | Documentation `@param` tag names a parameter that does not exist on the documented function |
+
+### `name`
+
+| Code | Severity | Description |
+|---|---|---|
+| `name.duplicate` | error | Name is already defined in this namespace |
+| `name.private` | error | Code tries to access a non-public imported item |
+| `name.undefined` | error | Value name is not defined |
+
+### `control`
+
+| Code | Severity | Description |
+|---|---|---|
+| `control.loop_required` | error | `break` or `continue` is used outside a loop |
+
+### `match`
 
 | Code | Severity | Description |
 |---|---|---|
 | `match.non_exhaustive` | error | `match` does not cover all possible cases |
-| `match.unreachable_case` | warning | Case can never be reached given earlier cases |
-| `match.guard_not_exhaustive` | warning | Guarded case does not count toward exhaustiveness |
-| `match.duplicate_case` | warning | Two identical patterns in the same `match` |
 
----
-
-## Category: `mut`
-
-Errors related to mutability.
+### `mut`
 
 | Code | Severity | Description |
 |---|---|---|
-| `mut.const_mutation` | error | Mutating a `const` binding |
-| `mut.const_method_call` | error | Calling a `mut func` on a `const` binding |
-| `mut.closure_captures_var` | error | Closure attempts to capture a `var` binding |
-| `mut.field_mutation_in_func` | error | Assigning to `self` field in a non-`mut func` |
-| `mut.using_binding_mutated` | error | `using` binding cannot be reassigned |
+| `mut.closure_captures_var` | error | Closure captures a mutable binding |
+| `mut.const_method_call` | error | `mut func` is called on a `const` receiver |
+| `mut.const_mutation` | error | Code tries to mutate a `const` value |
+| `mut.using_binding_mutated` | error | `using` binding is reassigned |
 
----
-
-## Category: `contract`
-
-Errors related to value contracts (`where` on fields and parameters).
+### `generic`
 
 | Code | Severity | Description |
 |---|---|---|
-| `contract.field_violation` | runtime panic | Field contract violated at construction or assignment |
-| `contract.param_violation` | runtime panic | Parameter contract violated at call site |
-| `contract.check_failure` | runtime panic | `check` assertion failed |
+| `generic.constraint_not_satisfied` | error | Type does not satisfy a generic constraint |
+| `generic.constraint_not_trait` | error | Generic constraint target is not a trait |
+| `generic.negative_constraint_violated` | error | Type violates a negative generic constraint |
+| `generic.unsupported_associated_type` | error | Trait associated types are not supported yet |
+| `generic.unsupported_const_generic` | error | Const generic parameters are not supported yet |
+| `generic.unsupported_hkt` | error | Higher-kinded type parameters are not supported yet |
+| `generic.unknown_type_param` | error | Generic constraint references an unknown type parameter |
 
-Note: contract violations are runtime panics, not compile errors.
-The compiler may statically detect provably violated contracts and emit `error`.
-
----
-
-## Category: `impl`
-
-Errors related to `implement` blocks and trait resolution.
+### `impl`
 
 | Code | Severity | Description |
 |---|---|---|
-| `impl.missing_method` | error | `implement` block does not implement all required trait methods |
-| `impl.wrong_signature` | error | Implemented method signature does not match trait declaration |
-| `impl.trait_not_found` | error | Trait being implemented does not exist |
-| `impl.type_not_found` | error | Type being implemented for does not exist |
-| `impl.mut_mismatch` | error | Trait requires `mut func` but implementation omits `mut`, or vice versa |
+| `impl.missing_method` | error | `implement` block omits a required trait method |
+| `impl.mut_mismatch` | error | Trait method mutability does not match implementation |
+| `impl.trait_not_found` | error | Trait named in an `implement` block does not exist |
+| `impl.type_not_found` | error | Type named in an `implement` block does not exist |
+| `impl.wrong_signature` | error | Implemented method signature does not match the trait |
 
----
-
-## Category: `using`
-
-Errors related to `using` and `Disposable`.
+### `using`
 
 | Code | Severity | Description |
 |---|---|---|
-| `using.not_disposable` | error | Type in `using` does not implement `Disposable` |
-| `using.non_result_init` | error | `using` initializer must produce a value (not void) |
+| `using.not_disposable` | error | `using` value does not satisfy the disposable contract |
 
 ---
 
-## Category: `generic`
+## Planned Or Reserved Diagnostics
 
-Errors related to generics.
+These codes are documented for future work or for runtime/tooling contracts.
+They are not emitted by the compiler today.
 
-| Code | Severity | Description |
+| Code | Intended severity | Status |
 |---|---|---|
-| `generic.constraint_not_satisfied` | error | Type argument does not satisfy `where T is Trait` |
-| `generic.negative_constraint_violated` | error | Type argument violates `where T is not Trait` |
-| `generic.ambiguous_type_arg` | error | Type argument cannot be inferred |
-| `generic.circular_instantiation` | error | Generic instantiation creates an infinite recursive type |
-| `generic.unsupported_hkt` | error | Higher-kinded type parameter not supported in v1 |
-
----
-
-## Category: `extern`
-
-Errors related to `extern c` and FFI.
-
-| Code | Severity | Description |
-|---|---|---|
-| `extern.managed_type_in_ffi` | error | Managed type used in FFI without explicit ABI annotation |
-| `extern.unknown_abi` | error | Unknown ABI label after `extern` |
-
----
-
-## Category: `project`
-
-Errors related to project structure and `ori.proj`.
-
-| Code | Severity | Description |
-|---|---|---|
-| `project.no_proj_file` | error | No `ori.proj` found in current or parent directories |
-| `project.entry_not_found` | error | Entry file declared in `ori.proj` does not exist |
-| `project.circular_import` | error | Circular namespace import detected |
-| `project.namespace_file_mismatch` | warning | File path does not match namespace convention |
-
----
-
-## Category: `attr`
-
-Errors related to attribute annotations.
-
-| Code | Severity | Description |
-|---|---|---|
-| `attr.unknown` | error | Attribute name is not a known built-in attribute |
-| `attr.invalid_arg` | error | Attribute argument has wrong type or structure |
-| `attr.invalid_target` | error | Attribute applied to an unsupported declaration kind |
-| `attr.deprecated` | warning | Use of a declaration marked `@deprecated` |
-| `attr.duplicate` | warning | Same attribute appears more than once on a declaration |
-
----
-
-## Category: `doc`
-
-Errors related to documentation comments processed by `ori doc`.
-
-| Code | Severity | Description |
-|---|---|---|
-| `doc.param_name_mismatch` | warning | `@param` name does not match any actual parameter |
-| `doc.missing_return` | warning | Public function with non-void return has no `@returns` tag |
-| `doc.unclosed_block` | error | `--|` block comment is not closed with `|--` |
-
----
-
-## Category: `contract`
-
-Errors related to `if` value contracts on fields and parameters.
-
-| Code | Severity | Description |
-|---|---|---|
-| `contract.field_violation` | runtime panic | Field `if` contract violated at construction or mutation |
-| `contract.param_violation` | runtime panic | Parameter `if` contract violated at call site |
-| `contract.check_failure` | runtime panic | `check` assertion failed |
-| `contract.success_void_mismatch` | error | `success()` with no args used where return type is not `result<void, _>` |
+| `bind.duplicate_param` | error | planned duplicate declaration detail |
+| `bind.self_outside_method` | error | planned binding diagnostic |
+| `bind.stdlib_module_unavailable` | error | reserved for future stdlib modules that are documented but intentionally blocked |
+| `bind.undefined` | error | reserved alias; emitted code is `name.undefined` |
+| `contract.check_failure` | runtime panic | runtime contract reporting |
+| `contract.field_violation` | runtime panic | runtime contract reporting |
+| `contract.param_violation` | runtime panic | runtime contract reporting |
+| `doc.missing_return` | warning | planned documentation tooling |
+| `doc.unclosed_block` | error | planned documentation/comment lexer work |
+| `extern.managed_type_in_ffi` | error | planned FFI diagnostics |
+| `extern.unknown_abi` | error | planned FFI diagnostics |
+| `generic.ambiguous_type_arg` | error | planned generic diagnostics |
+| `generic.circular_instantiation` | error | planned generic diagnostics |
+| `match.duplicate_case` | warning | planned match diagnostics |
+| `match.guard_not_exhaustive` | warning | planned match diagnostics |
+| `match.unreachable_case` | warning | planned match diagnostics |
+| `mut.field_mutation_in_func` | error | planned method mutability diagnostic |
+| `parse.import_after_declaration` | error | planned parser recovery diagnostic |
+| `parse.invalid_range` | error | planned range parse/type split diagnostic |
+| `parse.missing_else_in_if_expr` | error | planned inline if diagnostic |
+| `parse.namespace_missing` | error | planned parser recovery diagnostic |
+| `parse.namespace_not_first` | error | planned parser recovery diagnostic |
+| `parse.unterminated_block` | error | planned parser recovery diagnostic |
+| `parse.unterminated_string` | error | planned lexer/parser split diagnostic |
+| `project.circular_import` | error | planned project-level diagnostic |
+| `project.entry_not_found` | error | planned project-level diagnostic |
+| `project.namespace_file_mismatch` | warning | planned project-level diagnostic |
+| `project.no_proj_file` | error | planned project-level diagnostic |
+| `type.ambiguous_generic` | error | planned generic diagnostic alias |
+| `type.annotation_required` | error | planned inference diagnostic |
+| `type.callable_mismatch` | error | reserved alias; emitted calls use `type.arg_*` |
+| `type.constraint_not_satisfied` | error | reserved alias; emitted code is `generic.constraint_not_satisfied` |
+| `type.equality_unsupported_field` | error | planned structural equality diagnostic |
+| `type.incompatible_result_error` | error | reserved alias; emitted code is `type.propagate_err_mismatch` |
+| `type.index_non_indexable` | error | reserved alias; emitted code is `type.not_indexable` |
+| `type.invalid_is_check` | error | reserved alias; emitted code is `type.is_target_not_type` |
+| `type.mismatch` | error | reserved alias; emitted code is `type.type_mismatch` |
+| `type.propagation_context` | error | reserved alias; emitted propagation codes are more specific |
+| `type.undefined` | error | reserved alias; emitted code is `type.undefined_name` |
+| `using.non_result_init` | error | planned `using` diagnostic |
 
 ---
 
 ## Diagnostic Format Contract
 
-Every diagnostic must provide:
+Every diagnostic should provide:
 
-1. **Code** — machine-readable identifier.
-2. **Severity** — `error` or `warning`.
-3. **Short message** — one line, present tense, no period.
-4. **Span** — file, line, column of the primary location.
-5. **`= why:`** — explanation of the rule (one sentence).
-6. **`= action:`** — what the programmer should do (imperative sentence).
+1. **Code**: machine-readable identifier.
+2. **Severity**: `error` or `warning`.
+3. **Short message**: one line, present tense, no period.
+4. **Span**: file, line, column of the primary location.
+5. **`= why:`**: explanation of the rule, when useful.
+6. **`= action:`**: what the programmer should do, when useful.
 
 Optional:
-- **Secondary spans** — additional source locations referenced by the diagnostic.
-- **`= note:`** — additional context (migration hints, related rules).
+
+- Secondary spans.
+- Notes with migration hints or related rules.
 
 Example:
 
-```
-error[type.constraint_not_satisfied]: T does not satisfy constraint
+```text
+error[generic.constraint_not_satisfied]: type does not satisfy constraint
   --> src/app/sort.orl:8:14
    |
-8  |    const sorted: list<User> = iter.sort(users)
+8  |    const sorted: list<User> = list.sort(users)
    |                               ^^^^^^^^^
    |
-   = why: iter.sort requires T to implement Comparable
-   = action: add 'implement Comparable for User' with func compare(other: User) -> Order
+   = action: implement the required trait or use a value with a supported type
 ```

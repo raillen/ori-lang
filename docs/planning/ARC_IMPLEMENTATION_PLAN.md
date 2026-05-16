@@ -1,28 +1,44 @@
-# ARC Implementation Plan — Ori Language
+# ARC Implementation Plan - Ori Language
 
 ## Current State
 
-The ARC (Automatic Reference Counting) infrastructure is **scaffolded but not implemented**. All hooks are no-ops. The compiler already emits retain/release calls at the correct points, but the runtime stubs do nothing.
+The ARC (Automatic Reference Counting) infrastructure is **partially implemented**.
+The native runtime has refcounted allocation, retain, release, destructor
+callbacks, compiler-registered strong edges, and cycle collection for that
+registered graph. The debug C backend also has an inline ARC graph collector for
+generated C paths that register managed ownership edges.
+
+There are three runtime surfaces:
+
+- Native/link runtime in `compiler/crates/ori-driver/src/pipeline.rs`: basic
+  non-atomic ARC for the current single-threaded runtime.
+- Rust runtime in `compiler/crates/ori-runtime/src/lib.rs`: atomic refcounting
+  plus destructor callbacks.
+- Debug C backend inline runtime in
+  `compiler/crates/ori-codegen/src/c_backend.rs`: non-atomic retain/release,
+  registered edge tracking, edge updates, and cycle collection for generated C.
 
 ### What already works
 
 | Feature | Status |
 |---|---|
-| `using`/dispose cleanup | ✅ Implemented (both backends) |
-| `is_managed_ty()` classification | ✅ All heap types identified |
-| `managed_stack` tracking in native backend | ✅ Pushes/pops at scope boundaries |
-| `emit_arc_retain_if_managed` calls | ✅ Emitted for: `let` bindings, function args, closure captures, `break`/`continue`/`return` cleanup |
-| `emit_arc_release_if_managed` calls | ✅ Emitted at scope exit (reverse order) |
-| `emit_arc_collect_cycles` calls | ✅ Emitted at function scope exit |
-| `ori_arc_retain` / `ori_arc_release` | ✅ Implemented with proper atomic refcounting |
-| `ori_closure_t` struct | ✅ Handles closure captures properly in C backend |
-| C backend `managed_stack` tracking | ✅ Implemented |
+| `using`/dispose cleanup | Implemented in the native backend; C backend emits cleanup calls for supported paths |
+| `is_managed_ty()` classification | Implemented for heap-like types |
+| `managed_stack` tracking in native backend | Implemented |
+| `emit_arc_retain_if_managed` calls | Implemented for native bindings, args, closure captures, and control-flow cleanup |
+| `emit_arc_release_if_managed` calls | Implemented for native scope cleanup |
+| `emit_arc_collect_cycles` calls | Emitted at function scope exit; the native runtime now reclaims registered unreachable cycles |
+| `ori_arc_retain` / `ori_arc_release` | Implemented in the Rust runtime with atomic refcounting |
+| `ori_closure_t` struct | Present in the C backend inline runtime; function values are emitted as `ori_closure_t*` |
+| C backend ARC tracking | Implemented for retain/release, registered edges, edge updates, and cycle collection in the inline runtime |
 
 ### What is missing
 
 | Gap | Impact |
 |---|---|
-| No cycle detection in `ori_arc_collect_cycles` | Cyclic references would leak even with ARC |
+| Cycle detection depends on registered edges | Edges created outside generated code or the native runtime graph are not inferred automatically |
+| C backend remains a debug backend | Generated C has ARC hooks and cycle collection, but the native backend remains the primary semantic target |
+| Some allocations pass a null destructor | Plain refcounting works, but nested managed cleanup is incomplete for allocation shapes without registered edges or destructors |
 
 ---
 
@@ -40,7 +56,7 @@ All of these are **pointer-sized** in the Cranelift backend (`ptr_ty`). The actu
 
 ---
 
-## Phase 1: Runtime — Refcounted Allocation Header (✅ Completed)
+## Phase 1: Runtime - Refcounted Allocation Header (Completed)
 
 **File:** `compiler/crates/ori-runtime/src/lib.rs`
 
@@ -80,8 +96,7 @@ unsafe fn ori_alloc(size: usize, destructor: unsafe extern "C" fn(*mut u8)) -> *
 pub unsafe extern "C" fn ori_arc_retain(ptr: *mut u8) {
     if ptr.is_null() { return; }
     let header = ptr.sub(std::mem::size_of::<OriHeapHeader>()) as *mut OriHeapHeader;
-    // Atomic increment — use core::sync::atomic::AtomicI64 or libc atomics
-    (*header).refcount += 1; // TODO: make atomic
+    (*header).refcount.fetch_add(1, Ordering::Relaxed);
 }
 ```
 
@@ -92,12 +107,13 @@ pub unsafe extern "C" fn ori_arc_retain(ptr: *mut u8) {
 pub unsafe extern "C" fn ori_arc_release(ptr: *mut u8) {
     if ptr.is_null() { return; }
     let header = ptr.sub(std::mem::size_of::<OriHeapHeader>()) as *mut OriHeapHeader;
-    (*header).refcount -= 1; // TODO: make atomic
-    if (*header).refcount <= 0 {
+    if (*header).refcount.fetch_sub(1, Ordering::Release) == 1 {
+        (*header).refcount.load(Ordering::Acquire);
         let destructor = (*header).destructor;
         if let Some(dtor) = destructor {
             dtor(ptr); // type-specific cleanup (free nested managed values)
         }
+        std::ptr::drop_in_place(&mut (*header).refcount);
         libc::free(header as *mut libc::c_void);
     }
 }
@@ -125,7 +141,7 @@ Each managed type needs a destructor that releases nested managed values:
 
 ---
 
-## Phase 2: Native Backend (Cranelift) — Allocation Changes (✅ Completed)
+## Phase 2: Native Backend (Cranelift) - Allocation Changes (Partial)
 
 **File:** `compiler/crates/ori-codegen/src/native_backend.rs`
 
@@ -171,19 +187,19 @@ Add declarations for each type-specific destructor as imported functions. These 
 
 The compiler already emits retain/release at the right places. Verify:
 
-- `let x = <managed-expr>` → retain (line ~1984)
-- Function args (managed) → retain (line ~3250, ~3254)
-- Closure captures → retain (line ~1219 area — currently only pushes to managed_stack, no retain call)
-- `break`/`continue` → scope cleanup releases (line ~2032, ~2042)
-- `return` → scope cleanup + retain return value (line ~1961-1963)
-- `?` propagation → retain error + scope cleanup (line ~3293-3294)
-- Assignment `x = y` → retain new, release old (line ~1997-1998)
+- `let x = <managed-expr>` -> retain
+- Function args with managed values -> retain
+- Closure captures -> retain and push to the managed cleanup stack
+- `break`/`continue` -> scope cleanup releases
+- `return` -> scope cleanup and return-value retain
+- `?` propagation -> retain error value and clean up scope
+- Assignment `x = y` -> retain new value and release old value
 
-**Bug to fix:** Closure capture prologue (`emit_closure_capture_prologue`, line ~1195-1227) pushes to `managed_stack` but does **not** call `emit_arc_retain_if_managed`. The capture values come from the environment struct — they should be retained since the closure now holds a reference.
+The previous closure-capture gap has been fixed in the native backend.
 
 ---
 
-## Phase 3: C Backend — ARC Support (✅ Completed)
+## Phase 3: C Backend - ARC Support (Implemented for Inline Graph)
 
 **File:** `compiler/crates/ori-codegen/src/c_backend.rs`
 
@@ -215,44 +231,48 @@ Mirror the native backend logic:
 
 ### 3.4 Closure captures — retain in C backend
 
-Currently line ~1126-1128, closure captures are shallow-copied:
+Closure captures are stored in an `ori_alloc`-allocated environment. Managed
+captures are registered as edges from the environment to the captured value, and
+the closure object registers an edge to its environment:
 
 ```c
 env_tmp->cap_name = cap_name;
+ori_arc_register_edge(env_tmp, cap_name_child);
+closure->env_ptr = env_tmp;
+ori_arc_register_edge(closure, env_tmp);
 ```
 
-Add retain for managed captures:
-
-```c
-env_tmp->cap_name = cap_name;
-ori_arc_retain(cap_name);  // if managed
-```
-
-And add a destructor for the env struct that releases all managed captures.
+This keeps managed captures visible to the inline ARC graph collector.
 
 ### 3.5 Add `ori_closure_t` destructor
 
-When freeing a closure, release `env_ptr` if non-null (calling the env struct's destructor).
+The C backend currently models closure ownership through registered ARC edges
+instead of a type-specific destructor. A future destructor table can still make
+cleanup more explicit for allocation shapes that are not represented in the
+registered graph.
 
 ---
 
-## Phase 4: Cycle Detection (✅ Completed)
+## Phase 4: Cycle Detection (Implemented for Native and C Inline Graphs)
 
 **File:** `compiler/crates/ori-runtime/src/lib.rs`
 
 ### 4.1 Implement `ori_arc_collect_cycles`
 
-For now, a simple mark-and-sweep or deferred cycle detection is acceptable. Options:
+The native runtime and C backend inline runtime keep a registry of managed
+allocations and compiler-declared strong edges. `ori_arc_collect_cycles()` uses
+trial deletion over that graph:
 
-**Option A (simple):** Keep a global registry of all managed allocations. Periodically scan for cycles using a mark-and-sweep pass. This requires a stop-the-world pause.
+- subtract registered internal references from each object's refcount;
+- mark objects that still have external references;
+- reclaim unmarked objects and remove their registered edges.
 
-**Option B (deferred):** Do nothing for now. Cycle detection can be added later. Most Ori programs will not create reference cycles (no mutable shared state by default).
-
-**Recommendation:** Start with Option B. The `ori_arc_collect_cycles` stub returning 0 is fine for initial implementation. Add cycle detection in a follow-up.
+The debug C backend collector is separate from the native runtime collector, but
+uses the same registered-edge model for generated C.
 
 ---
 
-## Phase 5: Testing (✅ Completed)
+## Phase 5: Testing (Partial)
 
 ### 5.1 Unit tests for runtime
 
@@ -303,11 +323,14 @@ Run compiled programs under Valgrind or with `-fsanitize=leak` to verify zero le
 | Phase 1: Runtime header + retain/release | Medium | None |
 | Phase 1.5: Type-specific destructors | Large | Phase 1 |
 | Phase 2: Native backend allocation changes | Medium | Phase 1, 1.5 |
-| Phase 3: C backend ARC support | Large | Phase 1, 1.5 |
-| Phase 4: Cycle detection | Deferred | — |
+| Phase 3: C backend ARC support | Implemented for inline graph paths | Phase 1, 1.5 |
+| Phase 4: Cycle detection | Implemented for native runtime and C inline graph | Phase 1 |
 | Phase 5: Testing | Medium | Phase 1-3 |
 
-**Recommended MVP:** Phase 1 + Phase 2 (native backend only) + basic String/List destructors. This covers the most common use cases and eliminates leaks for the primary backend.
+**Recommended MVP status:** Phase 1, the native backend ARC path, and the C
+backend inline graph path are implemented. Remaining ARC hardening should focus
+on type-specific destructors and allocation shapes that still do not expose all
+nested managed ownership through registered edges.
 
 ---
 

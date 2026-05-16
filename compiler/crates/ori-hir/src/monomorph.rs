@@ -192,11 +192,28 @@ fn infer_substitution(template: &Ty, actual: &Ty, subst: &mut HashMap<u32, Ty>) 
         | (Ty::List(t), Ty::List(a))
         | (Ty::Set(t), Ty::Set(a))
         | (Ty::Range(t), Ty::Range(a))
-        | (Ty::Lazy(t), Ty::Lazy(a)) => infer_substitution(t, a, subst),
+        | (Ty::Lazy(t), Ty::Lazy(a))
+        | (Ty::Future(t), Ty::Future(a))
+        | (Ty::TaskJob(t), Ty::TaskJob(a))
+        | (Ty::Channel(t), Ty::Channel(a)) => infer_substitution(t, a, subst),
         (Ty::Result(ok_t, err_t), Ty::Result(ok_a, err_a))
         | (Ty::Map(ok_t, err_t), Ty::Map(ok_a, err_a)) => {
             infer_substitution(ok_t, ok_a, subst);
             infer_substitution(err_t, err_a, subst);
+        }
+        (
+            Ty::Opaque {
+                kind: kind_t,
+                args: args_t,
+            },
+            Ty::Opaque {
+                kind: kind_a,
+                args: args_a,
+            },
+        ) if kind_t == kind_a && args_t.len() == args_a.len() => {
+            for (arg_t, arg_a) in args_t.iter().zip(args_a) {
+                infer_substitution(arg_t, arg_a, subst);
+            }
         }
         (Ty::Tuple(items_t), Ty::Tuple(items_a)) if items_t.len() == items_a.len() => {
             for (item_t, item_a) in items_t.iter().zip(items_a) {
@@ -378,7 +395,8 @@ fn rewrite_expr_calls(expr: &mut HirExpr, state: &mut MonoState) {
         HirExprKind::Some_(inner)
         | HirExprKind::Ok_(inner)
         | HirExprKind::Err_(inner)
-        | HirExprKind::Propagate(inner) => rewrite_expr_calls(inner, state),
+        | HirExprKind::Propagate(inner)
+        | HirExprKind::Await(inner) => rewrite_expr_calls(inner, state),
         HirExprKind::IfExpr { cond, then, else_ } => {
             rewrite_expr_calls(cond, state);
             rewrite_expr_calls(then, state);
@@ -414,7 +432,6 @@ fn rewrite_expr_calls(expr: &mut HirExpr, state: &mut MonoState) {
         | HirExprKind::BytesLit(_)
         | HirExprKind::Unit
         | HirExprKind::Var(_)
-        | HirExprKind::GlobalConst(_)
         | HirExprKind::None_
         | HirExprKind::IsCheck { .. }
         | HirExprKind::Closure { .. } => {}
@@ -622,7 +639,8 @@ fn substitute_expr(expr: &mut HirExpr, subst: &HashMap<u32, Ty>) {
         HirExprKind::Some_(inner)
         | HirExprKind::Ok_(inner)
         | HirExprKind::Err_(inner)
-        | HirExprKind::Propagate(inner) => substitute_expr(inner, subst),
+        | HirExprKind::Propagate(inner)
+        | HirExprKind::Await(inner) => substitute_expr(inner, subst),
         HirExprKind::IfExpr { cond, then, else_ } => {
             substitute_expr(cond, subst);
             substitute_expr(then, subst);
@@ -664,7 +682,6 @@ fn substitute_expr(expr: &mut HirExpr, subst: &HashMap<u32, Ty>) {
         | HirExprKind::BytesLit(_)
         | HirExprKind::Unit
         | HirExprKind::Var(_)
-        | HirExprKind::GlobalConst(_)
         | HirExprKind::None_ => {}
         HirExprKind::Closure { captures, .. } => {
             for capture in captures {
@@ -693,6 +710,13 @@ fn substitute_ty(ty: &Ty, subst: &HashMap<u32, Ty>) -> Ty {
         Ty::Set(inner) => Ty::Set(Box::new(substitute_ty(inner, subst))),
         Ty::Range(inner) => Ty::Range(Box::new(substitute_ty(inner, subst))),
         Ty::Lazy(inner) => Ty::Lazy(Box::new(substitute_ty(inner, subst))),
+        Ty::Future(inner) => Ty::Future(Box::new(substitute_ty(inner, subst))),
+        Ty::TaskJob(inner) => Ty::TaskJob(Box::new(substitute_ty(inner, subst))),
+        Ty::Channel(inner) => Ty::Channel(Box::new(substitute_ty(inner, subst))),
+        Ty::Opaque { kind, args } => Ty::Opaque {
+            kind: *kind,
+            args: args.iter().map(|arg| substitute_ty(arg, subst)).collect(),
+        },
         Ty::Tuple(items) => Ty::Tuple(
             items
                 .iter()
@@ -879,7 +903,8 @@ fn expr_has_generic_param(expr: &HirExpr) -> bool {
             HirExprKind::Some_(inner)
             | HirExprKind::Ok_(inner)
             | HirExprKind::Err_(inner)
-            | HirExprKind::Propagate(inner) => expr_has_generic_param(inner),
+            | HirExprKind::Propagate(inner)
+            | HirExprKind::Await(inner) => expr_has_generic_param(inner),
             HirExprKind::IfExpr { cond, then, else_ } => {
                 expr_has_generic_param(cond)
                     || expr_has_generic_param(then)
@@ -916,7 +941,6 @@ fn expr_has_generic_param(expr: &HirExpr) -> bool {
             | HirExprKind::BytesLit(_)
             | HirExprKind::Unit
             | HirExprKind::Var(_)
-            | HirExprKind::GlobalConst(_)
             | HirExprKind::None_ => false,
             HirExprKind::Closure { captures, .. } => captures
                 .iter()
@@ -932,10 +956,14 @@ fn ty_has_generic_param(ty: &Ty) -> bool {
         | Ty::List(inner)
         | Ty::Set(inner)
         | Ty::Range(inner)
-        | Ty::Lazy(inner) => ty_has_generic_param(inner),
+        | Ty::Lazy(inner)
+        | Ty::Future(inner)
+        | Ty::TaskJob(inner)
+        | Ty::Channel(inner) => ty_has_generic_param(inner),
         Ty::Result(ok, err) | Ty::Map(ok, err) => {
             ty_has_generic_param(ok) || ty_has_generic_param(err)
         }
+        Ty::Opaque { args, .. } => args.iter().any(ty_has_generic_param),
         Ty::Tuple(items) => items.iter().any(ty_has_generic_param),
         Ty::Func { params, ret } => {
             params.iter().any(ty_has_generic_param) || ty_has_generic_param(ret)

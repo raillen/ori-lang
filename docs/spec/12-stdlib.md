@@ -15,13 +15,50 @@ Stdlib modules are imported explicitly:
 ```ori
 import ori.io as io
 import ori.fs as fs
-import ori.iter as iter
 ```
 
 The stdlib is small and layered:
 - **Core types** (`optional`, `result`, `list`, etc.) — always available, no import.
 - **Foundation modules** — general-purpose utilities.
 - **Domain modules** — specific areas (networking, JSON, etc.).
+
+---
+
+## Current Implementation Status
+
+Implemented and importable today:
+- `ori.core`
+- `ori.io`
+- `ori.fs`
+- `ori.files` compatibility alias
+- `ori.string`
+- `ori.bytes`
+- `ori.list`
+- `ori.map`
+- `ori.set`
+- `ori.math`
+- `ori.convert`
+- `ori.mem`
+- `ori.time`
+- `ori.format`
+- `ori.os`
+- `ori.random`
+- `ori.iter`
+- `ori.lazy`
+- `ori.concurrent`
+- `ori.task`
+- `ori.channel`
+- `ori.atomic`
+- `ori.Error`
+- `ori.json`
+
+Partially importable modules:
+- `ori.test`
+
+No stdlib module listed above is intentionally blocked at import time. Importing
+a planned future module is a compile-time error with
+`bind.stdlib_module_unavailable`. Importing an unknown `ori.*` module is a
+compile-time error with `bind.stdlib_module_unknown`.
 
 ---
 
@@ -33,23 +70,57 @@ No import required. These types and functions are built into the language.
 
 `bool`, `int`, `int8`–`int64`, `u8`–`u64`, `float`, `float32`–`float64`,
 `string`, `bytes`, `void`, `list<T>`, `map<K,V>`, `set<T>`, `optional<T>`,
-`result<T,E>`, `range<T>`, `lazy<T>`, `any<Trait>`, `tuple<...>`
+`result<T,E>`, `range<T>`, `lazy<T>`, `future<T>`, `any<Trait>`,
+`tuple<...>`
+
+Current collection limit:
+
+- `map` keys currently support `int`, `string`, or a user-defined type that
+  implements both `ori.core.Hashable` and `ori.core.Equatable`.
+- `set` elements currently support `int`, `string`, or a user-defined type that
+  implements both `ori.core.Hashable` and `ori.core.Equatable`.
+- The checker rejects unsupported map keys and set elements with
+  `type.collection_hash_unsupported`.
+
+`lazy<T>` is available through `lazy.once` and `lazy.force`.
+
+```ori
+const delayed: lazy<int> = lazy.once(do() => compute())
+const value: int = lazy.force(delayed)
+```
 
 ### Built-in Functions
 
 ```ori
-len(collection)              -- int: length of list, map, set, string, bytes
-string(value)                -- string: convert any Displayable value (calls to_string())
-int(value)                   -- int: convert float or numeric string to int
-float(value)                 -- float: convert int or numeric string to float
-u8(value)                    -- u8: explicit narrowing conversion
--- ... all numeric conversions follow the same pattern
+len(text: string)            -- int: byte length of a string
+string(value: int)           -- string: convert an integer to text
+string(value: float)         -- string: convert a float to text
+string(value: bool)          -- string: convert a boolean to text
+int(value)                   -- int: explicit numeric conversion where supported
+float(value)                 -- float: explicit numeric conversion where supported
+u8(value)                    -- u8: explicit narrowing conversion where supported
 ```
+
+Collection and byte lengths are exposed through their modules or method-call
+syntax, for example `ori.list.len(values)` and `bytes.len(data)`.
+
+For diagnostics with messages, use `ori.string.parse_int` and
+`ori.string.parse_float`. The older `ori.convert.string_to_int` and
+`ori.convert.string_to_float` helpers return `optional<T>`.
 
 ### Built-in Traits (in `ori.core`)
 
-`Displayable`, `Equatable`, `Comparable`, `Hashable`, `Disposable`,
-`Iterable<Item>`, `Default`, `From<Other>`, `Error`, `Cloneable`
+`Displayable`, `Addable`, `Subtractable`, `Equatable`, `Comparable`,
+`Hashable`, `Disposable`, `Iterable`, `Default`, `Error`, `Cloneable`,
+`Transferable`
+
+Status: these names are registered as real `ori.core` traits. `Disposable`
+is enforced by `using`. `Transferable` is enforced for values that cross task
+or channel boundaries. `Addable`, `Subtractable`, `Equatable`, and
+`Comparable` are used by operator overloading for user-defined concrete types.
+`Iterable` is recognized by `for` when the implementation exposes
+`mut func next() -> optional<T>`. Other trait-driven behaviors, such as broad
+`Displayable` conversion, are planned rather than complete.
 
 ---
 
@@ -58,11 +129,11 @@ u8(value)                    -- u8: explicit narrowing conversion
 ```ori
 import ori.io as io
 
-io.print(value: any<Displayable>)                    -> result<void, ori.Error>
-io.print(value: any<Displayable>, to: ori.io.Writer) -> result<void, ori.Error>
-io.read_line()                                       -> result<string, ori.Error>
-io.write(text: string)                               -> result<void, ori.Error>
-io.write(text: string, to: ori.io.Writer)            -> result<void, ori.Error>
+io.print(value: string)                              -> void
+io.println(value: string)                            -> void
+io.eprint(value: string)                             -> void
+io.eprintln(value: string)                           -> void
+io.read_line()                                       -> string
 
 -- Standard writers
 ori.io.stdout: ori.io.Writer
@@ -76,18 +147,36 @@ ori.io.stderr: ori.io.Writer
 ```ori
 import ori.fs as fs
 
-fs.read_text(path: string)             -> result<string, ori.fs.Error>
-fs.read_bytes(path: string)            -> result<bytes, ori.fs.Error>
-fs.write_text(path: string, content: string) -> result<void, ori.fs.Error>
-fs.write_bytes(path: string, data: bytes)    -> result<void, ori.fs.Error>
+fs.read_text(path: string)             -> result<string, string>
+fs.read_text_async(path: string)       -> future<result<string, string>>
+fs.write_text(path: string, content: string) -> result<string, string>
+fs.write_text_async(path: string, content: string) -> future<result<string, string>>
+fs.read_bytes(path: string)            -> result<bytes, string>
+fs.write_bytes(path: string, content: bytes) -> result<string, string>
+fs.read_all(path: string)              -> result<string, string>
+fs.append_text(path: string, content: string) -> bool
 fs.exists(path: string)                -> bool
-fs.delete(path: string)                -> result<void, ori.fs.Error>
-fs.list_dir(path: string)              -> result<list<string>, ori.fs.Error>
-fs.open_read(path: string)             -> result<ori.fs.File, ori.fs.Error>
-fs.open_write(path: string)            -> result<ori.fs.File, ori.fs.Error>
-fs.read_all(file: ori.fs.File)         -> result<string, ori.fs.Error>
+fs.delete(path: string)                -> bool
+fs.list_dir(path: string)              -> result<list<string>, string>
+fs.create_dir(path: string)            -> bool
+fs.is_file(path: string)               -> bool
+fs.is_dir(path: string)                -> bool
+fs.copy(from: string, to: string)      -> bool
+fs.rename(from: string, to: string)    -> bool
 
--- ori.fs.File implements Disposable; use with `using`
+`ori.fs` is the canonical module name. `ori.files` is accepted as a
+compatibility alias for the same functions.
+
+The async variants complete on the native runtime and return the same
+`result<string,string>` shape after `await`.
+
+`read_all(path)` is a text convenience alias for `read_text(path)`.
+`read_bytes(path)` returns the current `bytes` representation. Because the
+current `bytes` ABI is NUL-terminated, files containing `0x00` return an error
+until `bytes` gains explicit length storage.
+
+Planned but not implemented in the current compiler/runtime: `open_read`,
+`open_write`, and `ori.fs.File`.
 ```
 
 ---
@@ -109,13 +198,31 @@ string.trim_end(s: string)                    -> string
 string.to_upper(s: string)                    -> string
 string.to_lower(s: string)                    -> string
 string.replace(s: string, from: string, to: string) -> string
-string.slice(s: string, range: range<int>)    -> string
+string.slice(s: string, start: int, end: int) -> string
 string.chars(s: string)                       -> list<string>
-string.to_bytes(s: string)                    -> bytes
-string.from_bytes(b: bytes)                   -> result<string, string>
 string.parse_int(s: string)                   -> result<int, string>
 string.parse_float(s: string)                 -> result<float, string>
+string.to_bytes(s: string)                    -> bytes
+string.from_bytes(b: bytes)                   -> result<string, string>
 ```
+
+Invalid input returns `error(message)`. The `ori.convert` parsing helpers are
+kept for optional-style parsing where invalid input should become `none`.
+
+## `ori.convert` - Type Conversion
+
+```ori
+import ori.convert as conv
+
+conv.float_to_string(n: float)        -> string
+conv.bool_to_string(b: bool)          -> string
+conv.string_to_int(s: string)         -> optional<int>
+conv.string_to_float(s: string)       -> optional<float>
+```
+
+Compatibility aliases without the `ori.convert` module prefix are accepted
+today (`float_to_string`, `bool_to_string`, `string_to_int`,
+`string_to_float`), but new code should prefer the explicit module form.
 
 ---
 
@@ -126,7 +233,7 @@ import ori.bytes as bytes
 
 bytes.len(b: bytes)                          -> int
 bytes.concat(a: bytes, b: bytes)             -> bytes
-bytes.slice(b: bytes, range: range<int>)     -> bytes
+bytes.slice(b: bytes, start: int, end: int)  -> bytes
 bytes.to_hex(b: bytes)                       -> string
 bytes.from_hex(s: string)                    -> result<bytes, string>
 bytes.decode_utf8(b: bytes)                  -> result<string, string>
@@ -135,36 +242,267 @@ bytes.get(b: bytes, index: int)              -> u8
 
 ---
 
+## `ori.list`, `ori.map`, and `ori.set` - Collections
+
+The native runtime stores collection values as runtime handles. `map` keys and
+`set` elements currently support built-in hashable scalar values and
+user-defined values that satisfy the checker rules for `Hashable` and
+`Equatable`.
+
+```ori
+import ori.deque as deque
+import ori.doubly_linked_list as dll
+import ori.graph as graph
+import ori.hash_table as hash_table
+import ori.heap as heap
+import ori.linked_list as ll
+import ori.map as maps
+import ori.queue as queue
+import ori.set as sets
+import ori.stack as stack
+import ori.tree as tree
+
+deque.new<T>() -> deque.Deque<T>
+deque.push_front<T>(d: deque.Deque<T>, value: T) -> void
+deque.push_back<T>(d: deque.Deque<T>, value: T) -> void
+deque.pop_front<T>(d: deque.Deque<T>) -> optional<T>
+deque.pop_back<T>(d: deque.Deque<T>) -> optional<T>
+deque.front<T>(d: deque.Deque<T>) -> optional<T>
+deque.back<T>(d: deque.Deque<T>) -> optional<T>
+deque.len<T>(d: deque.Deque<T>) -> int
+deque.is_empty<T>(d: deque.Deque<T>) -> bool
+deque.clear<T>(d: deque.Deque<T>) -> void
+deque.to_list<T>(d: deque.Deque<T>) -> list<T>
+
+queue.new<T>() -> queue.Queue<T>
+queue.enqueue<T>(q: queue.Queue<T>, value: T) -> void
+queue.dequeue<T>(q: queue.Queue<T>) -> optional<T>
+queue.peek<T>(q: queue.Queue<T>) -> optional<T>
+queue.len<T>(q: queue.Queue<T>) -> int
+queue.is_empty<T>(q: queue.Queue<T>) -> bool
+queue.clear<T>(q: queue.Queue<T>) -> void
+queue.to_list<T>(q: queue.Queue<T>) -> list<T>
+
+stack.new<T>() -> stack.Stack<T>
+stack.push<T>(s: stack.Stack<T>, value: T) -> void
+stack.pop<T>(s: stack.Stack<T>) -> optional<T>
+stack.peek<T>(s: stack.Stack<T>) -> optional<T>
+stack.len<T>(s: stack.Stack<T>) -> int
+stack.is_empty<T>(s: stack.Stack<T>) -> bool
+stack.clear<T>(s: stack.Stack<T>) -> void
+stack.to_list<T>(s: stack.Stack<T>) -> list<T>
+
+ll.new<T>() -> ll.LinkedList<T>
+ll.push_front<T>(list: ll.LinkedList<T>, value: T) -> void
+ll.push_back<T>(list: ll.LinkedList<T>, value: T) -> void
+ll.pop_front<T>(list: ll.LinkedList<T>) -> optional<T>
+ll.front<T>(list: ll.LinkedList<T>) -> optional<T>
+ll.len<T>(list: ll.LinkedList<T>) -> int
+ll.is_empty<T>(list: ll.LinkedList<T>) -> bool
+ll.clear<T>(list: ll.LinkedList<T>) -> void
+ll.to_list<T>(list: ll.LinkedList<T>) -> list<T>
+
+dll.new<T>() -> dll.DoublyLinkedList<T>
+dll.push_front<T>(list: dll.DoublyLinkedList<T>, value: T) -> void
+dll.push_back<T>(list: dll.DoublyLinkedList<T>, value: T) -> void
+dll.pop_front<T>(list: dll.DoublyLinkedList<T>) -> optional<T>
+dll.pop_back<T>(list: dll.DoublyLinkedList<T>) -> optional<T>
+dll.front<T>(list: dll.DoublyLinkedList<T>) -> optional<T>
+dll.back<T>(list: dll.DoublyLinkedList<T>) -> optional<T>
+dll.len<T>(list: dll.DoublyLinkedList<T>) -> int
+dll.is_empty<T>(list: dll.DoublyLinkedList<T>) -> bool
+dll.clear<T>(list: dll.DoublyLinkedList<T>) -> void
+dll.to_list<T>(list: dll.DoublyLinkedList<T>) -> list<T>
+
+tree.new<T>(root: T) -> tree.Tree<T>
+tree.root<T>(t: tree.Tree<T>) -> tree.NodeId
+tree.value<T>(t: tree.Tree<T>, node: tree.NodeId) -> T
+tree.add_child<T>(t: tree.Tree<T>, parent: tree.NodeId, value: T) -> tree.NodeId
+tree.children<T>(t: tree.Tree<T>, node: tree.NodeId) -> list<tree.NodeId>
+tree.parent<T>(t: tree.Tree<T>, node: tree.NodeId) -> optional<tree.NodeId>
+tree.remove_subtree<T>(t: tree.Tree<T>, node: tree.NodeId) -> void
+tree.len<T>(t: tree.Tree<T>) -> int
+tree.depth<T>(t: tree.Tree<T>, node: tree.NodeId) -> int
+tree.pre_order<T>(t: tree.Tree<T>) -> list<tree.NodeId>
+tree.post_order<T>(t: tree.Tree<T>) -> list<tree.NodeId>
+tree.breadth_first<T>(t: tree.Tree<T>) -> list<tree.NodeId>
+
+hash_table.new<K, V>() -> hash_table.HashTable<K, V>
+hash_table.with_capacity<K, V>(capacity: int) -> hash_table.HashTable<K, V>
+hash_table.set<K, V>(table: hash_table.HashTable<K, V>, key: K, value: V) -> void
+hash_table.get<K, V>(table: hash_table.HashTable<K, V>, key: K) -> optional<V>
+hash_table.remove<K, V>(table: hash_table.HashTable<K, V>, key: K) -> optional<V>
+hash_table.contains<K, V>(table: hash_table.HashTable<K, V>, key: K) -> bool
+hash_table.len<K, V>(table: hash_table.HashTable<K, V>) -> int
+hash_table.capacity<K, V>(table: hash_table.HashTable<K, V>) -> int
+hash_table.reserve<K, V>(table: hash_table.HashTable<K, V>, capacity: int) -> void
+hash_table.clear<K, V>(table: hash_table.HashTable<K, V>) -> void
+hash_table.keys<K, V>(table: hash_table.HashTable<K, V>) -> list<K>
+hash_table.values<K, V>(table: hash_table.HashTable<K, V>) -> list<V>
+hash_table.entries<K, V>(table: hash_table.HashTable<K, V>) -> list<tuple<K, V>>
+
+graph.new<N>(directed: bool) -> graph.Graph<N>
+graph.add_node<N>(g: graph.Graph<N>, node: N) -> void
+graph.remove_node<N>(g: graph.Graph<N>, node: N) -> void
+graph.add_edge<N>(g: graph.Graph<N>, from: N, to: N) -> void
+graph.remove_edge<N>(g: graph.Graph<N>, from: N, to: N) -> void
+graph.has_node<N>(g: graph.Graph<N>, node: N) -> bool
+graph.has_edge<N>(g: graph.Graph<N>, from: N, to: N) -> bool
+graph.neighbors<N>(g: graph.Graph<N>, node: N) -> list<N>
+graph.nodes<N>(g: graph.Graph<N>) -> list<N>
+graph.edges<N>(g: graph.Graph<N>) -> list<tuple<N, N>>
+graph.bfs<N>(g: graph.Graph<N>, start: N) -> list<N>
+graph.dfs<N>(g: graph.Graph<N>, start: N) -> list<N>
+graph.topological_sort<N>(g: graph.Graph<N>) -> list<N>
+
+heap.new<T>() -> heap.Heap<T>
+heap.push<T>(h: heap.Heap<T>, value: T) -> void
+heap.pop<T>(h: heap.Heap<T>) -> optional<T>
+heap.peek<T>(h: heap.Heap<T>) -> optional<T>
+heap.len<T>(h: heap.Heap<T>) -> int
+heap.is_empty<T>(h: heap.Heap<T>) -> bool
+
+maps.new<K, V>() -> map<K, V>
+maps.set<K, V>(m: map<K, V>, key: K, value: V) -> void
+maps.get<K, V>(m: map<K, V>, key: K) -> V
+maps.contains<K, V>(m: map<K, V>, key: K) -> bool
+maps.remove<K, V>(m: map<K, V>, key: K) -> void
+maps.len<K, V>(m: map<K, V>) -> int
+maps.capacity<K, V>(m: map<K, V>) -> int
+maps.reserve<K, V>(m: map<K, V>, capacity: int) -> void
+maps.clear<K, V>(m: map<K, V>) -> void
+maps.keys<K, V>(m: map<K, V>) -> list<K>
+maps.values<K, V>(m: map<K, V>) -> list<V>
+maps.entries<K, V>(m: map<K, V>) -> list<tuple<K, V>>
+
+sets.new<T>() -> set<T>
+sets.add<T>(s: set<T>, value: T) -> void
+sets.contains<T>(s: set<T>, value: T) -> bool
+sets.remove<T>(s: set<T>, value: T) -> void
+sets.len<T>(s: set<T>) -> int
+sets.capacity<T>(s: set<T>) -> int
+sets.reserve<T>(s: set<T>, capacity: int) -> void
+sets.clear<T>(s: set<T>) -> void
+sets.union<T>(a: set<T>, b: set<T>) -> set<T>
+sets.intersection<T>(a: set<T>, b: set<T>) -> set<T>
+sets.difference<T>(a: set<T>, b: set<T>) -> set<T>
+```
+
+`reserve(collection, capacity)` guarantees at least that many dense slots.
+`clear(collection)` removes all entries and keeps the allocated capacity for
+reuse.
+`maps.get(m, key)` keeps the v1 direct-value contract for compatibility with
+existing code. Use `maps.contains(m, key)` before `maps.get(...)` when absence
+is possible, or use `hash_table.get(...)` when the API should return
+`optional<V>`.
+`deque`, `queue`, `stack`, `linked_list`, and `doubly_linked_list` are distinct
+opaque stdlib types. Internally they currently reuse the native list handle,
+but a `queue.Queue<T>` is not assignable to `list<T>` and cannot be passed to
+`ori.list` helpers directly. Use `to_list` when a snapshot list is needed.
+Linked-list modules do not expose node pointers in v1.
+
+`tree.Tree<T>` is an opaque arena tree handle. `tree.NodeId` identifies a node
+inside one tree. `tree.children` and traversal functions return snapshot lists
+of node ids. `tree.remove_subtree` removes the selected node and all children;
+using a removed or foreign node id is a runtime error with the message
+`ori tree node id is invalid`. `tree.OrderedTree<T>` is not part of v1; ordered
+insert/search/remove remain reserved until the Comparable contract is stable.
+
+`hash_table.HashTable<K,V>` is a public advanced API over the same native hash
+engine used by `map<K,V>`. It exists for explicit capacity control and for
+`get/remove` APIs that return `optional<V>`. Keys follow the same rule as
+`map`: use `int`, `string`, or a user type that implements both
+`ori.core.Hashable` and `ori.core.Equatable`.
+
+`graph.Graph<N>` is an opaque adjacency-list graph. `graph.new(true)` creates a
+directed graph; `graph.new(false)` creates an undirected graph. Edges are simple
+`tuple<N,N>` pairs; weights and shortest path algorithms are reserved for a
+future module revision. `graph.add_edge` ensures both endpoint nodes exist.
+`graph.topological_sort` returns an empty list when the graph is undirected or
+when a directed cycle prevents a full topological order.
+
+`heap.Heap<T>` is an opaque min-heap. The smallest value according to the
+element ordering is returned first. The v1 runtime supports `int`, `string`,
+and user-defined types that implement `ori.core.Comparable`. Empty `pop` and
+`peek` calls return `none`. Custom closure comparators are reserved for a later
+phase because the public closure-comparator ABI is intentionally separate from
+the heap API.
+
+These opaque collection handles are `Transferable` when their element type is
+`Transferable`. They do not implement structural `Equatable` or `Hashable` in
+v1. Direct `for` iteration is intentionally reserved for `list`, `set`, `map`,
+`range`, `string`, and `bytes`; iterate over `collection.to_list(value)` for
+these collection modules.
+
+---
+
 ## `ori.iter` — Functional Collection Operations
 
-Generic: works for any `list<T>` with the appropriate element type.
+Status: implemented for the current eager list ABI. The module is importable
+today. The checker accepts generic list contracts and the native runtime stores
+list items as word-sized values, so scalar values and runtime handles such as
+strings, tuples, lists, maps, and user values can flow through the same
+operations.
+
+The C backend keeps the original `list<int>` coverage for the full iterator
+surface, with additional string-specialized `sort`, `unique`, and `group_by`
+helpers.
 
 ```ori
 import ori.iter as iter
 
 iter.map<T, R>(values: list<T>, mapper: func(T) -> R) -> list<R>
 iter.filter<T>(values: list<T>, predicate: func(T) -> bool) -> list<T>
-iter.reduce<T, R>(values: list<T>, initial: R, reducer: func(R, T) -> R) -> R
-iter.flat_map<T, R>(values: list<T>, mapper: func(T) -> list<R>) -> list<R>
-iter.find<T>(values: list<T>, predicate: func(T) -> bool) -> optional<T>
 iter.any<T>(values: list<T>, predicate: func(T) -> bool) -> bool
 iter.all<T>(values: list<T>, predicate: func(T) -> bool) -> bool
 iter.count_where<T>(values: list<T>, predicate: func(T) -> bool) -> int
-iter.zip<A, B>(a: list<A>, b: list<B>) -> list<tuple<A, B>>
-iter.flatten<T>(nested: list<list<T>>) -> list<T>
 iter.take<T>(values: list<T>, n: int) -> list<T>
 iter.skip<T>(values: list<T>, n: int) -> list<T>
-iter.partition<T>(values: list<T>, predicate: func(T) -> bool) -> tuple<list<T>, list<T>>
-iter.sort<T>(values: list<T>) -> list<T> where T is Comparable
-iter.sort_by<T>(values: list<T>, compare: func(T, T) -> Order) -> list<T>
 iter.reverse<T>(values: list<T>) -> list<T>
+iter.reduce<T, R>(values: list<T>, initial: R, reducer: func(R, T) -> R) -> R
+iter.find<T>(values: list<T>, predicate: func(T) -> bool) -> optional<T>
+iter.flat_map<T, R>(values: list<T>, mapper: func(T) -> list<R>) -> list<R>
+iter.sort<T>(values: list<T>) -> list<T> where T is Comparable
+iter.sort_by<T>(values: list<T>, compare: func(T, T) -> int) -> list<T>
 iter.unique<T>(values: list<T>) -> list<T> where T is Equatable
+iter.zip<A, B>(a: list<A>, b: list<B>) -> list<tuple<A, B>>
+iter.partition<T>(values: list<T>, predicate: func(T) -> bool) -> tuple<list<T>, list<T>>
 iter.group_by<T, K>(values: list<T>, key: func(T) -> K) -> map<K, list<T>>
     where K is Hashable and K is Equatable
+iter.flatten<T>(nested: list<list<T>>) -> list<T>
 ```
 
 All `iter.*` functions are **eager**: they return a new `list<T>` immediately.
-For lazy evaluation, wrap with `lazy<T>`.
+Lazy evaluation is explicit through `lazy<T>`, `lazy.once`, and `lazy.force`.
+
+Current implementation status:
+
+- `iter.map(values, mapper)`, `iter.filter(values, predicate)`,
+  `iter.any(values, predicate)`, `iter.all(values, predicate)`, and
+  `iter.count_where(values, predicate)` use the current closure ABI and keep
+  the source element type.
+- `iter.take(values, n)`, `iter.skip(values, n)`, and `iter.reverse(values)`
+  return new lists with the same element type.
+- `iter.reduce(values, initial, reducer)` folds from left to right.
+- `iter.find(values, predicate)` returns `some(value)` for the first matching
+  value, or `none`.
+- `iter.flat_map(values, mapper)` concatenates returned lists eagerly.
+- `iter.sort(values)` has native int and string ordering coverage.
+- `iter.sort_by(values, compare)` uses an `int` comparator: negative or zero
+  keeps `a` before `b`, positive places `a` after `b`.
+- `iter.unique(values)` keeps the first occurrence of each value. Native string
+  uniqueness compares string contents.
+- `iter.zip(a, b)` returns a new list of pairs and stops at the shorter input
+  list.
+- `iter.partition(values, predicate)` returns two new lists: matching values
+  first, non-matching values second.
+- `iter.group_by(values, key)` appends each input value to the list stored under
+  its computed key. Native runtime covers `int` and `string` keys.
+- `iter.flatten(nested)` flattens one level of `list<list<int>>` into a new
+  `list<T>`.
+- Native tests cover the non-`int` path with `list<string>`,
+  `map<string, list<string>>`, `optional<string>`, `tuple<string, int>`, and
+  `list<list<string>>`.
 
 ---
 
@@ -176,19 +514,20 @@ import ori.math as math
 math.abs(x: int) -> int
 math.abs(x: float) -> float
 math.min(a: int, b: int) -> int
-math.max(a: int, b: int) -> int
 math.min(a: float, b: float) -> float
+math.max(a: int, b: int) -> int
 math.max(a: float, b: float) -> float
 math.clamp(value: int, min: int, max: int) -> int
-math.floor(x: float) -> float
-math.ceil(x: float) -> float
-math.round(x: float) -> float
+math.floor(x: float) -> int
+math.ceil(x: float) -> int
+math.round(x: float) -> int
 math.sqrt(x: float where x >= 0.0) -> float
 math.pow(base: float, exp: float) -> float
 math.log(x: float where x > 0.0) -> float
 math.log2(x: float where x > 0.0) -> float
 math.sin(x: float) -> float
 math.cos(x: float) -> float
+math.tan(x: float) -> float
 math.pi: float
 math.e: float
 math.infinity: float
@@ -197,38 +536,62 @@ math.is_nan(x: float) -> bool
 math.is_infinite(x: float) -> bool
 ```
 
----
+Mixed integer/float calls are not implicitly widened. Use `float(value)` when a
+call should use the float overload.
 
-## `ori.format` — Presentation Formatting
+## `ori.mem` - Memory Inspection
 
 ```ori
-import ori.format as format
+import ori.mem as mem
 
-format.number(value: float, decimals: int = 0) -> string
-format.percent(value: float, decimals: int = 0) -> string
-format.date(millis: int, style: string = "iso") -> string
-format.datetime(millis: int, style: string = "short", locale: string = "") -> string
-format.hex(value: int) -> string
-format.binary(value: int) -> string
-format.bytes_size(bytes: int, style: ori.format.BytesStyle = .Decimal) -> string
-
-enum BytesStyle
-    Binary     -- KiB, MiB, GiB
-    Decimal    -- KB, MB, GB
-end
+mem.size_of(value) -> int
+mem.align_of(value) -> int
 ```
 
----
+Both functions return compile-time constants for the static type of `value`.
+The current parser does not support type-argument call syntax such as
+`size_of<T>()`; use a value as the type witness.
 
-## `ori.time` — Time
+## `ori.time` - Time
 
 ```ori
 import ori.time as time
 
-time.now() -> int               -- Unix timestamp in milliseconds
-time.sleep(millis: int)         -- block current thread
+time.now() -> int
+time.sleep(millis: int) -> void
 time.duration_ms(start: int, end: int) -> int
 ```
+
+`time.now()` returns the Unix timestamp in milliseconds. `time.sleep(0)` is
+valid and returns immediately.
+
+## `ori.format` - Presentation Formatting
+
+```ori
+import ori.format as format
+
+format.number(value: float, decimals: int) -> string
+format.percent(value: float, decimals: int) -> string
+format.hex(value: int) -> string
+format.binary(value: int) -> string
+format.date(millis: int, style: string) -> string
+format.datetime(millis: int, style: string, locale: string) -> string
+format.bytes_size(bytes: int, style: string) -> string
+```
+
+Current status:
+
+- `decimals` is explicit because stdlib default arguments are not supported yet.
+- `date` and `datetime` currently format UTC ISO output.
+- `bytes_size` accepts `"binary"` for KiB/MiB units. Other style values use
+  decimal KB/MB units.
+
+## Additional Module Contracts
+
+The modules below carry their own implementation notes. Some are implemented
+only for a subset of functions or backend targets, and future modules may use
+`bind.stdlib_module_unavailable` while they are documented but intentionally
+blocked.
 
 ---
 
@@ -240,28 +603,221 @@ import ori.random as random
 random.int(min: int, max: int) -> int       -- inclusive range
 random.float(min: float, max: float) -> float
 random.bool() -> bool
-random.shuffle<T>(items: list<T>) -> list<T>
 random.choice<T>(items: list<T>) -> optional<T>
+random.shuffle<T>(items: list<T>) -> list<T>
 ```
+
+Current implementation status:
+
+- `random.int`, `random.float`, and `random.bool` are importable and available
+  in the native backend and the C backend.
+- `random.choice(items)` returns `some(value)` for a random item, or `none` for
+  an empty list.
+- `random.shuffle(items)` returns a new shuffled list with the same element
+  type.
+- If `min > max`, `random.int` and `random.float` swap the bounds before
+  generating the value.
+- `random.int(min, max)` uses an inclusive range.
+- `random.float(min, max)` returns a value inside the normalized range.
+- Native tests cover generic `choice<T>` and `shuffle<T>` for non-`int`
+  elements through the list/optional storage ABI.
+
+---
+
+## `ori.lazy` - Lazy Values
+
+Status: implemented. `lazy<T>` stores a zero-argument thunk and caches the
+computed value after the first force.
+
+```ori
+import ori.lazy as lz
+
+const delayed: lazy<int> = lz.once(do() => compute())
+const value: int = lz.force(delayed)
+```
+
+Functions:
+
+```ori
+lazy.once<T>(thunk: func() -> T) -> lazy<T>
+lazy.force<T>(value: lazy<T>) -> T
+```
+
+The shorthand `lazy.once(...)` and `lazy.force(...)` are also accepted without
+an import.
+
+---
+
+## Concurrency Foundation
+
+Status: implemented for the native backend. The C debug backend rejects these
+runtime calls with `backend.c_unsupported`.
+
+Values that cross a task or channel boundary must be `Transferable`.
+
+Currently transferable:
+
+- primitive scalar values;
+- `string` and `bytes`;
+- `list<T>`, `map<K, V>`, `set<T>`, `optional<T>`, `result<T, E>`, tuples,
+  `future<T>`, `task.Job<T>`, `channel.Channel<T>`, and the opaque collection
+  handles above when their contents are transferable;
+- structs when all fields are transferable;
+- enum values without payload tracking in the current resolver;
+- `atomic.AtomicInt` and the opaque task/channel error handles.
+
+Function values, lazy thunks, and `any<Trait>` values are not transferable by
+default. A closure passed to `task.spawn` also cannot capture a `var` binding.
+
+`ori.concurrent` is importable today as the umbrella module for this contract.
+Its concrete APIs currently live in `ori.task`, `ori.channel`, and
+`ori.atomic`.
+
+---
+
+## `ori.task` - Tasks and Futures
+
+Status: implemented in the native runtime for explicit task and future APIs.
+The runtime now supports pollable futures, private failed/cancelled states, a
+FIFO executor queue, continuation scheduling, and non-blocking timers.
+`async func` currently uses native state-machine lowering for the supported v1
+subset. The call returns a `future<T>` immediately, the generated frame is
+scheduled on the native executor, and supported `await` shapes suspend through
+`ori_future_poll` plus `ori_future_on_ready` instead of calling
+`task.block_on`.
+
+Async bodies outside the current subset fail with `backend.native_unsupported`
+before Cranelift. `task.block_on` stays available only as an explicit sync
+bridge.
+
+```ori
+import ori.task as task
+
+task.spawn<T>(work: func() -> T) -> task.Job<T>
+task.join<T>(job: task.Job<T>) -> result<T, task.JoinError>
+task.detach<T>(job: task.Job<T>) -> void
+task.block_on<T>(future: future<T>) -> T
+task.sleep(ms: int) -> future<void>
+```
+
+Rules:
+
+- `task.spawn` runs a no-argument function or closure on a native thread.
+- Captured values and the return value must satisfy `Transferable`.
+- `task.join` returns `success(value)` when the task finishes normally.
+- `task.join` returns `error(...)` when the job was already joined, missing, or
+  the native thread panicked. The error is an opaque `task.JoinError` value.
+- `task.detach` lets the native thread continue without requiring a join.
+- `task.sleep(ms)` creates a pending `future<void>` that becomes ready after
+  the requested delay. It uses the runtime timer thread and does not block the
+  executor queue.
+- `task.block_on` is the explicit sync bridge. It waits for a future, drains
+  queued executor continuations while waiting, and returns the stored value.
+
+Future runtime state:
+
+- `pending`: value is not ready yet;
+- `ready`: value is available;
+- `failed`: internal runtime failure state;
+- `cancelled`: internal cancellation state.
+
+Public cancellation APIs are not exposed yet. Until they are designed, user code
+cannot cancel a future directly. The current executor policy is a process-local
+FIFO queue with a separate runtime timer thread for delayed futures.
+
+Ownership rule: a future keeps its stored value alive until `block_on` observes
+it or until the future object is released. `task.sleep` produces
+`future<void>`. `async func f(...) -> T` produces `future<T>` immediately; in
+the state-machine path, the future becomes ready, failed, or cancelled when the
+generated async frame reaches its terminal state.
+
+---
+
+## `ori.channel` - Channels
+
+Status: implemented in the native runtime with real synchronization.
+
+```ori
+import ori.channel as channel
+
+channel.create<T>() -> channel.Channel<T>
+channel.send<T>(ch: channel.Channel<T>, value: T) -> result<void, channel.SendError>
+channel.receive<T>(ch: channel.Channel<T>) -> result<T, channel.ReceiveError>
+channel.close<T>(ch: channel.Channel<T>) -> void
+```
+
+Behavior:
+
+- `channel.create` creates an unbounded FIFO channel.
+- `channel.send` enqueues a transferable value, or returns `error(...)` when
+  the channel is closed.
+- `channel.receive` waits until a value is available, or returns `error(...)`
+  when the channel is closed and empty.
+- `channel.close` closes the channel and wakes waiting receivers.
+
+The error values are opaque handles: `channel.SendError` and
+`channel.ReceiveError`.
+
+---
+
+## `ori.atomic` - Atomic Integers
+
+Status: implemented in the native runtime.
+
+```ori
+import ori.atomic as atomic
+
+atomic.new(value: int) -> atomic.AtomicInt
+atomic.load(value: atomic.AtomicInt) -> int
+atomic.store(value: atomic.AtomicInt, next: int) -> void
+atomic.add(value: atomic.AtomicInt, delta: int) -> int
+```
+
+`atomic.add` returns the new value after the addition. Generic `Atomic<T>` is
+intentionally deferred until there is a concrete need.
 
 ---
 
 ## `ori.json` — JSON
 
+Status: implemented in the native runtime. `ori.json.Value` is currently an
+alias for `string`: it represents validated, canonical JSON text. This keeps
+the language/runtime ABI small while the richer structured JSON value type is
+still not part of the compiler.
+
 ```ori
 import ori.json as json
 
+type json.Value = string
+
 json.parse(text: string) -> result<ori.json.Value, string>
 json.stringify(value: ori.json.Value) -> string
-json.stringify(value: ori.json.Value, pretty: bool) -> string
+json.stringify_pretty(value: ori.json.Value) -> string
 ```
+
+Current behavior:
+
+- `json.parse(text)` returns `ok(canonical_json_text)` for valid JSON.
+- `json.parse(text)` returns `error("invalid json")` for invalid JSON.
+- `json.stringify(value)` canonicalizes valid JSON text. If the input is plain
+  text rather than valid JSON, it returns a quoted JSON string.
+- `json.stringify_pretty(value)` uses the same value rules as
+  `json.stringify`, but returns formatted JSON with indentation.
+- A structured JSON object/array API remains future work.
 
 ---
 
 ## `ori.test` — Testing
 
+Status: partially implemented. Test functions marked with `@test` can be run
+with `ori test <file-or-project>`. This command uses the native backend and the
+Rust `ori-runtime` static library.
+
+The `ori.test` module is importable today for basic assertion helpers.
+
 ```ori
 import ori.test as test
+import ori.task as task
 
 -- Test functions are marked with attr:
 @test
@@ -269,14 +825,28 @@ func test_addition()
     check 1 + 1 == 2
 end
 
+@test
+async func test_async_work()
+    await task.sleep(1)
+    test.assert(true, "async test should run")
+end
+
 -- Assertions:
-test.assert(condition: bool, message: string)
-test.assert_eq<T>(a: T, b: T) where T is Equatable and T is Displayable
-test.assert_ne<T>(a: T, b: T) where T is Equatable and T is Displayable
-test.fail(message: string)
+test.assert(condition: bool, message: string) -- implemented
+test.assert_eq<T>(a: T, b: T)                 -- implemented
+test.assert_ne<T>(a: T, b: T)                 -- implemented
+test.fail(message: string)                    -- implemented
 ```
 
-Run tests with `ori test`.
+`assert_eq` and `assert_ne` currently cover `int`, `bool`, `float`, `string`,
+and user values that pass the `ori.core.Equatable` trait gate. `check`
+statements also work inside `@test` functions. Async tests must have no
+parameters and must return `void`; the test runner waits for their returned
+future before recording the result.
+
+Native runtime coverage is canonical for standard-library behavior. The C
+backend is a debug/transpile backend with partial feature parity; it may reject
+standard-library features when generated C would not preserve Ori semantics.
 
 ---
 
@@ -293,26 +863,37 @@ os.platform() -> string          -- "linux", "windows", "macos"
 os.arch() -> string              -- "x86_64", "aarch64", etc.
 ```
 
+Current implementation notes:
+
+- `os.args()` returns the process argument vector as reported by the host. The
+  first item is the executable path/name when the platform provides it.
+- `os.env(name)` returns `some(value)` when the variable exists and `none`
+  otherwise.
+- `os.platform()` currently normalizes known targets to `"windows"`, `"linux"`,
+  `"macos"`, or `"unknown"`.
+- `os.arch()` currently normalizes known targets to `"x86_64"`, `"aarch64"`,
+  `"x86"`, `"arm"`, or `"unknown"`.
+
 ---
 
 ## `ori.Error` — Standard Error Type
 
-`ori.Error` is the standard error type for stdlib operations.
+Status: implemented base value type. `import ori.Error` is accepted. Prefer an
+alias when constructing the value, because `error(...)`/`Error(...)` are also
+result wrapper forms.
 
 ```ori
 struct ori.Error
+    code: string
     message: string
-    cause: optional<any<Error>>
 end
 
-implement Error for ori.Error
-    func message() -> string
-        return self.message
-    end
-    func cause() -> optional<any<Error>>
-        return self.cause
-    end
-end
+import ori.Error as StdError
+
+const err: StdError = StdError(code: "E_IO", message: "could not read file")
 ```
 
-Most `ori.*` functions that can fail return `result<T, ori.Error>`.
+Future `ori.*` functions that expose rich errors are expected to return
+`result<T, ori.Error>`. Cause chaining and full `ori.core.Error` trait-method
+integration are still planned. Current implemented filesystem and parse helpers
+still use `string` errors or `optional<T>` where documented above.

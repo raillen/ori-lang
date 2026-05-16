@@ -1,18 +1,23 @@
 use crate::hir::*;
 use ori_ast::common::Visibility;
-use ori_ast::expr::{Arg, ClosureBody, ClosureExpr, Expr, FStrPart};
+use ori_ast::expr::{Arg, BinaryOp, ClosureBody, ClosureExpr, Expr, FStrPart, UnaryOp};
 use ori_ast::item::{Item, SourceFile};
 use ori_ast::stmt::{Block, MatchCase, Stmt};
 use ori_diagnostics::{DiagnosticSink, FileId, Span};
+use ori_types::literal::{parse_float_literal, parse_int_literal};
 use ori_types::{
-    expand_ty_aliases, lower_type_with_aliases, DefId, DefKind, DefMap, FuncSig, ImplSig, ReExport,
-    TraitSig, TypeAliasSig, Ty,
+    expand_ty_aliases, lower_type_with_aliases, DefId, DefKind, DefMap, EnumSig, FuncSig, ImplSig,
+    OpaqueTy, ReExport, StructSig, TraitSig, Ty, TypeAliasSig, ValueSig,
 };
 use smol_str::SmolStr;
 use std::collections::{HashMap, HashSet};
 
 /// Maps an Ori stdlib qualified path to the C function name used at link time.
 fn stdlib_c_name(ori_path: &str) -> Option<&'static str> {
+    if let Some(name) = ori_types::stdlib::stdlib_runtime_symbol(ori_path) {
+        return Some(name);
+    }
+
     match ori_path {
         // ori.io
         "ori.io.print" | "ori.io.println" => Some("ori_io_print"),
@@ -27,6 +32,8 @@ fn stdlib_c_name(ori_path: &str) -> Option<&'static str> {
         "ori.string.starts_with" => Some("ori_string_starts_with"),
         "ori.string.ends_with" => Some("ori_string_ends_with"),
         "ori.string.trim" => Some("ori_string_trim"),
+        "ori.string.trim_start" => Some("ori_string_trim_start"),
+        "ori.string.trim_end" => Some("ori_string_trim_end"),
         "ori.string.to_upper" => Some("ori_string_to_upper"),
         "ori.string.to_lower" => Some("ori_string_to_lower"),
         "ori.string.replace" => Some("ori_string_replace"),
@@ -59,14 +66,18 @@ fn stdlib_c_name(ori_path: &str) -> Option<&'static str> {
         "ori.math.abs" => Some("ori_math_abs"),
         "ori.math.min" => Some("ori_math_min"),
         "ori.math.max" => Some("ori_math_max"),
+        "ori.math.clamp" => Some("ori_math_clamp"),
         "ori.math.pow" => Some("ori_math_pow"),
         "ori.math.floor" => Some("ori_math_floor"),
         "ori.math.ceil" => Some("ori_math_ceil"),
         "ori.math.round" => Some("ori_math_round"),
         "ori.math.log" => Some("ori_math_log"),
+        "ori.math.log2" => Some("ori_math_log2"),
         "ori.math.sin" => Some("ori_math_sin"),
         "ori.math.cos" => Some("ori_math_cos"),
         "ori.math.tan" => Some("ori_math_tan"),
+        "ori.math.is_nan" => Some("ori_math_is_nan"),
+        "ori.math.is_infinite" => Some("ori_math_is_infinite"),
         // additional list operations
         "ori.list.pop" | "list.pop" => Some("ori_list_pop"),
         "ori.list.remove" | "list.remove" => Some("ori_list_remove"),
@@ -95,16 +106,154 @@ fn stdlib_c_name(ori_path: &str) -> Option<&'static str> {
         "ori.string.repeat" | "string.repeat" => Some("ori_string_repeat"),
         "ori.string.pad_left" | "string.pad_left" => Some("ori_string_pad_left"),
         "ori.string.pad_right" | "string.pad_right" => Some("ori_string_pad_right"),
+        "ori.string.to_bytes" | "string.to_bytes" => Some("ori_string_to_bytes"),
+        "ori.string.from_bytes" | "string.from_bytes" => Some("ori_string_from_bytes"),
+        // ori.bytes
+        "ori.bytes.len" | "bytes.len" => Some("ori_bytes_len"),
+        "ori.bytes.concat" | "bytes.concat" => Some("ori_bytes_concat"),
+        "ori.bytes.slice" | "bytes.slice" => Some("ori_bytes_slice"),
+        "ori.bytes.to_hex" | "bytes.to_hex" => Some("ori_bytes_to_hex"),
+        "ori.bytes.from_hex" | "bytes.from_hex" => Some("ori_bytes_from_hex"),
+        "ori.bytes.decode_utf8" | "bytes.decode_utf8" => Some("ori_bytes_decode_utf8"),
+        "ori.bytes.get" | "bytes.get" => Some("ori_bytes_get"),
         // type conversion functions
         "float_to_string" | "ori.convert.float_to_string" => Some("ori_float_to_string"),
         "bool_to_string" | "ori.convert.bool_to_string" => Some("ori_bool_to_string"),
         "string_to_int" | "ori.convert.string_to_int" => Some("ori_string_to_int"),
         "string_to_float" | "ori.convert.string_to_float" => Some("ori_string_to_float"),
+        // ori.fs is canonical; ori.files is kept as a compatibility alias.
+        "ori.fs.read_text" | "fs.read_text" | "ori.files.read_text" | "files.read_text" => {
+            Some("ori_files_read_text")
+        }
+        "ori.fs.read_text_async"
+        | "fs.read_text_async"
+        | "ori.files.read_text_async"
+        | "files.read_text_async" => Some("ori_files_read_text_async"),
+        "ori.fs.write_text" | "fs.write_text" | "ori.files.write_text" | "files.write_text" => {
+            Some("ori_files_write_text")
+        }
+        "ori.fs.write_text_async"
+        | "fs.write_text_async"
+        | "ori.files.write_text_async"
+        | "files.write_text_async" => Some("ori_files_write_text_async"),
+        "ori.fs.read_bytes" | "fs.read_bytes" | "ori.files.read_bytes" | "files.read_bytes" => {
+            Some("ori_files_read_bytes")
+        }
+        "ori.fs.write_bytes" | "fs.write_bytes" | "ori.files.write_bytes" | "files.write_bytes" => {
+            Some("ori_files_write_bytes")
+        }
+        "ori.fs.read_all" | "fs.read_all" | "ori.files.read_all" | "files.read_all" => {
+            Some("ori_files_read_all")
+        }
+        "ori.fs.append_text" | "fs.append_text" | "ori.files.append_text" | "files.append_text" => {
+            Some("ori_files_append_text")
+        }
+        "ori.fs.exists" | "fs.exists" | "ori.files.exists" | "files.exists" => {
+            Some("ori_files_exists")
+        }
+        "ori.fs.delete" | "fs.delete" | "ori.files.delete" | "files.delete" => {
+            Some("ori_files_delete")
+        }
+        "ori.fs.list_dir" | "fs.list_dir" | "ori.files.list_dir" | "files.list_dir" => {
+            Some("ori_files_list_dir")
+        }
+        "ori.fs.create_dir" | "fs.create_dir" | "ori.files.create_dir" | "files.create_dir" => {
+            Some("ori_files_create_dir")
+        }
+        "ori.fs.is_file" | "fs.is_file" | "ori.files.is_file" | "files.is_file" => {
+            Some("ori_files_is_file")
+        }
+        "ori.fs.is_dir" | "fs.is_dir" | "ori.files.is_dir" | "files.is_dir" => {
+            Some("ori_files_is_dir")
+        }
+        "ori.fs.copy" | "fs.copy" | "ori.files.copy" | "files.copy" => Some("ori_files_copy"),
+        "ori.fs.rename" | "fs.rename" | "ori.files.rename" | "files.rename" => {
+            Some("ori_files_rename")
+        }
         _ => None,
     }
 }
 
+fn string_conversion_c_name(ty: &Ty) -> Option<&'static str> {
+    if ty.is_integer() || ty.contains_infer() {
+        Some("ori_to_string")
+    } else if ty.is_float() {
+        Some("ori_float_to_string")
+    } else if matches!(ty, Ty::Bool) {
+        Some("ori_bool_to_string")
+    } else {
+        None
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MemIntrinsic {
+    SizeOf,
+    AlignOf,
+}
+
+fn mem_intrinsic(path: &str) -> Option<MemIntrinsic> {
+    match path {
+        "ori.mem.size_of" => Some(MemIntrinsic::SizeOf),
+        "ori.mem.align_of" => Some(MemIntrinsic::AlignOf),
+        _ => None,
+    }
+}
+
+fn ori_mem_size_of_ty(ty: &Ty) -> i64 {
+    match ty {
+        Ty::Bool | Ty::Int8 | Ty::U8 => 1,
+        Ty::Int16 | Ty::U16 => 2,
+        Ty::Int32 | Ty::U32 | Ty::Float32 => 4,
+        Ty::Int | Ty::Int64 | Ty::U64 | Ty::Float | Ty::Float64 => 8,
+        Ty::Void | Ty::Never => 0,
+        Ty::Error => 0,
+        Ty::Infer(_) | Ty::Param { .. } => 8,
+        Ty::String
+        | Ty::Bytes
+        | Ty::Optional(_)
+        | Ty::Result(_, _)
+        | Ty::List(_)
+        | Ty::Map(_, _)
+        | Ty::Set(_)
+        | Ty::Range(_)
+        | Ty::Lazy(_)
+        | Ty::Future(_)
+        | Ty::TaskJob(_)
+        | Ty::Channel(_)
+        | Ty::AtomicInt
+        | Ty::TaskJoinError
+        | Ty::ChannelSendError
+        | Ty::ChannelReceiveError
+        | Ty::Opaque { .. }
+        | Ty::Any(_)
+        | Ty::Tuple(_)
+        | Ty::Func { .. }
+        | Ty::Named(_, _) => 8,
+    }
+}
+
+fn ori_mem_align_of_ty(ty: &Ty) -> i64 {
+    match ori_mem_size_of_ty(ty) {
+        0 | 1 => 1,
+        2 => 2,
+        4 => 4,
+        _ => 8,
+    }
+}
+
 fn stdlib_c_func_ty(c_name: &str) -> Ty {
+    if let Some(entry) = ori_types::stdlib::stdlib_runtime_functions()
+        .iter()
+        .find(|entry| entry.runtime_symbol == c_name)
+    {
+        if let Some((params, ret)) = ori_types::stdlib::stdlib_func_sig(entry.canonical_path) {
+            return Ty::Func {
+                params,
+                ret: Box::new(ret),
+            };
+        }
+    }
     let (params, ret) = match c_name {
         "ori_io_print" | "ori_io_eprint" => (vec![Ty::String], Ty::Void),
         "ori_io_read_line" => (vec![], Ty::String),
@@ -115,12 +264,16 @@ fn stdlib_c_func_ty(c_name: &str) -> Ty {
         "ori_string_contains" | "ori_string_starts_with" | "ori_string_ends_with" => {
             (vec![Ty::String, Ty::String], Ty::Bool)
         }
-        "ori_string_trim" | "ori_string_to_upper" | "ori_string_to_lower" => {
-            (vec![Ty::String], Ty::String)
-        }
+        "ori_string_trim"
+        | "ori_string_trim_start"
+        | "ori_string_trim_end"
+        | "ori_string_to_upper"
+        | "ori_string_to_lower" => (vec![Ty::String], Ty::String),
         "ori_string_replace" => (vec![Ty::String, Ty::String, Ty::String], Ty::String),
         "ori_string_chars" => (vec![Ty::String], Ty::List(Box::new(Ty::String))),
         "ori_to_string" => (vec![Ty::Int], Ty::String),
+        "ori_to_int" => (vec![Ty::Int], Ty::Int),
+        "ori_to_float" => (vec![Ty::Int], Ty::Float),
         "ori_list_new" => (vec![], Ty::List(Box::new(Ty::Infer(0)))),
         "ori_list_push" => (
             vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Infer(0)],
@@ -183,12 +336,47 @@ fn stdlib_c_func_ty(c_name: &str) -> Ty {
         ),
         "ori_math_sqrt" => (vec![Ty::Float], Ty::Float),
         "ori_math_abs" => (vec![Ty::Int], Ty::Int),
+        "ori_math_abs_float" => (vec![Ty::Float], Ty::Float),
         "ori_math_min" | "ori_math_max" => (vec![Ty::Int, Ty::Int], Ty::Int),
+        "ori_math_min_float" | "ori_math_max_float" => (vec![Ty::Float, Ty::Float], Ty::Float),
+        "ori_math_clamp" => (vec![Ty::Int, Ty::Int, Ty::Int], Ty::Int),
         "ori_math_pow" => (vec![Ty::Float, Ty::Float], Ty::Float),
         "ori_math_floor" | "ori_math_ceil" | "ori_math_round" => (vec![Ty::Float], Ty::Int),
-        "ori_math_log" | "ori_math_sin" | "ori_math_cos" | "ori_math_tan" => {
+        "ori_math_log" | "ori_math_log2" | "ori_math_sin" | "ori_math_cos" | "ori_math_tan" => {
             (vec![Ty::Float], Ty::Float)
         }
+        "ori_math_is_nan" | "ori_math_is_infinite" => (vec![Ty::Float], Ty::Bool),
+        "ori_time_now" => (vec![], Ty::Int),
+        "ori_time_sleep" => (vec![Ty::Int], Ty::Void),
+        "ori_time_duration_ms" => (vec![Ty::Int, Ty::Int], Ty::Int),
+        "ori_format_number" | "ori_format_percent" => (vec![Ty::Float, Ty::Int], Ty::String),
+        "ori_format_hex" | "ori_format_binary" => (vec![Ty::Int], Ty::String),
+        "ori_format_date" => (vec![Ty::Int, Ty::String], Ty::String),
+        "ori_format_datetime" => (vec![Ty::Int, Ty::String, Ty::String], Ty::String),
+        "ori_format_bytes_size" => (vec![Ty::Int, Ty::String], Ty::String),
+        "ori_files_read_bytes" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(Ty::Bytes), Box::new(Ty::String)),
+        ),
+        "ori_files_write_bytes" => (
+            vec![Ty::String, Ty::Bytes],
+            Ty::Result(Box::new(Ty::String), Box::new(Ty::String)),
+        ),
+        "ori_files_read_all" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(Ty::String), Box::new(Ty::String)),
+        ),
+        "ori_os_args" => (vec![], Ty::List(Box::new(Ty::String))),
+        "ori_os_env" => (vec![Ty::String], Ty::Optional(Box::new(Ty::String))),
+        "ori_os_exit" => (vec![Ty::Int], Ty::Void),
+        "ori_os_pid" => (vec![], Ty::Int),
+        "ori_os_platform" | "ori_os_arch" => (vec![], Ty::String),
+        "ori_random_int" => (vec![Ty::Int, Ty::Int], Ty::Int),
+        "ori_random_float" => (vec![Ty::Float, Ty::Float], Ty::Float),
+        "ori_random_bool" => (vec![], Ty::Bool),
+        "ori_test_assert" => (vec![Ty::Bool, Ty::String], Ty::Void),
+        "ori_test_fail" => (vec![Ty::String], Ty::Never),
+        "ori_panic" => (vec![Ty::String], Ty::Never),
         "ori_list_pop" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Infer(0)),
         "ori_list_remove" => (vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int], Ty::Void),
         "ori_list_insert" => (
@@ -203,15 +391,16 @@ fn stdlib_c_func_ty(c_name: &str) -> Ty {
             vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Infer(0)],
             Ty::Int,
         ),
-        "ori_list_sort" | "ori_list_reverse" => {
-            (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Void)
-        }
+        "ori_list_sort" | "ori_list_reverse" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Void),
         "ori_list_slice" => (
             vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int, Ty::Int],
             Ty::List(Box::new(Ty::Infer(0))),
         ),
         "ori_map_remove" => (
-            vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0))), Ty::Infer(0)],
+            vec![
+                Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0))),
+                Ty::Infer(0),
+            ],
             Ty::Void,
         ),
         "ori_map_keys" => (
@@ -222,25 +411,38 @@ fn stdlib_c_func_ty(c_name: &str) -> Ty {
             vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0)))],
             Ty::List(Box::new(Ty::Infer(0))),
         ),
+        "ori_map_entries" => (
+            vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0)))],
+            Ty::List(Box::new(Ty::Tuple(vec![Ty::Infer(0), Ty::Infer(0)]))),
+        ),
         "ori_set_remove" => (
             vec![Ty::Set(Box::new(Ty::Infer(0))), Ty::Infer(0)],
             Ty::Void,
         ),
         "ori_set_union" | "ori_set_intersection" | "ori_set_difference" => (
-            vec![Ty::Set(Box::new(Ty::Infer(0))), Ty::Set(Box::new(Ty::Infer(0)))],
+            vec![
+                Ty::Set(Box::new(Ty::Infer(0))),
+                Ty::Set(Box::new(Ty::Infer(0))),
+            ],
             Ty::Set(Box::new(Ty::Infer(0))),
         ),
         "ori_list_map" => (
             vec![
                 Ty::List(Box::new(Ty::Infer(0))),
-                Ty::Func { params: vec![Ty::Infer(0)], ret: Box::new(Ty::Infer(1)) },
+                Ty::Func {
+                    params: vec![Ty::Infer(0)],
+                    ret: Box::new(Ty::Infer(1)),
+                },
             ],
             Ty::List(Box::new(Ty::Infer(1))),
         ),
         "ori_list_filter" => (
             vec![
                 Ty::List(Box::new(Ty::Infer(0))),
-                Ty::Func { params: vec![Ty::Infer(0)], ret: Box::new(Ty::Bool) },
+                Ty::Func {
+                    params: vec![Ty::Infer(0)],
+                    ret: Box::new(Ty::Bool),
+                },
             ],
             Ty::List(Box::new(Ty::Infer(0))),
         ),
@@ -250,15 +452,370 @@ fn stdlib_c_func_ty(c_name: &str) -> Ty {
         "ori_string_pad_left" | "ori_string_pad_right" => {
             (vec![Ty::String, Ty::Int, Ty::String], Ty::String)
         }
+        "ori_string_parse_int" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(Ty::Int), Box::new(Ty::String)),
+        ),
+        "ori_string_parse_float" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(Ty::Float), Box::new(Ty::String)),
+        ),
+        "ori_string_to_bytes" => (vec![Ty::String], Ty::Bytes),
+        "ori_string_from_bytes" => (
+            vec![Ty::Bytes],
+            Ty::Result(Box::new(Ty::String), Box::new(Ty::String)),
+        ),
+        "ori_bytes_len" => (vec![Ty::Bytes], Ty::Int),
+        "ori_bytes_concat" => (vec![Ty::Bytes, Ty::Bytes], Ty::Bytes),
+        "ori_bytes_slice" => (vec![Ty::Bytes, Ty::Int, Ty::Int], Ty::Bytes),
+        "ori_bytes_to_hex" => (vec![Ty::Bytes], Ty::String),
+        "ori_bytes_from_hex" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(Ty::Bytes), Box::new(Ty::String)),
+        ),
+        "ori_bytes_decode_utf8" => (
+            vec![Ty::Bytes],
+            Ty::Result(Box::new(Ty::String), Box::new(Ty::String)),
+        ),
+        "ori_bytes_get" => (vec![Ty::Bytes, Ty::Int], Ty::U8),
         "ori_float_to_string" => (vec![Ty::Float], Ty::String),
         "ori_bool_to_string" => (vec![Ty::Bool], Ty::String),
         "ori_string_to_int" => (vec![Ty::String], Ty::Optional(Box::new(Ty::Int))),
         "ori_string_to_float" => (vec![Ty::String], Ty::Optional(Box::new(Ty::Float))),
+        "ori_files_read_text" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(Ty::String), Box::new(Ty::String)),
+        ),
+        "ori_files_read_text_async" => (
+            vec![Ty::String],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(Ty::String),
+                Box::new(Ty::String),
+            ))),
+        ),
+        "ori_files_write_text" => (
+            vec![Ty::String, Ty::String],
+            Ty::Result(Box::new(Ty::String), Box::new(Ty::String)),
+        ),
+        "ori_files_write_text_async" => (
+            vec![Ty::String, Ty::String],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(Ty::String),
+                Box::new(Ty::String),
+            ))),
+        ),
+        "ori_files_append_text" => (vec![Ty::String, Ty::String], Ty::Bool),
+        "ori_files_exists" | "ori_files_is_file" | "ori_files_is_dir" => {
+            (vec![Ty::String], Ty::Bool)
+        }
+        "ori_files_delete" | "ori_files_create_dir" => (vec![Ty::String], Ty::Bool),
+        "ori_files_list_dir" => (
+            vec![Ty::String],
+            Ty::Result(
+                Box::new(Ty::List(Box::new(Ty::String))),
+                Box::new(Ty::String),
+            ),
+        ),
+        "ori_files_copy" | "ori_files_rename" => (vec![Ty::String, Ty::String], Ty::Bool),
         _ => return Ty::Infer(0),
     };
     Ty::Func {
         params,
         ret: Box::new(ret),
+    }
+}
+
+fn specialized_stdlib_call_ret_ty(c_name: &str, args: &[HirArg], fallback: Ty) -> Ty {
+    let canonical = ori_types::stdlib::stdlib_runtime_functions()
+        .iter()
+        .find(|entry| entry.runtime_symbol == c_name)
+        .map(|entry| entry.canonical_path)
+        .unwrap_or(c_name);
+    let list_elem = |arg: &HirArg| match &arg.value.ty {
+        Ty::List(elem) => Some(*elem.clone()),
+        ty => ty.list_backed_collection_elem().cloned(),
+    };
+    let closure = |arg: &HirArg| match &arg.value.ty {
+        Ty::Func { params, ret } => Some((params.clone(), *ret.clone())),
+        _ => None,
+    };
+    match canonical {
+        "ori.list.get" | "ori.list.pop" => args.first().and_then(list_elem).unwrap_or(fallback),
+        "ori.list.slice" => args
+            .first()
+            .and_then(list_elem)
+            .map(|elem| Ty::List(Box::new(elem)))
+            .unwrap_or(fallback),
+        "ori.deque.pop_front"
+        | "ori.deque.pop_back"
+        | "ori.deque.front"
+        | "ori.deque.back"
+        | "ori.queue.dequeue"
+        | "ori.queue.peek"
+        | "ori.stack.pop"
+        | "ori.stack.peek"
+        | "ori.linked_list.pop_front"
+        | "ori.linked_list.front"
+        | "ori.doubly_linked_list.pop_front"
+        | "ori.doubly_linked_list.pop_back"
+        | "ori.doubly_linked_list.front"
+        | "ori.doubly_linked_list.back" => args
+            .first()
+            .and_then(list_elem)
+            .map(|elem| Ty::Optional(Box::new(elem)))
+            .unwrap_or(fallback),
+        "ori.deque.to_list"
+        | "ori.queue.to_list"
+        | "ori.stack.to_list"
+        | "ori.linked_list.to_list"
+        | "ori.doubly_linked_list.to_list" => args
+            .first()
+            .and_then(list_elem)
+            .map(|elem| Ty::List(Box::new(elem)))
+            .unwrap_or(fallback),
+        "ori.tree.value" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Opaque {
+                    kind: OpaqueTy::Tree,
+                    args,
+                } => args.first().cloned(),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.tree.children"
+        | "ori.tree.pre_order"
+        | "ori.tree.post_order"
+        | "ori.tree.breadth_first" => Ty::List(Box::new(Ty::Opaque {
+            kind: OpaqueTy::NodeId,
+            args: vec![],
+        })),
+        "ori.tree.parent" => Ty::Optional(Box::new(Ty::Opaque {
+            kind: OpaqueTy::NodeId,
+            args: vec![],
+        })),
+        "ori.list.map" => args
+            .get(1)
+            .and_then(closure)
+            .map(|(_, ret)| Ty::List(Box::new(ret)))
+            .unwrap_or(fallback),
+        "ori.list.filter" => args
+            .first()
+            .and_then(list_elem)
+            .map(|elem| Ty::List(Box::new(elem)))
+            .unwrap_or(fallback),
+        "ori.map.get" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Map(_, value) => Some(*value.clone()),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.map.keys" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Map(key, _) => Some(Ty::List(Box::new(*key.clone()))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.map.values" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Map(_, value) => Some(Ty::List(Box::new(*value.clone()))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.map.entries" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Map(key, value) => Some(Ty::List(Box::new(Ty::Tuple(vec![
+                    *key.clone(),
+                    *value.clone(),
+                ])))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.hash_table.get" | "ori.hash_table.remove" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Opaque {
+                    kind: OpaqueTy::HashTable,
+                    args,
+                } if args.len() == 2 => Some(Ty::Optional(Box::new(args[1].clone()))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.hash_table.keys" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Opaque {
+                    kind: OpaqueTy::HashTable,
+                    args,
+                } if args.len() == 2 => Some(Ty::List(Box::new(args[0].clone()))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.hash_table.values" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Opaque {
+                    kind: OpaqueTy::HashTable,
+                    args,
+                } if args.len() == 2 => Some(Ty::List(Box::new(args[1].clone()))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.hash_table.entries" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Opaque {
+                    kind: OpaqueTy::HashTable,
+                    args,
+                } if args.len() == 2 => Some(Ty::List(Box::new(Ty::Tuple(vec![
+                    args[0].clone(),
+                    args[1].clone(),
+                ])))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.graph.neighbors"
+        | "ori.graph.nodes"
+        | "ori.graph.bfs"
+        | "ori.graph.dfs"
+        | "ori.graph.topological_sort" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Opaque {
+                    kind: OpaqueTy::Graph,
+                    args,
+                } => args.first().cloned().map(|elem| Ty::List(Box::new(elem))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.graph.edges" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Opaque {
+                    kind: OpaqueTy::Graph,
+                    args,
+                } => args
+                    .first()
+                    .cloned()
+                    .map(|elem| Ty::List(Box::new(Ty::Tuple(vec![elem.clone(), elem])))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.heap.pop" | "ori.heap.peek" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Opaque {
+                    kind: OpaqueTy::Heap,
+                    args,
+                } => args
+                    .first()
+                    .cloned()
+                    .map(|elem| Ty::Optional(Box::new(elem))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.random.choice" => args
+            .first()
+            .and_then(list_elem)
+            .map(|elem| Ty::Optional(Box::new(elem)))
+            .unwrap_or(fallback),
+        "ori.random.shuffle" => args
+            .first()
+            .and_then(list_elem)
+            .map(|elem| Ty::List(Box::new(elem)))
+            .unwrap_or(fallback),
+        "ori.task.join" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::TaskJob(inner) => Some(Ty::Result(inner.clone(), Box::new(Ty::TaskJoinError))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.task.block_on" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Future(inner) => Some(*inner.clone()),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.channel.receive" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Channel(inner) => {
+                    Some(Ty::Result(inner.clone(), Box::new(Ty::ChannelReceiveError)))
+                }
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.iter.map" => args
+            .get(1)
+            .and_then(closure)
+            .map(|(_, ret)| Ty::List(Box::new(ret)))
+            .unwrap_or(fallback),
+        "ori.iter.filter" | "ori.iter.take" | "ori.iter.skip" | "ori.iter.reverse"
+        | "ori.iter.sort" | "ori.iter.sort_by" | "ori.iter.unique" => args
+            .first()
+            .and_then(list_elem)
+            .map(|elem| Ty::List(Box::new(elem)))
+            .unwrap_or(fallback),
+        "ori.iter.any" | "ori.iter.all" => Ty::Bool,
+        "ori.iter.count_where" => Ty::Int,
+        "ori.iter.reduce" => args
+            .get(1)
+            .map(|arg| arg.value.ty.clone())
+            .unwrap_or(fallback),
+        "ori.iter.find" => args
+            .first()
+            .and_then(list_elem)
+            .map(|elem| Ty::Optional(Box::new(elem)))
+            .unwrap_or(fallback),
+        "ori.iter.flat_map" => args
+            .get(1)
+            .and_then(closure)
+            .and_then(|(_, ret)| match ret {
+                Ty::List(inner) => Some(Ty::List(inner)),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.iter.zip" => match (
+            args.first().and_then(list_elem),
+            args.get(1).and_then(list_elem),
+        ) {
+            (Some(left), Some(right)) => Ty::List(Box::new(Ty::Tuple(vec![left, right]))),
+            _ => fallback,
+        },
+        "ori.iter.partition" => args
+            .first()
+            .and_then(list_elem)
+            .map(|elem| {
+                Ty::Tuple(vec![
+                    Ty::List(Box::new(elem.clone())),
+                    Ty::List(Box::new(elem)),
+                ])
+            })
+            .unwrap_or(fallback),
+        "ori.iter.group_by" => match (
+            args.first().and_then(list_elem),
+            args.get(1).and_then(closure),
+        ) {
+            (Some(elem), Some((_, key))) => {
+                Ty::Map(Box::new(key), Box::new(Ty::List(Box::new(elem))))
+            }
+            _ => fallback,
+        },
+        "ori.iter.flatten" => args
+            .first()
+            .and_then(list_elem)
+            .and_then(|elem| match elem {
+                Ty::List(inner) => Some(Ty::List(inner)),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        _ => fallback,
     }
 }
 
@@ -272,6 +829,9 @@ struct Scope {
 struct Lowerer<'a> {
     def_map: &'a DefMap,
     func_sigs: &'a [FuncSig],
+    value_sigs: &'a [ValueSig],
+    struct_sigs: &'a [StructSig],
+    enum_sigs: &'a [EnumSig],
     trait_sigs: &'a [TraitSig],
     impl_sigs: &'a [ImplSig],
     namespace: &'a str,
@@ -282,6 +842,9 @@ struct Lowerer<'a> {
     aliases: HashMap<SmolStr, SmolStr>,
     /// Current function's return type (for `?` desugaring).
     ret_ty: Ty,
+    /// Inner return type for async functions. `None` means the current function
+    /// returns synchronously.
+    async_inner_ret_ty: Option<Ty>,
     closure_counter: usize,
     generated_funcs: Vec<HirFunc>,
     /// `DefId` → `(arity, underlying_ty)` for each `type alias` declaration.
@@ -292,6 +855,9 @@ impl<'a> Lowerer<'a> {
     fn new(
         def_map: &'a DefMap,
         func_sigs: &'a [FuncSig],
+        value_sigs: &'a [ValueSig],
+        struct_sigs: &'a [StructSig],
+        enum_sigs: &'a [EnumSig],
         trait_sigs: &'a [TraitSig],
         impl_sigs: &'a [ImplSig],
         type_alias_sigs: &[TypeAliasSig],
@@ -306,6 +872,9 @@ impl<'a> Lowerer<'a> {
         Self {
             def_map,
             func_sigs,
+            value_sigs,
+            struct_sigs,
+            enum_sigs,
             trait_sigs,
             impl_sigs,
             namespace,
@@ -314,6 +883,7 @@ impl<'a> Lowerer<'a> {
             scopes: vec![Scope::default()],
             aliases: HashMap::new(),
             ret_ty: Ty::Void,
+            async_inner_ret_ty: None,
             closure_counter: 0,
             generated_funcs: Vec::new(),
             type_alias_map,
@@ -334,6 +904,120 @@ impl<'a> Lowerer<'a> {
         }
         None
     }
+
+    fn resolve_math_overload(&self, name: &str) -> Option<&'static str> {
+        let expanded = self.expand_alias(name);
+        match expanded.as_str() {
+            "ori.math.abs" => Some("ori.math.abs"),
+            "ori.math.min" => Some("ori.math.min"),
+            "ori.math.max" => Some("ori.math.max"),
+            _ => None,
+        }
+    }
+
+    fn struct_field_ty(&self, def_id: DefId, field: &str) -> Option<Ty> {
+        self.struct_sigs
+            .iter()
+            .find(|sig| sig.def_id == def_id)
+            .and_then(|sig| sig.fields.iter().find(|(name, _)| name == field))
+            .map(|(_, ty)| ty.clone())
+    }
+
+    fn lower_math_overload_call(
+        &mut self,
+        path: &str,
+        args: &[Arg],
+        tp: &[SmolStr],
+        span: Span,
+    ) -> HirExpr {
+        let args_h = self.lower_call_args(args, tp);
+        let use_float = args_h.iter().any(|arg| arg.value.ty.is_float());
+        let symbol = match (path, use_float) {
+            ("ori.math.abs", true) => "ori_math_abs_float",
+            ("ori.math.min", true) => "ori_math_min_float",
+            ("ori.math.max", true) => "ori_math_max_float",
+            ("ori.math.abs", false) => "ori_math_abs",
+            ("ori.math.min", false) => "ori_math_min",
+            ("ori.math.max", false) => "ori_math_max",
+            _ => "ori_math_abs",
+        };
+        let sig_ty = stdlib_c_func_ty(symbol);
+        let ret_ty = match &sig_ty {
+            Ty::Func { ret, .. } => *ret.clone(),
+            _ => Ty::Infer(0),
+        };
+        HirExpr {
+            kind: HirExprKind::Call {
+                callee: Box::new(HirExpr {
+                    kind: HirExprKind::Var(SmolStr::new(symbol)),
+                    ty: sig_ty,
+                    span,
+                }),
+                args: args_h,
+            },
+            ty: ret_ty,
+            span,
+        }
+    }
+
+    fn lower_lazy_once_call(&mut self, args: &[Arg], tp: &[SmolStr], span: Span) -> HirExpr {
+        let args_h = self.lower_call_args(args, tp);
+        let inner_ty = args_h
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Func { ret, .. } => Some(*ret.clone()),
+                _ => None,
+            })
+            .unwrap_or(Ty::Infer(0));
+        let lazy_ty = Ty::Lazy(Box::new(inner_ty.clone()));
+        let sig_ty = Ty::Func {
+            params: vec![Ty::Func {
+                params: vec![],
+                ret: Box::new(inner_ty),
+            }],
+            ret: Box::new(lazy_ty.clone()),
+        };
+        HirExpr {
+            kind: HirExprKind::Call {
+                callee: Box::new(HirExpr {
+                    kind: HirExprKind::Var(SmolStr::new("ori_lazy_once")),
+                    ty: sig_ty,
+                    span,
+                }),
+                args: args_h,
+            },
+            ty: lazy_ty,
+            span,
+        }
+    }
+
+    fn lower_lazy_force_call(&mut self, args: &[Arg], tp: &[SmolStr], span: Span) -> HirExpr {
+        let args_h = self.lower_call_args(args, tp);
+        let inner_ty = args_h
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Lazy(inner) => Some(*inner.clone()),
+                _ => None,
+            })
+            .unwrap_or(Ty::Infer(0));
+        let sig_ty = Ty::Func {
+            params: vec![Ty::Lazy(Box::new(inner_ty.clone()))],
+            ret: Box::new(inner_ty.clone()),
+        };
+        HirExpr {
+            kind: HirExprKind::Call {
+                callee: Box::new(HirExpr {
+                    kind: HirExprKind::Var(SmolStr::new("ori_lazy_force")),
+                    ty: sig_ty,
+                    span,
+                }),
+                args: args_h,
+            },
+            ty: inner_ty,
+            span,
+        }
+    }
+
     fn push(&mut self) {
         self.scopes.push(Scope::default());
     }
@@ -422,6 +1106,12 @@ impl<'a> Lowerer<'a> {
                         Ty::Infer(0)
                     }
                 }
+                DefKind::Const | DefKind::Var => self
+                    .value_sigs
+                    .iter()
+                    .find(|sig| sig.def_id == id)
+                    .map(|sig| sig.ty.clone())
+                    .unwrap_or(Ty::Infer(0)),
                 _ => Ty::Infer(0),
             }
         } else {
@@ -472,6 +1162,170 @@ impl<'a> Lowerer<'a> {
             }
         }
         (matches.len() == 1).then(|| matches.remove(0))
+    }
+    fn trait_method_func_for_trait_and_type(
+        &self,
+        trait_def_id: ori_types::DefId,
+        type_def_id: ori_types::DefId,
+        method: &str,
+    ) -> Option<(SmolStr, Ty)> {
+        let trait_sig = self
+            .trait_sigs
+            .iter()
+            .find(|sig| sig.def_id == trait_def_id)?;
+        let method_sig = trait_sig.methods.iter().find(|sig| sig.name == method)?;
+        let impl_sig = self
+            .impl_sigs
+            .iter()
+            .find(|sig| sig.type_def_id == type_def_id && sig.trait_def_id == trait_def_id)?;
+        if let Some(impl_method) = impl_sig.methods.iter().find(|sig| sig.name == method) {
+            return Some((
+                self.def_map.get(impl_method.func_def_id).path.clone(),
+                method_sig.return_ty.clone(),
+            ));
+        }
+        if method_sig.has_default {
+            let trait_path = self.def_map.get(trait_sig.def_id).path.clone();
+            return Some((
+                SmolStr::new(format!("{}.{}", trait_path, method_sig.name)),
+                method_sig.return_ty.clone(),
+            ));
+        }
+        None
+    }
+    fn iterable_element_ty(&self, ty: &Ty) -> Ty {
+        match ty {
+            Ty::List(t) | Ty::Set(t) | Ty::Range(t) => *t.clone(),
+            Ty::Map(key, _) => *key.clone(),
+            Ty::String => Ty::String,
+            Ty::Bytes => Ty::U8,
+            Ty::Named(type_def_id, _) => self
+                .impl_sigs
+                .iter()
+                .filter(|sig| sig.type_def_id == *type_def_id)
+                .find(|sig| {
+                    self.def_map
+                        .get(sig.trait_def_id)
+                        .path
+                        .ends_with(".Iterable")
+                })
+                .and_then(|impl_sig| impl_sig.methods.iter().find(|method| method.name == "next"))
+                .and_then(|method| {
+                    self.func_sigs
+                        .iter()
+                        .find(|sig| sig.def_id == method.func_def_id)
+                })
+                .and_then(|sig| match &sig.return_ty {
+                    Ty::Optional(inner) => Some(*inner.clone()),
+                    _ => None,
+                })
+                .unwrap_or(Ty::Infer(0)),
+            _ => Ty::Infer(0),
+        }
+    }
+    fn operator_trait_method_func_for_type(
+        &self,
+        type_def_id: ori_types::DefId,
+        trait_name: &str,
+        method: &str,
+    ) -> Option<(SmolStr, Ty)> {
+        let trait_def_id = self.def_map.lookup(&format!("ori.core.{trait_name}"))?;
+        let impl_sig = self
+            .impl_sigs
+            .iter()
+            .find(|sig| sig.type_def_id == type_def_id && sig.trait_def_id == trait_def_id)?;
+        let impl_method = impl_sig.methods.iter().find(|sig| sig.name == method)?;
+        let path = self.def_map.get(impl_method.func_def_id).path.clone();
+        let return_ty = self
+            .func_sigs
+            .iter()
+            .find(|sig| sig.def_id == impl_method.func_def_id)
+            .map(|sig| sig.return_ty.clone())
+            .unwrap_or(Ty::Infer(0));
+        Some((path, return_ty))
+    }
+    fn lower_operator_overload(
+        &self,
+        op: BinaryOp,
+        lhs: HirExpr,
+        rhs: HirExpr,
+        span: Span,
+    ) -> Option<HirExpr> {
+        if lhs.ty != rhs.ty {
+            return None;
+        }
+        let Ty::Named(type_def_id, _) = &lhs.ty else {
+            return None;
+        };
+        let (trait_name, method_name) = operator_trait_method(op)?;
+        let (method_path, return_ty) =
+            self.operator_trait_method_func_for_type(*type_def_id, trait_name, method_name)?;
+        let call = self.operator_method_call(method_path, return_ty.clone(), lhs, rhs, span);
+
+        match op {
+            BinaryOp::Add | BinaryOp::Sub => Some(call),
+            BinaryOp::Eq => Some(call),
+            BinaryOp::Ne => Some(HirExpr {
+                kind: HirExprKind::Unary {
+                    op: UnaryOp::Not,
+                    operand: Box::new(call),
+                },
+                ty: Ty::Bool,
+                span,
+            }),
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+                let zero = HirExpr {
+                    kind: HirExprKind::IntLit(0),
+                    ty: Ty::Int,
+                    span,
+                };
+                Some(HirExpr {
+                    kind: HirExprKind::Binary {
+                        op,
+                        lhs: Box::new(call),
+                        rhs: Box::new(zero),
+                    },
+                    ty: Ty::Bool,
+                    span,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    fn operator_method_call(
+        &self,
+        method_path: SmolStr,
+        return_ty: Ty,
+        lhs: HirExpr,
+        rhs: HirExpr,
+        span: Span,
+    ) -> HirExpr {
+        let callee_ty = self.ty_for_def_path(method_path.as_str());
+        let callee = HirExpr {
+            kind: HirExprKind::Var(method_path),
+            ty: callee_ty,
+            span,
+        };
+        HirExpr {
+            kind: HirExprKind::Call {
+                callee: Box::new(callee),
+                args: vec![
+                    HirArg {
+                        label: None,
+                        spread: false,
+                        value: lhs,
+                    },
+                    HirArg {
+                        label: None,
+                        spread: false,
+                        value: rhs,
+                    },
+                ],
+            },
+            ty: return_ty,
+            span,
+        }
     }
     fn lower_ast_ty(&mut self, t: &ori_ast::ty::Type, tp: &[SmolStr]) -> Ty {
         let raw = lower_type_with_aliases(
@@ -530,7 +1384,9 @@ impl<'a> Lowerer<'a> {
         };
         for field in q.parts.iter().skip(1) {
             let field_ty = match &ty {
-                Ty::Named(_, _) => Ty::Infer(0),
+                Ty::Named(def_id, _) => self
+                    .struct_field_ty(*def_id, field.as_str())
+                    .unwrap_or(Ty::Infer(0)),
                 Ty::Tuple(elems) => field
                     .text
                     .parse::<usize>()
@@ -619,12 +1475,28 @@ impl<'a> Lowerer<'a> {
         lowered
     }
 
-    fn err_expr(span: Span) -> HirExpr {
-        HirExpr {
-            kind: HirExprKind::Unit,
-            ty: Ty::Error,
-            span,
+    fn lower_method_params(
+        &mut self,
+        params: &[ori_ast::item::Param],
+        tp: &[SmolStr],
+        self_ty: Ty,
+        span: Span,
+    ) -> Vec<HirParam> {
+        let mut lowered = self.lower_params(params, tp);
+        if !has_explicit_self_param(params) {
+            lowered.insert(
+                0,
+                HirParam {
+                    name: SmolStr::new("self"),
+                    ty: self_ty,
+                    default: None,
+                    contract: None,
+                    variadic: false,
+                    span,
+                },
+            );
         }
+        lowered
     }
 }
 
@@ -670,10 +1542,40 @@ fn lower_impl_sigs(def_map: &DefMap, impl_sigs: &[ImplSig]) -> Vec<HirTraitImpl>
         .collect()
 }
 
+fn builtin_stdlib_structs(def_map: &DefMap) -> Vec<HirStruct> {
+    let Some(error_def_id) = def_map.lookup("ori.Error") else {
+        return Vec::new();
+    };
+
+    vec![HirStruct {
+        def_id: error_def_id,
+        name: SmolStr::new("ori.Error"),
+        fields: vec![
+            HirField {
+                name: SmolStr::new("code"),
+                ty: Ty::String,
+                contract: None,
+                span: Span::DUMMY,
+            },
+            HirField {
+                name: SmolStr::new("message"),
+                ty: Ty::String,
+                contract: None,
+                span: Span::DUMMY,
+            },
+        ],
+        is_public: true,
+        span: Span::DUMMY,
+    }]
+}
+
 pub fn lower(
     file: &SourceFile,
     def_map: &DefMap,
     func_sigs: &[FuncSig],
+    value_sigs: &[ValueSig],
+    struct_sigs: &[StructSig],
+    enum_sigs: &[EnumSig],
     trait_sigs: &[TraitSig],
     impl_sigs: &[ImplSig],
     type_alias_sigs: &[TypeAliasSig],
@@ -685,6 +1587,9 @@ pub fn lower(
     let mut l = Lowerer::new(
         def_map,
         func_sigs,
+        value_sigs,
+        struct_sigs,
+        enum_sigs,
         trait_sigs,
         impl_sigs,
         type_alias_sigs,
@@ -695,7 +1600,7 @@ pub fn lower(
 
     // Build alias map from imports: `import ori.io as io` → `io → ori.io`
     l.aliases = ori_types::resolve::import_aliases(file, reexports);
-    let mut structs = Vec::new();
+    let mut structs = builtin_stdlib_structs(def_map);
     let mut enums = Vec::new();
     let traits = lower_trait_sigs(def_map, trait_sigs);
     let trait_impls = lower_impl_sigs(def_map, impl_sigs);
@@ -738,19 +1643,23 @@ pub fn lower(
                     let mut all_tp = tp.clone();
                     all_tp.extend(m.type_params.iter().map(|p| p.name.text.clone()));
                     l.aliases.insert(SmolStr::new("Self"), s.name.text.clone());
-                    let params = l.lower_params(&m.params, &all_tp);
-                    let return_ty = m
+                    let self_ty = Ty::Named(def_id, Vec::new());
+                    let params = l.lower_method_params(&m.params, &all_tp, self_ty, m.span);
+                    let body_ret_ty = m
                         .return_ty
                         .as_ref()
                         .map(|t| l.lower_ast_ty(t, &all_tp))
                         .unwrap_or(Ty::Void);
+                    let return_ty = async_return_ty(m.is_async, body_ret_ty.clone());
                     l.aliases.remove("Self");
                     l.push();
                     for p in &params {
                         l.bind(p.name.clone(), p.ty.clone());
                     }
-                    l.ret_ty = return_ty.clone();
+                    l.ret_ty = body_ret_ty.clone();
+                    l.async_inner_ret_ty = m.is_async.then(|| body_ret_ty.clone());
                     let body = l.lower_block(&m.body, &all_tp);
+                    l.async_inner_ret_ty = None;
                     l.pop();
                     let path = format!("{}.{}.{}", namespace, s.name.text, m.name.text);
                     let def_id = def_map.lookup(&path).unwrap_or(ori_types::DefId(u32::MAX));
@@ -762,6 +1671,7 @@ pub fn lower(
                         body,
                         closure_captures: Vec::new(),
                         is_public: m.visibility == Visibility::Public,
+                        is_async: m.is_async,
                         is_mut: m.is_mut,
                         span: m.span,
                     });
@@ -799,26 +1709,40 @@ pub fn lower(
             }
             Item::Implement(i) => {
                 let type_name = i.for_type.last().text.clone();
+                let self_ty = l
+                    .resolve_def_path(&i.for_type.to_string())
+                    .and_then(|path| def_map.lookup(&path))
+                    .map(|def_id| Ty::Named(def_id, Vec::new()))
+                    .unwrap_or(Ty::Infer(0));
                 let tp: Vec<SmolStr> = i.type_params.iter().map(|p| p.name.text.clone()).collect();
                 for m in &i.methods {
                     let mut all_tp = tp.clone();
                     all_tp.extend(m.type_params.iter().map(|p| p.name.text.clone()));
                     l.aliases.insert(SmolStr::new("Self"), type_name.clone());
-                    let params = l.lower_params(&m.params, &all_tp);
-                    let return_ty = m
+                    let params = l.lower_method_params(&m.params, &all_tp, self_ty.clone(), m.span);
+                    let body_ret_ty = m
                         .return_ty
                         .as_ref()
                         .map(|t| l.lower_ast_ty(t, &all_tp))
                         .unwrap_or(Ty::Void);
+                    let return_ty = async_return_ty(m.is_async, body_ret_ty.clone());
                     l.aliases.remove("Self");
                     l.push();
                     for p in &params {
                         l.bind(p.name.clone(), p.ty.clone());
                     }
-                    l.ret_ty = return_ty.clone();
+                    l.ret_ty = body_ret_ty.clone();
+                    l.async_inner_ret_ty = m.is_async.then(|| body_ret_ty.clone());
                     let body = l.lower_block(&m.body, &all_tp);
+                    l.async_inner_ret_ty = None;
                     l.pop();
-                    let path = format!("{}.{}.{}", namespace, type_name, m.name.text);
+                    let path = format!(
+                        "{}.{}.{}.{}",
+                        namespace,
+                        type_name,
+                        i.trait_name.last().text,
+                        m.name.text
+                    );
                     let def_id = def_map.lookup(&path).unwrap_or(ori_types::DefId(u32::MAX));
                     funcs.push(HirFunc {
                         def_id,
@@ -828,31 +1752,45 @@ pub fn lower(
                         body,
                         closure_captures: Vec::new(),
                         is_public: m.visibility == Visibility::Public,
+                        is_async: m.is_async,
                         is_mut: m.is_mut,
                         span: m.span,
                     });
                 }
             }
             Item::Trait(t) => {
+                let trait_path = format!("{}.{}", namespace, t.name.text);
+                let trait_self_ty = def_map
+                    .lookup(&trait_path)
+                    .map(|def_id| Ty::Named(def_id, Vec::new()))
+                    .unwrap_or(Ty::Infer(0));
                 let tp: Vec<SmolStr> = t.type_params.iter().map(|p| p.name.text.clone()).collect();
                 for m in &t.members {
                     if let ori_ast::item::TraitMember::Default(func) = m {
                         let mut all_tp = tp.clone();
                         all_tp.extend(func.type_params.iter().map(|p| p.name.text.clone()));
                         l.aliases.insert(SmolStr::new("Self"), t.name.text.clone());
-                        let params = l.lower_params(&func.params, &all_tp);
-                        let return_ty = func
+                        let params = l.lower_method_params(
+                            &func.params,
+                            &all_tp,
+                            trait_self_ty.clone(),
+                            func.span,
+                        );
+                        let body_ret_ty = func
                             .return_ty
                             .as_ref()
                             .map(|ty| l.lower_ast_ty(ty, &all_tp))
                             .unwrap_or(Ty::Void);
+                        let return_ty = async_return_ty(func.is_async, body_ret_ty.clone());
                         l.aliases.remove("Self");
                         l.push();
                         for p in &params {
                             l.bind(p.name.clone(), p.ty.clone());
                         }
-                        l.ret_ty = return_ty.clone();
+                        l.ret_ty = body_ret_ty.clone();
+                        l.async_inner_ret_ty = func.is_async.then(|| body_ret_ty.clone());
                         let body = l.lower_block(&func.body, &all_tp);
+                        l.async_inner_ret_ty = None;
                         l.pop();
                         let path = format!("{}.{}.{}", namespace, t.name.text, func.name.text);
                         let def_id = def_map.lookup(&path).unwrap_or(ori_types::DefId(u32::MAX));
@@ -864,6 +1802,7 @@ pub fn lower(
                             body,
                             closure_captures: Vec::new(),
                             is_public: func.visibility == Visibility::Public,
+                            is_async: func.is_async,
                             is_mut: func.is_mut,
                             span: func.span,
                         });
@@ -873,17 +1812,20 @@ pub fn lower(
             Item::Func(f) => {
                 let tp: Vec<SmolStr> = f.type_params.iter().map(|p| p.name.text.clone()).collect();
                 let params = l.lower_params(&f.params, &tp);
-                let return_ty = f
+                let body_ret_ty = f
                     .return_ty
                     .as_ref()
                     .map(|t| l.lower_ast_ty(t, &tp))
                     .unwrap_or(Ty::Void);
+                let return_ty = async_return_ty(f.is_async, body_ret_ty.clone());
                 l.push();
                 for p in &params {
                     l.bind(p.name.clone(), p.ty.clone());
                 }
-                l.ret_ty = return_ty.clone();
+                l.ret_ty = body_ret_ty.clone();
+                l.async_inner_ret_ty = f.is_async.then(|| body_ret_ty.clone());
                 let body = l.lower_block(&f.body, &tp);
+                l.async_inner_ret_ty = None;
                 l.pop();
                 let path = format!("{}.{}", namespace, f.name.text);
                 let def_id = def_map.lookup(&path).unwrap_or(ori_types::DefId(u32::MAX));
@@ -895,6 +1837,7 @@ pub fn lower(
                     body,
                     closure_captures: Vec::new(),
                     is_public: f.visibility == Visibility::Public,
+                    is_async: f.is_async,
                     is_mut: f.is_mut,
                     span: f.span,
                 });
@@ -1379,7 +2322,8 @@ fn insert_default_arguments_expr(
         HirExprKind::Some_(inner)
         | HirExprKind::Ok_(inner)
         | HirExprKind::Err_(inner)
-        | HirExprKind::Propagate(inner) => insert_default_arguments_expr(inner, defaults),
+        | HirExprKind::Propagate(inner)
+        | HirExprKind::Await(inner) => insert_default_arguments_expr(inner, defaults),
         HirExprKind::IfExpr { cond, then, else_ } => {
             insert_default_arguments_expr(cond, defaults);
             insert_default_arguments_expr(then, defaults);
@@ -1415,7 +2359,6 @@ fn insert_default_arguments_expr(
         | HirExprKind::BytesLit(_)
         | HirExprKind::Unit
         | HirExprKind::Var(_)
-        | HirExprKind::GlobalConst(_)
         | HirExprKind::None_
         | HirExprKind::Closure { .. } => {}
         HirExprKind::IsCheck { value, .. } => insert_default_arguments_expr(value, defaults),
@@ -1468,7 +2411,8 @@ impl<'a> Lowerer<'a> {
             Stmt::Return(r) => {
                 let val = r.value.as_ref().map(|e| {
                     let mut value = self.lower_expr(e, tp);
-                    apply_expected_expr_ty(&mut value, &self.ret_ty);
+                    let expected = self.async_inner_ret_ty.as_ref().unwrap_or(&self.ret_ty);
+                    apply_expected_expr_ty(&mut value, expected);
                     value
                 });
                 Some(HirStmt::Return(val, r.span))
@@ -1504,7 +2448,7 @@ impl<'a> Lowerer<'a> {
             }
             Stmt::For(f) => {
                 let iterable = self.lower_expr(&f.iterable, tp);
-                let elem_ty = elem_type(&iterable.ty);
+                let elem_ty = self.iterable_element_ty(&iterable.ty);
                 let second_ty = for_second_binding_ty(&iterable.ty);
                 self.push();
                 self.bind(f.binding.text.clone(), elem_ty.clone());
@@ -1641,7 +2585,7 @@ impl<'a> Lowerer<'a> {
                 span,
                 ..
             } => {
-                let pat = lower_pattern(pattern, scr_ty);
+                let pat = lower_pattern(pattern, scr_ty, self.enum_sigs);
                 self.push();
                 bind_hir_pattern_scope(self, &pat);
                 let stmts = body.iter().filter_map(|s| self.lower_stmt(s, tp)).collect();
@@ -1678,18 +2622,27 @@ impl<'a> Lowerer<'a> {
                 span,
             },
             Expr::IntLit { raw, .. } => {
-                let v: i64 = parse_int_lit(raw);
+                let parsed = parse_int_literal(raw).unwrap_or_else(|err| {
+                    eprintln!(
+                        "ori: ICE: invalid integer literal reached HIR lowering: {}",
+                        err.message
+                    );
+                    ori_types::literal::ParsedIntLiteral {
+                        value: 0,
+                        ty: Ty::Int,
+                    }
+                });
                 HirExpr {
-                    kind: HirExprKind::IntLit(v),
-                    ty: Ty::Int,
+                    kind: HirExprKind::IntLit(parsed.value),
+                    ty: parsed.ty,
                     span,
                 }
             }
             Expr::FloatLit { raw, .. } => {
-                let v: f64 = raw.parse().unwrap_or(0.0);
+                let parsed = parse_float_lit(raw);
                 HirExpr {
-                    kind: HirExprKind::FloatLit(v),
-                    ty: Ty::Float,
+                    kind: HirExprKind::FloatLit(parsed.value),
+                    ty: parsed.ty,
                     span,
                 }
             }
@@ -1768,6 +2721,20 @@ impl<'a> Lowerer<'a> {
                         span,
                     };
                 }
+                if expanded_path.as_str() == "ori.math.infinity" {
+                    return HirExpr {
+                        kind: HirExprKind::FloatLit(f64::INFINITY),
+                        ty: Ty::Float,
+                        span,
+                    };
+                }
+                if expanded_path.as_str() == "ori.math.nan" {
+                    return HirExpr {
+                        kind: HirExprKind::FloatLit(f64::NAN),
+                        ty: Ty::Float,
+                        span,
+                    };
+                }
                 if let Some(c_name) = self.resolve_stdlib(&path) {
                     return HirExpr {
                         kind: HirExprKind::Var(SmolStr::new(c_name)),
@@ -1826,6 +2793,11 @@ impl<'a> Lowerer<'a> {
             Expr::Binary { op, lhs, rhs, .. } => {
                 let l = self.lower_expr(lhs, tp);
                 let r = self.lower_expr(rhs, tp);
+                if let Some(overloaded) =
+                    self.lower_operator_overload(*op, l.clone(), r.clone(), span)
+                {
+                    return overloaded;
+                }
                 let ty = binary_result_ty(*op, &l.ty, &r.ty);
                 HirExpr {
                     kind: HirExprKind::Binary {
@@ -1851,12 +2823,18 @@ impl<'a> Lowerer<'a> {
             }
             Expr::Field { object, field, .. } => {
                 let obj = self.lower_expr(object, tp);
+                let ty = if let Ty::Named(def_id, _) = &obj.ty {
+                    self.struct_field_ty(*def_id, field.as_str())
+                        .unwrap_or(Ty::Infer(0))
+                } else {
+                    Ty::Infer(0)
+                };
                 HirExpr {
                     kind: HirExprKind::Field {
                         object: Box::new(obj),
                         field: field.text.clone(),
                     },
-                    ty: Ty::Infer(0),
+                    ty,
                     span,
                 }
             }
@@ -1921,9 +2899,108 @@ impl<'a> Lowerer<'a> {
                     }
                 }
             }
-            Expr::Call { callee, args, .. } => {
+            Expr::Call { callee, args, span } => {
                 // Intercept builtin wrapper functions before generic lowering
                 if let Expr::QualifiedIdent(q) = callee.as_ref() {
+                    let name = q.to_string();
+                    if let Some(path) = self.resolve_math_overload(&name) {
+                        return self.lower_math_overload_call(path, args, tp, *span);
+                    }
+                    if name == "string" {
+                        let args_h = self.lower_call_args(args, tp);
+                        if let Some(first) = args_h.first() {
+                            if let Some(c_name) = string_conversion_c_name(&first.value.ty) {
+                                let sig_ty = stdlib_c_func_ty(c_name);
+                                return HirExpr {
+                                    kind: HirExprKind::Call {
+                                        callee: Box::new(HirExpr {
+                                            kind: HirExprKind::Var(SmolStr::new(c_name)),
+                                            ty: sig_ty,
+                                            span: callee.span(),
+                                        }),
+                                        args: args_h,
+                                    },
+                                    ty: Ty::String,
+                                    span: *span,
+                                };
+                            }
+                        }
+                    }
+                    if name == "panic" {
+                        let args_h = self.lower_call_args(args, tp);
+                        return HirExpr {
+                            kind: HirExprKind::Call {
+                                callee: Box::new(HirExpr {
+                                    kind: HirExprKind::Var(SmolStr::new("ori_panic")),
+                                    ty: stdlib_c_func_ty("ori_panic"),
+                                    span: callee.span(),
+                                }),
+                                args: args_h,
+                            },
+                            ty: Ty::Never,
+                            span: *span,
+                        };
+                    }
+                    let expanded_name = self.expand_alias(&name);
+                    if let Some(intrinsic) = mem_intrinsic(&expanded_name) {
+                        let args_h = self.lower_call_args(args, tp);
+                        let value_ty = args_h
+                            .first()
+                            .map(|arg| arg.value.ty.clone())
+                            .unwrap_or(Ty::Error);
+                        let value = match intrinsic {
+                            MemIntrinsic::SizeOf => ori_mem_size_of_ty(&value_ty),
+                            MemIntrinsic::AlignOf => ori_mem_align_of_ty(&value_ty),
+                        };
+                        return HirExpr {
+                            kind: HirExprKind::IntLit(value),
+                            ty: Ty::Int,
+                            span: *span,
+                        };
+                    }
+                    let canonical_name = ori_types::stdlib::canonical_stdlib_path(&expanded_name)
+                        .unwrap_or(expanded_name.as_str());
+                    match canonical_name {
+                        "ori.lazy.once" => {
+                            return self.lower_lazy_once_call(args, tp, *span);
+                        }
+                        "ori.lazy.force" => {
+                            return self.lower_lazy_force_call(args, tp, *span);
+                        }
+                        _ => {}
+                    }
+                    if let Some(trait_path) = qualified_prefix(q) {
+                        if let Some(trait_def_id) =
+                            self.resolve_def_id_with_kind(&trait_path, DefKind::Trait)
+                        {
+                            let args_h = self.lower_call_args(args, tp);
+                            if let Some(first_arg) = args_h.first() {
+                                if let Ty::Named(type_def_id, _) = &first_arg.value.ty {
+                                    if let Some((method_path, return_ty)) = self
+                                        .trait_method_func_for_trait_and_type(
+                                            trait_def_id,
+                                            *type_def_id,
+                                            q.last().as_str(),
+                                        )
+                                    {
+                                        let callee_h = HirExpr {
+                                            kind: HirExprKind::Var(method_path.clone()),
+                                            ty: self.ty_for_def_path(method_path.as_str()),
+                                            span: callee.span(),
+                                        };
+                                        return HirExpr {
+                                            kind: HirExprKind::Call {
+                                                callee: Box::new(callee_h),
+                                                args: args_h,
+                                            },
+                                            ty: return_ty,
+                                            span: *span,
+                                        };
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if q.parts.len() == 2 {
                         let receiver_name = &q.parts[0];
                         let method_name = &q.parts[1];
@@ -1934,7 +3011,7 @@ impl<'a> Lowerer<'a> {
                                 {
                                     let receiver = HirExpr {
                                         kind: HirExprKind::Var(receiver_name.text.clone()),
-                                        ty: receiver_ty,
+                                        ty: receiver_ty.clone(),
                                         span: receiver_name.span,
                                     };
                                     let args_h = args
@@ -1953,9 +3030,34 @@ impl<'a> Lowerer<'a> {
                                             args: args_h,
                                         },
                                         ty: return_ty,
-                                        span,
+                                        span: *span,
                                     };
                                 }
+                            }
+                            if matches!(receiver_ty, Ty::Param { .. }) {
+                                let receiver = HirExpr {
+                                    kind: HirExprKind::Var(receiver_name.text.clone()),
+                                    ty: receiver_ty.clone(),
+                                    span: receiver_name.span,
+                                };
+                                let args_h = args
+                                    .iter()
+                                    .map(|arg| match &arg.value {
+                                        ori_ast::expr::ArgValue::Expr(e)
+                                        | ori_ast::expr::ArgValue::Spread(e) => {
+                                            self.lower_expr(e, tp)
+                                        }
+                                    })
+                                    .collect();
+                                return HirExpr {
+                                    kind: HirExprKind::MethodCall {
+                                        receiver: Box::new(receiver),
+                                        method: method_name.text.clone(),
+                                        args: args_h,
+                                    },
+                                    ty: Ty::Infer(0),
+                                    span: *span,
+                                };
                             }
                             if let Ty::Named(def_id, _) = &receiver_ty {
                                 let def = self.def_map.get(*def_id);
@@ -1969,12 +3071,13 @@ impl<'a> Lowerer<'a> {
                                 if let Some((method_path, return_ty)) = resolved {
                                     let receiver = HirExpr {
                                         kind: HirExprKind::Var(receiver_name.text.clone()),
-                                        ty: receiver_ty,
+                                        ty: receiver_ty.clone(),
                                         span: receiver_name.span,
                                     };
+                                    let callee_ty = self.ty_for_def_path(method_path.as_str());
                                     let callee_h = HirExpr {
                                         kind: HirExprKind::Var(method_path),
-                                        ty: Ty::Infer(0),
+                                        ty: callee_ty,
                                         span: callee.span(),
                                     };
                                     let mut args_h = vec![HirArg {
@@ -1989,13 +3092,56 @@ impl<'a> Lowerer<'a> {
                                             args: args_h,
                                         },
                                         ty: return_ty,
-                                        span,
+                                        span: *span,
                                     };
+                                }
+                            }
+                            // Check for primitive methods on strings/bytes
+                            let m_name = method_name.text.as_str();
+                            let namespaces = ["ori.string", "ori.bytes"];
+                            for ns in namespaces {
+                                if let Some(c_name) = stdlib_c_name(&format!("{ns}.{m_name}")) {
+                                    let sig_ty = stdlib_c_func_ty(c_name);
+                                    if let Ty::Func { params, .. } = &sig_ty {
+                                        if let Some(first_param) = params.first() {
+                                            if receiver_ty.is_assignable_to(first_param) {
+                                                let receiver = HirExpr {
+                                                    kind: HirExprKind::Var(
+                                                        receiver_name.text.clone(),
+                                                    ),
+                                                    ty: receiver_ty.clone(),
+                                                    span: receiver_name.span,
+                                                };
+                                                let callee_h = HirExpr {
+                                                    kind: HirExprKind::Var(SmolStr::new(c_name)),
+                                                    ty: sig_ty.clone(),
+                                                    span: callee.span(),
+                                                };
+                                                let mut args_h = vec![HirArg {
+                                                    label: None,
+                                                    spread: false,
+                                                    value: receiver,
+                                                }];
+                                                args_h.extend(self.lower_call_args(args, tp));
+                                                return HirExpr {
+                                                    kind: HirExprKind::Call {
+                                                        callee: Box::new(callee_h),
+                                                        args: args_h,
+                                                    },
+                                                    ty: if let Ty::Func { ret, .. } = sig_ty {
+                                                        *ret
+                                                    } else {
+                                                        Ty::Infer(0)
+                                                    },
+                                                    span: *span,
+                                                };
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
-                    let name = q.to_string();
                     match name.as_str() {
                         "some" | "Some" => {
                             if let Some(a) = args.first() {
@@ -2008,7 +3154,7 @@ impl<'a> Lowerer<'a> {
                                 return HirExpr {
                                     kind: HirExprKind::Some_(Box::new(inner)),
                                     ty,
-                                    span,
+                                    span: *span,
                                 };
                             }
                         }
@@ -2024,7 +3170,7 @@ impl<'a> Lowerer<'a> {
                                 return HirExpr {
                                     kind: HirExprKind::Ok_(Box::new(inner)),
                                     ty,
-                                    span,
+                                    span: *span,
                                 };
                             }
                         }
@@ -2039,7 +3185,7 @@ impl<'a> Lowerer<'a> {
                                 return HirExpr {
                                     kind: HirExprKind::Err_(Box::new(inner)),
                                     ty,
-                                    span,
+                                    span: *span,
                                 };
                             }
                         }
@@ -2050,7 +3196,7 @@ impl<'a> Lowerer<'a> {
                         return HirExpr {
                             kind: HirExprKind::StructLit { def_id, fields },
                             ty: Ty::Named(def_id, Vec::new()),
-                            span,
+                            span: *span,
                         };
                     }
                     if let Some((def_id, variant)) = self.resolve_enum_variant(q) {
@@ -2062,7 +3208,7 @@ impl<'a> Lowerer<'a> {
                                 fields,
                             },
                             ty: Ty::Named(def_id, Vec::new()),
-                            span,
+                            span: *span,
                         };
                     }
                 }
@@ -2083,9 +3229,10 @@ impl<'a> Lowerer<'a> {
                         }
                     }
                     if let Some(m_path) = resolved_method {
+                        let callee_ty = self.ty_for_def_path(m_path.as_str());
                         let callee_h = HirExpr {
                             kind: HirExprKind::Var(m_path),
-                            ty: Ty::Infer(0),
+                            ty: callee_ty,
                             span: callee.span(),
                         };
                         let mut args_h = vec![HirArg {
@@ -2100,7 +3247,7 @@ impl<'a> Lowerer<'a> {
                                 args: args_h,
                             },
                             ty: resolved_return_ty,
-                            span,
+                            span: *span,
                         };
                     }
                     if let Ty::Any(trait_def_id) = &obj_h.ty {
@@ -2121,8 +3268,62 @@ impl<'a> Lowerer<'a> {
                                     args: args_h,
                                 },
                                 ty: return_ty,
-                                span,
+                                span: *span,
                             };
+                        }
+                    }
+                    if matches!(obj_h.ty, Ty::Param { .. }) {
+                        let args_h = args
+                            .iter()
+                            .map(|arg| match &arg.value {
+                                ori_ast::expr::ArgValue::Expr(e)
+                                | ori_ast::expr::ArgValue::Spread(e) => self.lower_expr(e, tp),
+                            })
+                            .collect();
+                        return HirExpr {
+                            kind: HirExprKind::MethodCall {
+                                receiver: Box::new(obj_h),
+                                method: field.text.clone(),
+                                args: args_h,
+                            },
+                            ty: Ty::Infer(0),
+                            span: *span,
+                        };
+                    }
+                    let m_name = field.text.as_str();
+                    let namespaces = ["ori.string", "ori.bytes"];
+                    for ns in namespaces {
+                        if let Some(c_name) = stdlib_c_name(&format!("{ns}.{m_name}")) {
+                            let sig_ty = stdlib_c_func_ty(c_name);
+                            if let Ty::Func { params, .. } = &sig_ty {
+                                if let Some(first_param) = params.first() {
+                                    if obj_h.ty.is_assignable_to(first_param) {
+                                        let callee_h = HirExpr {
+                                            kind: HirExprKind::Var(SmolStr::new(c_name)),
+                                            ty: sig_ty.clone(),
+                                            span: callee.span(),
+                                        };
+                                        let mut args_h = vec![HirArg {
+                                            label: None,
+                                            spread: false,
+                                            value: obj_h,
+                                        }];
+                                        args_h.extend(self.lower_call_args(args, tp));
+                                        return HirExpr {
+                                            kind: HirExprKind::Call {
+                                                callee: Box::new(callee_h),
+                                                args: args_h,
+                                            },
+                                            ty: if let Ty::Func { ret, .. } = sig_ty {
+                                                *ret
+                                            } else {
+                                                Ty::Infer(0)
+                                            },
+                                            span: *span,
+                                        };
+                                    }
+                                }
+                            }
                         }
                     }
                     // If not resolved as method, fall through to normal lowering
@@ -2141,15 +3342,21 @@ impl<'a> Lowerer<'a> {
                             args: args_h,
                         },
                         ty: Ty::Infer(0),
-                        span,
+                        span: *span,
                     };
                 }
 
                 let callee_h = self.lower_expr(callee, tp);
                 let args_h = self.lower_call_args(args, tp);
-                let ret_ty = match &callee_h.ty {
+                let fallback_ret_ty = match &callee_h.ty {
                     Ty::Func { ret, .. } => *ret.clone(),
                     _ => Ty::Infer(0),
+                };
+                let ret_ty = match &callee_h.kind {
+                    HirExprKind::Var(name) => {
+                        specialized_stdlib_call_ret_ty(name.as_str(), &args_h, fallback_ret_ty)
+                    }
+                    _ => fallback_ret_ty,
                 };
                 HirExpr {
                     kind: HirExprKind::Call {
@@ -2157,7 +3364,7 @@ impl<'a> Lowerer<'a> {
                         args: args_h,
                     },
                     ty: ret_ty,
-                    span,
+                    span: *span,
                 }
             }
             Expr::Try { expr: inner, .. } => {
@@ -2165,6 +3372,18 @@ impl<'a> Lowerer<'a> {
                 let ty = unwrap_ty(&inner_h.ty);
                 HirExpr {
                     kind: HirExprKind::Propagate(Box::new(inner_h)),
+                    ty,
+                    span,
+                }
+            }
+            Expr::Await { expr: inner, .. } => {
+                let inner_h = self.lower_expr(inner, tp);
+                let ty = match &inner_h.ty {
+                    Ty::Future(inner_ty) => *inner_ty.clone(),
+                    _ => Ty::Infer(0),
+                };
+                HirExpr {
+                    kind: HirExprKind::Await(Box::new(inner_h)),
                     ty,
                     span,
                 }
@@ -2502,6 +3721,7 @@ impl<'a> Lowerer<'a> {
             body,
             closure_captures: captures.clone(),
             is_public: false,
+            is_async: false,
             is_mut: false,
             span,
         });
@@ -2695,7 +3915,9 @@ fn collect_free_names_expr(expr: &Expr, bound: &mut HashSet<SmolStr>, names: &mu
                 collect_free_names_expr(&field.value, bound, names);
             }
         }
-        Expr::Unary { operand, .. } | Expr::Try { expr: operand, .. } => {
+        Expr::Unary { operand, .. }
+        | Expr::Try { expr: operand, .. }
+        | Expr::Await { expr: operand, .. } => {
             collect_free_names_expr(operand, bound, names);
         }
         Expr::Binary { lhs, rhs, .. } => {
@@ -2797,7 +4019,11 @@ fn bind_pattern_names(pattern: &ori_ast::pattern::Pattern, bound: &mut HashSet<S
     }
 }
 
-fn lower_pattern(pat: &ori_ast::pattern::Pattern, scr_ty: &Ty) -> HirPattern {
+fn lower_pattern(
+    pat: &ori_ast::pattern::Pattern,
+    scr_ty: &Ty,
+    enum_sigs: &[EnumSig],
+) -> HirPattern {
     use ori_ast::pattern::Pattern;
     match pat {
         Pattern::Wildcard(_) => HirPattern::Wildcard,
@@ -2809,7 +4035,7 @@ fn lower_pattern(pat: &ori_ast::pattern::Pattern, scr_ty: &Ty) -> HirPattern {
             } else {
                 &Ty::Infer(0)
             };
-            HirPattern::Some_(Box::new(lower_pattern(p, inner_ty)))
+            HirPattern::Some_(Box::new(lower_pattern(p, inner_ty, enum_sigs)))
         }
         Pattern::Success(p, _) => {
             let ok_ty = if let Ty::Result(ok, _) = scr_ty {
@@ -2817,7 +4043,7 @@ fn lower_pattern(pat: &ori_ast::pattern::Pattern, scr_ty: &Ty) -> HirPattern {
             } else {
                 &Ty::Infer(0)
             };
-            HirPattern::Ok_(Box::new(lower_pattern(p, ok_ty)))
+            HirPattern::Ok_(Box::new(lower_pattern(p, ok_ty, enum_sigs)))
         }
         Pattern::Error(p, _) => {
             let err_ty = if let Ty::Result(_, err) = scr_ty {
@@ -2825,7 +4051,7 @@ fn lower_pattern(pat: &ori_ast::pattern::Pattern, scr_ty: &Ty) -> HirPattern {
             } else {
                 &Ty::Infer(0)
             };
-            HirPattern::Err_(Box::new(lower_pattern(p, err_ty)))
+            HirPattern::Err_(Box::new(lower_pattern(p, err_ty, enum_sigs)))
         }
         Pattern::Literal(e) => match e.as_ref() {
             Expr::BoolLit(b, _) => HirPattern::BoolLit(*b),
@@ -2842,7 +4068,7 @@ fn lower_pattern(pat: &ori_ast::pattern::Pattern, scr_ty: &Ty) -> HirPattern {
             HirPattern::Tuple(
                 pats.iter()
                     .zip(elem_tys.iter())
-                    .map(|(pat, ty)| lower_pattern(pat, ty))
+                    .map(|(pat, ty)| lower_pattern(pat, ty, enum_sigs))
                     .collect(),
             )
         }
@@ -2859,15 +4085,33 @@ fn lower_pattern(pat: &ori_ast::pattern::Pattern, scr_ty: &Ty) -> HirPattern {
         }
         Pattern::VariantNamed { name, fields, .. } => {
             if let Ty::Named(def_id, _) = scr_ty {
+                let variant_sig =
+                    enum_sigs
+                        .iter()
+                        .find(|sig| sig.def_id == *def_id)
+                        .and_then(|sig| {
+                            sig.variants
+                                .iter()
+                                .find(|variant| variant.name == name.text)
+                        });
                 HirPattern::Variant {
                     def_id: *def_id,
                     variant: name.text.clone(),
                     fields: fields
                         .iter()
                         .map(|field| {
+                            let field_ty = variant_sig
+                                .and_then(|variant| {
+                                    variant
+                                        .fields
+                                        .iter()
+                                        .find(|(field_name, _)| *field_name == field.name.text)
+                                })
+                                .map(|(_, ty)| ty.clone())
+                                .unwrap_or(Ty::Infer(0));
                             (
                                 field.name.text.clone(),
-                                lower_pattern(&field.pattern, &Ty::Infer(0)),
+                                lower_pattern(&field.pattern, &field_ty, enum_sigs),
                             )
                         })
                         .collect(),
@@ -2915,26 +4159,28 @@ fn qualified_prefix(q: &ori_ast::common::QualifiedName) -> Option<String> {
 }
 
 fn parse_int_lit(raw: &str) -> i64 {
-    let s = raw.replace('_', "");
-    if let Some(hex) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-        i64::from_str_radix(hex, 16).unwrap_or(0)
-    } else if let Some(bin) = s.strip_prefix("0b").or_else(|| s.strip_prefix("0B")) {
-        i64::from_str_radix(bin, 2).unwrap_or(0)
-    } else if let Some(oct) = s.strip_prefix("0o").or_else(|| s.strip_prefix("0O")) {
-        i64::from_str_radix(oct, 8).unwrap_or(0)
-    } else {
-        // strip any suffix like u8, i32
-        let num: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
-        num.parse().unwrap_or(0)
-    }
+    parse_int_literal(raw)
+        .map(|parsed| parsed.value)
+        .unwrap_or_else(|err| {
+            eprintln!(
+                "ori: ICE: invalid integer literal reached HIR lowering: {}",
+                err.message
+            );
+            0
+        })
 }
 
-fn elem_type(ty: &Ty) -> Ty {
-    match ty {
-        Ty::List(t) | Ty::Set(t) | Ty::Range(t) => *t.clone(),
-        Ty::Map(key, _) => *key.clone(),
-        _ => Ty::Infer(0),
-    }
+fn parse_float_lit(raw: &str) -> ori_types::literal::ParsedFloatLiteral {
+    parse_float_literal(raw).unwrap_or_else(|err| {
+        eprintln!(
+            "ori: ICE: invalid float literal reached HIR lowering: {}",
+            err.message
+        );
+        ori_types::literal::ParsedFloatLiteral {
+            value: 0.0,
+            ty: Ty::Float,
+        }
+    })
 }
 
 fn for_second_binding_ty(ty: &Ty) -> Ty {
@@ -2962,6 +4208,12 @@ fn apply_expected_expr_ty(expr: &mut HirExpr, expected: &Ty) {
         | (HirExprKind::Err_(_), Ty::Result(_, _)) => {
             expr.ty = expected.clone();
         }
+        (HirExprKind::StructLit { def_id, .. }, Ty::Named(expected_def_id, _))
+            if *def_id == DefId(u32::MAX) =>
+        {
+            *def_id = *expected_def_id;
+            expr.ty = expected.clone();
+        }
         _ => {}
     }
 }
@@ -2974,11 +4226,31 @@ fn unwrap_ty(ty: &Ty) -> Ty {
     }
 }
 
+fn async_return_ty(is_async: bool, inner: Ty) -> Ty {
+    if is_async {
+        Ty::Future(Box::new(inner))
+    } else {
+        inner
+    }
+}
+
 fn binary_result_ty(op: ori_ast::expr::BinaryOp, lty: &Ty, _rty: &Ty) -> Ty {
     use ori_ast::expr::BinaryOp::*;
     match op {
         Add | Sub | Mul | Div | Rem => lty.clone(),
         Eq | Ne | Lt | Le | Gt | Ge | And | Or => Ty::Bool,
+    }
+}
+
+fn operator_trait_method(op: BinaryOp) -> Option<(&'static str, &'static str)> {
+    match op {
+        BinaryOp::Add => Some(("Addable", "add")),
+        BinaryOp::Sub => Some(("Subtractable", "subtract")),
+        BinaryOp::Eq | BinaryOp::Ne => Some(("Equatable", "equals")),
+        BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+            Some(("Comparable", "compare"))
+        }
+        _ => None,
     }
 }
 
@@ -3003,6 +4275,12 @@ fn lower_lvalue(lv: &ori_ast::stmt::LValue, lowerer: &mut Lowerer, tp: &[SmolStr
             index: Box::new(lowerer.lower_expr(index, tp)),
         },
     }
+}
+
+fn has_explicit_self_param(params: &[ori_ast::item::Param]) -> bool {
+    params
+        .first()
+        .is_some_and(|param| param.name.text.as_str() == "self")
 }
 
 fn lvalue_to_expr(lv: &HirLValue, span: Span) -> HirExpr {
@@ -3048,13 +4326,16 @@ fn compound_op_to_binary(op: ori_ast::stmt::CompoundOp) -> ori_ast::expr::Binary
     }
 }
 
-
 /// Resolve the type after `is` in an `IsCheck` expression.
 ///
 /// Primitive builtin type names (e.g. `int`, `string`, `bool`) are not
 /// registered in the `DefMap`, so we map them directly to their `Ty` variants
 /// instead of calling `lower_ast_ty` which would emit a spurious error.
-fn lower_is_target_ty(name: &ori_ast::common::QualifiedName, l: &mut Lowerer, tp: &[SmolStr]) -> Ty {
+fn lower_is_target_ty(
+    name: &ori_ast::common::QualifiedName,
+    l: &mut Lowerer,
+    tp: &[SmolStr],
+) -> Ty {
     if name.is_single() {
         let s = name.last().text.as_str();
         match s {
@@ -3078,4 +4359,31 @@ fn lower_is_target_ty(name: &ori_ast::common::QualifiedName, l: &mut Lowerer, tp
     }
     let ty_node = ori_ast::ty::Type::Named(name.clone());
     l.lower_ast_ty(&ty_node, tp)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ori_types::stdlib::stdlib_runtime_functions;
+
+    #[test]
+    fn stdlib_manifest_paths_lower_to_declared_runtime_symbols() {
+        for entry in stdlib_runtime_functions() {
+            assert_eq!(
+                stdlib_c_name(entry.canonical_path),
+                Some(entry.runtime_symbol),
+                "{}",
+                entry.canonical_path
+            );
+            for alias in entry.aliases {
+                assert_eq!(stdlib_c_name(alias), Some(entry.runtime_symbol), "{alias}");
+            }
+            assert!(
+                matches!(stdlib_c_func_ty(entry.runtime_symbol), Ty::Func { .. }),
+                "{} -> {} has no HIR stdlib function type",
+                entry.canonical_path,
+                entry.runtime_symbol
+            );
+        }
+    }
 }

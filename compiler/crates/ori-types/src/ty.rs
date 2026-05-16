@@ -1,6 +1,48 @@
 use crate::def::{DefId, DefKind, DefMap};
 use smol_str::SmolStr;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OpaqueTy {
+    Deque,
+    Queue,
+    Stack,
+    LinkedList,
+    DoublyLinkedList,
+    Tree,
+    NodeId,
+    HashTable,
+    Graph,
+    Heap,
+}
+
+impl OpaqueTy {
+    pub fn display_name(self) -> &'static str {
+        match self {
+            OpaqueTy::Deque => "deque.Deque",
+            OpaqueTy::Queue => "queue.Queue",
+            OpaqueTy::Stack => "stack.Stack",
+            OpaqueTy::LinkedList => "linked_list.LinkedList",
+            OpaqueTy::DoublyLinkedList => "doubly_linked_list.DoublyLinkedList",
+            OpaqueTy::Tree => "tree.Tree",
+            OpaqueTy::NodeId => "tree.NodeId",
+            OpaqueTy::HashTable => "hash_table.HashTable",
+            OpaqueTy::Graph => "graph.Graph",
+            OpaqueTy::Heap => "heap.Heap",
+        }
+    }
+
+    pub fn is_list_backed_collection(self) -> bool {
+        matches!(
+            self,
+            OpaqueTy::Deque
+                | OpaqueTy::Queue
+                | OpaqueTy::Stack
+                | OpaqueTy::LinkedList
+                | OpaqueTy::DoublyLinkedList
+        )
+    }
+}
+
 /// The canonical type representation used throughout the type checker.
 ///
 /// Unlike `ori_ast::ty::Type` (which mirrors source syntax), `Ty` uses
@@ -39,6 +81,17 @@ pub enum Ty {
     Set(Box<Ty>),
     Range(Box<Ty>),
     Lazy(Box<Ty>),
+    Future(Box<Ty>),
+    TaskJob(Box<Ty>),
+    Channel(Box<Ty>),
+    AtomicInt,
+    TaskJoinError,
+    ChannelSendError,
+    ChannelReceiveError,
+    Opaque {
+        kind: OpaqueTy,
+        args: Vec<Ty>,
+    },
 
     /// `any<Trait>` — dynamic dispatch; trait identified by `DefId`.
     Any(DefId),
@@ -108,16 +161,31 @@ impl Ty {
     pub fn is_float(&self) -> bool {
         matches!(self, Ty::Float | Ty::Float32 | Ty::Float64)
     }
+    pub fn is_node_id(&self) -> bool {
+        matches!(
+            self,
+            Ty::Opaque {
+                kind: OpaqueTy::NodeId,
+                ..
+            }
+        )
+    }
 
     /// Returns `true` if this type or any contained type is an inference variable.
     pub fn contains_infer(&self) -> bool {
         match self {
             Ty::Infer(_) => true,
-            Ty::Optional(t) | Ty::List(t) | Ty::Set(t) | Ty::Range(t) | Ty::Lazy(t) => {
-                t.contains_infer()
-            }
+            Ty::Optional(t)
+            | Ty::List(t)
+            | Ty::Set(t)
+            | Ty::Range(t)
+            | Ty::Lazy(t)
+            | Ty::Future(t)
+            | Ty::TaskJob(t)
+            | Ty::Channel(t) => t.contains_infer(),
             Ty::Any(_) => false,
             Ty::Result(a, b) | Ty::Map(a, b) => a.contains_infer() || b.contains_infer(),
+            Ty::Opaque { args, .. } => args.iter().any(|arg| arg.contains_infer()),
             Ty::Tuple(ts) => ts.iter().any(|t| t.contains_infer()),
             Ty::Func { params, ret } => {
                 params.iter().any(|p| p.contains_infer()) || ret.contains_infer()
@@ -135,6 +203,18 @@ impl Ty {
         use Ty::*;
         // Reflexive & error/never rules
         if self == other {
+            return true;
+        }
+        if matches!(
+            (self, other),
+            (Ty::Int, Ty::Int64)
+                | (Ty::Int64, Ty::Int)
+                | (Ty::Float, Ty::Float64)
+                | (Ty::Float64, Ty::Float)
+        ) {
+            return true;
+        }
+        if matches!((self, other), (Ty::Int, ty) | (ty, Ty::Int) if ty.is_node_id()) {
             return true;
         }
         if self.is_error() {
@@ -157,10 +237,31 @@ impl Ty {
             (Result(a_ok, a_err), Result(b_ok, b_err)) => {
                 a_ok.is_assignable_to(b_ok) && a_err.is_assignable_to(b_err)
             }
-            (List(a), List(b)) | (Set(a), Set(b)) | (Range(a), Range(b)) | (Lazy(a), Lazy(b)) => {
-                a.is_assignable_to(b)
-            }
+            (List(a), List(b))
+            | (Set(a), Set(b))
+            | (Range(a), Range(b))
+            | (Lazy(a), Lazy(b))
+            | (Future(a), Future(b))
+            | (TaskJob(a), TaskJob(b))
+            | (Channel(a), Channel(b)) => a.is_assignable_to(b),
             (Map(ka, va), Map(kb, vb)) => ka.is_assignable_to(kb) && va.is_assignable_to(vb),
+            (
+                Opaque {
+                    kind: kind_a,
+                    args: args_a,
+                },
+                Opaque {
+                    kind: kind_b,
+                    args: args_b,
+                },
+            ) => {
+                kind_a == kind_b
+                    && args_a.len() == args_b.len()
+                    && args_a
+                        .iter()
+                        .zip(args_b.iter())
+                        .all(|(a, b)| a.is_assignable_to(b))
+            }
             (Tuple(as_), Tuple(bs)) => {
                 as_.len() == bs.len()
                     && as_
@@ -226,6 +327,25 @@ impl Ty {
             Ty::Set(t) => format!("set<{}>", t.display()),
             Ty::Range(t) => format!("range<{}>", t.display()),
             Ty::Lazy(t) => format!("lazy<{}>", t.display()),
+            Ty::Future(t) => format!("future<{}>", t.display()),
+            Ty::TaskJob(t) => format!("task.Job<{}>", t.display()),
+            Ty::Channel(t) => format!("channel.Channel<{}>", t.display()),
+            Ty::AtomicInt => "atomic.AtomicInt".into(),
+            Ty::TaskJoinError => "task.JoinError".into(),
+            Ty::ChannelSendError => "channel.SendError".into(),
+            Ty::ChannelReceiveError => "channel.ReceiveError".into(),
+            Ty::Opaque { kind, args } => {
+                if args.is_empty() {
+                    kind.display_name().into()
+                } else {
+                    let args = args
+                        .iter()
+                        .map(|arg| arg.display())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("{}<{}>", kind.display_name(), args)
+                }
+            }
             Ty::Any(d) => format!("any<{:?}>", d),
             Ty::Tuple(ts) => {
                 let inner = ts
@@ -259,6 +379,13 @@ impl Ty {
             Ty::Infer(id) => format!("_#{}", id),
         }
     }
+
+    pub fn list_backed_collection_elem(&self) -> Option<&Ty> {
+        match self {
+            Ty::Opaque { kind, args } if kind.is_list_backed_collection() => args.first(),
+            _ => None,
+        }
+    }
 }
 
 // ── Type alias expansion ───────────────────────────────────────────────────────
@@ -267,9 +394,15 @@ impl Ty {
 /// arguments in `args`.  Used when instantiating a generic type alias.
 pub fn substitute_ty_params(ty: &Ty, args: &[Ty]) -> Ty {
     match ty {
-        Ty::Param { index, .. } => args.get(*index as usize).cloned().unwrap_or_else(|| ty.clone()),
+        Ty::Param { index, .. } => args
+            .get(*index as usize)
+            .cloned()
+            .unwrap_or_else(|| ty.clone()),
         Ty::Named(id, inner_args) => {
-            let new_args = inner_args.iter().map(|a| substitute_ty_params(a, args)).collect();
+            let new_args = inner_args
+                .iter()
+                .map(|a| substitute_ty_params(a, args))
+                .collect();
             Ty::Named(*id, new_args)
         }
         Ty::Optional(inner) => Ty::Optional(Box::new(substitute_ty_params(inner, args))),
@@ -285,11 +418,27 @@ pub fn substitute_ty_params(ty: &Ty, args: &[Ty]) -> Ty {
         Ty::Set(elem) => Ty::Set(Box::new(substitute_ty_params(elem, args))),
         Ty::Range(elem) => Ty::Range(Box::new(substitute_ty_params(elem, args))),
         Ty::Lazy(inner) => Ty::Lazy(Box::new(substitute_ty_params(inner, args))),
-        Ty::Tuple(elems) => {
-            Ty::Tuple(elems.iter().map(|e| substitute_ty_params(e, args)).collect())
-        }
+        Ty::Future(inner) => Ty::Future(Box::new(substitute_ty_params(inner, args))),
+        Ty::TaskJob(inner) => Ty::TaskJob(Box::new(substitute_ty_params(inner, args))),
+        Ty::Channel(inner) => Ty::Channel(Box::new(substitute_ty_params(inner, args))),
+        Ty::Opaque { kind, args: inner } => Ty::Opaque {
+            kind: *kind,
+            args: inner
+                .iter()
+                .map(|arg| substitute_ty_params(arg, args))
+                .collect(),
+        },
+        Ty::Tuple(elems) => Ty::Tuple(
+            elems
+                .iter()
+                .map(|e| substitute_ty_params(e, args))
+                .collect(),
+        ),
         Ty::Func { params, ret } => Ty::Func {
-            params: params.iter().map(|p| substitute_ty_params(p, args)).collect(),
+            params: params
+                .iter()
+                .map(|p| substitute_ty_params(p, args))
+                .collect(),
             ret: Box::new(substitute_ty_params(ret, args)),
         },
         other => other.clone(),
@@ -342,20 +491,30 @@ where
             Box::new(normalize_ty_aliases_depth(*ok, lookup, depth)),
             Box::new(normalize_ty_aliases_depth(*err, lookup, depth)),
         ),
-        Ty::List(elem) => {
-            Ty::List(Box::new(normalize_ty_aliases_depth(*elem, lookup, depth)))
-        }
+        Ty::List(elem) => Ty::List(Box::new(normalize_ty_aliases_depth(*elem, lookup, depth))),
         Ty::Map(k, v) => Ty::Map(
             Box::new(normalize_ty_aliases_depth(*k, lookup, depth)),
             Box::new(normalize_ty_aliases_depth(*v, lookup, depth)),
         ),
         Ty::Set(elem) => Ty::Set(Box::new(normalize_ty_aliases_depth(*elem, lookup, depth))),
-        Ty::Range(elem) => {
-            Ty::Range(Box::new(normalize_ty_aliases_depth(*elem, lookup, depth)))
+        Ty::Range(elem) => Ty::Range(Box::new(normalize_ty_aliases_depth(*elem, lookup, depth))),
+        Ty::Lazy(inner) => Ty::Lazy(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth))),
+        Ty::Future(inner) => {
+            Ty::Future(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth)))
         }
-        Ty::Lazy(inner) => {
-            Ty::Lazy(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth)))
+        Ty::TaskJob(inner) => {
+            Ty::TaskJob(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth)))
         }
+        Ty::Channel(inner) => {
+            Ty::Channel(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth)))
+        }
+        Ty::Opaque { kind, args } => Ty::Opaque {
+            kind,
+            args: args
+                .into_iter()
+                .map(|arg| normalize_ty_aliases_depth(arg, lookup, depth))
+                .collect(),
+        },
         Ty::Tuple(elems) => Ty::Tuple(
             elems
                 .into_iter()

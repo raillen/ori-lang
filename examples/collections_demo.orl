@@ -1,0 +1,90 @@
+namespace app.collections
+
+import ori.deque as deque
+import ori.doubly_linked_list as dll
+import ori.hash_table as hash_table
+import ori.io as io
+import ori.linked_list as ll
+import ori.list as lists
+import ori.map as maps
+import ori.queue as queue
+import ori.stack as stack
+import ori.tree as tree
+
+func main()
+    io.print("Collections")
+    const fruits: list<string> = ["Apple", "Banana", "Cherry"]
+    io.print(string(lists.len(fruits)))
+
+    for fruit in fruits
+        io.print(fruit)
+    end
+
+    const scores: map<int, int> = {1: 95, 2: 88, 3: 92}
+    maps.reserve(scores, 8)
+    io.print(string(maps.get(scores, 2)))
+
+    const todo: queue.Queue<string> = queue.new()
+    queue.enqueue(todo, "first")
+    queue.enqueue(todo, "second")
+    match queue.dequeue(todo)
+        case some(item):
+            io.print(item)
+        case none:
+            io.print("empty")
+    end
+
+    const history: stack.Stack<string> = stack.new()
+    stack.push(history, "open")
+    stack.push(history, "save")
+    match stack.pop(history)
+        case some(action):
+            io.print(action)
+        case none:
+            io.print("empty")
+    end
+
+    const window: deque.Deque<int> = deque.new()
+    deque.push_back(window, 2)
+    deque.push_front(window, 1)
+    deque.push_back(window, 3)
+    io.print(string(deque.len(window)))
+
+    const names: ll.LinkedList<string> = ll.new()
+    ll.push_back(names, "draft")
+    ll.push_front(names, "idea")
+    match ll.front(names)
+        case some(item):
+            io.print(item)
+        case none:
+            io.print("empty")
+    end
+
+    const path: dll.DoublyLinkedList<int> = dll.new()
+    dll.push_front(path, 10)
+    dll.push_back(path, 20)
+    match dll.back(path)
+        case some(step):
+            io.print(string(step))
+        case none:
+            io.print("empty")
+    end
+
+    const outline: tree.Tree<string> = tree.new("book")
+    const root: tree.NodeId = tree.root(outline)
+    const chapter: tree.NodeId = tree.add_child(outline, root, "chapter")
+    const section: tree.NodeId = tree.add_child(outline, chapter, "section")
+    io.print(tree.value(outline, root))
+    io.print(string(tree.depth(outline, section)))
+    const order: list<tree.NodeId> = tree.pre_order(outline)
+    io.print(tree.value(outline, order[1]))
+
+    const cache: hash_table.HashTable<string, int> = hash_table.with_capacity(4)
+    hash_table.set(cache, "pages", 120)
+    match hash_table.get(cache, "pages")
+        case some(count):
+            io.print(string(count))
+        case none:
+            io.print("missing")
+    end
+end

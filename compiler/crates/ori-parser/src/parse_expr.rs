@@ -3,8 +3,14 @@ use ori_ast::expr::{
     Arg, ArgValue, BinaryOp, ClosureBody, ClosureExpr, ClosureParam, Expr, FStrPart, FieldInit,
     IndexExpr, UnaryOp,
 };
-use ori_lexer::TokenKind;
+use ori_diagnostics::{DiagnosticSink, Span};
+use ori_lexer::{lex, TokenKind};
 use smol_str::SmolStr;
+
+struct NormalizedTripleString {
+    text: String,
+    offsets: Vec<usize>,
+}
 
 // ── Pratt precedence ──────────────────────────────────────────────────────────
 
@@ -46,6 +52,23 @@ fn token_to_binop(kind: &TokenKind) -> Option<BinaryOp> {
 }
 
 // ── Public entry ──────────────────────────────────────────────────────────────
+
+fn is_comparison_op(op: BinaryOp) -> bool {
+    matches!(
+        op,
+        BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge
+    )
+}
+
+fn is_comparison_expr(expr: &Expr) -> bool {
+    matches!(expr, Expr::Binary { op, .. } if is_comparison_op(*op))
+}
+
+fn starts_numeric_suffix(text: &str) -> bool {
+    text.chars()
+        .next()
+        .is_some_and(|ch| ch == '_' || ch.is_alphabetic())
+}
 
 impl<'src> Parser<'src> {
     /// Parse an expression (top-level precedence).
@@ -98,6 +121,14 @@ impl<'src> Parser<'src> {
             // `base with { field: value } end` struct update.
             if self.at(&TokenKind::With) && min_prec <= 1 {
                 self.advance();
+                if !self.at(&TokenKind::LBrace) {
+                    self.error(
+                        "parse.unexpected_token",
+                        "struct update expects `{` after `with`; write `base with { field: value } end`",
+                        self.current_span(),
+                    );
+                    return None;
+                }
                 let updates = self.parse_braced_field_inits()?;
                 let end = self.expect(&TokenKind::End)?;
                 let span = lhs.span().cover(end);
@@ -116,6 +147,13 @@ impl<'src> Parser<'src> {
                 }
                 let op_tok = self.advance().unwrap();
                 let op = token_to_binop(&op_tok.kind).unwrap();
+                if is_comparison_op(op) && is_comparison_expr(&lhs) {
+                    self.error(
+                        "parse.chained_comparison",
+                        "chained comparison is not allowed",
+                        lhs.span().cover(op_tok.span),
+                    );
+                }
                 let rhs = self.parse_expr_prec(right_prec)?;
                 let span = lhs.span().cover(rhs.span());
                 lhs = Expr::Binary {
@@ -149,6 +187,14 @@ impl<'src> Parser<'src> {
             return Some(Expr::Unary {
                 op: UnaryOp::Not,
                 operand: Box::new(operand),
+                span: s,
+            });
+        }
+        if self.eat_contextual("await") {
+            let inner = self.parse_unary()?;
+            let s = span.cover(inner.span());
+            return Some(Expr::Await {
+                expr: Box::new(inner),
                 span: s,
             });
         }
@@ -223,6 +269,17 @@ impl<'src> Parser<'src> {
         Some(expr)
     }
 
+    fn numeric_literal_raw_with_adjacent_suffix(&mut self, initial_span: Span) -> (SmolStr, Span) {
+        let mut span = initial_span;
+        if let Some(next) = self.peek() {
+            if next.span.start == span.end && starts_numeric_suffix(self.slice(next.span)) {
+                span = span.cover(next.span);
+                self.advance();
+            }
+        }
+        (SmolStr::new(self.slice(span)), span)
+    }
+
     pub fn parse_primary_expr(&mut self) -> Option<Expr> {
         let span = self.current_span();
         match self.peek_kind()? {
@@ -254,39 +311,56 @@ impl<'src> Parser<'src> {
 
             TokenKind::IntLit => {
                 let tok = self.advance().unwrap();
-                Some(Expr::IntLit {
-                    raw: SmolStr::new(self.slice(tok.span)),
-                    span,
-                })
+                let (raw, span) = self.numeric_literal_raw_with_adjacent_suffix(tok.span);
+                Some(Expr::IntLit { raw, span })
             }
             TokenKind::FloatLit => {
                 let tok = self.advance().unwrap();
-                Some(Expr::FloatLit {
-                    raw: SmolStr::new(self.slice(tok.span)),
-                    span,
-                })
+                let (raw, span) = self.numeric_literal_raw_with_adjacent_suffix(tok.span);
+                Some(Expr::FloatLit { raw, span })
             }
             TokenKind::StrLit => {
                 let tok = self.advance().unwrap();
-                let raw = self.slice(tok.span);
-                // Strip surrounding quotes; unescape sequences are left to a later pass
-                let value = SmolStr::new(&raw[1..raw.len() - 1]);
+                let raw = self.slice(tok.span).to_string();
+                let value = self
+                    .unescape_string_content(&raw[1..raw.len() - 1], tok.span.start as usize + 1);
+                Some(Expr::StrLit { value, span })
+            }
+            TokenKind::TripleStrLit => {
+                let tok = self.advance().unwrap();
+                let raw = self.slice(tok.span).to_string();
+                let content = self.normalize_triple_string_content(&raw[3..raw.len() - 3]);
+                let value = self.unescape_string_content(&content, tok.span.start as usize + 3);
                 Some(Expr::StrLit { value, span })
             }
             TokenKind::FStrLit => {
                 let tok = self.advance().unwrap();
-                // Store raw content; interpolation parsing deferred to a later pass
-                let raw = self.slice(tok.span);
-                let content = SmolStr::new(&raw[2..raw.len() - 1]); // strip f" and "
+                let raw = self.slice(tok.span).to_string();
+                let content = &raw[2..raw.len() - 1]; // strip f" and "
                 Some(Expr::FStrLit {
-                    parts: vec![FStrPart::Literal(content)],
+                    parts: self.parse_fstr_parts(content, tok.span.start as usize + 2, None),
+                    span,
+                })
+            }
+            TokenKind::TripleFStrLit => {
+                let tok = self.advance().unwrap();
+                let raw = self.slice(tok.span).to_string();
+                let content =
+                    self.normalize_triple_string_content_with_offsets(&raw[4..raw.len() - 3]);
+                Some(Expr::FStrLit {
+                    parts: self.parse_fstr_parts(
+                        &content.text,
+                        tok.span.start as usize + 4,
+                        Some(&content.offsets),
+                    ),
                     span,
                 })
             }
             TokenKind::BytesLit => {
                 let tok = self.advance().unwrap();
-                let raw = self.slice(tok.span);
-                let content = raw[2..raw.len() - 1].as_bytes().to_vec();
+                let raw = self.slice(tok.span).to_string();
+                let content = self
+                    .unescape_bytes_content(&raw[2..raw.len() - 1], tok.span.start as usize + 2);
                 Some(Expr::BytesLit {
                     bytes: content,
                     span,
@@ -297,6 +371,31 @@ impl<'src> Parser<'src> {
             TokenKind::SelfKw => {
                 self.advance();
                 Some(Expr::SelfExpr(span))
+            }
+
+            // `tuple(a, b)` - explicit tuple constructor form from the grammar.
+            TokenKind::Tuple => {
+                self.advance();
+                self.expect(&TokenKind::LParen)?;
+                let mut elements = Vec::new();
+                while !self.at(&TokenKind::RParen) && !self.at_eof() {
+                    elements.push(self.parse_expr()?);
+                    if !self.eat(&TokenKind::Comma) {
+                        break;
+                    }
+                }
+                let end = self.expect(&TokenKind::RParen)?;
+                if elements.len() < 2 {
+                    self.error(
+                        "parse.tuple_arity",
+                        "`tuple(...)` requires at least two elements",
+                        span.cover(end),
+                    );
+                }
+                Some(Expr::Tuple {
+                    elements,
+                    span: span.cover(end),
+                })
             }
 
             // Grouped expression or tuple `(a, b)` or `(a)`
@@ -394,6 +493,14 @@ impl<'src> Parser<'src> {
             // `.Variant` — shorthand enum variant
             TokenKind::Dot => {
                 self.advance();
+                if self.at(&TokenKind::LBrace) {
+                    let fields = self.parse_braced_field_inits()?;
+                    let end = fields.last().map(|f| f.span).unwrap_or(span);
+                    return Some(Expr::AnonStructLit {
+                        fields,
+                        span: span.cover(end),
+                    });
+                }
                 let variant = self.parse_name()?;
                 if self.at(&TokenKind::LParen) {
                     let fields = self.parse_field_inits()?;
@@ -431,7 +538,7 @@ impl<'src> Parser<'src> {
             }
 
             // Identifier or qualified name — also handles `Name(fields)` struct/enum lit
-            TokenKind::Ident => {
+            TokenKind::Ident | TokenKind::Lazy => {
                 let name = self.parse_qualified_name()?;
                 Some(Expr::QualifiedIdent(name))
             }
@@ -586,6 +693,398 @@ impl<'src> Parser<'src> {
         Some(fields)
     }
 
+    fn unescape_string_content(&mut self, content: &str, base: usize) -> SmolStr {
+        let mut out = String::new();
+        let mut iter = content.char_indices().peekable();
+        while let Some((i, ch)) = iter.next() {
+            if ch != '\\' {
+                out.push(ch);
+                continue;
+            }
+
+            let Some((j, esc)) = iter.next() else {
+                self.error(
+                    "parse.invalid_escape",
+                    "unfinished escape sequence",
+                    Span::new(base + i, base + i + 1),
+                );
+                break;
+            };
+
+            match esc {
+                'n' => out.push('\n'),
+                'r' => out.push('\r'),
+                't' => out.push('\t'),
+                '"' => out.push('"'),
+                '\\' => out.push('\\'),
+                '0' => out.push('\0'),
+                'u' => {
+                    if iter.peek().map(|(_, c)| *c) != Some('{') {
+                        self.error(
+                            "parse.invalid_escape",
+                            "expected `{` after `\\u`",
+                            Span::new(base + i, base + j + esc.len_utf8()),
+                        );
+                        out.push('u');
+                        continue;
+                    }
+                    iter.next(); // {
+                    let mut hex = String::new();
+                    let mut end = None;
+                    for (k, c) in iter.by_ref() {
+                        if c == '}' {
+                            end = Some(k + 1);
+                            break;
+                        }
+                        hex.push(c);
+                    }
+                    match u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32) {
+                        Some(c) => out.push(c),
+                        None => self.error(
+                            "parse.invalid_escape",
+                            "invalid unicode escape",
+                            Span::new(base + i, base + end.unwrap_or(content.len())),
+                        ),
+                    }
+                }
+                other => {
+                    self.error(
+                        "parse.invalid_escape",
+                        format!("unknown escape sequence `\\{other}`"),
+                        Span::new(base + i, base + j + other.len_utf8()),
+                    );
+                    out.push(other);
+                }
+            }
+        }
+        SmolStr::new(out)
+    }
+
+    fn unescape_bytes_content(&mut self, content: &str, base: usize) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut iter = content.char_indices().peekable();
+        while let Some((i, ch)) = iter.next() {
+            if ch != '\\' {
+                let mut buf = [0; 4];
+                out.extend_from_slice(ch.encode_utf8(&mut buf).as_bytes());
+                continue;
+            }
+
+            let Some((j, esc)) = iter.next() else {
+                self.error(
+                    "parse.invalid_escape",
+                    "unfinished byte escape sequence",
+                    Span::new(base + i, base + i + 1),
+                );
+                break;
+            };
+
+            match esc {
+                'n' => out.push(b'\n'),
+                'r' => out.push(b'\r'),
+                't' => out.push(b'\t'),
+                '"' => out.push(b'"'),
+                '\\' => out.push(b'\\'),
+                '0' => out.push(0),
+                'x' => {
+                    let Some((h1_i, h1)) = iter.next() else {
+                        self.error(
+                            "parse.invalid_escape",
+                            "expected two hex digits after `\\x`",
+                            Span::new(base + i, base + j + 1),
+                        );
+                        continue;
+                    };
+                    let Some((h2_i, h2)) = iter.next() else {
+                        self.error(
+                            "parse.invalid_escape",
+                            "expected two hex digits after `\\x`",
+                            Span::new(base + i, base + h1_i + h1.len_utf8()),
+                        );
+                        continue;
+                    };
+                    if let (Some(a), Some(b)) = (hex_value(h1), hex_value(h2)) {
+                        out.push((a << 4) | b);
+                    } else {
+                        self.error(
+                            "parse.invalid_escape",
+                            "invalid hex byte escape",
+                            Span::new(base + i, base + h2_i + h2.len_utf8()),
+                        );
+                    }
+                }
+                'u' => {
+                    let mut end = j + esc.len_utf8();
+                    if iter.peek().map(|(_, c)| *c) == Some('{') {
+                        iter.next();
+                        end += 1;
+                        for (k, c) in iter.by_ref() {
+                            end = k + c.len_utf8();
+                            if c == '}' {
+                                break;
+                            }
+                        }
+                    }
+                    self.error(
+                        "parse.byte_unicode_escape",
+                        "byte strings do not support unicode escapes; use `\\xNN` bytes",
+                        Span::new(base + i, base + end),
+                    );
+                }
+                other => {
+                    self.error(
+                        "parse.invalid_escape",
+                        format!("unknown byte escape sequence `\\{other}`"),
+                        Span::new(base + i, base + j + other.len_utf8()),
+                    );
+                    let mut buf = [0; 4];
+                    out.extend_from_slice(other.encode_utf8(&mut buf).as_bytes());
+                }
+            }
+        }
+        out
+    }
+
+    fn normalize_triple_string_content(&self, content: &str) -> String {
+        self.normalize_triple_string_content_with_offsets(content)
+            .text
+    }
+
+    fn normalize_triple_string_content_with_offsets(
+        &self,
+        content: &str,
+    ) -> NormalizedTripleString {
+        let mut normalized = String::new();
+        let mut source_offsets = Vec::new();
+        let bytes = content.as_bytes();
+        let mut i = 0usize;
+        while i < content.len() {
+            if bytes[i..].starts_with(b"\r\n") {
+                source_offsets.push(i);
+                normalized.push('\n');
+                i += 2;
+                continue;
+            }
+            let ch = content[i..].chars().next().unwrap();
+            for byte_offset in 0..ch.len_utf8() {
+                source_offsets.push(i + byte_offset);
+            }
+            normalized.push(ch);
+            i += ch.len_utf8();
+        }
+        source_offsets.push(content.len());
+
+        let mut start = 0usize;
+        let mut end = normalized.len();
+        if normalized.starts_with('\n') {
+            start = 1;
+        }
+
+        let mut baseline = "";
+        if let Some(last_newline) = normalized[start..end].rfind('\n') {
+            let last_newline = start + last_newline;
+            let tail = &normalized[last_newline + 1..end];
+            if tail.chars().all(|ch| ch == ' ' || ch == '\t') {
+                baseline = tail;
+                end = last_newline;
+            }
+        }
+
+        let mut text = String::new();
+        let mut offsets = Vec::new();
+        if baseline.is_empty() {
+            append_mapped_range(
+                &mut text,
+                &mut offsets,
+                &normalized,
+                &source_offsets,
+                start,
+                end,
+            );
+        } else {
+            let mut line_start = start;
+            while line_start <= end {
+                let line_end = normalized[line_start..end]
+                    .find('\n')
+                    .map(|idx| line_start + idx)
+                    .unwrap_or(end);
+                let line = &normalized[line_start..line_end];
+                let content_start = if line.starts_with(baseline) {
+                    line_start + baseline.len()
+                } else {
+                    line_start
+                };
+                append_mapped_range(
+                    &mut text,
+                    &mut offsets,
+                    &normalized,
+                    &source_offsets,
+                    content_start,
+                    line_end,
+                );
+                if line_end >= end {
+                    break;
+                }
+                offsets.push(source_offsets[line_end]);
+                text.push('\n');
+                line_start = line_end + 1;
+            }
+        }
+        offsets.push(source_offsets[end]);
+        NormalizedTripleString { text, offsets }
+    }
+
+    fn parse_fstr_parts(
+        &mut self,
+        content: &str,
+        base: usize,
+        offsets: Option<&[usize]>,
+    ) -> Vec<FStrPart> {
+        let mut parts = Vec::new();
+        let mut literal_start = 0usize;
+        let mut i = 0usize;
+
+        while i < content.len() {
+            let ch = content[i..].chars().next().unwrap();
+            if ch == '{' {
+                if content[i + 1..].starts_with('{') {
+                    if literal_start < i {
+                        let literal = self.unescape_string_content(
+                            &content[literal_start..i],
+                            fstr_source_offset(base, offsets, literal_start),
+                        );
+                        if !literal.is_empty() {
+                            parts.push(FStrPart::Literal(literal));
+                        }
+                    }
+                    parts.push(FStrPart::Literal(SmolStr::new("{")));
+                    i += 2;
+                    literal_start = i;
+                    continue;
+                }
+                if literal_start < i {
+                    let literal = self.unescape_string_content(
+                        &content[literal_start..i],
+                        fstr_source_offset(base, offsets, literal_start),
+                    );
+                    if !literal.is_empty() {
+                        parts.push(FStrPart::Literal(literal));
+                    }
+                }
+                let expr_start = i + 1;
+                let Some(expr_end) = find_fstr_expr_end(content, expr_start) else {
+                    self.error(
+                        "parse.fstring_unclosed_expr",
+                        "unterminated f-string interpolation",
+                        Span::new(
+                            fstr_source_offset(base, offsets, i),
+                            fstr_source_offset(base, offsets, content.len()),
+                        ),
+                    );
+                    literal_start = i;
+                    break;
+                };
+                let raw_expr = &content[expr_start..expr_end];
+                let leading_trim = raw_expr.len() - raw_expr.trim_start().len();
+                let expr_src = raw_expr.trim();
+                if expr_src.is_empty() {
+                    self.error(
+                        "parse.fstring_empty_expr",
+                        "empty f-string interpolation",
+                        Span::new(
+                            fstr_source_offset(base, offsets, expr_start),
+                            fstr_source_offset(base, offsets, expr_end),
+                        ),
+                    );
+                } else if let Some(expr) = self.parse_fstr_interpolated_expr(
+                    expr_src,
+                    Span::new(
+                        fstr_source_offset(base, offsets, expr_start + leading_trim),
+                        fstr_source_offset(
+                            base,
+                            offsets,
+                            expr_start + leading_trim + expr_src.len(),
+                        ),
+                    ),
+                ) {
+                    parts.push(FStrPart::Interpolated(Box::new(expr)));
+                }
+                i = expr_end + 1;
+                literal_start = i;
+                continue;
+            }
+
+            if ch == '}' {
+                if content[i + 1..].starts_with('}') {
+                    if literal_start < i {
+                        let literal = self.unescape_string_content(
+                            &content[literal_start..i],
+                            fstr_source_offset(base, offsets, literal_start),
+                        );
+                        if !literal.is_empty() {
+                            parts.push(FStrPart::Literal(literal));
+                        }
+                    }
+                    parts.push(FStrPart::Literal(SmolStr::new("}")));
+                    i += 2;
+                    literal_start = i;
+                    continue;
+                }
+                self.error(
+                    "parse.fstring_unmatched_brace",
+                    "unmatched `}` in f-string",
+                    Span::new(
+                        fstr_source_offset(base, offsets, i),
+                        fstr_source_offset(base, offsets, i + 1),
+                    ),
+                );
+            }
+            i += ch.len_utf8();
+        }
+
+        if literal_start < content.len() {
+            let literal = self.unescape_string_content(
+                &content[literal_start..],
+                fstr_source_offset(base, offsets, literal_start),
+            );
+            if !literal.is_empty() {
+                parts.push(FStrPart::Literal(literal));
+            }
+        }
+
+        if parts.is_empty() {
+            parts.push(FStrPart::Literal(SmolStr::new("")));
+        }
+        parts
+    }
+
+    fn parse_fstr_interpolated_expr(&mut self, source: &str, span: Span) -> Option<Expr> {
+        let mut nested_sink = DiagnosticSink::default();
+        let mut tokens = lex(source, self.file_id, &mut nested_sink);
+        let offset = span.start as u32;
+        for token in &mut tokens {
+            token.span = offset_span(token.span, offset);
+        }
+        for mut diagnostic in nested_sink.into_diagnostics() {
+            offset_diagnostic_spans(&mut diagnostic, offset);
+            self.sink.emit(diagnostic);
+        }
+
+        let expr = {
+            let mut parser = Parser::new(&tokens, self.source, self.file_id, self.sink);
+            let expr = parser.parse_expr();
+            if expr.is_some() && !parser.at_eof() {
+                parser.error(
+                    "parse.fstring_expr_trailing_tokens",
+                    "unexpected tokens after f-string expression",
+                    parser.current_span(),
+                );
+            }
+            expr
+        };
+        expr
+    }
+
     fn parse_closure_expr(&mut self, start: ori_diagnostics::Span) -> Option<Expr> {
         self.expect(&TokenKind::LParen)?;
         let mut params = Vec::new();
@@ -627,4 +1126,91 @@ impl<'src> Parser<'src> {
             span: start.cover(end),
         })))
     }
+}
+
+fn hex_value(ch: char) -> Option<u8> {
+    match ch {
+        '0'..='9' => Some(ch as u8 - b'0'),
+        'a'..='f' => Some(ch as u8 - b'a' + 10),
+        'A'..='F' => Some(ch as u8 - b'A' + 10),
+        _ => None,
+    }
+}
+
+fn append_mapped_range(
+    text: &mut String,
+    offsets: &mut Vec<usize>,
+    source: &str,
+    source_offsets: &[usize],
+    start: usize,
+    end: usize,
+) {
+    offsets.extend((start..end).map(|idx| source_offsets[idx]));
+    text.push_str(&source[start..end]);
+}
+
+fn fstr_source_offset(base: usize, offsets: Option<&[usize]>, idx: usize) -> usize {
+    base + offsets
+        .and_then(|items| items.get(idx).copied())
+        .unwrap_or(idx)
+}
+
+fn offset_span(span: Span, offset: u32) -> Span {
+    Span {
+        start: span.start + offset,
+        end: span.end + offset,
+    }
+}
+
+fn offset_diagnostic_spans(diagnostic: &mut ori_diagnostics::Diagnostic, offset: u32) {
+    for label in &mut diagnostic.labels {
+        label.span = offset_span(label.span, offset);
+    }
+}
+
+fn find_fstr_expr_end(content: &str, start: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut i = start;
+    while i < content.len() {
+        let ch = content[i..].chars().next().unwrap();
+        match ch {
+            '{' => {
+                depth += 1;
+                i += 1;
+            }
+            '}' if depth == 0 => return Some(i),
+            '}' => {
+                depth -= 1;
+                i += 1;
+            }
+            '"' | '\'' => {
+                i = skip_quoted_in_fstr_expr(content, i, ch)?;
+            }
+            _ => i += ch.len_utf8(),
+        }
+    }
+    None
+}
+
+fn skip_quoted_in_fstr_expr(content: &str, start: usize, quote: char) -> Option<usize> {
+    let mut escaped = false;
+    let mut i = start + quote.len_utf8();
+    while i < content.len() {
+        let ch = content[i..].chars().next().unwrap();
+        if escaped {
+            escaped = false;
+            i += ch.len_utf8();
+            continue;
+        }
+        if ch == '\\' {
+            escaped = true;
+            i += 1;
+            continue;
+        }
+        i += ch.len_utf8();
+        if ch == quote {
+            return Some(i);
+        }
+    }
+    None
 }

@@ -59,19 +59,22 @@ if some(user) = find_user(42)
 end
 ```
 
-**`.or(fallback)`** — unwrap or use a default:
+**Planned `.or(fallback)`** — unwrap or use a default:
 
 ```ori
 const name: string = find_name(id).or("Anonymous")
 ```
 
-**`.or_return(value)`** — unwrap or return from the enclosing function:
+**Planned `.or_return(value)`** — unwrap or return from the enclosing function:
 
 ```ori
 const user: User = find_user(id).or_return(none)
 -- If find_user returns none, the enclosing function returns none immediately.
 -- The enclosing function must return optional<_>.
 ```
+
+These helpers are not accepted by the current checker/runtime. Use `?`,
+`if some(...) = ...`, or `match` today.
 
 **`?` propagation** — unwrap or propagate absence:
 
@@ -120,9 +123,9 @@ end
 Rules for `?` on `result<T, E>`:
 1. The enclosing function must return `result<_, F>` where `F` is compatible with `E`.
 2. If `E == F`: the error is propagated as-is.
-3. If `E != F`: a compile error. Use `.or_wrap()` or explicit conversion.
+3. If `E != F`: a compile error. Use explicit conversion. `.or_wrap()` is planned.
 
-### `.or_wrap(context)`
+### Planned `.or_wrap(context)`
 
 Adds a context string to an existing error without losing the original:
 
@@ -132,6 +135,9 @@ const config: Config = read_config(path).or_wrap("loading configuration")?
 
 If `read_config` returns `error("empty path")`, the result becomes
 `error("loading configuration: empty path")`.
+
+Current status: `.or_wrap(...)` is not accepted by the current checker/runtime.
+Use `?` with matching error types or handle the error with `match` today.
 
 ### Pattern Match on `result<T, E>`
 
@@ -170,12 +176,22 @@ The enclosing function's return type must be compatible:
 Using `?` in a function that returns `void` or an incompatible type is a
 compile error.
 
+Backend status:
+
+- The native backend supports `?` propagation.
+- The C backend supports `?` propagation for `optional<T>` and
+  `result<T, E>` when the enclosing function returns a compatible
+  `optional<_>` or `result<_, E>`.
+
 ---
 
 ## Error Types
 
-Any type may be used as the error branch of `result<T, E>`. However, types
-used as errors conventionally implement the `Error` trait:
+Any type may be used as the error branch of `result<T, E>`.
+
+Current implementation: `ori.core.Error` exists as a marker trait. The richer
+`message()`/`cause()` trait-method contract below is planned and documents the
+intended stable shape for future stdlib APIs:
 
 ```ori
 trait Error
@@ -187,8 +203,10 @@ trait Error
 end
 ```
 
-Using `Error` is not required by the compiler; it is required by some stdlib
-functions (e.g. `ori.io` functions use `ori.Error`).
+Using `Error` is not required by the compiler today. Future rich stdlib APIs may
+require it. The current `ori.Error` value type is importable and stores
+`code: string` plus `message: string`; current `ori.io`/`ori.fs` helpers still
+use `string` errors or `optional<T>` where documented.
 
 ### Defining Error Types
 
@@ -286,10 +304,8 @@ end
 
 ```ori
 func run(path: string) -> result<void, AppError>
-    const config: Config = read_config(path)
-        .or_wrap("reading config")
-        -- result<Config, string> is not result<Config, AppError>
-        -- explicit conversion needed:
+    -- result<Config, string> is not result<void, AppError>.
+    -- Explicit conversion is needed today.
     match read_config(path)
     case success(c):
         apply_config(c)

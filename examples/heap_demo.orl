@@ -1,0 +1,27 @@
+namespace examples.heap_demo
+
+import ori.heap as heap
+import ori.io as io
+
+func main()
+    const pending: heap.Heap<int> = heap.new()
+    heap.push(pending, 30)
+    heap.push(pending, 10)
+    heap.push(pending, 20)
+
+    match heap.peek(pending)
+        case some(value):
+            io.print(string(value))
+        case none:
+            io.print("empty")
+    end
+
+    match heap.pop(pending)
+        case some(value):
+            io.print(string(value))
+        case none:
+            io.print("empty")
+    end
+
+    io.print(string(heap.len(pending)))
+end

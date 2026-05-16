@@ -72,6 +72,7 @@ impl Item {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncDecl {
     pub visibility: Visibility,
+    pub is_async: bool,
     pub is_mut: bool,
     pub name: Name,
     pub type_params: TypeParams,
@@ -86,6 +87,7 @@ pub struct FuncDecl {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FuncSignature {
     pub visibility: Visibility,
+    pub is_async: bool,
     pub is_mut: bool,
     pub name: Name,
     pub type_params: TypeParams,

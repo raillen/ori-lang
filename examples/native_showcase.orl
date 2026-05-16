@@ -1,0 +1,99 @@
+namespace app.native_showcase
+
+import ori.io as io
+import ori.list as lists
+import ori.map as maps
+
+trait Labelled
+    func label(self) -> string
+end
+
+trait Disposable
+    mut func dispose(self)
+end
+
+struct User
+    name: string
+    role: string
+end
+
+struct Resource
+    id: int
+end
+
+enum Event
+    Started(label: string)
+    Assigned(user: User)
+    Pair(data: tuple<int, string>)
+end
+
+implement Labelled for User
+    func label(self) -> string
+        return self.name + ":" + self.role
+    end
+end
+
+implement Disposable for Resource
+    mut func dispose(self)
+        io.print("disposed-" + string(self.id))
+    end
+end
+
+func choose<T>(first: T, second: T) -> T
+    return second
+end
+
+func label_of<T>(value: T) -> string where T is Labelled
+    return value.label()
+end
+
+func event(kind: int, user: User) -> Event
+    if kind == 0
+        return Event.Started(label: "boot")
+    end
+    if kind == 1
+        return Event.Assigned(user: user)
+    end
+    return Event.Pair(data: tuple(7, "seven"))
+end
+
+func main()
+    using resource: Resource = Resource(id: 1)
+
+    const user: User = choose(
+        User(name: "Ada", role: "guest"),
+        User(name: "Grace", role: "admin"),
+    )
+    const boxed: any<Labelled> = user
+
+    var names: list<string> = ["seed"]
+    lists.push(names, label_of(user))
+
+    var labels: map<string, string> = {"owner": "none"}
+    maps.set(labels, "owner", boxed.label())
+
+    io.print(lists.get(names, 1))
+    io.print(maps.get(labels, "owner"))
+
+    match event(0, user)
+    case Started(label):
+        io.print(label)
+    case else:
+        io.print("bad")
+    end
+
+    match event(1, user)
+    case Assigned(user):
+        io.print(user.name)
+    case else:
+        io.print("bad")
+    end
+
+    match event(2, user)
+    case Pair(data: tuple(id, label)):
+        io.print(string(id))
+        io.print(label)
+    case else:
+        io.print("bad")
+    end
+end

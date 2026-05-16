@@ -1,0 +1,27 @@
+namespace examples.stack_demo
+
+import ori.io as io
+import ori.stack as stack
+
+func main()
+    const history: stack.Stack<string> = stack.new()
+    stack.push(history, "open")
+    stack.push(history, "edit")
+    stack.push(history, "save")
+
+    match stack.peek(history)
+        case some(action):
+            io.print(action)
+        case none:
+            io.print("empty")
+    end
+
+    match stack.pop(history)
+        case some(action):
+            io.print(action)
+        case none:
+            io.print("empty")
+    end
+
+    io.print(string(stack.len(history)))
+end
