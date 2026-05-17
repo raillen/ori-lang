@@ -2805,7 +2805,13 @@ impl<'a> Checker<'a> {
         match (canonical_path, first_arg_ty.as_ref()) {
             ("ori.list.get", Some(Ty::List(elem))) => ret = *elem.clone(),
             ("ori.list.pop", Some(Ty::List(elem))) => ret = *elem.clone(),
-            ("ori.list.slice", Some(Ty::List(elem))) => ret = Ty::List(elem.clone()),
+            ("ori.list.try_get" | "ori.list.try_pop", Some(Ty::List(elem))) => {
+                ret = Ty::Optional(elem.clone())
+            }
+            (
+                "ori.list.slice" | "ori.list.clone" | "ori.list.to_list" | "ori.list.from_list",
+                Some(Ty::List(elem)),
+            ) => ret = Ty::List(elem.clone()),
             ("ori.list.push", Some(Ty::List(elem))) => {
                 self.check_stdlib_arg_assignable(args, 1, elem);
             }
@@ -2831,6 +2837,16 @@ impl<'a> Checker<'a> {
                 }
             }
             (
+                "ori.linked_list.insert_after"
+                | "ori.doubly_linked_list.insert_after"
+                | "ori.doubly_linked_list.insert_before",
+                _,
+            ) => {
+                if let Some(elem) = first_list_backed_collection_elem.as_ref() {
+                    self.check_stdlib_arg_assignable(args, 2, elem);
+                }
+            }
+            (
                 "ori.deque.pop_front"
                 | "ori.deque.pop_back"
                 | "ori.deque.front"
@@ -2852,6 +2868,33 @@ impl<'a> Checker<'a> {
                 }
             }
             (
+                "ori.linked_list.value_at"
+                | "ori.linked_list.remove_at"
+                | "ori.doubly_linked_list.value_at"
+                | "ori.doubly_linked_list.remove_at",
+                _,
+            ) => {
+                if let Some(elem) = first_list_backed_collection_elem.as_ref() {
+                    ret = Ty::Optional(Box::new(elem.clone()));
+                }
+            }
+            (
+                "ori.linked_list.cursor_front"
+                | "ori.linked_list.cursor_back"
+                | "ori.linked_list.find"
+                | "ori.doubly_linked_list.cursor_front"
+                | "ori.doubly_linked_list.cursor_back"
+                | "ori.doubly_linked_list.find",
+                _,
+            ) => {
+                if path == "ori.linked_list.find" || path == "ori.doubly_linked_list.find" {
+                    if let Some(elem) = first_list_backed_collection_elem.as_ref() {
+                        self.check_stdlib_arg_assignable(args, 1, elem);
+                    }
+                }
+                ret = Ty::Optional(Box::new(Ty::Int));
+            }
+            (
                 "ori.deque.to_list"
                 | "ori.queue.to_list"
                 | "ori.stack.to_list"
@@ -2863,15 +2906,41 @@ impl<'a> Checker<'a> {
                     ret = Ty::List(Box::new(elem.clone()));
                 }
             }
+            (
+                "ori.deque.clone"
+                | "ori.queue.clone"
+                | "ori.stack.clone"
+                | "ori.linked_list.clone"
+                | "ori.doubly_linked_list.clone",
+                _,
+            ) => {
+                if let Some(first) = first_arg_ty.as_ref() {
+                    ret = first.clone();
+                }
+            }
             ("ori.tree.value", _) => {
                 if let Some(elem) = first_tree_elem.as_ref() {
                     ret = elem.clone();
                 }
             }
-            ("ori.tree.add_child", _) => {
+            ("ori.tree.try_value", _) => {
+                if let Some(elem) = first_tree_elem.as_ref() {
+                    ret = Ty::Optional(Box::new(elem.clone()));
+                }
+            }
+            ("ori.tree.add_child" | "ori.tree.set_value", _) => {
                 if let Some(elem) = first_tree_elem.as_ref() {
                     self.check_stdlib_arg_assignable(args, 2, elem);
                 }
+            }
+            ("ori.tree.find", _) => {
+                if let Some(elem) = first_tree_elem.as_ref() {
+                    self.check_stdlib_arg_assignable(args, 1, elem);
+                }
+                ret = Ty::Optional(Box::new(Ty::Opaque {
+                    kind: OpaqueTy::NodeId,
+                    args: vec![],
+                }));
             }
             (
                 "ori.tree.children"
@@ -2891,6 +2960,11 @@ impl<'a> Checker<'a> {
                     args: vec![],
                 }));
             }
+            ("ori.tree.clone" | "ori.tree.clone_subtree", _) => {
+                if let Some(first) = first_arg_ty.as_ref() {
+                    ret = first.clone();
+                }
+            }
             ("ori.map.set", Some(Ty::Map(key, value))) => {
                 self.check_stdlib_arg_assignable(args, 1, key);
                 self.check_stdlib_arg_assignable(args, 2, value);
@@ -2899,8 +2973,15 @@ impl<'a> Checker<'a> {
                 self.check_stdlib_arg_assignable(args, 1, key);
                 ret = *value.clone();
             }
+            ("ori.map.try_get" | "ori.map.try_remove", Some(Ty::Map(key, value))) => {
+                self.check_stdlib_arg_assignable(args, 1, key);
+                ret = Ty::Optional(value.clone());
+            }
             ("ori.map.contains" | "ori.map.remove", Some(Ty::Map(key, _))) => {
                 self.check_stdlib_arg_assignable(args, 1, key);
+            }
+            ("ori.map.clone", Some(Ty::Map(_, _))) => {
+                ret = first_arg_ty.as_ref().unwrap().clone();
             }
             ("ori.map.keys", Some(Ty::Map(key, _))) => ret = Ty::List(Box::new(*key.clone())),
             ("ori.map.values", Some(Ty::Map(_, value))) => {
@@ -2941,16 +3022,44 @@ impl<'a> Checker<'a> {
                     ret = Ty::List(Box::new(Ty::Tuple(vec![key.clone(), value.clone()])));
                 }
             }
+            ("ori.hash_table.clone", _) => {
+                if let Some(first) = first_arg_ty.as_ref() {
+                    ret = first.clone();
+                }
+            }
             ("ori.graph.add_node" | "ori.graph.remove_node" | "ori.graph.has_node", _) => {
                 if let Some(elem) = first_graph_elem.as_ref() {
                     self.check_stdlib_arg_assignable(args, 1, elem);
                 }
             }
-            ("ori.graph.add_edge" | "ori.graph.remove_edge" | "ori.graph.has_edge", _) => {
+            (
+                "ori.graph.add_edge"
+                | "ori.graph.remove_edge"
+                | "ori.graph.has_edge"
+                | "ori.graph.edge_weight"
+                | "ori.graph.shortest_path"
+                | "ori.graph.shortest_weighted_path",
+                _,
+            ) => {
                 if let Some(elem) = first_graph_elem.as_ref() {
                     self.check_stdlib_arg_assignable(args, 1, elem);
                     self.check_stdlib_arg_assignable(args, 2, elem);
                 }
+                if path == "ori.graph.edge_weight" {
+                    ret = Ty::Optional(Box::new(Ty::Int));
+                }
+                if path == "ori.graph.shortest_path" || path == "ori.graph.shortest_weighted_path" {
+                    if let Some(elem) = first_graph_elem.as_ref() {
+                        ret = Ty::Optional(Box::new(Ty::List(Box::new(elem.clone()))));
+                    }
+                }
+            }
+            ("ori.graph.add_weighted_edge", _) => {
+                if let Some(elem) = first_graph_elem.as_ref() {
+                    self.check_stdlib_arg_assignable(args, 1, elem);
+                    self.check_stdlib_arg_assignable(args, 2, elem);
+                }
+                self.check_stdlib_arg_assignable(args, 3, &Ty::Int);
             }
             ("ori.graph.neighbors" | "ori.graph.bfs" | "ori.graph.dfs", _) => {
                 if let Some(elem) = first_graph_elem.as_ref() {
@@ -2961,6 +3070,21 @@ impl<'a> Checker<'a> {
             ("ori.graph.nodes" | "ori.graph.topological_sort", _) => {
                 if let Some(elem) = first_graph_elem.as_ref() {
                     ret = Ty::List(Box::new(elem.clone()));
+                }
+            }
+            ("ori.graph.try_topological_sort", _) => {
+                if let Some(elem) = first_graph_elem.as_ref() {
+                    ret = Ty::Optional(Box::new(Ty::List(Box::new(elem.clone()))));
+                }
+            }
+            ("ori.graph.components" | "ori.graph.strongly_connected_components", _) => {
+                if let Some(elem) = first_graph_elem.as_ref() {
+                    ret = Ty::List(Box::new(Ty::List(Box::new(elem.clone()))));
+                }
+            }
+            ("ori.graph.transitive_closure" | "ori.graph.clone", _) => {
+                if let Some(first) = first_arg_ty.as_ref() {
+                    ret = first.clone();
                 }
             }
             ("ori.graph.edges", _) => {
@@ -2978,8 +3102,45 @@ impl<'a> Checker<'a> {
                     ret = Ty::Optional(Box::new(elem.clone()));
                 }
             }
-            ("ori.set.add" | "ori.set.contains" | "ori.set.remove", Some(Ty::Set(elem))) => {
+            ("ori.heap.clone" | "ori.heap.merge", _) => {
+                if let Some(first) = first_arg_ty.as_ref() {
+                    ret = first.clone();
+                }
+            }
+            ("ori.heap.to_list" | "ori.heap.into_sorted_list", _) => {
+                if let Some(elem) = first_heap_elem.as_ref() {
+                    ret = Ty::List(Box::new(elem.clone()));
+                }
+            }
+            ("ori.heap.from_list", _) => {
+                if let Some(arg) = args.first() {
+                    let arg_ty = match &arg.value {
+                        ArgValue::Expr(expr) | ArgValue::Spread(expr) => self.infer_expr(expr),
+                    };
+                    if let Ty::List(elem) = arg_ty {
+                        ret = Ty::Opaque {
+                            kind: OpaqueTy::Heap,
+                            args: vec![*elem],
+                        };
+                    }
+                }
+            }
+            ("ori.heap.remove", _) => {
+                if let Some(elem) = first_heap_elem.as_ref() {
+                    self.check_stdlib_arg_assignable(args, 1, elem);
+                }
+            }
+            (
+                "ori.set.add" | "ori.set.contains" | "ori.set.remove" | "ori.set.try_remove",
+                Some(Ty::Set(elem)),
+            ) => {
                 self.check_stdlib_arg_assignable(args, 1, elem);
+            }
+            ("ori.set.clone", Some(Ty::Set(_))) => {
+                ret = first_arg_ty.as_ref().unwrap().clone();
+            }
+            ("ori.set.to_list", Some(Ty::Set(elem))) => {
+                ret = Ty::List(elem.clone());
             }
             ("ori.set.union" | "ori.set.intersection" | "ori.set.difference", Some(Ty::Set(_))) => {
                 self.check_stdlib_arg_assignable(args, 1, first_arg_ty.as_ref().unwrap());
@@ -5996,6 +6157,15 @@ fn elem_of(ty: &Ty) -> Option<Ty> {
         Ty::Map(key, _) => Some(*key.clone()),
         Ty::String => Some(Ty::String), // string iteration yields strings (grapheme clusters)
         Ty::Bytes => Some(Ty::U8),
+        Ty::Opaque { kind, args } if kind.is_list_backed_collection() => args.first().cloned(),
+        Ty::Opaque {
+            kind: OpaqueTy::Heap | OpaqueTy::Graph,
+            args,
+        } => args.first().cloned(),
+        Ty::Opaque {
+            kind: OpaqueTy::HashTable,
+            args,
+        } => args.first().cloned(),
         _ => None,
     }
 }
@@ -6005,6 +6175,12 @@ fn for_second_binding_ty(ty: &Ty) -> Ty {
         Ty::Map(_, value) => *value.clone(),
         // For lists, sets, strings, bytes: second binding is always the index (int)
         Ty::List(_) | Ty::Set(_) | Ty::String | Ty::Bytes | Ty::Range(_) => Ty::Int,
+        Ty::Opaque { kind, .. }
+            if kind.is_list_backed_collection()
+                || matches!(kind, OpaqueTy::Heap | OpaqueTy::Graph | OpaqueTy::HashTable) =>
+        {
+            Ty::Int
+        }
         // For any other type, the second binding is an error — the type doesn't
         // support a meaningful second binding, and the type-checker will flag the
         // iterable itself as non-iterable before we ever bind this.

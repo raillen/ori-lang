@@ -47,28 +47,42 @@ const INTERNAL_NATIVE_RUNTIME_IMPORTS: &[&str] = &[
     "ori_future_value_i64",
     "ori_future_value_ptr",
     "ori_graph_add_edge_string",
+    "ori_graph_add_weighted_edge_string",
     "ori_graph_add_node_string",
     "ori_graph_bfs_string",
     "ori_graph_dfs_string",
+    "ori_graph_edge_weight_string",
     "ori_graph_has_edge_string",
     "ori_graph_has_node_string",
     "ori_graph_neighbors_string",
     "ori_graph_remove_edge_string",
     "ori_graph_remove_node_string",
+    "ori_graph_shortest_path_string",
+    "ori_graph_shortest_weighted_path_string",
     "ori_hash_table_contains_string",
+    "ori_hash_table_from_entries_string",
     "ori_hash_table_get_string",
     "ori_hash_table_remove_string",
     "ori_hash_table_set_string",
+    "ori_heap_from_list_custom",
+    "ori_heap_from_list_string",
     "ori_heap_new_custom",
     "ori_heap_new_string",
     "ori_heap_push_custom",
     "ori_heap_push_string",
+    "ori_heap_remove_custom",
+    "ori_heap_remove_string",
     "ori_int_to_cstr",
+    "ori_doubly_linked_list_find_string",
+    "ori_linked_list_find_string",
     "ori_map_contains_string",
     "ori_map_get_string",
     "ori_map_key_at",
     "ori_map_remove_string",
     "ori_map_set_string",
+    "ori_map_from_entries_string",
+    "ori_map_try_get_string",
+    "ori_map_try_remove_string",
     "ori_map_value_at",
     "ori_math_abs_float",
     "ori_math_max_float",
@@ -77,7 +91,10 @@ const INTERNAL_NATIVE_RUNTIME_IMPORTS: &[&str] = &[
     "ori_os_set_args",
     "ori_set_add_string",
     "ori_set_contains_string",
+    "ori_set_from_list_string",
     "ori_set_remove_string",
+    "ori_set_try_remove_string",
+    "ori_tree_find_string",
     "ori_string_concat_parts",
     "ori_to_string_parts",
 ];
@@ -2675,6 +2692,17 @@ impl NativeBackend {
         let id = decl("ori_set_remove_string", &[pt, pt], vec![], None)?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_set_remove_string"), id);
+        let id = decl(
+            "ori_set_try_remove_string",
+            &[pt, pt],
+            vec![],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_set_try_remove_string"), id);
+        let id = decl("ori_set_from_list_string", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_set_from_list_string"), id);
         let id = decl("ori_set_union", &[pt, pt], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_set_union"), id);
         let id = decl("ori_set_intersection", &[pt, pt], vec![], Some(pt))?;
@@ -2699,6 +2727,9 @@ impl NativeBackend {
         let id = decl("ori_map_get_string", &[pt, pt], vec![], Some(types::I64))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_map_get_string"), id);
+        let id = decl("ori_map_try_get_string", &[pt, pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_try_get_string"), id);
         let id = decl(
             "ori_map_contains",
             &[pt, types::I64],
@@ -2743,6 +2774,12 @@ impl NativeBackend {
         let id = decl("ori_map_remove_string", &[pt, pt], vec![], None)?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_map_remove_string"), id);
+        let id = decl("ori_map_try_remove_string", &[pt, pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_try_remove_string"), id);
+        let id = decl("ori_map_from_entries_string", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_from_entries_string"), id);
         let id = decl("ori_map_keys", &[pt], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_keys"), id);
         let id = decl("ori_map_values", &[pt], vec![], Some(pt))?;
@@ -2771,6 +2808,28 @@ impl NativeBackend {
         )?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_hash_table_contains_string"), id);
+        let id = decl(
+            "ori_hash_table_from_entries_string",
+            &[pt],
+            vec![],
+            Some(pt),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_hash_table_from_entries_string"), id);
+        let id = decl("ori_tree_find_string", &[pt, pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_tree_find_string"), id);
+        let id = decl("ori_linked_list_find_string", &[pt, pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_linked_list_find_string"), id);
+        let id = decl(
+            "ori_doubly_linked_list_find_string",
+            &[pt, pt],
+            vec![],
+            Some(pt),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_doubly_linked_list_find_string"), id);
         for name in ["ori_graph_add_node_string", "ori_graph_remove_node_string"] {
             let id = decl(name, &[pt, pt], vec![], None)?;
             self.stdlib_ids.insert(SmolStr::new(name), id);
@@ -2779,12 +2838,28 @@ impl NativeBackend {
             let id = decl(name, &[pt, pt, pt], vec![], None)?;
             self.stdlib_ids.insert(SmolStr::new(name), id);
         }
+        let id = decl(
+            "ori_graph_add_weighted_edge_string",
+            &[pt, pt, pt, types::I64],
+            vec![],
+            None,
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_graph_add_weighted_edge_string"), id);
         for name in ["ori_graph_has_node_string"] {
             let id = decl(name, &[pt, pt], vec![], Some(types::I8))?;
             self.stdlib_ids.insert(SmolStr::new(name), id);
         }
         for name in ["ori_graph_has_edge_string"] {
             let id = decl(name, &[pt, pt, pt], vec![], Some(types::I8))?;
+            self.stdlib_ids.insert(SmolStr::new(name), id);
+        }
+        for name in [
+            "ori_graph_edge_weight_string",
+            "ori_graph_shortest_path_string",
+            "ori_graph_shortest_weighted_path_string",
+        ] {
+            let id = decl(name, &[pt, pt, pt], vec![], Some(pt))?;
             self.stdlib_ids.insert(SmolStr::new(name), id);
         }
         for name in [
@@ -2807,6 +2882,23 @@ impl NativeBackend {
         let id = decl("ori_heap_push_custom", &[pt, types::I64, pt], vec![], None)?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_heap_push_custom"), id);
+        let id = decl("ori_heap_from_list_string", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_heap_from_list_string"), id);
+        let id = decl("ori_heap_from_list_custom", &[pt, pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_heap_from_list_custom"), id);
+        let id = decl("ori_heap_remove_string", &[pt, pt], vec![], Some(types::I8))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_heap_remove_string"), id);
+        let id = decl(
+            "ori_heap_remove_custom",
+            &[pt, types::I64, pt],
+            vec![],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_heap_remove_custom"), id);
         let id = decl("ori_files_read_text", &[pt], vec![Ty::String], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_files_read_text"), id);
@@ -5863,6 +5955,92 @@ impl<'a> FuncCodegen<'a> {
             _ if matches!(&iterable.ty, Ty::Bytes) => {
                 self.emit_for_bytes(binding, index_binding, iterable, body)
             }
+            _ if matches!(&iterable.ty, Ty::Opaque { kind, .. } if kind.is_list_backed_collection()) =>
+            {
+                let Ty::Opaque { kind, args } = &iterable.ty else {
+                    unreachable!();
+                };
+                let runtime_name = match kind {
+                    OpaqueTy::Deque => "ori_deque_to_list",
+                    OpaqueTy::Queue => "ori_queue_to_list",
+                    OpaqueTy::Stack => "ori_stack_to_list",
+                    OpaqueTy::LinkedList => "ori_linked_list_to_list",
+                    OpaqueTy::DoublyLinkedList => "ori_doubly_linked_list_to_list",
+                    _ => unreachable!(),
+                };
+                let fref = *self
+                    .func_refs
+                    .get(runtime_name)
+                    .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+                let handle = self.emit_expr(iterable)?;
+                let call = self.builder.ins().call(fref, &[handle]);
+                let snapshot = self.builder.inst_results(call)[0];
+                let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
+                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)
+            }
+            _ if matches!(
+                &iterable.ty,
+                Ty::Opaque {
+                    kind: OpaqueTy::Heap,
+                    ..
+                }
+            ) =>
+            {
+                let Ty::Opaque { args, .. } = &iterable.ty else {
+                    unreachable!();
+                };
+                let fref = *self
+                    .func_refs
+                    .get("ori_heap_to_list")
+                    .ok_or_else(|| "missing runtime function `ori_heap_to_list`".to_string())?;
+                let handle = self.emit_expr(iterable)?;
+                let call = self.builder.ins().call(fref, &[handle]);
+                let snapshot = self.builder.inst_results(call)[0];
+                let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
+                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)
+            }
+            _ if matches!(
+                &iterable.ty,
+                Ty::Opaque {
+                    kind: OpaqueTy::Graph,
+                    ..
+                }
+            ) =>
+            {
+                let Ty::Opaque { args, .. } = &iterable.ty else {
+                    unreachable!();
+                };
+                let fref = *self
+                    .func_refs
+                    .get("ori_graph_nodes")
+                    .ok_or_else(|| "missing runtime function `ori_graph_nodes`".to_string())?;
+                let handle = self.emit_expr(iterable)?;
+                let call = self.builder.ins().call(fref, &[handle]);
+                let snapshot = self.builder.inst_results(call)[0];
+                let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
+                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)
+            }
+            _ if matches!(
+                &iterable.ty,
+                Ty::Opaque {
+                    kind: OpaqueTy::HashTable,
+                    ..
+                }
+            ) =>
+            {
+                let Ty::Opaque { args, .. } = &iterable.ty else {
+                    unreachable!();
+                };
+                let fref = *self
+                    .func_refs
+                    .get("ori_hash_table_keys")
+                    .ok_or_else(|| "missing runtime function `ori_hash_table_keys`".to_string())?;
+                let handle = self.emit_expr(iterable)?;
+                let call = self.builder.ins().call(fref, &[handle]);
+                let snapshot = self.builder.inst_results(call)[0];
+                let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
+                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)
+            }
             _ => {
                 if let Some(next_func) = self.iterable_next_func_name_for_type(&iterable.ty) {
                     self.emit_for_custom_iterable(
@@ -6088,6 +6266,17 @@ impl<'a> FuncCodegen<'a> {
         body: &HirBlock,
     ) -> Result<(), String> {
         let list_v = self.emit_expr(iterable)?;
+        self.emit_for_list_value(binding, index_binding, elem_ty, list_v, body)
+    }
+
+    fn emit_for_list_value(
+        &mut self,
+        binding: &SmolStr,
+        index_binding: Option<&SmolStr>,
+        elem_ty: &Ty,
+        list_v: ir::Value,
+        body: &HirBlock,
+    ) -> Result<(), String> {
         let len_ref = *self
             .func_refs
             .get("ori_list_len")
@@ -6823,7 +7012,13 @@ impl<'a> FuncCodegen<'a> {
                     }
                     if matches!(
                         name.as_str(),
-                        "ori_map_set" | "ori_map_get" | "ori_map_contains" | "ori_map_remove"
+                        "ori_map_set"
+                            | "ori_map_get"
+                            | "ori_map_try_get"
+                            | "ori_map_contains"
+                            | "ori_map_remove"
+                            | "ori_map_try_remove"
+                            | "ori_map_from_entries"
                     ) {
                         return self.emit_map_runtime_call(name.as_str(), args);
                     }
@@ -6838,21 +7033,35 @@ impl<'a> FuncCodegen<'a> {
                     }
                     if matches!(
                         name.as_str(),
+                        "ori_linked_list_find" | "ori_doubly_linked_list_find"
+                    ) {
+                        return self.emit_linked_list_find_runtime_call(name.as_str(), args);
+                    }
+                    if matches!(
+                        name.as_str(),
                         "ori_graph_add_node"
                             | "ori_graph_remove_node"
                             | "ori_graph_add_edge"
+                            | "ori_graph_add_weighted_edge"
                             | "ori_graph_remove_edge"
                             | "ori_graph_has_node"
                             | "ori_graph_has_edge"
+                            | "ori_graph_edge_weight"
                             | "ori_graph_neighbors"
                             | "ori_graph_bfs"
                             | "ori_graph_dfs"
+                            | "ori_graph_shortest_path"
+                            | "ori_graph_shortest_weighted_path"
                     ) {
                         return self.emit_graph_runtime_call(name.as_str(), args);
                     }
                     if matches!(
                         name.as_str(),
-                        "ori_set_add" | "ori_set_contains" | "ori_set_remove"
+                        "ori_set_add"
+                            | "ori_set_contains"
+                            | "ori_set_remove"
+                            | "ori_set_try_remove"
+                            | "ori_set_from_list"
                     ) {
                         return self.emit_set_runtime_call(name.as_str(), args);
                     }
@@ -6861,15 +7070,22 @@ impl<'a> FuncCodegen<'a> {
                         "ori_tree_new"
                             | "ori_tree_root"
                             | "ori_tree_value"
+                            | "ori_tree_try_value"
+                            | "ori_tree_contains_node"
+                            | "ori_tree_set_value"
                             | "ori_tree_add_child"
                             | "ori_tree_children"
                             | "ori_tree_parent"
                             | "ori_tree_remove_subtree"
+                            | "ori_tree_move_subtree"
+                            | "ori_tree_find"
                             | "ori_tree_len"
                             | "ori_tree_depth"
                             | "ori_tree_pre_order"
                             | "ori_tree_post_order"
                             | "ori_tree_breadth_first"
+                            | "ori_tree_clone"
+                            | "ori_tree_clone_subtree"
                     ) {
                         return self.emit_tree_runtime_call(name.as_str(), args);
                     }
@@ -6881,6 +7097,13 @@ impl<'a> FuncCodegen<'a> {
                             | "ori_heap_peek"
                             | "ori_heap_len"
                             | "ori_heap_is_empty"
+                            | "ori_heap_clear"
+                            | "ori_heap_clone"
+                            | "ori_heap_to_list"
+                            | "ori_heap_from_list"
+                            | "ori_heap_merge"
+                            | "ori_heap_remove"
+                            | "ori_heap_into_sorted_list"
                     ) {
                         return self.emit_heap_runtime_call(name.as_str(), args, &expr.ty);
                     }
@@ -7643,6 +7866,30 @@ impl<'a> FuncCodegen<'a> {
     }
 
     fn emit_map_runtime_call(&mut self, name: &str, args: &[HirArg]) -> Result<ir::Value, String> {
+        if name == "ori_map_from_entries" {
+            if args.len() != 1 {
+                return Err("ori_map_from_entries expects one entries list".to_string());
+            }
+            let key_ty = match &args[0].value.ty {
+                Ty::List(inner) => match inner.as_ref() {
+                    Ty::Tuple(items) if items.len() == 2 => items[0].clone(),
+                    _ => Ty::Infer(0),
+                },
+                _ => Ty::Infer(0),
+            };
+            let runtime_name = if matches!(key_ty, Ty::String) {
+                "ori_map_from_entries_string"
+            } else {
+                name
+            };
+            let fref = *self
+                .func_refs
+                .get(runtime_name)
+                .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+            let entries = self.emit_expr(&args[0].value)?;
+            let call = self.builder.ins().call(fref, &[entries]);
+            return Ok(self.builder.inst_results(call)[0]);
+        }
         let Some(first_arg) = args.first() else {
             return Err(format!("map runtime call `{name}` expects a map argument"));
         };
@@ -7658,8 +7905,11 @@ impl<'a> FuncCodegen<'a> {
         let runtime_name = match (name, key_ty) {
             ("ori_map_set", Ty::String) => "ori_map_set_string",
             ("ori_map_get", Ty::String) => "ori_map_get_string",
+            ("ori_map_try_get", Ty::String) => "ori_map_try_get_string",
             ("ori_map_contains", Ty::String) => "ori_map_contains_string",
             ("ori_map_remove", Ty::String) => "ori_map_remove_string",
+            ("ori_map_try_remove", Ty::String) => "ori_map_try_remove_string",
+            ("ori_map_from_entries", Ty::String) => "ori_map_from_entries_string",
             _ => name,
         };
         let fref = *self
@@ -7691,6 +7941,15 @@ impl<'a> FuncCodegen<'a> {
                 let call = self.builder.ins().call(fref, &[map_v, stored_key]);
                 let stored_value = self.builder.inst_results(call)[0];
                 Ok(self.from_list_storage_value(stored_value, value_ty))
+            }
+            "ori_map_try_get" | "ori_map_try_remove" => {
+                if args.len() != 2 {
+                    return Err(format!("{name} expects map and key"));
+                }
+                let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
+                let stored_key = self.to_list_storage_value(key_value, key_ty);
+                let call = self.builder.ins().call(fref, &[map_v, stored_key]);
+                Ok(self.builder.inst_results(call)[0])
             }
             "ori_map_contains" => {
                 if args.len() != 2 {
@@ -7795,6 +8054,42 @@ impl<'a> FuncCodegen<'a> {
         }
     }
 
+    fn emit_linked_list_find_runtime_call(
+        &mut self,
+        name: &str,
+        args: &[HirArg],
+    ) -> Result<ir::Value, String> {
+        if args.len() != 2 {
+            return Err(format!("{name} expects list and value"));
+        }
+        let elem_ty = match &args[0].value.ty {
+            Ty::Opaque {
+                kind: OpaqueTy::LinkedList | OpaqueTy::DoublyLinkedList,
+                args,
+            } => args.first().cloned().unwrap_or(Ty::Infer(0)),
+            other => {
+                return Err(format!(
+                    "linked-list find runtime call `{name}` received `{}`",
+                    other.display()
+                ))
+            }
+        };
+        let runtime_name = match (name, &elem_ty) {
+            ("ori_linked_list_find", Ty::String) => "ori_linked_list_find_string",
+            ("ori_doubly_linked_list_find", Ty::String) => "ori_doubly_linked_list_find_string",
+            _ => name,
+        };
+        let fref = *self
+            .func_refs
+            .get(runtime_name)
+            .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+        let list = self.emit_expr(&args[0].value)?;
+        let value = self.emit_expr_for_expected(&args[1].value, &elem_ty)?;
+        let stored = self.to_list_storage_value(value, &elem_ty);
+        let call = self.builder.ins().call(fref, &[list, stored]);
+        Ok(self.builder.inst_results(call)[0])
+    }
+
     fn emit_graph_runtime_call(
         &mut self,
         name: &str,
@@ -7820,12 +8115,18 @@ impl<'a> FuncCodegen<'a> {
             ("ori_graph_add_node", Ty::String) => "ori_graph_add_node_string",
             ("ori_graph_remove_node", Ty::String) => "ori_graph_remove_node_string",
             ("ori_graph_add_edge", Ty::String) => "ori_graph_add_edge_string",
+            ("ori_graph_add_weighted_edge", Ty::String) => "ori_graph_add_weighted_edge_string",
             ("ori_graph_remove_edge", Ty::String) => "ori_graph_remove_edge_string",
             ("ori_graph_has_node", Ty::String) => "ori_graph_has_node_string",
             ("ori_graph_has_edge", Ty::String) => "ori_graph_has_edge_string",
+            ("ori_graph_edge_weight", Ty::String) => "ori_graph_edge_weight_string",
             ("ori_graph_neighbors", Ty::String) => "ori_graph_neighbors_string",
             ("ori_graph_bfs", Ty::String) => "ori_graph_bfs_string",
             ("ori_graph_dfs", Ty::String) => "ori_graph_dfs_string",
+            ("ori_graph_shortest_path", Ty::String) => "ori_graph_shortest_path_string",
+            ("ori_graph_shortest_weighted_path", Ty::String) => {
+                "ori_graph_shortest_weighted_path_string"
+            }
             _ => name,
         };
         let fref = *self
@@ -7876,7 +8177,30 @@ impl<'a> FuncCodegen<'a> {
                 self.emit_arc_register_edge_if_managed(&node_ty, graph, to)?;
                 Ok(self.builder.ins().iconst(types::I8, 0))
             }
-            "ori_graph_remove_edge" | "ori_graph_has_edge" => {
+            "ori_graph_add_weighted_edge" => {
+                if args.len() != 4 {
+                    return Err(
+                        "ori_graph_add_weighted_edge expects graph, from, to, and weight"
+                            .to_string(),
+                    );
+                }
+                let from = self.emit_expr_for_expected(&args[1].value, &node_ty)?;
+                let to = self.emit_expr_for_expected(&args[2].value, &node_ty)?;
+                let weight = self.emit_expr_for_expected(&args[3].value, &Ty::Int)?;
+                let stored_from = self.to_list_storage_value(from, &node_ty);
+                let stored_to = self.to_list_storage_value(to, &node_ty);
+                self.builder
+                    .ins()
+                    .call(fref, &[graph, stored_from, stored_to, weight]);
+                self.emit_arc_register_edge_if_managed(&node_ty, graph, from)?;
+                self.emit_arc_register_edge_if_managed(&node_ty, graph, to)?;
+                Ok(self.builder.ins().iconst(types::I8, 0))
+            }
+            "ori_graph_remove_edge"
+            | "ori_graph_has_edge"
+            | "ori_graph_edge_weight"
+            | "ori_graph_shortest_path"
+            | "ori_graph_shortest_weighted_path" => {
                 if args.len() != 3 {
                     return Err(format!("{name} expects graph, from, and to"));
                 }
@@ -7901,6 +8225,32 @@ impl<'a> FuncCodegen<'a> {
     }
 
     fn emit_set_runtime_call(&mut self, name: &str, args: &[HirArg]) -> Result<ir::Value, String> {
+        if name == "ori_set_from_list" {
+            if args.len() != 1 {
+                return Err("ori_set_from_list expects one source list".to_string());
+            }
+            let elem_ty = match &args[0].value.ty {
+                Ty::List(elem) => elem.as_ref(),
+                other => {
+                    return Err(format!(
+                        "ori_set_from_list expects list input, got `{}`",
+                        other.display()
+                    ))
+                }
+            };
+            let runtime_name = if matches!(elem_ty, Ty::String) {
+                "ori_set_from_list_string"
+            } else {
+                name
+            };
+            let fref = *self
+                .func_refs
+                .get(runtime_name)
+                .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+            let source = self.emit_expr(&args[0].value)?;
+            let call = self.builder.ins().call(fref, &[source]);
+            return Ok(self.builder.inst_results(call)[0]);
+        }
         let Some(first_arg) = args.first() else {
             return Err(format!("set runtime call `{name}` expects a set argument"));
         };
@@ -7916,6 +8266,8 @@ impl<'a> FuncCodegen<'a> {
             ("ori_set_add", Ty::String) => "ori_set_add_string",
             ("ori_set_contains", Ty::String) => "ori_set_contains_string",
             ("ori_set_remove", Ty::String) => "ori_set_remove_string",
+            ("ori_set_try_remove", Ty::String) => "ori_set_try_remove_string",
+            ("ori_set_from_list", Ty::String) => "ori_set_from_list_string",
             _ => name,
         };
         let fref = *self
@@ -7942,14 +8294,18 @@ impl<'a> FuncCodegen<'a> {
                 let call = self.builder.ins().call(fref, &[set_v, stored]);
                 Ok(self.builder.inst_results(call)[0])
             }
-            "ori_set_remove" => {
+            "ori_set_remove" | "ori_set_try_remove" => {
                 if args.len() != 2 {
-                    return Err("ori_set_remove expects set and value".to_string());
+                    return Err(format!("{name} expects set and value"));
                 }
                 let value = self.emit_expr_for_expected(&args[1].value, elem_ty)?;
                 let stored = self.to_list_storage_value(value, elem_ty);
-                self.builder.ins().call(fref, &[set_v, stored]);
-                Ok(self.builder.ins().iconst(types::I8, 0))
+                let call = self.builder.ins().call(fref, &[set_v, stored]);
+                if name == "ori_set_try_remove" {
+                    Ok(self.builder.inst_results(call)[0])
+                } else {
+                    Ok(self.builder.ins().iconst(types::I8, 0))
+                }
             }
             _ => Err(native_codegen_unsupported(format!(
                 "set runtime call `{name}`"
@@ -7958,10 +8314,6 @@ impl<'a> FuncCodegen<'a> {
     }
 
     fn emit_tree_runtime_call(&mut self, name: &str, args: &[HirArg]) -> Result<ir::Value, String> {
-        let fref = *self
-            .func_refs
-            .get(name)
-            .ok_or_else(|| format!("missing runtime function `{name}`"))?;
         let node_id_ty = Ty::Opaque {
             kind: OpaqueTy::NodeId,
             args: vec![],
@@ -7973,6 +8325,15 @@ impl<'a> FuncCodegen<'a> {
             } => args.first().cloned(),
             _ => None,
         };
+        let elem_ty = args.first().and_then(tree_elem_ty).unwrap_or(Ty::Infer(0));
+        let runtime_name = match (name, &elem_ty) {
+            ("ori_tree_find", Ty::String) => "ori_tree_find_string",
+            _ => name,
+        };
+        let fref = *self
+            .func_refs
+            .get(runtime_name)
+            .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
         match name {
             "ori_tree_new" => {
                 if args.len() != 1 {
@@ -7990,7 +8351,6 @@ impl<'a> FuncCodegen<'a> {
                 if args.len() != 3 {
                     return Err("ori_tree_add_child expects tree, parent, and value".to_string());
                 }
-                let elem_ty = tree_elem_ty(&args[0]).unwrap_or(Ty::Infer(0));
                 let tree = self.emit_expr(&args[0].value)?;
                 let parent = self.emit_expr_for_expected(&args[1].value, &node_id_ty)?;
                 let value = self.emit_expr_for_expected(&args[2].value, &elem_ty)?;
@@ -8004,18 +8364,39 @@ impl<'a> FuncCodegen<'a> {
                 if args.len() != 2 {
                     return Err("ori_tree_value expects tree and node".to_string());
                 }
-                let elem_ty = tree_elem_ty(&args[0]).unwrap_or(Ty::Infer(0));
                 let tree = self.emit_expr(&args[0].value)?;
                 let node = self.emit_expr_for_expected(&args[1].value, &node_id_ty)?;
                 let call = self.builder.ins().call(fref, &[tree, node]);
                 let stored = self.builder.inst_results(call)[0];
                 Ok(self.from_list_storage_value(stored, &elem_ty))
             }
+            "ori_tree_set_value" => {
+                if args.len() != 3 {
+                    return Err("ori_tree_set_value expects tree, node, and value".to_string());
+                }
+                let tree = self.emit_expr(&args[0].value)?;
+                let node = self.emit_expr_for_expected(&args[1].value, &node_id_ty)?;
+                let value = self.emit_expr_for_expected(&args[2].value, &elem_ty)?;
+                let stored = self.to_list_storage_value(value, &elem_ty);
+                let call = self.builder.ins().call(fref, &[tree, node, stored]);
+                Ok(self.builder.inst_results(call)[0])
+            }
+            "ori_tree_find" => {
+                if args.len() != 2 {
+                    return Err("ori_tree_find expects tree and value".to_string());
+                }
+                let tree = self.emit_expr(&args[0].value)?;
+                let value = self.emit_expr_for_expected(&args[1].value, &elem_ty)?;
+                let stored = self.to_list_storage_value(value, &elem_ty);
+                let call = self.builder.ins().call(fref, &[tree, stored]);
+                Ok(self.builder.inst_results(call)[0])
+            }
             "ori_tree_root"
             | "ori_tree_len"
             | "ori_tree_pre_order"
             | "ori_tree_post_order"
-            | "ori_tree_breadth_first" => {
+            | "ori_tree_breadth_first"
+            | "ori_tree_clone" => {
                 if args.len() != 1 {
                     return Err(format!("{name} expects one tree argument"));
                 }
@@ -8030,7 +8411,10 @@ impl<'a> FuncCodegen<'a> {
             "ori_tree_children"
             | "ori_tree_parent"
             | "ori_tree_remove_subtree"
-            | "ori_tree_depth" => {
+            | "ori_tree_depth"
+            | "ori_tree_try_value"
+            | "ori_tree_contains_node"
+            | "ori_tree_clone_subtree" => {
                 if args.len() != 2 {
                     return Err(format!("{name} expects tree and node"));
                 }
@@ -8042,6 +8426,16 @@ impl<'a> FuncCodegen<'a> {
                     .first()
                     .copied()
                     .unwrap_or_else(|| self.builder.ins().iconst(types::I8, 0)))
+            }
+            "ori_tree_move_subtree" => {
+                if args.len() != 3 {
+                    return Err("ori_tree_move_subtree expects tree, node, and parent".to_string());
+                }
+                let tree = self.emit_expr(&args[0].value)?;
+                let node = self.emit_expr_for_expected(&args[1].value, &node_id_ty)?;
+                let parent = self.emit_expr_for_expected(&args[2].value, &node_id_ty)?;
+                let call = self.builder.ins().call(fref, &[tree, node, parent]);
+                Ok(self.builder.inst_results(call)[0])
             }
             _ => Err(native_codegen_unsupported(format!(
                 "tree runtime call `{name}`"
@@ -8152,7 +8546,131 @@ impl<'a> FuncCodegen<'a> {
                 self.emit_arc_register_edge_if_managed(&elem_ty, heap, value)?;
                 Ok(self.builder.ins().iconst(types::I8, 0))
             }
-            "ori_heap_pop" | "ori_heap_peek" | "ori_heap_len" | "ori_heap_is_empty" => {
+            "ori_heap_from_list" => {
+                if args.len() != 1 {
+                    return Err("ori_heap_from_list expects one source list".to_string());
+                }
+                let elem_ty = heap_elem_ty(result_ty)
+                    .or_else(|| match &args[0].value.ty {
+                        Ty::List(elem) => Some(*elem.clone()),
+                        _ => None,
+                    })
+                    .unwrap_or(Ty::Int);
+                let source = self.emit_expr(&args[0].value)?;
+                let runtime_name = match &elem_ty {
+                    Ty::String => "ori_heap_from_list_string",
+                    Ty::Named(def_id, _) => {
+                        let compare = SmolStr::new("compare");
+                        let Some(compare_name) =
+                            self.trait_method_func_name_for_type(*def_id, &compare)
+                        else {
+                            return Err(format!(
+                                "heap element `{}` has no Comparable.compare implementation",
+                                elem_ty.display()
+                            ));
+                        };
+                        let compare_ref =
+                            *self.func_refs.get(compare_name.as_str()).ok_or_else(|| {
+                                format!("missing function reference `{compare_name}`")
+                            })?;
+                        let compare_ptr = self.builder.ins().func_addr(self.ptr_ty, compare_ref);
+                        let fref =
+                            *self
+                                .func_refs
+                                .get("ori_heap_from_list_custom")
+                                .ok_or_else(|| {
+                                    "missing runtime function `ori_heap_from_list_custom`"
+                                        .to_string()
+                                })?;
+                        let call = self.builder.ins().call(fref, &[source, compare_ptr]);
+                        return Ok(self.builder.inst_results(call)[0]);
+                    }
+                    _ => "ori_heap_from_list",
+                };
+                let fref = *self
+                    .func_refs
+                    .get(runtime_name)
+                    .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
+                let call = self.builder.ins().call(fref, &[source]);
+                Ok(self.builder.inst_results(call)[0])
+            }
+            "ori_heap_remove" => {
+                if args.len() != 2 {
+                    return Err("ori_heap_remove expects heap and value".to_string());
+                }
+                let elem_ty = match heap_elem_ty(&args[0].value.ty) {
+                    Some(ty) if !ty.contains_infer() => ty,
+                    _ => args[1].value.ty.clone(),
+                };
+                let heap = self.emit_expr(&args[0].value)?;
+                let value = self.emit_expr_for_expected(&args[1].value, &elem_ty)?;
+                let stored = self.to_list_storage_value(value, &elem_ty);
+                let call = match &elem_ty {
+                    Ty::String => {
+                        let fref =
+                            *self
+                                .func_refs
+                                .get("ori_heap_remove_string")
+                                .ok_or_else(|| {
+                                    "missing runtime function `ori_heap_remove_string`".to_string()
+                                })?;
+                        self.builder.ins().call(fref, &[heap, stored])
+                    }
+                    Ty::Named(def_id, _) => {
+                        let compare = SmolStr::new("compare");
+                        let Some(compare_name) =
+                            self.trait_method_func_name_for_type(*def_id, &compare)
+                        else {
+                            return Err(format!(
+                                "heap element `{}` has no Comparable.compare implementation",
+                                elem_ty.display()
+                            ));
+                        };
+                        let compare_ref =
+                            *self.func_refs.get(compare_name.as_str()).ok_or_else(|| {
+                                format!("missing function reference `{compare_name}`")
+                            })?;
+                        let compare_ptr = self.builder.ins().func_addr(self.ptr_ty, compare_ref);
+                        let fref =
+                            *self
+                                .func_refs
+                                .get("ori_heap_remove_custom")
+                                .ok_or_else(|| {
+                                    "missing runtime function `ori_heap_remove_custom`".to_string()
+                                })?;
+                        self.builder.ins().call(fref, &[heap, stored, compare_ptr])
+                    }
+                    _ => {
+                        let fref = *self
+                            .func_refs
+                            .get(name)
+                            .ok_or_else(|| format!("missing runtime function `{name}`"))?;
+                        self.builder.ins().call(fref, &[heap, stored])
+                    }
+                };
+                Ok(self.builder.inst_results(call)[0])
+            }
+            "ori_heap_merge" => {
+                if args.len() != 2 {
+                    return Err("ori_heap_merge expects two heaps".to_string());
+                }
+                let left = self.emit_expr(&args[0].value)?;
+                let right = self.emit_expr(&args[1].value)?;
+                let fref = *self
+                    .func_refs
+                    .get(name)
+                    .ok_or_else(|| format!("missing runtime function `{name}`"))?;
+                let call = self.builder.ins().call(fref, &[left, right]);
+                Ok(self.builder.inst_results(call)[0])
+            }
+            "ori_heap_pop"
+            | "ori_heap_peek"
+            | "ori_heap_len"
+            | "ori_heap_is_empty"
+            | "ori_heap_clear"
+            | "ori_heap_clone"
+            | "ori_heap_to_list"
+            | "ori_heap_into_sorted_list" => {
                 if args.len() != 1 {
                     return Err(format!("{name} expects one heap argument"));
                 }

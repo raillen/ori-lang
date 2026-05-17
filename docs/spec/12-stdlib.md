@@ -272,6 +272,7 @@ deque.back<T>(d: deque.Deque<T>) -> optional<T>
 deque.len<T>(d: deque.Deque<T>) -> int
 deque.is_empty<T>(d: deque.Deque<T>) -> bool
 deque.clear<T>(d: deque.Deque<T>) -> void
+deque.clone<T>(d: deque.Deque<T>) -> deque.Deque<T>
 deque.to_list<T>(d: deque.Deque<T>) -> list<T>
 
 queue.new<T>() -> queue.Queue<T>
@@ -281,6 +282,7 @@ queue.peek<T>(q: queue.Queue<T>) -> optional<T>
 queue.len<T>(q: queue.Queue<T>) -> int
 queue.is_empty<T>(q: queue.Queue<T>) -> bool
 queue.clear<T>(q: queue.Queue<T>) -> void
+queue.clone<T>(q: queue.Queue<T>) -> queue.Queue<T>
 queue.to_list<T>(q: queue.Queue<T>) -> list<T>
 
 stack.new<T>() -> stack.Stack<T>
@@ -290,6 +292,7 @@ stack.peek<T>(s: stack.Stack<T>) -> optional<T>
 stack.len<T>(s: stack.Stack<T>) -> int
 stack.is_empty<T>(s: stack.Stack<T>) -> bool
 stack.clear<T>(s: stack.Stack<T>) -> void
+stack.clone<T>(s: stack.Stack<T>) -> stack.Stack<T>
 stack.to_list<T>(s: stack.Stack<T>) -> list<T>
 
 ll.new<T>() -> ll.LinkedList<T>
@@ -297,9 +300,16 @@ ll.push_front<T>(list: ll.LinkedList<T>, value: T) -> void
 ll.push_back<T>(list: ll.LinkedList<T>, value: T) -> void
 ll.pop_front<T>(list: ll.LinkedList<T>) -> optional<T>
 ll.front<T>(list: ll.LinkedList<T>) -> optional<T>
+ll.cursor_front<T>(list: ll.LinkedList<T>) -> optional<int>
+ll.cursor_back<T>(list: ll.LinkedList<T>) -> optional<int>
+ll.value_at<T>(list: ll.LinkedList<T>, cursor: int) -> optional<T>
+ll.insert_after<T>(list: ll.LinkedList<T>, cursor: int, value: T) -> bool
+ll.remove_at<T>(list: ll.LinkedList<T>, cursor: int) -> optional<T>
+ll.find<T>(list: ll.LinkedList<T>, value: T) -> optional<int>
 ll.len<T>(list: ll.LinkedList<T>) -> int
 ll.is_empty<T>(list: ll.LinkedList<T>) -> bool
 ll.clear<T>(list: ll.LinkedList<T>) -> void
+ll.clone<T>(list: ll.LinkedList<T>) -> ll.LinkedList<T>
 ll.to_list<T>(list: ll.LinkedList<T>) -> list<T>
 
 dll.new<T>() -> dll.DoublyLinkedList<T>
@@ -309,23 +319,38 @@ dll.pop_front<T>(list: dll.DoublyLinkedList<T>) -> optional<T>
 dll.pop_back<T>(list: dll.DoublyLinkedList<T>) -> optional<T>
 dll.front<T>(list: dll.DoublyLinkedList<T>) -> optional<T>
 dll.back<T>(list: dll.DoublyLinkedList<T>) -> optional<T>
+dll.cursor_front<T>(list: dll.DoublyLinkedList<T>) -> optional<int>
+dll.cursor_back<T>(list: dll.DoublyLinkedList<T>) -> optional<int>
+dll.value_at<T>(list: dll.DoublyLinkedList<T>, cursor: int) -> optional<T>
+dll.insert_after<T>(list: dll.DoublyLinkedList<T>, cursor: int, value: T) -> bool
+dll.insert_before<T>(list: dll.DoublyLinkedList<T>, cursor: int, value: T) -> bool
+dll.remove_at<T>(list: dll.DoublyLinkedList<T>, cursor: int) -> optional<T>
+dll.find<T>(list: dll.DoublyLinkedList<T>, value: T) -> optional<int>
 dll.len<T>(list: dll.DoublyLinkedList<T>) -> int
 dll.is_empty<T>(list: dll.DoublyLinkedList<T>) -> bool
 dll.clear<T>(list: dll.DoublyLinkedList<T>) -> void
+dll.clone<T>(list: dll.DoublyLinkedList<T>) -> dll.DoublyLinkedList<T>
 dll.to_list<T>(list: dll.DoublyLinkedList<T>) -> list<T>
 
 tree.new<T>(root: T) -> tree.Tree<T>
 tree.root<T>(t: tree.Tree<T>) -> tree.NodeId
 tree.value<T>(t: tree.Tree<T>, node: tree.NodeId) -> T
+tree.try_value<T>(t: tree.Tree<T>, node: tree.NodeId) -> optional<T>
+tree.contains_node<T>(t: tree.Tree<T>, node: tree.NodeId) -> bool
+tree.set_value<T>(t: tree.Tree<T>, node: tree.NodeId, value: T) -> bool
 tree.add_child<T>(t: tree.Tree<T>, parent: tree.NodeId, value: T) -> tree.NodeId
 tree.children<T>(t: tree.Tree<T>, node: tree.NodeId) -> list<tree.NodeId>
 tree.parent<T>(t: tree.Tree<T>, node: tree.NodeId) -> optional<tree.NodeId>
 tree.remove_subtree<T>(t: tree.Tree<T>, node: tree.NodeId) -> void
+tree.move_subtree<T>(t: tree.Tree<T>, node: tree.NodeId, new_parent: tree.NodeId) -> bool
+tree.find<T>(t: tree.Tree<T>, value: T) -> optional<tree.NodeId>
 tree.len<T>(t: tree.Tree<T>) -> int
 tree.depth<T>(t: tree.Tree<T>, node: tree.NodeId) -> int
 tree.pre_order<T>(t: tree.Tree<T>) -> list<tree.NodeId>
 tree.post_order<T>(t: tree.Tree<T>) -> list<tree.NodeId>
 tree.breadth_first<T>(t: tree.Tree<T>) -> list<tree.NodeId>
+tree.clone<T>(t: tree.Tree<T>) -> tree.Tree<T>
+tree.clone_subtree<T>(t: tree.Tree<T>, node: tree.NodeId) -> tree.Tree<T>
 
 hash_table.new<K, V>() -> hash_table.HashTable<K, V>
 hash_table.with_capacity<K, V>(capacity: int) -> hash_table.HashTable<K, V>
@@ -334,9 +359,12 @@ hash_table.get<K, V>(table: hash_table.HashTable<K, V>, key: K) -> optional<V>
 hash_table.remove<K, V>(table: hash_table.HashTable<K, V>, key: K) -> optional<V>
 hash_table.contains<K, V>(table: hash_table.HashTable<K, V>, key: K) -> bool
 hash_table.len<K, V>(table: hash_table.HashTable<K, V>) -> int
+hash_table.is_empty<K, V>(table: hash_table.HashTable<K, V>) -> bool
 hash_table.capacity<K, V>(table: hash_table.HashTable<K, V>) -> int
 hash_table.reserve<K, V>(table: hash_table.HashTable<K, V>, capacity: int) -> void
 hash_table.clear<K, V>(table: hash_table.HashTable<K, V>) -> void
+hash_table.clone<K, V>(table: hash_table.HashTable<K, V>) -> hash_table.HashTable<K, V>
+hash_table.from_entries<K, V>(entries: list<tuple<K, V>>) -> hash_table.HashTable<K, V>
 hash_table.keys<K, V>(table: hash_table.HashTable<K, V>) -> list<K>
 hash_table.values<K, V>(table: hash_table.HashTable<K, V>) -> list<V>
 hash_table.entries<K, V>(table: hash_table.HashTable<K, V>) -> list<tuple<K, V>>
@@ -345,15 +373,28 @@ graph.new<N>(directed: bool) -> graph.Graph<N>
 graph.add_node<N>(g: graph.Graph<N>, node: N) -> void
 graph.remove_node<N>(g: graph.Graph<N>, node: N) -> void
 graph.add_edge<N>(g: graph.Graph<N>, from: N, to: N) -> void
+graph.add_weighted_edge<N>(g: graph.Graph<N>, from: N, to: N, weight: int) -> void
 graph.remove_edge<N>(g: graph.Graph<N>, from: N, to: N) -> void
 graph.has_node<N>(g: graph.Graph<N>, node: N) -> bool
 graph.has_edge<N>(g: graph.Graph<N>, from: N, to: N) -> bool
+graph.edge_weight<N>(g: graph.Graph<N>, from: N, to: N) -> optional<int>
 graph.neighbors<N>(g: graph.Graph<N>, node: N) -> list<N>
 graph.nodes<N>(g: graph.Graph<N>) -> list<N>
 graph.edges<N>(g: graph.Graph<N>) -> list<tuple<N, N>>
 graph.bfs<N>(g: graph.Graph<N>, start: N) -> list<N>
 graph.dfs<N>(g: graph.Graph<N>, start: N) -> list<N>
 graph.topological_sort<N>(g: graph.Graph<N>) -> list<N>
+graph.try_topological_sort<N>(g: graph.Graph<N>) -> optional<list<N>>
+graph.is_directed<N>(g: graph.Graph<N>) -> bool
+graph.len<N>(g: graph.Graph<N>) -> int
+graph.edge_len<N>(g: graph.Graph<N>) -> int
+graph.has_cycle<N>(g: graph.Graph<N>) -> bool
+graph.components<N>(g: graph.Graph<N>) -> list<list<N>>
+graph.strongly_connected_components<N>(g: graph.Graph<N>) -> list<list<N>>
+graph.transitive_closure<N>(g: graph.Graph<N>) -> graph.Graph<N>
+graph.shortest_path<N>(g: graph.Graph<N>, start: N, goal: N) -> optional<list<N>>
+graph.shortest_weighted_path<N>(g: graph.Graph<N>, start: N, goal: N) -> optional<list<N>>
+graph.clone<N>(g: graph.Graph<N>) -> graph.Graph<N>
 
 heap.new<T>() -> heap.Heap<T>
 heap.push<T>(h: heap.Heap<T>, value: T) -> void
@@ -361,16 +402,28 @@ heap.pop<T>(h: heap.Heap<T>) -> optional<T>
 heap.peek<T>(h: heap.Heap<T>) -> optional<T>
 heap.len<T>(h: heap.Heap<T>) -> int
 heap.is_empty<T>(h: heap.Heap<T>) -> bool
+heap.clear<T>(h: heap.Heap<T>) -> void
+heap.clone<T>(h: heap.Heap<T>) -> heap.Heap<T>
+heap.to_list<T>(h: heap.Heap<T>) -> list<T>
+heap.from_list<T>(values: list<T>) -> heap.Heap<T>
+heap.merge<T>(left: heap.Heap<T>, right: heap.Heap<T>) -> heap.Heap<T>
+heap.remove<T>(h: heap.Heap<T>, value: T) -> bool
+heap.into_sorted_list<T>(h: heap.Heap<T>) -> list<T>
 
 maps.new<K, V>() -> map<K, V>
 maps.set<K, V>(m: map<K, V>, key: K, value: V) -> void
 maps.get<K, V>(m: map<K, V>, key: K) -> V
+maps.try_get<K, V>(m: map<K, V>, key: K) -> optional<V>
 maps.contains<K, V>(m: map<K, V>, key: K) -> bool
 maps.remove<K, V>(m: map<K, V>, key: K) -> void
+maps.try_remove<K, V>(m: map<K, V>, key: K) -> optional<V>
 maps.len<K, V>(m: map<K, V>) -> int
+maps.is_empty<K, V>(m: map<K, V>) -> bool
 maps.capacity<K, V>(m: map<K, V>) -> int
 maps.reserve<K, V>(m: map<K, V>, capacity: int) -> void
 maps.clear<K, V>(m: map<K, V>) -> void
+maps.clone<K, V>(m: map<K, V>) -> map<K, V>
+maps.from_entries<K, V>(entries: list<tuple<K, V>>) -> map<K, V>
 maps.keys<K, V>(m: map<K, V>) -> list<K>
 maps.values<K, V>(m: map<K, V>) -> list<V>
 maps.entries<K, V>(m: map<K, V>) -> list<tuple<K, V>>
@@ -379,10 +432,15 @@ sets.new<T>() -> set<T>
 sets.add<T>(s: set<T>, value: T) -> void
 sets.contains<T>(s: set<T>, value: T) -> bool
 sets.remove<T>(s: set<T>, value: T) -> void
+sets.try_remove<T>(s: set<T>, value: T) -> bool
 sets.len<T>(s: set<T>) -> int
+sets.is_empty<T>(s: set<T>) -> bool
 sets.capacity<T>(s: set<T>) -> int
 sets.reserve<T>(s: set<T>, capacity: int) -> void
 sets.clear<T>(s: set<T>) -> void
+sets.clone<T>(s: set<T>) -> set<T>
+sets.to_list<T>(s: set<T>) -> list<T>
+sets.from_list<T>(values: list<T>) -> set<T>
 sets.union<T>(a: set<T>, b: set<T>) -> set<T>
 sets.intersection<T>(a: set<T>, b: set<T>) -> set<T>
 sets.difference<T>(a: set<T>, b: set<T>) -> set<T>
@@ -392,21 +450,27 @@ sets.difference<T>(a: set<T>, b: set<T>) -> set<T>
 `clear(collection)` removes all entries and keeps the allocated capacity for
 reuse.
 `maps.get(m, key)` keeps the v1 direct-value contract for compatibility with
-existing code. Use `maps.contains(m, key)` before `maps.get(...)` when absence
-is possible, or use `hash_table.get(...)` when the API should return
+existing code. New code should prefer `maps.try_get(m, key)` when absence is
+possible. `maps.try_remove(m, key)` returns the removed value as
 `optional<V>`.
 `deque`, `queue`, `stack`, `linked_list`, and `doubly_linked_list` are distinct
-opaque stdlib types. Internally they currently reuse the native list handle,
-but a `queue.Queue<T>` is not assignable to `list<T>` and cannot be passed to
-`ori.list` helpers directly. Use `to_list` when a snapshot list is needed.
-Linked-list modules do not expose node pointers in v1.
+opaque stdlib types. `deque`, `queue`, and `stack` use the native deque runtime
+so front/back operations avoid the old list-front shifting cost. The linked-list
+modules expose cursor APIs as stable positions for the current list state.
+`cursor_front`, `cursor_back`, `find`, `value_at`, `insert_after`,
+`insert_before`, and `remove_at` return `optional`/`bool` instead of panicking on
+invalid cursors. A cursor is invalid after structural changes that move or remove
+items before it. `for` over these opaque handles uses a snapshot list. Use
+`to_list` when the snapshot needs to be stored explicitly.
 
 `tree.Tree<T>` is an opaque arena tree handle. `tree.NodeId` identifies a node
 inside one tree. `tree.children` and traversal functions return snapshot lists
-of node ids. `tree.remove_subtree` removes the selected node and all children;
-using a removed or foreign node id is a runtime error with the message
-`ori tree node id is invalid`. `tree.OrderedTree<T>` is not part of v1; ordered
-insert/search/remove remain reserved until the Comparable contract is stable.
+of node ids. `tree.try_value` and `tree.contains_node` are the safe APIs for
+unknown node ids. `tree.value` still reports invalid ids as a runtime error with
+the message `ori tree node id is invalid`. `tree.move_subtree` rejects the root,
+foreign/removed ids, and moves that would create a cycle. `tree.OrderedTree<T>`
+is not part of v1; ordered insert/search/remove remain reserved until the
+Comparable contract is stable.
 
 `hash_table.HashTable<K,V>` is a public advanced API over the same native hash
 engine used by `map<K,V>`. It exists for explicit capacity control and for
@@ -415,24 +479,45 @@ engine used by `map<K,V>`. It exists for explicit capacity control and for
 `ori.core.Hashable` and `ori.core.Equatable`.
 
 `graph.Graph<N>` is an opaque adjacency-list graph. `graph.new(true)` creates a
-directed graph; `graph.new(false)` creates an undirected graph. Edges are simple
-`tuple<N,N>` pairs; weights and shortest path algorithms are reserved for a
-future module revision. `graph.add_edge` ensures both endpoint nodes exist.
-`graph.topological_sort` returns an empty list when the graph is undirected or
-when a directed cycle prevents a full topological order.
+directed graph; `graph.new(false)` creates an undirected graph. `graph.add_edge`
+ensures both endpoint nodes exist and stores weight `1`. `graph.add_weighted_edge`
+also ensures both endpoint nodes exist and stores a non-negative weight. Re-adding
+the same edge updates its weight. `graph.edges` keeps the old `tuple<N,N>`
+snapshot contract; use `graph.edge_weight` when the weight matters.
+`graph.topological_sort` keeps the old list contract and returns an empty list
+when the graph is undirected or cyclic. New code can use
+`graph.try_topological_sort` for an explicit `optional<list<N>>` result.
+`graph.shortest_path` is unweighted BFS shortest path.
+`graph.shortest_weighted_path` uses stored edge weights.
+`for node in graph_value` iterates a snapshot of graph nodes.
 
 `heap.Heap<T>` is an opaque min-heap. The smallest value according to the
 element ordering is returned first. The v1 runtime supports `int`, `string`,
 and user-defined types that implement `ori.core.Comparable`. Empty `pop` and
-`peek` calls return `none`. Custom closure comparators are reserved for a later
-phase because the public closure-comparator ABI is intentionally separate from
-the heap API.
+`peek` calls return `none`. `heap.to_list` returns heap storage order, not
+sorted order. Use `heap.into_sorted_list` for sorted output. Custom closure
+comparators are reserved for a later phase because the public closure-comparator
+ABI is intentionally separate from the heap API.
+`for item in heap_value` iterates a snapshot in heap storage order.
+
+Collection complexity contract for v1 native runtime:
+
+| Family | Expected cost |
+| --- | --- |
+| `list` | `get`/`set` O(1), `push` amortized O(1), `insert`/`remove` O(n), `sort` O(n log n). |
+| `map`, `set`, `hash_table` | `get`/`set`/`contains`/`remove` average O(1), worst-case O(n), snapshots O(n). |
+| `deque`, `queue`, `stack` | Front/back push/pop O(1) amortized, snapshots O(n). |
+| `linked_list`, `doubly_linked_list` | Cursor lookup and positional insert/remove O(n), front/back push/pop O(1) amortized, `find` O(n). |
+| `tree` | Node lookup O(1), traversal/find/clone O(n), `move_subtree` O(n) because it validates cycles. |
+| `graph` | Node lookup is linear in v1, traversal O(V + E), unweighted shortest path O(V + E), weighted shortest path O(V^2 + E). |
+| `heap` | `push`/`pop` O(log n), `peek` O(1), `from_list`/`merge` O(n log n), sorted output O(n log n). |
 
 These opaque collection handles are `Transferable` when their element type is
 `Transferable`. They do not implement structural `Equatable` or `Hashable` in
-v1. Direct `for` iteration is intentionally reserved for `list`, `set`, `map`,
-`range`, `string`, and `bytes`; iterate over `collection.to_list(value)` for
-these collection modules.
+v1. Direct `for` iteration works for `list`, `set`, `map`, `range`, `string`,
+`bytes`, `deque`, `queue`, `stack`, `linked_list`, `doubly_linked_list`,
+`hash_table`, `graph`, and `heap`. Opaque collection iteration is snapshot
+based, not lazy.
 
 ---
 

@@ -541,7 +541,17 @@ fn specialized_stdlib_call_ret_ty(c_name: &str, args: &[HirArg], fallback: Ty) -
     };
     match canonical {
         "ori.list.get" | "ori.list.pop" => args.first().and_then(list_elem).unwrap_or(fallback),
+        "ori.list.try_get" | "ori.list.try_pop" => args
+            .first()
+            .and_then(list_elem)
+            .map(|elem| Ty::Optional(Box::new(elem)))
+            .unwrap_or(fallback),
         "ori.list.slice" => args
+            .first()
+            .and_then(list_elem)
+            .map(|elem| Ty::List(Box::new(elem)))
+            .unwrap_or(fallback),
+        "ori.list.clone" | "ori.list.to_list" | "ori.list.from_list" => args
             .first()
             .and_then(list_elem)
             .map(|elem| Ty::List(Box::new(elem)))
@@ -564,6 +574,20 @@ fn specialized_stdlib_call_ret_ty(c_name: &str, args: &[HirArg], fallback: Ty) -
             .and_then(list_elem)
             .map(|elem| Ty::Optional(Box::new(elem)))
             .unwrap_or(fallback),
+        "ori.linked_list.value_at"
+        | "ori.linked_list.remove_at"
+        | "ori.doubly_linked_list.value_at"
+        | "ori.doubly_linked_list.remove_at" => args
+            .first()
+            .and_then(list_elem)
+            .map(|elem| Ty::Optional(Box::new(elem)))
+            .unwrap_or(fallback),
+        "ori.linked_list.cursor_front"
+        | "ori.linked_list.cursor_back"
+        | "ori.linked_list.find"
+        | "ori.doubly_linked_list.cursor_front"
+        | "ori.doubly_linked_list.cursor_back"
+        | "ori.doubly_linked_list.find" => Ty::Optional(Box::new(Ty::Int)),
         "ori.deque.to_list"
         | "ori.queue.to_list"
         | "ori.stack.to_list"
@@ -572,6 +596,14 @@ fn specialized_stdlib_call_ret_ty(c_name: &str, args: &[HirArg], fallback: Ty) -
             .first()
             .and_then(list_elem)
             .map(|elem| Ty::List(Box::new(elem)))
+            .unwrap_or(fallback),
+        "ori.deque.clone"
+        | "ori.queue.clone"
+        | "ori.stack.clone"
+        | "ori.linked_list.clone"
+        | "ori.doubly_linked_list.clone" => args
+            .first()
+            .map(|arg| arg.value.ty.clone())
             .unwrap_or(fallback),
         "ori.tree.value" => args
             .first()
@@ -583,6 +615,19 @@ fn specialized_stdlib_call_ret_ty(c_name: &str, args: &[HirArg], fallback: Ty) -
                 _ => None,
             })
             .unwrap_or(fallback),
+        "ori.tree.try_value" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Opaque {
+                    kind: OpaqueTy::Tree,
+                    args,
+                } => args
+                    .first()
+                    .cloned()
+                    .map(|elem| Ty::Optional(Box::new(elem))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
         "ori.tree.children"
         | "ori.tree.pre_order"
         | "ori.tree.post_order"
@@ -590,10 +635,14 @@ fn specialized_stdlib_call_ret_ty(c_name: &str, args: &[HirArg], fallback: Ty) -
             kind: OpaqueTy::NodeId,
             args: vec![],
         })),
-        "ori.tree.parent" => Ty::Optional(Box::new(Ty::Opaque {
+        "ori.tree.parent" | "ori.tree.find" => Ty::Optional(Box::new(Ty::Opaque {
             kind: OpaqueTy::NodeId,
             args: vec![],
         })),
+        "ori.tree.clone" | "ori.tree.clone_subtree" => args
+            .first()
+            .map(|arg| arg.value.ty.clone())
+            .unwrap_or(fallback),
         "ori.list.map" => args
             .get(1)
             .and_then(closure)
@@ -610,6 +659,17 @@ fn specialized_stdlib_call_ret_ty(c_name: &str, args: &[HirArg], fallback: Ty) -
                 Ty::Map(_, value) => Some(*value.clone()),
                 _ => None,
             })
+            .unwrap_or(fallback),
+        "ori.map.try_get" | "ori.map.try_remove" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Map(_, value) => Some(Ty::Optional(value.clone())),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.map.clone" => args
+            .first()
+            .map(|arg| arg.value.ty.clone())
             .unwrap_or(fallback),
         "ori.map.keys" => args
             .first()
@@ -644,6 +704,10 @@ fn specialized_stdlib_call_ret_ty(c_name: &str, args: &[HirArg], fallback: Ty) -
                 } if args.len() == 2 => Some(Ty::Optional(Box::new(args[1].clone()))),
                 _ => None,
             })
+            .unwrap_or(fallback),
+        "ori.hash_table.clone" => args
+            .first()
+            .map(|arg| arg.value.ty.clone())
             .unwrap_or(fallback),
         "ori.hash_table.keys" => args
             .first()
@@ -692,6 +756,39 @@ fn specialized_stdlib_call_ret_ty(c_name: &str, args: &[HirArg], fallback: Ty) -
                 _ => None,
             })
             .unwrap_or(fallback),
+        "ori.graph.try_topological_sort"
+        | "ori.graph.shortest_path"
+        | "ori.graph.shortest_weighted_path" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Opaque {
+                    kind: OpaqueTy::Graph,
+                    args,
+                } => args
+                    .first()
+                    .cloned()
+                    .map(|elem| Ty::Optional(Box::new(Ty::List(Box::new(elem))))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.graph.edge_weight" => Ty::Optional(Box::new(Ty::Int)),
+        "ori.graph.components" | "ori.graph.strongly_connected_components" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Opaque {
+                    kind: OpaqueTy::Graph,
+                    args,
+                } => args
+                    .first()
+                    .cloned()
+                    .map(|elem| Ty::List(Box::new(Ty::List(Box::new(elem))))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.graph.transitive_closure" | "ori.graph.clone" => args
+            .first()
+            .map(|arg| arg.value.ty.clone())
+            .unwrap_or(fallback),
         "ori.graph.edges" => args
             .first()
             .and_then(|arg| match &arg.value.ty {
@@ -715,6 +812,30 @@ fn specialized_stdlib_call_ret_ty(c_name: &str, args: &[HirArg], fallback: Ty) -
                     .first()
                     .cloned()
                     .map(|elem| Ty::Optional(Box::new(elem))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.heap.clone" | "ori.heap.merge" => args
+            .first()
+            .map(|arg| arg.value.ty.clone())
+            .unwrap_or(fallback),
+        "ori.heap.to_list" | "ori.heap.into_sorted_list" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::Opaque {
+                    kind: OpaqueTy::Heap,
+                    args,
+                } => args.first().cloned().map(|elem| Ty::List(Box::new(elem))),
+                _ => None,
+            })
+            .unwrap_or(fallback),
+        "ori.heap.from_list" => args
+            .first()
+            .and_then(|arg| match &arg.value.ty {
+                Ty::List(elem) => Some(Ty::Opaque {
+                    kind: OpaqueTy::Heap,
+                    args: vec![*elem.clone()],
+                }),
                 _ => None,
             })
             .unwrap_or(fallback),
@@ -1199,6 +1320,13 @@ impl<'a> Lowerer<'a> {
             Ty::Map(key, _) => *key.clone(),
             Ty::String => Ty::String,
             Ty::Bytes => Ty::U8,
+            Ty::Opaque { kind, args } if kind.is_list_backed_collection() => {
+                args.first().cloned().unwrap_or(Ty::Infer(0))
+            }
+            Ty::Opaque {
+                kind: OpaqueTy::Heap | OpaqueTy::Graph | OpaqueTy::HashTable,
+                args,
+            } => args.first().cloned().unwrap_or(Ty::Infer(0)),
             Ty::Named(type_def_id, _) => self
                 .impl_sigs
                 .iter()

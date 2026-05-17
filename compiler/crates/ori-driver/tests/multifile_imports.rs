@@ -4,7 +4,8 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ori_driver::pipeline::{
-    run_build, run_check, run_compile, run_doc, run_fmt, run_test, CheckOutput,
+    run_build, run_check, run_compile, run_compile_with_options, run_doc, run_fmt, run_test,
+    CheckOutput, CompileOptions,
 };
 
 static NEXT_DIR_ID: AtomicU64 = AtomicU64::new(0);
@@ -1888,6 +1889,32 @@ func main()
     end
     const names_snapshot: list<string> = ll.to_list(names)
     io.print(names_snapshot[0])
+    ll.push_back(names, "gamma")
+    match ll.find(names, "gamma")
+        case some(cursor):
+            io.print(string(cursor))
+        case none:
+            io.print("missing")
+    end
+    match ll.cursor_front(names)
+        case some(cursor):
+            io.print(string(cursor))
+        case none:
+            io.print("missing")
+    end
+    io.print(string(ll.insert_after(names, 0, "inserted")))
+    match ll.value_at(names, 1)
+        case some(value):
+            io.print(value)
+        case none:
+            io.print("missing")
+    end
+    match ll.remove_at(names, 1)
+        case some(value):
+            io.print(value)
+        case none:
+            io.print("missing")
+    end
     ll.clear(names)
     if ll.is_empty(names)
         io.print("linked-empty")
@@ -1930,6 +1957,37 @@ func main()
     io.print(string(dll.len(ints)))
     const ints_snapshot: list<int> = dll.to_list(ints)
     io.print(string(ints_snapshot[0]))
+    match dll.cursor_back(ints)
+        case some(cursor):
+            io.print(string(cursor))
+        case none:
+            io.print("missing")
+    end
+    io.print(string(dll.insert_before(ints, 0, 9)))
+    io.print(string(dll.insert_after(ints, 0, 8)))
+    match dll.value_at(ints, 1)
+        case some(value):
+            io.print(string(value))
+        case none:
+            io.print("missing")
+    end
+    match dll.find(ints, 2)
+        case some(cursor):
+            io.print(string(cursor))
+        case none:
+            io.print("missing")
+    end
+    match dll.remove_at(ints, 1)
+        case some(value):
+            io.print(string(value))
+        case none:
+            io.print("missing")
+    end
+    var direct_sum: int = 0
+    for value in ints
+        direct_sum = direct_sum + value
+    end
+    io.print(string(direct_sum))
     dll.clear(ints)
     if dll.is_empty(ints)
         io.print("doubly-empty")
@@ -1966,7 +2024,7 @@ end
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(
         stdout.replace("\r\n", "\n"),
-        "alpha\nalpha\nbeta\nlinked-empty\nlinked-none\n1\n3\n1\n3\n1\n2\ndoubly-empty\nmanaged\ndoubly-none\n"
+        "alpha\nalpha\nbeta\n1\n0\ntrue\ninserted\ninserted\nlinked-empty\nlinked-none\n1\n3\n1\n3\n1\n2\n0\ntrue\ntrue\n8\n2\n8\n11\ndoubly-empty\nmanaged\ndoubly-none\n"
     );
 }
 
@@ -2570,6 +2628,216 @@ end
     assert_eq!(
         stdout.replace("\r\n", "\n"),
         "1\n3\nfalse\n1\n3\n4\nempty\napple\n2\n5\n7\n"
+    );
+}
+
+#[test]
+fn compile_runs_completed_collection_gap_apis_native() {
+    let dir = TestDir::new("compile_completed_collection_gap_apis_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.graph as graph
+import ori.heap as heap
+import ori.io as io
+import ori.list as lists
+import ori.map as maps
+import ori.set as sets
+import ori.tree as tree
+
+func main()
+    const values: list<int> = lists.from_list([10, 20, 30])
+    const copied: list<int> = lists.clone(values)
+    match lists.try_get(copied, 1)
+        case some(value):
+            io.print(string(value))
+        case none:
+            io.print("missing")
+    end
+    io.print(string(lists.try_remove(copied, 0)))
+    match lists.try_pop(copied)
+        case some(value):
+            io.print(string(value))
+        case none:
+            io.print("empty")
+    end
+    lists.clear(copied)
+    io.print(string(lists.is_empty(copied)))
+
+    const labels: set<string> = sets.from_list(["a", "b", "a"])
+    const labels_copy: set<string> = sets.clone(labels)
+    io.print(string(sets.len(labels_copy)))
+    io.print(string(sets.try_remove(labels_copy, "a")))
+    const label_items: list<string> = sets.to_list(labels_copy)
+    io.print(label_items[0])
+
+    const entries: list<tuple<string, int>> = [tuple("a", 1), tuple("b", 2)]
+    const table: map<string, int> = maps.from_entries(entries)
+    match maps.try_get(table, "b")
+        case some(value):
+            io.print(string(value))
+        case none:
+            io.print("missing")
+    end
+    match maps.try_remove(table, "a")
+        case some(value):
+            io.print(string(value))
+        case none:
+            io.print("missing")
+    end
+    io.print(string(maps.is_empty(table)))
+    const table_copy: map<string, int> = maps.clone(table)
+    io.print(string(maps.len(table_copy)))
+
+    const outline: tree.Tree<string> = tree.new("root")
+    const root: tree.NodeId = tree.root(outline)
+    const left: tree.NodeId = tree.add_child(outline, root, "left")
+    const right: tree.NodeId = tree.add_child(outline, root, "right")
+    const leaf: tree.NodeId = tree.add_child(outline, left, "leaf")
+    io.print(string(tree.contains_node(outline, leaf)))
+    io.print(string(tree.set_value(outline, leaf, "leaf2")))
+    match tree.try_value(outline, leaf)
+        case some(value):
+            io.print(value)
+        case none:
+            io.print("missing")
+    end
+    io.print(string(tree.move_subtree(outline, leaf, right)))
+    match tree.find(outline, "leaf2")
+        case some(node):
+            io.print(tree.value(outline, node))
+        case none:
+            io.print("missing")
+    end
+    const branch: tree.Tree<string> = tree.clone_subtree(outline, right)
+    io.print(tree.value(branch, tree.root(branch)))
+    const outline_copy: tree.Tree<string> = tree.clone(outline)
+    io.print(string(tree.len(outline_copy)))
+
+    const dag: graph.Graph<int> = graph.new(true)
+    graph.add_edge(dag, 1, 2)
+    graph.add_edge(dag, 2, 4)
+    graph.add_edge(dag, 1, 3)
+    graph.add_edge(dag, 3, 4)
+    io.print(string(graph.is_directed(dag)))
+    io.print(string(graph.len(dag)))
+    io.print(string(graph.edge_len(dag)))
+    io.print(string(graph.has_cycle(dag)))
+    match graph.try_topological_sort(dag)
+        case some(order):
+            io.print(string(lists.len(order)))
+        case none:
+            io.print("no-topo")
+    end
+    match graph.shortest_path(dag, 1, 4)
+        case some(path):
+            io.print(string(path[0] + path[1] + path[2]))
+        case none:
+            io.print("no-path")
+    end
+    graph.add_weighted_edge(dag, 1, 3, 10)
+    match graph.edge_weight(dag, 1, 3)
+        case some(weight):
+            io.print(string(weight))
+        case none:
+            io.print("no-weight")
+    end
+    match graph.shortest_weighted_path(dag, 1, 4)
+        case some(path):
+            io.print(string(path[0] + path[1] + path[2]))
+        case none:
+            io.print("no-weighted-path")
+    end
+    const closure: graph.Graph<int> = graph.transitive_closure(dag)
+    io.print(string(graph.has_edge(closure, 1, 4)))
+    const dag_copy: graph.Graph<int> = graph.clone(dag)
+    io.print(string(graph.edge_len(dag_copy)))
+    var dag_sum: int = 0
+    for node in dag_copy
+        dag_sum = dag_sum + node
+    end
+    io.print(string(dag_sum))
+
+    const routes: graph.Graph<string> = graph.new(true)
+    graph.add_weighted_edge(routes, "start", "slow", 9)
+    graph.add_weighted_edge(routes, "start", "fast", 1)
+    graph.add_weighted_edge(routes, "fast", "end", 1)
+    graph.add_weighted_edge(routes, "slow", "end", 1)
+    match graph.edge_weight(routes, "start", "slow")
+        case some(weight):
+            io.print(string(weight))
+        case none:
+            io.print("no-weight")
+    end
+    match graph.shortest_weighted_path(routes, "start", "end")
+        case some(path):
+            io.print(path[1])
+        case none:
+            io.print("no-route")
+    end
+
+    const cyclic: graph.Graph<int> = graph.new(true)
+    graph.add_edge(cyclic, 1, 2)
+    graph.add_edge(cyclic, 2, 1)
+    io.print(string(graph.has_cycle(cyclic)))
+    match graph.try_topological_sort(cyclic)
+        case some(order):
+            io.print(string(lists.len(order)))
+        case none:
+            io.print("cycle")
+    end
+    const scc: list<list<int>> = graph.strongly_connected_components(cyclic)
+    io.print(string(lists.len(scc)))
+
+    const network: graph.Graph<int> = graph.new(false)
+    graph.add_edge(network, 10, 11)
+    graph.add_edge(network, 20, 21)
+    const components: list<list<int>> = graph.components(network)
+    io.print(string(lists.len(components)))
+
+    const source: list<int> = [9, 2, 5]
+    const from_list: heap.Heap<int> = heap.from_list(source)
+    io.print(string(heap.remove(from_list, 5)))
+    const sorted: list<int> = heap.into_sorted_list(from_list)
+    io.print(string(sorted[0]))
+    io.print(string(sorted[1]))
+    const extra: heap.Heap<int> = heap.from_list([1, 7])
+    const merged: heap.Heap<int> = heap.merge(from_list, extra)
+    io.print(string(heap.len(merged)))
+    const heap_copy: heap.Heap<int> = heap.clone(merged)
+    const heap_items: list<int> = heap.to_list(heap_copy)
+    io.print(string(lists.len(heap_items)))
+    var heap_sum: int = 0
+    for item in heap_copy
+        heap_sum = heap_sum + item
+    end
+    io.print(string(heap_sum))
+    heap.clear(heap_copy)
+    io.print(string(heap.is_empty(heap_copy)))
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "completed_collection_gap_apis.exe"
+    } else {
+        "completed_collection_gap_apis"
+    });
+    let out = run_compile_with_options(
+        &dir.path("main.orl"),
+        Path::new(&exe),
+        CompileOptions { native_raw: true },
+    )
+    .unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(
+        stdout.replace("\r\n", "\n"),
+        "20\ntrue\n30\ntrue\n2\ntrue\nb\n2\n1\nfalse\n1\ntrue\ntrue\nleaf2\ntrue\nleaf2\nright\n4\ntrue\n4\n4\nfalse\n4\n7\n10\n7\ntrue\n4\n10\n9\nfast\ntrue\ncycle\n1\n2\ntrue\n2\n9\n4\n4\n19\ntrue\n"
     );
 }
 

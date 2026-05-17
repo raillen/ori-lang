@@ -133,8 +133,14 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.list.new", ["list.new"] => "ori_list_new"),
     stdlib!("ori.list.push", ["list.push"] => "ori_list_push"),
     stdlib!("ori.list.get", ["list.get"] => "ori_list_get"),
+    stdlib!("ori.list.try_get", ["list.try_get"] => "ori_list_try_get"),
     stdlib!("ori.list.set", ["list.set"] => "ori_list_set"),
     stdlib!("ori.list.len", ["list.len"] => "ori_list_len"),
+    stdlib!("ori.list.is_empty", ["list.is_empty"] => "ori_list_is_empty"),
+    stdlib!("ori.list.clear", ["list.clear"] => "ori_list_clear"),
+    stdlib!("ori.list.clone", ["list.clone"] => "ori_list_clone"),
+    stdlib!("ori.list.to_list", ["list.to_list"] => "ori_list_to_list"),
+    stdlib!("ori.list.from_list", ["list.from_list"] => "ori_list_from_list"),
     stdlib!("ori.list.free", ["list.free"] => "ori_list_free"),
     stdlib!("ori.deque.new", ["deque.new"] => "ori_deque_new"),
     stdlib!("ori.deque.push_front", ["deque.push_front"] => "ori_deque_push_front"),
@@ -146,6 +152,7 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.deque.len", ["deque.len"] => "ori_deque_len"),
     stdlib!("ori.deque.is_empty", ["deque.is_empty"] => "ori_deque_is_empty"),
     stdlib!("ori.deque.clear", ["deque.clear"] => "ori_deque_clear"),
+    stdlib!("ori.deque.clone", ["deque.clone"] => "ori_deque_clone"),
     stdlib!("ori.deque.to_list", ["deque.to_list"] => "ori_deque_to_list"),
     stdlib!("ori.queue.new", ["queue.new"] => "ori_queue_new"),
     stdlib!("ori.queue.enqueue", ["queue.enqueue"] => "ori_queue_enqueue"),
@@ -154,6 +161,7 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.queue.len", ["queue.len"] => "ori_queue_len"),
     stdlib!("ori.queue.is_empty", ["queue.is_empty"] => "ori_queue_is_empty"),
     stdlib!("ori.queue.clear", ["queue.clear"] => "ori_queue_clear"),
+    stdlib!("ori.queue.clone", ["queue.clone"] => "ori_queue_clone"),
     stdlib!("ori.queue.to_list", ["queue.to_list"] => "ori_queue_to_list"),
     stdlib!("ori.stack.new", ["stack.new"] => "ori_stack_new"),
     stdlib!("ori.stack.push", ["stack.push"] => "ori_stack_push"),
@@ -162,15 +170,23 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.stack.len", ["stack.len"] => "ori_stack_len"),
     stdlib!("ori.stack.is_empty", ["stack.is_empty"] => "ori_stack_is_empty"),
     stdlib!("ori.stack.clear", ["stack.clear"] => "ori_stack_clear"),
+    stdlib!("ori.stack.clone", ["stack.clone"] => "ori_stack_clone"),
     stdlib!("ori.stack.to_list", ["stack.to_list"] => "ori_stack_to_list"),
     stdlib!("ori.linked_list.new", ["linked_list.new"] => "ori_linked_list_new"),
     stdlib!("ori.linked_list.push_front", ["linked_list.push_front"] => "ori_linked_list_push_front"),
     stdlib!("ori.linked_list.push_back", ["linked_list.push_back"] => "ori_linked_list_push_back"),
     stdlib!("ori.linked_list.pop_front", ["linked_list.pop_front"] => "ori_linked_list_pop_front"),
     stdlib!("ori.linked_list.front", ["linked_list.front"] => "ori_linked_list_front"),
+    stdlib!("ori.linked_list.cursor_front", ["linked_list.cursor_front"] => "ori_linked_list_cursor_front"),
+    stdlib!("ori.linked_list.cursor_back", ["linked_list.cursor_back"] => "ori_linked_list_cursor_back"),
+    stdlib!("ori.linked_list.value_at", ["linked_list.value_at"] => "ori_linked_list_value_at"),
+    stdlib!("ori.linked_list.insert_after", ["linked_list.insert_after"] => "ori_linked_list_insert_after"),
+    stdlib!("ori.linked_list.remove_at", ["linked_list.remove_at"] => "ori_linked_list_remove_at"),
+    stdlib!("ori.linked_list.find", ["linked_list.find"] => "ori_linked_list_find"),
     stdlib!("ori.linked_list.len", ["linked_list.len"] => "ori_linked_list_len"),
     stdlib!("ori.linked_list.is_empty", ["linked_list.is_empty"] => "ori_linked_list_is_empty"),
     stdlib!("ori.linked_list.clear", ["linked_list.clear"] => "ori_linked_list_clear"),
+    stdlib!("ori.linked_list.clone", ["linked_list.clone"] => "ori_linked_list_clone"),
     stdlib!("ori.linked_list.to_list", ["linked_list.to_list"] => "ori_linked_list_to_list"),
     stdlib!("ori.doubly_linked_list.new", ["doubly_linked_list.new"] => "ori_doubly_linked_list_new"),
     stdlib!("ori.doubly_linked_list.push_front", ["doubly_linked_list.push_front"] => "ori_doubly_linked_list_push_front"),
@@ -179,38 +195,61 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.doubly_linked_list.pop_back", ["doubly_linked_list.pop_back"] => "ori_doubly_linked_list_pop_back"),
     stdlib!("ori.doubly_linked_list.front", ["doubly_linked_list.front"] => "ori_doubly_linked_list_front"),
     stdlib!("ori.doubly_linked_list.back", ["doubly_linked_list.back"] => "ori_doubly_linked_list_back"),
+    stdlib!("ori.doubly_linked_list.cursor_front", ["doubly_linked_list.cursor_front"] => "ori_doubly_linked_list_cursor_front"),
+    stdlib!("ori.doubly_linked_list.cursor_back", ["doubly_linked_list.cursor_back"] => "ori_doubly_linked_list_cursor_back"),
+    stdlib!("ori.doubly_linked_list.value_at", ["doubly_linked_list.value_at"] => "ori_doubly_linked_list_value_at"),
+    stdlib!("ori.doubly_linked_list.insert_after", ["doubly_linked_list.insert_after"] => "ori_doubly_linked_list_insert_after"),
+    stdlib!("ori.doubly_linked_list.insert_before", ["doubly_linked_list.insert_before"] => "ori_doubly_linked_list_insert_before"),
+    stdlib!("ori.doubly_linked_list.remove_at", ["doubly_linked_list.remove_at"] => "ori_doubly_linked_list_remove_at"),
+    stdlib!("ori.doubly_linked_list.find", ["doubly_linked_list.find"] => "ori_doubly_linked_list_find"),
     stdlib!("ori.doubly_linked_list.len", ["doubly_linked_list.len"] => "ori_doubly_linked_list_len"),
     stdlib!("ori.doubly_linked_list.is_empty", ["doubly_linked_list.is_empty"] => "ori_doubly_linked_list_is_empty"),
     stdlib!("ori.doubly_linked_list.clear", ["doubly_linked_list.clear"] => "ori_doubly_linked_list_clear"),
+    stdlib!("ori.doubly_linked_list.clone", ["doubly_linked_list.clone"] => "ori_doubly_linked_list_clone"),
     stdlib!("ori.doubly_linked_list.to_list", ["doubly_linked_list.to_list"] => "ori_doubly_linked_list_to_list"),
     stdlib!("ori.tree.new", ["tree.new"] => "ori_tree_new"),
     stdlib!("ori.tree.root", ["tree.root"] => "ori_tree_root"),
     stdlib!("ori.tree.value", ["tree.value"] => "ori_tree_value"),
+    stdlib!("ori.tree.try_value", ["tree.try_value"] => "ori_tree_try_value"),
+    stdlib!("ori.tree.contains_node", ["tree.contains_node"] => "ori_tree_contains_node"),
+    stdlib!("ori.tree.set_value", ["tree.set_value"] => "ori_tree_set_value"),
     stdlib!("ori.tree.add_child", ["tree.add_child"] => "ori_tree_add_child"),
     stdlib!("ori.tree.children", ["tree.children"] => "ori_tree_children"),
     stdlib!("ori.tree.parent", ["tree.parent"] => "ori_tree_parent"),
     stdlib!("ori.tree.remove_subtree", ["tree.remove_subtree"] => "ori_tree_remove_subtree"),
+    stdlib!("ori.tree.move_subtree", ["tree.move_subtree"] => "ori_tree_move_subtree"),
+    stdlib!("ori.tree.find", ["tree.find"] => "ori_tree_find"),
     stdlib!("ori.tree.len", ["tree.len"] => "ori_tree_len"),
     stdlib!("ori.tree.depth", ["tree.depth"] => "ori_tree_depth"),
     stdlib!("ori.tree.pre_order", ["tree.pre_order"] => "ori_tree_pre_order"),
     stdlib!("ori.tree.post_order", ["tree.post_order"] => "ori_tree_post_order"),
     stdlib!("ori.tree.breadth_first", ["tree.breadth_first"] => "ori_tree_breadth_first"),
+    stdlib!("ori.tree.clone", ["tree.clone"] => "ori_tree_clone"),
+    stdlib!("ori.tree.clone_subtree", ["tree.clone_subtree"] => "ori_tree_clone_subtree"),
     stdlib!("ori.set.new", ["set.new"] => "ori_set_new"),
     stdlib!("ori.set.add", ["set.add"] => "ori_set_add"),
     stdlib!("ori.set.contains", ["set.contains"] => "ori_set_contains"),
     stdlib!("ori.set.len", ["set.len"] => "ori_set_len"),
+    stdlib!("ori.set.is_empty", ["set.is_empty"] => "ori_set_is_empty"),
     stdlib!("ori.set.capacity", ["set.capacity"] => "ori_set_capacity"),
     stdlib!("ori.set.reserve", ["set.reserve"] => "ori_set_reserve"),
     stdlib!("ori.set.clear", ["set.clear"] => "ori_set_clear"),
+    stdlib!("ori.set.clone", ["set.clone"] => "ori_set_clone"),
+    stdlib!("ori.set.to_list", ["set.to_list"] => "ori_set_to_list"),
+    stdlib!("ori.set.from_list", ["set.from_list"] => "ori_set_from_list"),
     stdlib!("ori.set.free", ["set.free"] => "ori_set_free"),
     stdlib!("ori.map.new", ["map.new"] => "ori_map_new"),
     stdlib!("ori.map.set", ["map.set"] => "ori_map_set"),
     stdlib!("ori.map.get", ["map.get"] => "ori_map_get"),
+    stdlib!("ori.map.try_get", ["map.try_get"] => "ori_map_try_get"),
     stdlib!("ori.map.contains", ["map.contains"] => "ori_map_contains"),
     stdlib!("ori.map.len", ["map.len"] => "ori_map_len"),
+    stdlib!("ori.map.is_empty", ["map.is_empty"] => "ori_map_is_empty"),
     stdlib!("ori.map.capacity", ["map.capacity"] => "ori_map_capacity"),
     stdlib!("ori.map.reserve", ["map.reserve"] => "ori_map_reserve"),
     stdlib!("ori.map.clear", ["map.clear"] => "ori_map_clear"),
+    stdlib!("ori.map.clone", ["map.clone"] => "ori_map_clone"),
+    stdlib!("ori.map.from_entries", ["map.from_entries"] => "ori_map_from_entries"),
     stdlib!("ori.map.free", ["map.free"] => "ori_map_free"),
     stdlib!("ori.hash_table.new", ["hash_table.new"] => "ori_hash_table_new"),
     stdlib!("ori.hash_table.with_capacity", ["hash_table.with_capacity"] => "ori_hash_table_with_capacity"),
@@ -219,9 +258,12 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.hash_table.remove", ["hash_table.remove"] => "ori_hash_table_remove"),
     stdlib!("ori.hash_table.contains", ["hash_table.contains"] => "ori_hash_table_contains"),
     stdlib!("ori.hash_table.len", ["hash_table.len"] => "ori_hash_table_len"),
+    stdlib!("ori.hash_table.is_empty", ["hash_table.is_empty"] => "ori_hash_table_is_empty"),
     stdlib!("ori.hash_table.capacity", ["hash_table.capacity"] => "ori_hash_table_capacity"),
     stdlib!("ori.hash_table.reserve", ["hash_table.reserve"] => "ori_hash_table_reserve"),
     stdlib!("ori.hash_table.clear", ["hash_table.clear"] => "ori_hash_table_clear"),
+    stdlib!("ori.hash_table.clone", ["hash_table.clone"] => "ori_hash_table_clone"),
+    stdlib!("ori.hash_table.from_entries", ["hash_table.from_entries"] => "ori_hash_table_from_entries"),
     stdlib!("ori.hash_table.keys", ["hash_table.keys"] => "ori_hash_table_keys"),
     stdlib!("ori.hash_table.values", ["hash_table.values"] => "ori_hash_table_values"),
     stdlib!("ori.hash_table.entries", ["hash_table.entries"] => "ori_hash_table_entries"),
@@ -229,21 +271,41 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.graph.add_node", ["graph.add_node"] => "ori_graph_add_node"),
     stdlib!("ori.graph.remove_node", ["graph.remove_node"] => "ori_graph_remove_node"),
     stdlib!("ori.graph.add_edge", ["graph.add_edge"] => "ori_graph_add_edge"),
+    stdlib!("ori.graph.add_weighted_edge", ["graph.add_weighted_edge"] => "ori_graph_add_weighted_edge"),
     stdlib!("ori.graph.remove_edge", ["graph.remove_edge"] => "ori_graph_remove_edge"),
     stdlib!("ori.graph.has_node", ["graph.has_node"] => "ori_graph_has_node"),
     stdlib!("ori.graph.has_edge", ["graph.has_edge"] => "ori_graph_has_edge"),
+    stdlib!("ori.graph.edge_weight", ["graph.edge_weight"] => "ori_graph_edge_weight"),
     stdlib!("ori.graph.neighbors", ["graph.neighbors"] => "ori_graph_neighbors"),
     stdlib!("ori.graph.nodes", ["graph.nodes"] => "ori_graph_nodes"),
     stdlib!("ori.graph.edges", ["graph.edges"] => "ori_graph_edges"),
     stdlib!("ori.graph.bfs", ["graph.bfs"] => "ori_graph_bfs"),
     stdlib!("ori.graph.dfs", ["graph.dfs"] => "ori_graph_dfs"),
     stdlib!("ori.graph.topological_sort", ["graph.topological_sort"] => "ori_graph_topological_sort"),
+    stdlib!("ori.graph.try_topological_sort", ["graph.try_topological_sort"] => "ori_graph_try_topological_sort"),
+    stdlib!("ori.graph.is_directed", ["graph.is_directed"] => "ori_graph_is_directed"),
+    stdlib!("ori.graph.len", ["graph.len"] => "ori_graph_len"),
+    stdlib!("ori.graph.edge_len", ["graph.edge_len"] => "ori_graph_edge_len"),
+    stdlib!("ori.graph.has_cycle", ["graph.has_cycle"] => "ori_graph_has_cycle"),
+    stdlib!("ori.graph.components", ["graph.components"] => "ori_graph_components"),
+    stdlib!("ori.graph.strongly_connected_components", ["graph.strongly_connected_components"] => "ori_graph_strongly_connected_components"),
+    stdlib!("ori.graph.transitive_closure", ["graph.transitive_closure"] => "ori_graph_transitive_closure"),
+    stdlib!("ori.graph.shortest_path", ["graph.shortest_path"] => "ori_graph_shortest_path"),
+    stdlib!("ori.graph.shortest_weighted_path", ["graph.shortest_weighted_path"] => "ori_graph_shortest_weighted_path"),
+    stdlib!("ori.graph.clone", ["graph.clone"] => "ori_graph_clone"),
     stdlib!("ori.heap.new", ["heap.new"] => "ori_heap_new"),
     stdlib!("ori.heap.push", ["heap.push"] => "ori_heap_push"),
     stdlib!("ori.heap.pop", ["heap.pop"] => "ori_heap_pop"),
     stdlib!("ori.heap.peek", ["heap.peek"] => "ori_heap_peek"),
     stdlib!("ori.heap.len", ["heap.len"] => "ori_heap_len"),
     stdlib!("ori.heap.is_empty", ["heap.is_empty"] => "ori_heap_is_empty"),
+    stdlib!("ori.heap.clear", ["heap.clear"] => "ori_heap_clear"),
+    stdlib!("ori.heap.clone", ["heap.clone"] => "ori_heap_clone"),
+    stdlib!("ori.heap.to_list", ["heap.to_list"] => "ori_heap_to_list"),
+    stdlib!("ori.heap.from_list", ["heap.from_list"] => "ori_heap_from_list"),
+    stdlib!("ori.heap.merge", ["heap.merge"] => "ori_heap_merge"),
+    stdlib!("ori.heap.remove", ["heap.remove"] => "ori_heap_remove"),
+    stdlib!("ori.heap.into_sorted_list", ["heap.into_sorted_list"] => "ori_heap_into_sorted_list"),
     stdlib!("ori.math.sqrt" => "ori_math_sqrt", c_backend),
     stdlib!("ori.math.abs" => "ori_math_abs", c_backend),
     stdlib!("ori.math.min" => "ori_math_min", c_backend),
@@ -359,7 +421,9 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.test.fail", ["test.fail"] => "ori_test_fail", c_backend),
     stdlib!("ori.panic" => "ori_panic"),
     stdlib!("ori.list.pop", ["list.pop"] => "ori_list_pop"),
+    stdlib!("ori.list.try_pop", ["list.try_pop"] => "ori_list_try_pop"),
     stdlib!("ori.list.remove", ["list.remove"] => "ori_list_remove"),
+    stdlib!("ori.list.try_remove", ["list.try_remove"] => "ori_list_try_remove"),
     stdlib!("ori.list.insert", ["list.insert"] => "ori_list_insert"),
     stdlib!("ori.list.contains", ["list.contains"] => "ori_list_contains"),
     stdlib!("ori.list.index_of", ["list.index_of"] => "ori_list_index_of"),
@@ -367,10 +431,12 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.list.reverse", ["list.reverse"] => "ori_list_reverse"),
     stdlib!("ori.list.slice", ["list.slice"] => "ori_list_slice"),
     stdlib!("ori.map.remove", ["map.remove"] => "ori_map_remove"),
+    stdlib!("ori.map.try_remove", ["map.try_remove"] => "ori_map_try_remove"),
     stdlib!("ori.map.keys", ["map.keys"] => "ori_map_keys"),
     stdlib!("ori.map.values", ["map.values"] => "ori_map_values"),
     stdlib!("ori.map.entries", ["map.entries"] => "ori_map_entries"),
     stdlib!("ori.set.remove", ["set.remove"] => "ori_set_remove"),
+    stdlib!("ori.set.try_remove", ["set.try_remove"] => "ori_set_try_remove"),
     stdlib!("ori.set.union", ["set.union"] => "ori_set_union"),
     stdlib!("ori.set.intersection", ["set.intersection"] => "ori_set_intersection"),
     stdlib!("ori.set.difference", ["set.difference"] => "ori_set_difference"),
@@ -639,14 +705,29 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int],
             Ty::Infer(0),
         ),
+        "ori.list.try_get" => (
+            vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int],
+            Ty::Optional(Box::new(Ty::Infer(0))),
+        ),
         "ori.list.set" => (
             vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int, Ty::Infer(0)],
             Ty::Void,
         ),
         "ori.list.len" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Int),
+        "ori.list.is_empty" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Bool),
+        "ori.list.clear" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Void),
+        "ori.list.clone" | "ori.list.to_list" | "ori.list.from_list" => (
+            vec![Ty::List(Box::new(Ty::Infer(0)))],
+            Ty::List(Box::new(Ty::Infer(0))),
+        ),
         "ori.list.free" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Void),
         "ori.list.pop" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Infer(0)),
+        "ori.list.try_pop" => (
+            vec![Ty::List(Box::new(Ty::Infer(0)))],
+            Ty::Optional(Box::new(Ty::Infer(0))),
+        ),
         "ori.list.remove" => (vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int], Ty::Void),
+        "ori.list.try_remove" => (vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int], Ty::Bool),
         "ori.list.insert" => (
             vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int, Ty::Infer(0)],
             Ty::Void,
@@ -835,6 +916,14 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
                     .unwrap();
             (vec![opaque_collection(kind), Ty::Infer(0)], Ty::Void)
         }
+        path if list_backed_collection_kind(path, &["insert_after", "insert_before"]).is_some() => {
+            let kind =
+                list_backed_collection_kind(path, &["insert_after", "insert_before"]).unwrap();
+            (
+                vec![opaque_collection(kind), Ty::Int, Ty::Infer(0)],
+                Ty::Bool,
+            )
+        }
         path if list_backed_collection_kind(
             path,
             &[
@@ -867,6 +956,27 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
                 Ty::Optional(Box::new(Ty::Infer(0))),
             )
         }
+        path if list_backed_collection_kind(path, &["value_at", "remove_at"]).is_some() => {
+            let kind = list_backed_collection_kind(path, &["value_at", "remove_at"]).unwrap();
+            (
+                vec![opaque_collection(kind), Ty::Int],
+                Ty::Optional(Box::new(Ty::Infer(0))),
+            )
+        }
+        path if list_backed_collection_kind(path, &["cursor_front", "cursor_back"]).is_some() => {
+            let kind = list_backed_collection_kind(path, &["cursor_front", "cursor_back"]).unwrap();
+            (
+                vec![opaque_collection(kind)],
+                Ty::Optional(Box::new(Ty::Int)),
+            )
+        }
+        path if list_backed_collection_kind(path, &["find"]).is_some() => {
+            let kind = list_backed_collection_kind(path, &["find"]).unwrap();
+            (
+                vec![opaque_collection(kind), Ty::Infer(0)],
+                Ty::Optional(Box::new(Ty::Int)),
+            )
+        }
         path if list_backed_collection_kind(path, &["len"]).is_some() => {
             let kind = list_backed_collection_kind(path, &["len"]).unwrap();
             (vec![opaque_collection(kind)], Ty::Int)
@@ -879,6 +989,10 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             let kind = list_backed_collection_kind(path, &["clear"]).unwrap();
             (vec![opaque_collection(kind)], Ty::Void)
         }
+        path if list_backed_collection_kind(path, &["clone"]).is_some() => {
+            let kind = list_backed_collection_kind(path, &["clone"]).unwrap();
+            (vec![opaque_collection(kind)], opaque_collection(kind))
+        }
         path if list_backed_collection_kind(path, &["to_list"]).is_some() => {
             let kind = list_backed_collection_kind(path, &["to_list"]).unwrap();
             (
@@ -889,6 +1003,12 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.tree.new" => (vec![Ty::Infer(0)], tree_ty()),
         "ori.tree.root" => (vec![tree_ty()], node_id_ty()),
         "ori.tree.value" => (vec![tree_ty(), node_id_ty()], Ty::Infer(0)),
+        "ori.tree.try_value" => (
+            vec![tree_ty(), node_id_ty()],
+            Ty::Optional(Box::new(Ty::Infer(0))),
+        ),
+        "ori.tree.contains_node" => (vec![tree_ty(), node_id_ty()], Ty::Bool),
+        "ori.tree.set_value" => (vec![tree_ty(), node_id_ty(), Ty::Infer(0)], Ty::Bool),
         "ori.tree.add_child" => (vec![tree_ty(), node_id_ty(), Ty::Infer(0)], node_id_ty()),
         "ori.tree.children" => (
             vec![tree_ty(), node_id_ty()],
@@ -899,11 +1019,18 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             Ty::Optional(Box::new(node_id_ty())),
         ),
         "ori.tree.remove_subtree" => (vec![tree_ty(), node_id_ty()], Ty::Void),
+        "ori.tree.move_subtree" => (vec![tree_ty(), node_id_ty(), node_id_ty()], Ty::Bool),
+        "ori.tree.find" => (
+            vec![tree_ty(), Ty::Infer(0)],
+            Ty::Optional(Box::new(node_id_ty())),
+        ),
         "ori.tree.len" => (vec![tree_ty()], Ty::Int),
         "ori.tree.depth" => (vec![tree_ty(), node_id_ty()], Ty::Int),
         "ori.tree.pre_order" | "ori.tree.post_order" | "ori.tree.breadth_first" => {
             (vec![tree_ty()], Ty::List(Box::new(node_id_ty())))
         }
+        "ori.tree.clone" => (vec![tree_ty()], tree_ty()),
+        "ori.tree.clone_subtree" => (vec![tree_ty(), node_id_ty()], tree_ty()),
         "ori.set.new" => (vec![], Ty::Set(Box::new(Ty::Infer(0)))),
         "ori.set.add" => (
             vec![Ty::Set(Box::new(Ty::Infer(0))), Ty::Infer(0)],
@@ -914,13 +1041,30 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             Ty::Bool,
         ),
         "ori.set.len" => (vec![Ty::Set(Box::new(Ty::Infer(0)))], Ty::Int),
+        "ori.set.is_empty" => (vec![Ty::Set(Box::new(Ty::Infer(0)))], Ty::Bool),
         "ori.set.capacity" => (vec![Ty::Set(Box::new(Ty::Infer(0)))], Ty::Int),
         "ori.set.reserve" => (vec![Ty::Set(Box::new(Ty::Infer(0))), Ty::Int], Ty::Void),
         "ori.set.clear" => (vec![Ty::Set(Box::new(Ty::Infer(0)))], Ty::Void),
+        "ori.set.clone" => (
+            vec![Ty::Set(Box::new(Ty::Infer(0)))],
+            Ty::Set(Box::new(Ty::Infer(0))),
+        ),
+        "ori.set.to_list" => (
+            vec![Ty::Set(Box::new(Ty::Infer(0)))],
+            Ty::List(Box::new(Ty::Infer(0))),
+        ),
+        "ori.set.from_list" => (
+            vec![Ty::List(Box::new(Ty::Infer(0)))],
+            Ty::Set(Box::new(Ty::Infer(0))),
+        ),
         "ori.set.free" => (vec![Ty::Set(Box::new(Ty::Infer(0)))], Ty::Void),
         "ori.set.remove" => (
             vec![Ty::Set(Box::new(Ty::Infer(0))), Ty::Infer(0)],
             Ty::Void,
+        ),
+        "ori.set.try_remove" => (
+            vec![Ty::Set(Box::new(Ty::Infer(0))), Ty::Infer(0)],
+            Ty::Bool,
         ),
         "ori.set.union" | "ori.set.intersection" | "ori.set.difference" => (
             vec![
@@ -948,6 +1092,13 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             ],
             Ty::Infer(1),
         ),
+        "ori.map.try_get" => (
+            vec![
+                Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(1))),
+                Ty::Infer(0),
+            ],
+            Ty::Optional(Box::new(Ty::Infer(1))),
+        ),
         "ori.map.contains" => (
             vec![
                 Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(1))),
@@ -958,6 +1109,10 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.map.len" => (
             vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(1)))],
             Ty::Int,
+        ),
+        "ori.map.is_empty" => (
+            vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(1)))],
+            Ty::Bool,
         ),
         "ori.map.capacity" => (
             vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(1)))],
@@ -974,6 +1129,17 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(1)))],
             Ty::Void,
         ),
+        "ori.map.clone" => (
+            vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(1)))],
+            Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(1))),
+        ),
+        "ori.map.from_entries" => (
+            vec![Ty::List(Box::new(Ty::Tuple(vec![
+                Ty::Infer(0),
+                Ty::Infer(1),
+            ])))],
+            Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(1))),
+        ),
         "ori.map.free" => (
             vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(1)))],
             Ty::Void,
@@ -984,6 +1150,13 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
                 Ty::Infer(0),
             ],
             Ty::Void,
+        ),
+        "ori.map.try_remove" => (
+            vec![
+                Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(1))),
+                Ty::Infer(0),
+            ],
+            Ty::Optional(Box::new(Ty::Infer(1))),
         ),
         "ori.map.keys" => (
             vec![Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(1)))],
@@ -1006,8 +1179,17 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         ),
         "ori.hash_table.contains" => (vec![hash_table_ty(), Ty::Infer(0)], Ty::Bool),
         "ori.hash_table.len" | "ori.hash_table.capacity" => (vec![hash_table_ty()], Ty::Int),
+        "ori.hash_table.is_empty" => (vec![hash_table_ty()], Ty::Bool),
         "ori.hash_table.reserve" => (vec![hash_table_ty(), Ty::Int], Ty::Void),
         "ori.hash_table.clear" => (vec![hash_table_ty()], Ty::Void),
+        "ori.hash_table.clone" => (vec![hash_table_ty()], hash_table_ty()),
+        "ori.hash_table.from_entries" => (
+            vec![Ty::List(Box::new(Ty::Tuple(vec![
+                Ty::Infer(0),
+                Ty::Infer(1),
+            ])))],
+            hash_table_ty(),
+        ),
         "ori.hash_table.keys" => (vec![hash_table_ty()], Ty::List(Box::new(Ty::Infer(0)))),
         "ori.hash_table.values" => (vec![hash_table_ty()], Ty::List(Box::new(Ty::Infer(1)))),
         "ori.hash_table.entries" => (
@@ -1021,8 +1203,16 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.graph.add_edge" | "ori.graph.remove_edge" => {
             (vec![graph_ty(), Ty::Infer(0), Ty::Infer(0)], Ty::Void)
         }
+        "ori.graph.add_weighted_edge" => (
+            vec![graph_ty(), Ty::Infer(0), Ty::Infer(0), Ty::Int],
+            Ty::Void,
+        ),
         "ori.graph.has_node" => (vec![graph_ty(), Ty::Infer(0)], Ty::Bool),
         "ori.graph.has_edge" => (vec![graph_ty(), Ty::Infer(0), Ty::Infer(0)], Ty::Bool),
+        "ori.graph.edge_weight" => (
+            vec![graph_ty(), Ty::Infer(0), Ty::Infer(0)],
+            Ty::Optional(Box::new(Ty::Int)),
+        ),
         "ori.graph.neighbors" | "ori.graph.bfs" | "ori.graph.dfs" => (
             vec![graph_ty(), Ty::Infer(0)],
             Ty::List(Box::new(Ty::Infer(0))),
@@ -1030,6 +1220,23 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.graph.nodes" | "ori.graph.topological_sort" => {
             (vec![graph_ty()], Ty::List(Box::new(Ty::Infer(0))))
         }
+        "ori.graph.try_topological_sort"
+        | "ori.graph.shortest_path"
+        | "ori.graph.shortest_weighted_path" => (
+            if path == "ori.graph.shortest_path" || path == "ori.graph.shortest_weighted_path" {
+                vec![graph_ty(), Ty::Infer(0), Ty::Infer(0)]
+            } else {
+                vec![graph_ty()]
+            },
+            Ty::Optional(Box::new(Ty::List(Box::new(Ty::Infer(0))))),
+        ),
+        "ori.graph.is_directed" | "ori.graph.has_cycle" => (vec![graph_ty()], Ty::Bool),
+        "ori.graph.len" | "ori.graph.edge_len" => (vec![graph_ty()], Ty::Int),
+        "ori.graph.components" | "ori.graph.strongly_connected_components" => (
+            vec![graph_ty()],
+            Ty::List(Box::new(Ty::List(Box::new(Ty::Infer(0))))),
+        ),
+        "ori.graph.transitive_closure" | "ori.graph.clone" => (vec![graph_ty()], graph_ty()),
         "ori.graph.edges" => (
             vec![graph_ty()],
             Ty::List(Box::new(Ty::Tuple(vec![Ty::Infer(0), Ty::Infer(0)]))),
@@ -1039,6 +1246,14 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.heap.pop" | "ori.heap.peek" => (vec![heap_ty()], Ty::Optional(Box::new(Ty::Infer(0)))),
         "ori.heap.len" => (vec![heap_ty()], Ty::Int),
         "ori.heap.is_empty" => (vec![heap_ty()], Ty::Bool),
+        "ori.heap.clear" => (vec![heap_ty()], Ty::Void),
+        "ori.heap.clone" => (vec![heap_ty()], heap_ty()),
+        "ori.heap.to_list" | "ori.heap.into_sorted_list" => {
+            (vec![heap_ty()], Ty::List(Box::new(Ty::Infer(0))))
+        }
+        "ori.heap.from_list" => (vec![Ty::List(Box::new(Ty::Infer(0)))], heap_ty()),
+        "ori.heap.merge" => (vec![heap_ty(), heap_ty()], heap_ty()),
+        "ori.heap.remove" => (vec![heap_ty(), Ty::Infer(0)], Ty::Bool),
         "ori.math.sqrt" => (vec![Ty::Float], Ty::Float),
         "ori.math.abs" => (vec![Ty::Int], Ty::Int),
         "ori.math.min" | "ori.math.max" => (vec![Ty::Int, Ty::Int], Ty::Int),
@@ -1163,6 +1378,16 @@ pub fn stdlib_native_abi(
         | "ori_set_new"
         | "ori_map_new"
         | "ori_os_args" => (vec![], Some(Ptr)),
+        "ori_list_clone"
+        | "ori_list_to_list"
+        | "ori_list_from_list"
+        | "ori_deque_clone"
+        | "ori_queue_clone"
+        | "ori_stack_clone"
+        | "ori_linked_list_clone"
+        | "ori_doubly_linked_list_clone"
+        | "ori_set_clone"
+        | "ori_map_clone" => (vec![Ptr], Some(Ptr)),
         "ori_list_push"
         | "ori_deque_push_front"
         | "ori_deque_push_back"
@@ -1173,7 +1398,20 @@ pub fn stdlib_native_abi(
         | "ori_doubly_linked_list_push_front"
         | "ori_doubly_linked_list_push_back"
         | "ori_set_add" => (vec![Ptr, I64], None),
+        "ori_linked_list_insert_after"
+        | "ori_doubly_linked_list_insert_after"
+        | "ori_doubly_linked_list_insert_before" => (vec![Ptr, I64, I64], Some(I8)),
         "ori_list_get" | "ori_map_get" => (vec![Ptr, I64], Some(I64)),
+        "ori_list_try_get" | "ori_map_try_get" | "ori_map_try_remove" => {
+            (vec![Ptr, I64], Some(Ptr))
+        }
+        "ori_linked_list_value_at"
+        | "ori_linked_list_remove_at"
+        | "ori_linked_list_find"
+        | "ori_doubly_linked_list_value_at"
+        | "ori_doubly_linked_list_remove_at"
+        | "ori_doubly_linked_list_find" => (vec![Ptr, I64], Some(Ptr)),
+        "ori_list_try_pop" => (vec![Ptr], Some(Ptr)),
         "ori_list_pop" => (vec![Ptr], Some(I64)),
         "ori_deque_pop_front"
         | "ori_deque_pop_back"
@@ -1185,10 +1423,14 @@ pub fn stdlib_native_abi(
         | "ori_stack_peek"
         | "ori_linked_list_pop_front"
         | "ori_linked_list_front"
+        | "ori_linked_list_cursor_front"
+        | "ori_linked_list_cursor_back"
         | "ori_doubly_linked_list_pop_front"
         | "ori_doubly_linked_list_pop_back"
         | "ori_doubly_linked_list_front"
-        | "ori_doubly_linked_list_back" => (vec![Ptr], Some(Ptr)),
+        | "ori_doubly_linked_list_back"
+        | "ori_doubly_linked_list_cursor_front"
+        | "ori_doubly_linked_list_cursor_back" => (vec![Ptr], Some(Ptr)),
         "ori_list_set" | "ori_list_insert" | "ori_map_set" => (vec![Ptr, I64, I64], None),
         "ori_list_len"
         | "ori_deque_len"
@@ -1200,6 +1442,7 @@ pub fn stdlib_native_abi(
         | "ori_map_len"
         | "ori_set_capacity"
         | "ori_map_capacity" => (vec![Ptr], Some(I64)),
+        "ori_list_is_empty" | "ori_set_is_empty" | "ori_map_is_empty" => (vec![Ptr], Some(I8)),
         "ori_deque_is_empty"
         | "ori_queue_is_empty"
         | "ori_stack_is_empty"
@@ -1208,6 +1451,7 @@ pub fn stdlib_native_abi(
         "ori_list_free"
         | "ori_set_free"
         | "ori_map_free"
+        | "ori_list_clear"
         | "ori_set_clear"
         | "ori_map_clear"
         | "ori_deque_clear"
@@ -1225,8 +1469,14 @@ pub fn stdlib_native_abi(
         "ori_tree_new" => (vec![I64], Some(Ptr)),
         "ori_tree_root" | "ori_tree_len" => (vec![Ptr], Some(I64)),
         "ori_tree_value" | "ori_tree_depth" => (vec![Ptr, I64], Some(I64)),
+        "ori_tree_try_value" | "ori_tree_parent" | "ori_tree_find" => (vec![Ptr, I64], Some(Ptr)),
+        "ori_tree_contains_node" => (vec![Ptr, I64], Some(I8)),
         "ori_tree_add_child" => (vec![Ptr, I64, I64], Some(I64)),
-        "ori_tree_children" | "ori_tree_parent" | "ori_tree_remove_subtree" => {
+        "ori_tree_set_value" => (vec![Ptr, I64, I64], Some(I8)),
+        "ori_tree_move_subtree" => (vec![Ptr, I64, I64], Some(I8)),
+        "ori_tree_clone" => (vec![Ptr], Some(Ptr)),
+        "ori_tree_clone_subtree" => (vec![Ptr, I64], Some(Ptr)),
+        "ori_tree_children" | "ori_tree_remove_subtree" => {
             let ret = if runtime_symbol == "ori_tree_remove_subtree" {
                 None
             } else {
@@ -1239,6 +1489,7 @@ pub fn stdlib_native_abi(
         }
         "ori_set_reserve" | "ori_map_reserve" => (vec![Ptr, I64], None),
         "ori_list_remove" | "ori_set_remove" | "ori_map_remove" => (vec![Ptr, I64], None),
+        "ori_list_try_remove" | "ori_set_try_remove" => (vec![Ptr, I64], Some(I8)),
         "ori_list_contains" | "ori_list_index_of" | "ori_set_contains" | "ori_map_contains" => (
             vec![Ptr, I64],
             Some(if runtime_symbol.ends_with("index_of") {
@@ -1251,31 +1502,56 @@ pub fn stdlib_native_abi(
         "ori_set_union" | "ori_set_intersection" | "ori_set_difference" => {
             (vec![Ptr, Ptr], Some(Ptr))
         }
+        "ori_set_to_list" => (vec![Ptr], Some(Ptr)),
+        "ori_set_from_list" => (vec![Ptr], Some(Ptr)),
+        "ori_map_from_entries" => (vec![Ptr], Some(Ptr)),
         "ori_hash_table_new" => (vec![], Some(Ptr)),
         "ori_hash_table_with_capacity" => (vec![I64], Some(Ptr)),
         "ori_hash_table_set" => (vec![Ptr, I64, I64], None),
         "ori_hash_table_get" | "ori_hash_table_remove" => (vec![Ptr, I64], Some(Ptr)),
         "ori_hash_table_contains" => (vec![Ptr, I64], Some(I8)),
         "ori_hash_table_len" | "ori_hash_table_capacity" => (vec![Ptr], Some(I64)),
+        "ori_hash_table_is_empty" => (vec![Ptr], Some(I8)),
         "ori_hash_table_reserve" => (vec![Ptr, I64], None),
         "ori_hash_table_clear" => (vec![Ptr], None),
+        "ori_hash_table_clone" => (vec![Ptr], Some(Ptr)),
+        "ori_hash_table_from_entries" => (vec![Ptr], Some(Ptr)),
         "ori_hash_table_keys" | "ori_hash_table_values" | "ori_hash_table_entries" => {
             (vec![Ptr], Some(Ptr))
         }
         "ori_graph_new" => (vec![I8], Some(Ptr)),
         "ori_graph_add_node" | "ori_graph_remove_node" => (vec![Ptr, I64], None),
         "ori_graph_add_edge" | "ori_graph_remove_edge" => (vec![Ptr, I64, I64], None),
+        "ori_graph_add_weighted_edge" => (vec![Ptr, I64, I64, I64], None),
         "ori_graph_has_node" => (vec![Ptr, I64], Some(I8)),
         "ori_graph_has_edge" => (vec![Ptr, I64, I64], Some(I8)),
+        "ori_graph_edge_weight" => (vec![Ptr, I64, I64], Some(Ptr)),
         "ori_graph_neighbors" | "ori_graph_bfs" | "ori_graph_dfs" => (vec![Ptr, I64], Some(Ptr)),
         "ori_graph_nodes" | "ori_graph_edges" | "ori_graph_topological_sort" => {
             (vec![Ptr], Some(Ptr))
+        }
+        "ori_graph_try_topological_sort" => (vec![Ptr], Some(Ptr)),
+        "ori_graph_is_directed" | "ori_graph_has_cycle" => (vec![Ptr], Some(I8)),
+        "ori_graph_len" | "ori_graph_edge_len" => (vec![Ptr], Some(I64)),
+        "ori_graph_components"
+        | "ori_graph_strongly_connected_components"
+        | "ori_graph_transitive_closure"
+        | "ori_graph_clone" => (vec![Ptr], Some(Ptr)),
+        "ori_graph_shortest_path" | "ori_graph_shortest_weighted_path" => {
+            (vec![Ptr, I64, I64], Some(Ptr))
         }
         "ori_heap_new" => (vec![], Some(Ptr)),
         "ori_heap_push" => (vec![Ptr, I64], None),
         "ori_heap_pop" | "ori_heap_peek" => (vec![Ptr], Some(Ptr)),
         "ori_heap_len" => (vec![Ptr], Some(I64)),
         "ori_heap_is_empty" => (vec![Ptr], Some(I8)),
+        "ori_heap_clear" => (vec![Ptr], None),
+        "ori_heap_clone" | "ori_heap_to_list" | "ori_heap_into_sorted_list" => {
+            (vec![Ptr], Some(Ptr))
+        }
+        "ori_heap_from_list" => (vec![Ptr], Some(Ptr)),
+        "ori_heap_merge" => (vec![Ptr, Ptr], Some(Ptr)),
+        "ori_heap_remove" => (vec![Ptr, I64], Some(I8)),
         "ori_list_map" | "ori_list_filter" | "ori_iter_flat_map" => {
             (vec![Ptr, Ptr, Ptr], Some(Ptr))
         }

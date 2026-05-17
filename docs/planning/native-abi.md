@@ -40,6 +40,7 @@ Everything below is represented as a native pointer-sized handle:
 | `list<T>` | `OriList*` |
 | `map<K,V>` | `OriMap*` |
 | `set<T>` | `OriSet*` |
+| `deque.Deque<T>`, `queue.Queue<T>`, `stack.Stack<T>`, `linked_list.LinkedList<T>`, `doubly_linked_list.DoublyLinkedList<T>` | `OriDeque*` |
 | `tree.Tree<T>` | `OriTree*` |
 | `hash_table.HashTable<K,V>` | `OriMap*` |
 | `graph.Graph<N>` | `OriGraph*` |
@@ -134,34 +135,50 @@ Current rules:
 - `ori_map_reserve` and `ori_set_reserve` guarantee a minimum dense capacity;
   `ori_map_capacity` and `ori_set_capacity` report that dense capacity.
 - `ori_deque`, `ori_queue`, `ori_stack`, `ori_linked_list`, and
-  `ori_doubly_linked_list` currently reuse the `OriList` handle layout. Empty
-  read/removal operations return an `optional<T>` handle. Linked-list nodes are
-  not public ABI objects in v1. The compiler still exposes these as distinct
-  opaque stdlib types, not as public `list<T>` aliases.
+  `ori_doubly_linked_list` use the `OriDeque*` runtime handle. Empty
+  read/removal operations return an `optional<T>` handle. Linked-list cursor
+  APIs pass cursors as `i64` positions in the current list state and return
+  `optional`/`bool` for invalid cursors. Cursors are not stable after
+  structural changes that move or remove items before them. The compiler still
+  exposes these as distinct opaque stdlib types, not as public `list<T>` aliases.
 - `ori_tree` uses an arena handle. Runtime calls pass `tree.NodeId` as `i64`.
   `tree.children` and traversal functions return `OriList*` snapshots of node
   ids. `tree.remove_subtree` unregisters ARC edges for removed node values and
-  invalid node ids abort with `ori tree node id is invalid`.
+  invalid node ids abort with `ori tree node id is invalid`. Safe probes use
+  optional/bool results through `ori_tree_try_value` and
+  `ori_tree_contains_node`.
 - `ori_hash_table` intentionally reuses the `OriMap*` layout and hash engine.
   It differs at the language API level by returning `optional<V>` from
   `get/remove` and by exposing explicit `with_capacity`.
 - `ori_map.keys`, `ori_map.values`, `ori_map.entries`, and the `hash_table`
   APIs that reuse those helpers return snapshots that keep managed keys,
   values, and entry tuples alive independently from the source map/table.
-- `ori_graph` stores dense node and edge arrays. Node payloads are word-sized
-  values, with specialized string entry points for content comparison. Traversal
+- `ori_graph` stores dense node arrays and parallel edge arrays for `from`,
+  `to`, and `weight`. Node payloads are word-sized values, with specialized
+  string entry points for content comparison. `add_edge` stores weight `1`;
+  `add_weighted_edge` updates or inserts a non-negative weight. Traversal
   functions return `OriList*`; `nodes`, `neighbors`, BFS/DFS/topological
   snapshots, and `edges` retain managed node values while the returned snapshot
   is alive. `edges` returns tuple payload pointers with `tuple<N,N>` layout.
+  Edge weights are queried separately through `edge_weight`, returning
+  `optional<int>`. Component/SCC APIs return `list<list<N>>` snapshots.
+  `try_topological_sort`, `shortest_path`, and `shortest_weighted_path` return
+  optional handles whose payload is an owned snapshot list.
 - Runtime list derivation helpers such as slice/copy/filter/take/skip/reverse,
   sort/unique, partition, flatten/flat_map, zip, group_by, random.shuffle,
   string.split/chars, os.args, and fs.list_dir either retain borrowed managed
   elements for the returned collection or transfer owned managed values into
   the returned collection before releasing local ownership.
+- Native `for` over opaque collection handles lowers through snapshot helpers:
+  list-backed handles use `to_list`, `hash_table` uses `keys`, `graph` uses
+  `nodes`, and `heap` uses `to_list`. This is explicit snapshot iteration, not
+  a lazy/live iterator view.
 - `ori_heap` stores a binary min-heap in a dense word-sized array. `int` heaps
   use built-in numeric ordering, `string` heaps use string content ordering,
   and user-defined `Comparable` heaps store a native compare function pointer
-  selected by the compiler during `heap.new<T>()` lowering.
+  selected by the compiler during `heap.new<T>()` lowering. `heap.to_list`
+  returns heap storage order; `heap.into_sorted_list` drains a clone into sorted
+  ascending order.
 
 Known limitation:
 
