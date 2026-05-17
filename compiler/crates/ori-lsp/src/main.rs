@@ -3,7 +3,7 @@ mod index;
 mod utils;
 
 use index::project::ProjectManager;
-use index::semantic::{CompletionContext, SemanticIndex};
+use index::semantic::{CompletionContext, SemanticIndex, SemanticSymbol};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,15 +12,21 @@ use tokio::time::Instant;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
     CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams, CodeActionResponse,
-    CompletionItem, CompletionItemKind, CompletionOptions, CompletionParams,
-    CompletionResponse, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentSymbol,
-    DocumentSymbolParams, DocumentSymbolResponse, GotoDefinitionParams,
-    GotoDefinitionResponse, Hover, HoverParams, InitializeParams, InitializeResult,
-    InitializedParams, Location, MessageType, OneOf, Range, ReferenceParams,
-    SaveOptions, ServerCapabilities, ServerInfo, SymbolKind, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
-    TextEdit, Url, WorkspaceEdit,
+    CodeLens, CodeLensOptions, CodeLensParams, Command, CompletionItem, CompletionItemKind,
+    CompletionOptions, CompletionParams, CompletionResponse, DidChangeTextDocumentParams,
+    DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams,
+    DocumentSymbol, DocumentSymbolParams, DocumentSymbolResponse, GotoDefinitionParams,
+    GotoDefinitionResponse, Hover, HoverParams, InlayHint, InlayHintKind, InlayHintLabel,
+    InlayHintParams, InitializeParams, InitializeResult, InitializedParams, Location,
+    MessageType, OneOf, Position, PrepareRenameResponse, Range, ReferenceParams, RenameParams,
+    SaveOptions, SemanticToken, SemanticTokens, SemanticTokensFullOptions,
+    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams,
+    SemanticTokensResult, SemanticTokenType, SemanticTokenModifier, ServerCapabilities,
+    ServerInfo, SignatureHelp, SignatureHelpOptions, SignatureHelpParams,
+    SignatureInformation, SymbolInformation, SymbolKind, TextDocumentPositionParams,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
+    TextDocumentSyncSaveOptions, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
+    WorkspaceSymbolParams,
 };
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
@@ -62,7 +68,6 @@ impl Backend {
             }
             Err(message) => vec![handlers::diagnostics::file_error_diagnostic(message)],
         };
-        // Add lint diagnostics
         if let Some(ref src) = source {
             let config = handlers::lint::LintConfig::default();
             let lint_diags = handlers::lint::lint(src, &config);
@@ -73,7 +78,6 @@ impl Backend {
             .await;
     }
 
-    /// Schedule a debounced validation for the given URI (300ms cooldown).
     async fn schedule_debounced_validate(&self, uri: Url) {
         let now = Instant::now();
         {
@@ -283,7 +287,7 @@ impl LanguageServer for Backend {
         }
     }
 
-    // ── Completions (context-aware) ──────────────────────────────────────────
+    // ── Completions ──────────────────────────────────────────────────────────
 
     async fn completion(
         &self,
@@ -318,7 +322,7 @@ impl LanguageServer for Backend {
                         if sym.name.starts_with(&partial) || partial.is_empty() {
                             items.push(CompletionItem {
                                 label: sym.name.clone(),
-                                kind: Some(symbol_kind_to_lsp(&sym.kind)),
+                                kind: Some(symbol_kind_to_cik(&sym.kind)),
                                 detail: Some(sym.summary.clone()),
                                 ..CompletionItem::default()
                             });
@@ -343,7 +347,6 @@ impl LanguageServer for Backend {
         let Some((_source, index)) = self.get_source_and_index(&uri).await else {
             return Ok(None);
         };
-
         let mut symbols: Vec<DocumentSymbol> = Vec::new();
 
         for sym in index.all_symbols() {
@@ -481,6 +484,344 @@ impl LanguageServer for Backend {
             Ok(Some(actions))
         }
     }
+
+    // ── Inlay Hints ──────────────────────────────────────────────────────────
+
+    async fn inlay_hint(
+        &self,
+        params: InlayHintParams,
+    ) -> Result<Option<Vec<InlayHint>>> {
+        let uri = params.text_document.uri;
+        let Some((source, index)) = self.get_source_and_index(&uri).await else {
+            return Ok(None);
+        };
+        let range = params.range;
+        let mut hints: Vec<InlayHint> = Vec::new();
+
+        for sym in index.all_symbols() {
+            match sym.kind {
+                index::semantic::SymbolKind::Variable
+                | index::semantic::SymbolKind::Parameter => {
+                    let hint_pos = Position {
+                        line: sym.range.end.line,
+                        character: sym.range.end.character,
+                    };
+                    hints.push(InlayHint {
+                        position: hint_pos,
+                        label: InlayHintLabel::String(format!(": {}", sym.summary)),
+                        kind: Some(InlayHintKind::TYPE),
+                        padding_left: Some(true),
+                        padding_right: Some(false),
+                        text_edits: None,
+                        tooltip: None,
+                        data: None,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        if hints.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(hints))
+        }
+    }
+
+    // ── Semantic Tokens ──────────────────────────────────────────────────────
+
+    async fn semantic_tokens_full(
+        &self,
+        params: SemanticTokensParams,
+    ) -> Result<Option<SemanticTokensResult>> {
+        let uri = params.text_document.uri;
+        let Some((source, index)) = self.get_source_and_index(&uri).await else {
+            return Ok(None);
+        };
+
+        let mut raw_tokens: Vec<(u32, u32, u32, SemanticTokenType, Vec<SemanticTokenModifier>)> =
+            Vec::new();
+
+        for sym in index.all_symbols() {
+            let (token_type, modifiers) = classify_semantic_token(&sym);
+            let line = sym.range.start.line;
+            let start_char = sym.range.start.character;
+            let length = sym.name.len() as u32;
+
+            raw_tokens.push((line, start_char, length, token_type, modifiers));
+        }
+
+        for kw in ORI_KEYWORDS {
+            let mut search_start = 0usize;
+            while let Some(pos) = source[search_start..].find(kw) {
+                let abs_pos = search_start + pos;
+                let before = abs_pos == 0
+                    || source.as_bytes().get(abs_pos - 1).map_or(true, |b| {
+                        !b.is_ascii_alphanumeric() && *b != b'_'
+                    });
+                let after = source
+                    .as_bytes()
+                    .get(abs_pos + kw.len())
+                    .map_or(true, |b| !b.is_ascii_alphanumeric() && *b != b'_');
+                if before && after {
+                    let pos = utils::position::position_for_byte_offset(&source, abs_pos);
+                    raw_tokens.push((
+                        pos.line,
+                        pos.character,
+                        kw.len() as u32,
+                        SemanticTokenType::KEYWORD,
+                        vec![],
+                    ));
+                }
+                search_start = abs_pos + 1;
+                if search_start >= source.len() {
+                    break;
+                }
+            }
+        }
+
+        raw_tokens.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+
+        let data = encode_semantic_tokens(&raw_tokens, &SEMANTIC_LEGEND);
+        if data.is_empty() {
+            return Ok(None);
+        }
+
+        Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
+            result_id: None,
+            data,
+        })))
+    }
+
+    // ── Workspace Symbols ────────────────────────────────────────────────────
+
+    async fn symbol(
+        &self,
+        params: WorkspaceSymbolParams,
+    ) -> Result<Option<Vec<SymbolInformation>>> {
+        let query = params.query.to_lowercase();
+        let mut results: Vec<SymbolInformation> = Vec::new();
+
+        let project = self.project.read().await;
+        let open_docs: Vec<(Url, String)> = project.all_open_documents();
+
+        for (uri, source) in &open_docs {
+            let index = SemanticIndex::build(source);
+            for sym in index.all_symbols() {
+                if sym.name.to_lowercase().contains(&query) || query.is_empty() {
+                    results.push(SymbolInformation {
+                        name: sym.name.clone(),
+                        kind: semantic_kind_to_lsp(&sym.kind),
+                        location: Location::new(uri.clone(), sym.range),
+                        container_name: None,
+                        tags: None,
+                        deprecated: None,
+                    });
+                }
+            }
+        }
+
+        results.truncate(100);
+
+        if results.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(results))
+        }
+    }
+
+    // ── Rename ───────────────────────────────────────────────────────────────
+
+    async fn rename(&self, params: RenameParams) -> Result<Option<WorkspaceEdit>> {
+        let uri = params.text_document_position.text_document.uri;
+        let position = params.text_document_position.position;
+        let new_name = params.new_name;
+
+        let Some((source, index)) = self.get_source_and_index(&uri).await else {
+            return Ok(None);
+        };
+        let Some(old_name) = utils::uri::word_at_position(&source, position) else {
+            return Ok(None);
+        };
+
+        if ORI_KEYWORDS.contains(&old_name.as_str()) || is_builtin_type(&old_name) {
+            return Ok(None);
+        }
+
+        let refs = index.find_references(&source, &old_name);
+        let mut edits = Vec::new();
+        for range in &refs {
+            edits.push(TextEdit {
+                range: *range,
+                new_text: new_name.clone(),
+            });
+        }
+
+        if let Some(range) = index.definition(&old_name) {
+            edits.push(TextEdit {
+                range,
+                new_text: new_name.clone(),
+            });
+        }
+
+        if edits.is_empty() {
+            return Ok(None);
+        }
+
+        let mut changes = HashMap::new();
+        changes.insert(uri, edits);
+
+        Ok(Some(WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        }))
+    }
+
+    async fn prepare_rename(
+        &self,
+        params: TextDocumentPositionParams,
+    ) -> Result<Option<PrepareRenameResponse>> {
+        let uri = params.text_document.uri;
+        let position = params.position;
+
+        let Some((source, index)) = self.get_source_and_index(&uri).await else {
+            return Ok(None);
+        };
+        let Some(word) = utils::uri::word_at_position(&source, position) else {
+            return Ok(None);
+        };
+
+        if ORI_KEYWORDS.contains(&word.as_str()) || is_builtin_type(&word) {
+            return Ok(None);
+        }
+
+        let range = index.definition(&word).unwrap_or_else(|| {
+            let line = position.line as usize;
+            if let Some(line_str) = source.lines().nth(line) {
+                if let Some(col) = line_str.find(&word) {
+                    Range {
+                        start: Position {
+                            line: position.line,
+                            character: col as u32,
+                        },
+                        end: Position {
+                            line: position.line,
+                            character: (col + word.len()) as u32,
+                        },
+                    }
+                } else {
+                    Range {
+                        start: position,
+                        end: position,
+                    }
+                }
+            } else {
+                Range {
+                    start: position,
+                    end: position,
+                }
+            }
+        });
+
+        Ok(Some(PrepareRenameResponse::Range(range)))
+    }
+
+    // ── Signature Help ───────────────────────────────────────────────────────
+
+    async fn signature_help(
+        &self,
+        params: SignatureHelpParams,
+    ) -> Result<Option<SignatureHelp>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+
+        let Some((source, index)) = self.get_source_and_index(&uri).await else {
+            return Ok(None);
+        };
+
+        let (func_name, open_paren_pos) =
+            match find_enclosing_call(&source, position) {
+                Some(v) => v,
+                None => return Ok(None),
+            };
+
+        let func_sym = match index
+            .all_symbols()
+            .find(|s| s.name == func_name && s.kind == index::semantic::SymbolKind::Function)
+        {
+            Some(s) => s,
+            None => return Ok(None),
+        };
+
+        let sig_str = &func_sym.summary;
+        let params = parse_params_from_signature(sig_str);
+
+        let active_param = count_commas_before(&source, open_paren_pos, position);
+
+        let label = format!("func {}{}", func_name, sig_str);
+        let max_param = params.len().saturating_sub(1) as u32;
+        let active = (active_param as u32).min(max_param);
+
+        Ok(Some(SignatureHelp {
+            signatures: vec![SignatureInformation {
+                label,
+                documentation: None,
+                parameters: Some(
+                    params
+                        .iter()
+                        .map(|p| tower_lsp::lsp_types::ParameterInformation {
+                            label: tower_lsp::lsp_types::ParameterLabel::Simple(p.clone()),
+                            documentation: None,
+                        })
+                        .collect(),
+                ),
+                active_parameter: None,
+            }],
+            active_signature: Some(0),
+            active_parameter: Some(active),
+        }))
+    }
+
+    // ── Code Lens ────────────────────────────────────────────────────────────
+
+    async fn code_lens(
+        &self,
+        params: CodeLensParams,
+    ) -> Result<Option<Vec<CodeLens>>> {
+        let uri = params.text_document.uri;
+        let Some((source, index)) = self.get_source_and_index(&uri).await else {
+            return Ok(None);
+        };
+
+        let mut lenses: Vec<CodeLens> = Vec::new();
+
+        for sym in index.all_symbols() {
+            match sym.kind {
+                index::semantic::SymbolKind::Function
+                | index::semantic::SymbolKind::Method => {
+                    let refs = index.find_references(&source, &sym.name);
+                    let ref_count = refs.len();
+
+                    lenses.push(CodeLens {
+                        range: sym.range,
+                        command: Some(Command {
+                            title: format!("{} references", ref_count),
+                            command: "ori.showReferences".into(),
+                            arguments: None,
+                        }),
+                        data: None,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        if lenses.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(lenses))
+        }
+    }
 }
 
 impl Backend {
@@ -503,7 +844,9 @@ impl Backend {
     }
 }
 
-fn symbol_kind_to_lsp(kind: &index::semantic::SymbolKind) -> CompletionItemKind {
+// ── Helper functions ────────────────────────────────────────────────────────
+
+fn symbol_kind_to_cik(kind: &index::semantic::SymbolKind) -> CompletionItemKind {
     match kind {
         index::semantic::SymbolKind::Function => CompletionItemKind::FUNCTION,
         index::semantic::SymbolKind::Method => CompletionItemKind::METHOD,
@@ -528,6 +871,193 @@ fn semantic_kind_to_lsp(kind: &index::semantic::SymbolKind) -> SymbolKind {
         index::semantic::SymbolKind::Field => SymbolKind::FIELD,
         _ => SymbolKind::OBJECT,
     }
+}
+
+/// Semantic token classification.
+fn classify_semantic_token(
+    sym: &SemanticSymbol,
+) -> (SemanticTokenType, Vec<SemanticTokenModifier>) {
+    let token_type = match sym.kind {
+        index::semantic::SymbolKind::Function => SemanticTokenType::FUNCTION,
+        index::semantic::SymbolKind::Method => SemanticTokenType::METHOD,
+        index::semantic::SymbolKind::Struct => SemanticTokenType::STRUCT,
+        index::semantic::SymbolKind::Enum => SemanticTokenType::ENUM,
+        index::semantic::SymbolKind::Trait => SemanticTokenType::INTERFACE,
+        index::semantic::SymbolKind::Parameter => SemanticTokenType::PARAMETER,
+        index::semantic::SymbolKind::Field => SemanticTokenType::PROPERTY,
+        index::semantic::SymbolKind::Variable => SemanticTokenType::VARIABLE,
+        index::semantic::SymbolKind::Import => SemanticTokenType::NAMESPACE,
+    };
+    let modifier = match sym.kind {
+        index::semantic::SymbolKind::Function if sym.name.starts_with("_") => {
+            vec![SemanticTokenModifier::DECLARATION]
+        }
+        _ => vec![],
+    };
+    (token_type, modifier)
+}
+
+/// The semantic token legend we advertise.
+static SEMANTIC_LEGEND: std::sync::LazyLock<SemanticTokensLegend> =
+    std::sync::LazyLock::new(|| SemanticTokensLegend {
+        token_types: vec![
+            SemanticTokenType::FUNCTION,
+            SemanticTokenType::METHOD,
+            SemanticTokenType::STRUCT,
+            SemanticTokenType::ENUM,
+            SemanticTokenType::INTERFACE,
+            SemanticTokenType::PARAMETER,
+            SemanticTokenType::PROPERTY,
+            SemanticTokenType::VARIABLE,
+            SemanticTokenType::NAMESPACE,
+            SemanticTokenType::KEYWORD,
+        ],
+        token_modifiers: vec![SemanticTokenModifier::DECLARATION],
+    });
+
+/// Encode raw tokens into delta-encoded LSP SemanticToken structs.
+fn encode_semantic_tokens(
+    tokens: &[(u32, u32, u32, SemanticTokenType, Vec<SemanticTokenModifier>)],
+    legend: &SemanticTokensLegend,
+) -> Vec<SemanticToken> {
+    let mut data = Vec::new();
+    let mut prev_line: u32 = 0;
+    let mut prev_char: u32 = 0;
+
+    for (line, start_char, length, token_type, _modifiers) in tokens {
+        let delta_line = *line - prev_line;
+        let delta_char = if delta_line == 0 {
+            *start_char - prev_char
+        } else {
+            *start_char
+        };
+
+        let type_idx = legend
+            .token_types
+            .iter()
+            .position(|t| t == token_type)
+            .unwrap_or(0) as u32;
+
+        data.push(SemanticToken {
+            delta_line,
+            delta_start: delta_char,
+            length: *length,
+            token_type: type_idx,
+            token_modifiers_bitset: 0,
+        });
+
+        prev_line = *line;
+        prev_char = *start_char;
+    }
+
+    data
+}
+
+/// Ori keywords for semantic token scanning.
+const ORI_KEYWORDS: &[&str] = &[
+    "func", "return", "end", "const", "var", "if", "else", "while", "for", "in",
+    "repeat", "loop", "break", "continue", "match", "case", "struct", "trait",
+    "implement", "enum", "where", "is", "alias", "do", "and", "or", "not",
+    "true", "false", "none", "success", "error", "some", "mut", "self",
+    "extern", "any", "optional", "result", "list", "map", "set", "range",
+    "void", "using", "check", "with", "then", "tuple", "lazy", "namespace",
+    "import", "as", "public",
+];
+
+fn is_builtin_type(name: &str) -> bool {
+    matches!(
+        name,
+        "int"
+            | "float"
+            | "bool"
+            | "string"
+            | "bytes"
+            | "void"
+            | "never"
+            | "optional"
+            | "result"
+            | "list"
+            | "map"
+            | "set"
+    )
+}
+
+/// Find the enclosing function call at a cursor position.
+fn find_enclosing_call(source: &str, position: Position) -> Option<(String, usize)> {
+    let lines: Vec<&str> = source.lines().collect();
+    let line_idx = position.line as usize;
+    if line_idx >= lines.len() {
+        return None;
+    }
+    let line = lines[line_idx];
+
+    let char_pos = position.character as usize;
+    let prefix = if char_pos <= line.len() {
+        &line[..char_pos]
+    } else {
+        line
+    };
+
+    let open_paren = prefix.rfind('(')?;
+    let before_paren = &prefix[..open_paren].trim_end();
+
+    let func_name = before_paren
+        .rsplit(|c: char| !c.is_alphanumeric() && c != '_' && c != '.')
+        .next()?;
+
+    if func_name.is_empty() {
+        return None;
+    }
+
+    let abs_pos = lines[..line_idx]
+        .iter()
+        .map(|l| l.len() + 1)
+        .sum::<usize>()
+        + open_paren;
+
+    Some((func_name.to_string(), abs_pos))
+}
+
+/// Count commas between open_paren and cursor position.
+fn count_commas_before(source: &str, open_pos: usize, cursor: Position) -> usize {
+    let lines: Vec<&str> = source.lines().collect();
+    let cursor_abs = lines[..cursor.line as usize]
+        .iter()
+        .map(|l| l.len() + 1)
+        .sum::<usize>()
+        + cursor.character as usize;
+
+    if cursor_abs <= open_pos {
+        return 0;
+    }
+
+    let between = &source[open_pos..cursor_abs.min(source.len())];
+    between.chars().filter(|&c| c == ',').count()
+}
+
+/// Parse parameter names from a function signature string.
+fn parse_params_from_signature(sig: &str) -> Vec<String> {
+    if !sig.starts_with('(') {
+        return vec![];
+    }
+    let inner = sig
+        .trim_start_matches('(')
+        .split("->")
+        .next()
+        .unwrap_or("")
+        .trim_end_matches(')');
+
+    inner
+        .split(',')
+        .filter_map(|p| {
+            let p = p.trim();
+            if p.is_empty() {
+                None
+            } else {
+                Some(p.split(':').next().unwrap_or(p).trim().to_string())
+            }
+        })
+        .collect()
 }
 
 fn server_capabilities() -> ServerCapabilities {
@@ -555,6 +1085,28 @@ fn server_capabilities() -> ServerCapabilities {
         code_action_provider: Some(tower_lsp::lsp_types::CodeActionProviderCapability::Simple(
             true,
         )),
+        inlay_hint_provider: Some(OneOf::Left(true)),
+        semantic_tokens_provider: Some(
+            SemanticTokensOptions {
+                legend: SEMANTIC_LEGEND.clone(),
+                full: Some(SemanticTokensFullOptions::Bool(true)),
+                range: Some(false),
+                ..Default::default()
+            }
+            .into(),
+        ),
+        workspace_symbol_provider: Some(OneOf::Left(true)),
+        rename_provider: Some(OneOf::Left(true)),
+        signature_help_provider: Some(SignatureHelpOptions {
+            trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
+            retrigger_characters: None,
+            work_done_progress_options: WorkDoneProgressOptions {
+                work_done_progress: None,
+            },
+        }),
+        code_lens_provider: Some(CodeLensOptions {
+            resolve_provider: Some(false),
+        }),
         ..ServerCapabilities::default()
     }
 }

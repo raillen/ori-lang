@@ -2,6 +2,13 @@
 
 > Ori is a reading-first, explicitly typed programming language. Compiler written in Rust.
 
+## Skills Globais (sempre ativas)
+
+Este projeto segue as skills universais de qualidade:
+- **`clean-code`** — Nomenclatura, funções, tratamento de erros, organização
+- **`project-documentation`** — Documentação incremental (implementação + uso)
+- **`semantic-html-a11y`** — HTML semântico e acessibilidade (quando aplicável)
+
 ## Architecture
 
 ```

@@ -76,4 +76,12 @@ impl ProjectManager {
     pub fn is_open(&self, uri: &Url) -> bool {
         self.open_documents.contains_key(uri)
     }
+
+    /// Return all currently open documents with (uri, content) pairs.
+    pub fn all_open_documents(&self) -> Vec<(Url, String)> {
+        self.open_documents
+            .values()
+            .map(|s| (s.uri.clone(), s.content.clone()))
+            .collect()
+    }
 }
