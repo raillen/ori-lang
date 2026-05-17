@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use tower_lsp::lsp_types::{Position, Range, Url};
+use std::path::PathBuf;
+use tower_lsp::lsp_types::{Position, Range};
 
 use crate::utils::position;
 use crate::utils::uri;
@@ -43,32 +44,36 @@ impl SymbolKind {
     }
 }
 
+/// Information about a resolved import for cross-file navigation.
+#[derive(Clone, Debug)]
+pub struct ResolvedImport {
+    pub alias: String,
+    pub namespace: String,
+    /// File path where the imported symbols are defined.
+    pub file_path: Option<PathBuf>,
+}
+
 /// AST-based semantic index for a single file.
-///
-/// Uses the real Ori parser (`ori_parser`) to extract symbols with precise
-/// spans, replacing the previous regex-based approach.
 #[derive(Default, Clone)]
 pub struct SemanticIndex {
     symbols: HashMap<String, Vec<SemanticSymbol>>,
-    /// Symbols grouped by kind for completion filtering.
     symbols_by_kind: HashMap<SymbolKind, Vec<SemanticSymbol>>,
+    /// All import paths discovered in the file (for cross-file resolution).
+    imports: Vec<ResolvedImport>,
 }
 
 impl SemanticIndex {
-    /// Build a semantic index from Ori source text.
     pub fn build(source: &str) -> Self {
         let mut index = Self::default();
         index.index_ast(source);
         index
     }
 
-    /// Find hover information for a symbol name.
     pub fn hover(&self, symbol: &str) -> Option<String> {
         let entries = self.symbols.get(symbol)?;
         if entries.len() == 1 {
             return Some(entries[0].hover.clone());
         }
-
         let summaries: Vec<_> = entries
             .iter()
             .map(|entry| format!("- {}", entry.summary))
@@ -79,8 +84,6 @@ impl SemanticIndex {
         ))
     }
 
-    /// Find the definition location for a symbol name.
-    /// Returns the range of the first declaration found.
     pub fn definition(&self, symbol: &str) -> Option<Range> {
         self.symbols
             .get(symbol)
@@ -88,13 +91,88 @@ impl SemanticIndex {
             .map(|entry| entry.range)
     }
 
-    /// Find all symbols matching a name prefix (for completions).
-    pub fn completions_for_prefix(&self, prefix: &str) -> Vec<&SemanticSymbol> {
+    /// Find all references to a symbol name in the source text.
+    /// Uses word-boundary scanning to find identifiers matching the name.
+    pub fn find_references(&self, source: &str, symbol: &str) -> Vec<Range> {
+        let mut refs = Vec::new();
+        let bytes = source.as_bytes();
+        let sym_bytes = symbol.as_bytes();
+        let mut i = 0;
+
+        while i < bytes.len() {
+            // Skip non-identifier bytes
+            if !is_ident_byte(bytes[i]) {
+                i += 1;
+                continue;
+            }
+
+            // Check if this is a word boundary match
+            let start = i;
+            while i < bytes.len() && is_ident_byte(bytes[i]) {
+                i += 1;
+            }
+
+            let word = &bytes[start..i];
+            if word == sym_bytes {
+                let range = Range::new(
+                    position::position_for_byte_offset(source, start),
+                    position::position_for_byte_offset(source, i),
+                );
+                refs.push(range);
+            }
+        }
+        refs
+    }
+
+    /// Returns import information for cross-file navigation.
+    pub fn imports(&self) -> &[ResolvedImport] {
+        &self.imports
+    }
+
+    /// Find a symbol by its position in the source (for context-aware operations).
+    pub fn symbol_at(&self, source: &str, pos: Position) -> Option<&SemanticSymbol> {
+        let word = uri::word_at_position(source, pos)?;
         self.symbols
-            .iter()
-            .filter(|(name, _)| name.starts_with(prefix))
-            .flat_map(|(_, entries)| entries)
-            .collect()
+            .get(&word)
+            .and_then(|entries| entries.first())
+    }
+
+    /// Determine completion context based on cursor position.
+    pub fn completion_context(&self, source: &str, pos: Position) -> CompletionContext {
+        let offset = position::byte_offset_for_position(source, pos);
+        let before = &source[..offset.min(source.len())];
+
+        // Check if we're after a dot (field/method access)
+        if let Some(dot_pos) = before.rfind('.') {
+            // Check that the dot is part of an identifier chain, not a number
+            let after_dot = &before[dot_pos + 1..];
+            if !after_dot.contains(|c: char| c.is_whitespace() || c == '\n')
+                && !after_dot.contains(')')
+            {
+                // Find the receiver name before the dot
+                let before_dot = &before[..dot_pos];
+                if let Some(receiver) = before_dot
+                    .rsplit(|c: char| !c.is_alphanumeric() && c != '_')
+                    .next()
+                {
+                    if !receiver.is_empty() {
+                        return CompletionContext::AfterDot {
+                            receiver: receiver.to_string(),
+                        };
+                    }
+                }
+            }
+        }
+
+        // Check if we're in an import path
+        if let Some(import_pos) = before.rfind("import ") {
+            let after_import = &before[import_pos + 7..];
+            if !after_import.contains('\n') {
+                return CompletionContext::Import;
+            }
+        }
+
+        CompletionContext::Default
     }
 
     /// All symbols in the index.
@@ -113,14 +191,12 @@ impl SemanticIndex {
             .push(symbol);
     }
 
-    /// Use the real Ori parser to extract symbols from source code.
     fn index_ast(&mut self, source: &str) {
         let file_id = ori_diagnostics::FileId(0);
         let mut sink = ori_diagnostics::DiagnosticSink::default();
         let tokens = ori_lexer::lex(source, file_id, &mut sink);
         let source_file = ori_parser::parse(&tokens, source, file_id, &mut sink);
 
-        // Index items from the parsed AST
         for item_with_attrs in &source_file.items {
             self.index_item(&item_with_attrs.item, source);
         }
@@ -139,8 +215,6 @@ impl SemanticIndex {
                     hover,
                     summary: format!("function {}", func.name.text),
                 });
-
-                // Index parameters
                 for param in &func.params {
                     let p_range = span_to_range(source, param.span);
                     self.add(SemanticSymbol {
@@ -179,8 +253,6 @@ impl SemanticIndex {
                     hover,
                     summary: format!("struct {}", s.name.text),
                 });
-
-                // Index fields
                 for field in &s.fields {
                     let f_range = span_to_range(source, field.span);
                     self.add(SemanticSymbol {
@@ -279,46 +351,17 @@ impl SemanticIndex {
             _ => {}
         }
     }
+}
 
-    /// Fallback to simple keyword/identifier scanning when the parser fails.
-    fn index_fallback(&mut self, source: &str) {
-        let lines: Vec<&str> = source.lines().collect();
-        let mut i = 0;
-        while i < lines.len() {
-            let line = lines[i].trim_start();
-            let stripped = strip_item_prefixes(line);
-
-            // Try to detect declarations via simple keyword matching
-            for keyword in &["func", "struct", "enum", "trait", "const", "var"] {
-                if let Some(rest) = stripped.strip_prefix(&format!("{keyword} ")) {
-                    if let Some((name, _)) = uri::take_identifier(rest) {
-                        let range = position::range_for_line_and_columns(
-                            i,
-                            line.find(name).unwrap_or(0),
-                            i,
-                            line.find(name).unwrap_or(0) + name.len(),
-                        );
-                        let kind = match *keyword {
-                            "func" => SymbolKind::Function,
-                            "struct" => SymbolKind::Struct,
-                            "enum" => SymbolKind::Enum,
-                            "trait" => SymbolKind::Trait,
-                            _ => SymbolKind::Variable,
-                        };
-                        self.add(SemanticSymbol {
-                            name: name.to_string(),
-                            kind,
-                            range,
-                            hover: format!("`{name}` — {keyword} declaration."),
-                            summary: format!("{keyword} {name}"),
-                        });
-                    }
-                    break;
-                }
-            }
-            i += 1;
-        }
-    }
+/// Describes what kind of completion the user expects at the cursor position.
+#[derive(Debug, Clone)]
+pub enum CompletionContext {
+    /// After a dot: `receiver.` — suggest fields or methods.
+    AfterDot { receiver: String },
+    /// Inside an import statement: `import ` — suggest modules.
+    Import,
+    /// Default context — suggest everything.
+    Default,
 }
 
 fn func_signature(func: &ori_ast::item::FuncDecl) -> String {
@@ -395,16 +438,8 @@ fn type_to_string(ty: &ori_ast::ty::Type) -> String {
     }
 }
 
-fn strip_item_prefixes(mut line: &str) -> &str {
-    loop {
-        let next = line
-            .strip_prefix("public ")
-            .or_else(|| line.strip_prefix("deprecated "));
-        let Some(next) = next else {
-            return line;
-        };
-        line = next.trim_start();
-    }
+fn is_ident_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
 fn span_to_range(source: &str, span: ori_diagnostics::Span) -> Range {
