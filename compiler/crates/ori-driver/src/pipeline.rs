@@ -1548,7 +1548,13 @@ fn run_native_tests(
         match run_result {
             Ok(result) => results.push(result),
             Err(error) => {
-                return Err(error);
+                results.push(TestResult {
+                    name: test.name.clone(),
+                    passed: false,
+                    stdout: String::new(),
+                    stderr: error,
+                    status: Some(1),
+                });
             }
         }
     }

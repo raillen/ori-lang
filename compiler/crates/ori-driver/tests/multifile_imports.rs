@@ -8608,6 +8608,58 @@ end
 }
 
 #[test]
+fn compile_runs_fs_bytes_preserve_nul_native() {
+    let dir = TestDir::new("compile_fs_bytes_preserve_nul");
+    let input_path = dir.path("binary-input.bin");
+    let output_path = dir.path("binary-output.bin");
+    std::fs::write(&input_path, b"A\0B").unwrap();
+
+    let input = ori_path_literal(&input_path);
+    let output = ori_path_literal(&output_path);
+
+    dir.write(
+        "main.orl",
+        &format!(
+            r#"namespace app.main
+
+import ori.fs as fs
+import ori.io as io
+
+func main()
+    match fs.read_bytes("{input}")
+        case success(raw):
+            io.print("len=" + string(raw.len()))
+            io.print(raw.to_hex())
+            match fs.write_bytes("{output}", raw)
+                case success(_):
+                    io.print("wrote")
+                case error(e):
+                    io.print("write_error=" + e)
+            end
+        case error(e):
+            io.print("read_error=" + e)
+    end
+end
+"#
+        ),
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "fs_bytes_preserve_nul.exe"
+    } else {
+        "fs_bytes_preserve_nul"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output_run = Command::new(&exe).output().unwrap();
+    assert!(output_run.status.success(), "{:?}", output_run);
+    let stdout = String::from_utf8(output_run.stdout).unwrap();
+    assert_eq!(stdout.replace("\r\n", "\n"), "len=3\n410042\nwrote\n");
+    assert_eq!(std::fs::read(output_path).unwrap(), b"A\0B");
+}
+
+#[test]
 fn compile_runs_escaped_literals_and_fstrings() {
     let dir = TestDir::new("escaped_literals_fstrings");
     dir.write(
@@ -9181,6 +9233,95 @@ end
     assert!(output.status.success(), "{:?}", output);
     let stdout = String::from_utf8(output.stdout).unwrap();
     let expected = "Length 1: 5\nCombined: 11\nDecoded: hello world\nHex: 68656c6c6f\nFromHex: hello\nFromBytes: hello\nHexErr\nSliced: hello\nFirst: 104\n";
+    assert_eq!(stdout.replace("\r\n", "\n"), expected);
+}
+
+#[test]
+fn compile_runs_bytes_preserve_nul_native() {
+    let dir = TestDir::new("compile_bytes_preserve_nul");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.string as str
+
+func main()
+    const raw: bytes = b"\x41\x00\x42"
+    io.print("len=" + string(raw.len()))
+    io.print(raw.to_hex())
+
+    match raw.decode_utf8()
+        case success(_):
+            io.print("decode_unexpected")
+        case error(_):
+            io.print("decode_nul_error")
+    end
+
+    match str.from_bytes(raw)
+        case success(_):
+            io.print("from_bytes_unexpected")
+        case error(_):
+            io.print("from_bytes_nul_error")
+    end
+
+    match "410042".from_hex()
+        case success(decoded):
+            io.print("decoded_len=" + string(decoded.len()))
+            io.print(decoded.to_hex())
+        case error(e):
+            io.print("error=" + e)
+    end
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "bytes_preserve_nul.exe"
+    } else {
+        "bytes_preserve_nul"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let expected = "len=3\n410042\ndecode_nul_error\nfrom_bytes_nul_error\ndecoded_len=3\n410042\n";
+    assert_eq!(stdout.replace("\r\n", "\n"), expected);
+}
+
+#[test]
+fn compile_runs_unicode_string_len_and_slice_native() {
+    let dir = TestDir::new("compile_unicode_string_len_slice");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+func main()
+    const text: string = "\u{00e1}\u{00e9}"
+    io.print("len=" + string(text.len()))
+    io.print(text.slice(0, 1))
+    io.print("index=" + string(text.index_of("\u{00e9}")))
+    io.print("emoji_index=" + string("\u{1f642}x".index_of("x")))
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "unicode_string_len_slice.exe"
+    } else {
+        "unicode_string_len_slice"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let expected = "len=2\n\u{00e1}\nindex=1\nemoji_index=1\n";
     assert_eq!(stdout.replace("\r\n", "\n"), expected);
 }
 

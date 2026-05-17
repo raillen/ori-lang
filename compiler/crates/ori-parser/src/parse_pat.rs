@@ -1,5 +1,6 @@
 use crate::parser::Parser;
 use ori_ast::common::Name;
+use ori_ast::expr::{Expr, UnaryOp};
 use ori_ast::pattern::{NamedPattern, Pattern};
 use ori_lexer::TokenKind;
 
@@ -78,9 +79,14 @@ impl<'src> Parser<'src> {
                 Some(Pattern::Literal(Box::new(expr)))
             }
             TokenKind::Minus => {
-                // Negative number literal in pattern
-                let expr = self.parse_primary_expr()?;
-                Some(Pattern::Literal(Box::new(expr)))
+                self.advance(); // consume `-`
+                let inner = self.parse_primary_expr()?;
+                let s = span.cover(inner.span());
+                Some(Pattern::Literal(Box::new(Expr::Unary {
+                    op: UnaryOp::Neg,
+                    operand: Box::new(inner),
+                    span: s,
+                })))
             }
 
             // Identifier: binding or `Variant` / `Variant(fields)`

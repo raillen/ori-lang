@@ -1775,7 +1775,15 @@ impl<'a> Checker<'a> {
                     };
                     self.infer_expr(expr);
                 }
-                Ty::Infer(0)
+                self.sink.emit(
+                    Diagnostic::error("type.type_mismatch", "called value is not a function")
+                        .with_label(Label::primary(
+                            self.file_id,
+                            expr.span(),
+                            "called value does not have a callable type",
+                        )),
+                );
+                Ty::Error
             }
             Expr::Try { expr, span, .. } => {
                 let inner = self.infer_expr(expr);

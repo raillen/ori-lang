@@ -2,85 +2,53 @@ use crate::parser::Parser;
 use ori_ast::ty::Type;
 use ori_lexer::TokenKind;
 
+macro_rules! primitive_type {
+    ($self:expr, $span:expr, $variant:ident) => {{
+        $self.advance();
+        Some(Type::$variant($span))
+    }};
+}
+
+macro_rules! single_generic_type {
+    ($self:expr, $span:expr, $variant:ident) => {{
+        $self.advance();
+        $self.expect(&TokenKind::Lt)?;
+        let inner = $self.parse_type()?;
+        let end = $self.expect(&TokenKind::Gt)?;
+        Some(Type::$variant(Box::new(inner), $span.cover(end)))
+    }};
+}
+
 impl<'src> Parser<'src> {
-    /// Parse any type expression.
     pub fn parse_type(&mut self) -> Option<Type> {
         let span = self.current_span();
         match self.peek_kind()? {
             // ── Primitive types ───────────────────────────────────────────────
-            TokenKind::BoolTy => {
-                self.advance();
-                Some(Type::Bool(span))
-            }
-            TokenKind::IntTy => {
-                self.advance();
-                Some(Type::Int(span))
-            }
-            TokenKind::Int8Ty => {
-                self.advance();
-                Some(Type::Int8(span))
-            }
-            TokenKind::Int16Ty => {
-                self.advance();
-                Some(Type::Int16(span))
-            }
-            TokenKind::Int32Ty => {
-                self.advance();
-                Some(Type::Int32(span))
-            }
-            TokenKind::Int64Ty => {
-                self.advance();
-                Some(Type::Int64(span))
-            }
-            TokenKind::U8Ty => {
-                self.advance();
-                Some(Type::U8(span))
-            }
-            TokenKind::U16Ty => {
-                self.advance();
-                Some(Type::U16(span))
-            }
-            TokenKind::U32Ty => {
-                self.advance();
-                Some(Type::U32(span))
-            }
-            TokenKind::U64Ty => {
-                self.advance();
-                Some(Type::U64(span))
-            }
-            TokenKind::FloatTy => {
-                self.advance();
-                Some(Type::Float(span))
-            }
-            TokenKind::Float32Ty => {
-                self.advance();
-                Some(Type::Float32(span))
-            }
-            TokenKind::Float64Ty => {
-                self.advance();
-                Some(Type::Float64(span))
-            }
-            TokenKind::StringTy => {
-                self.advance();
-                Some(Type::String(span))
-            }
-            TokenKind::BytesTy => {
-                self.advance();
-                Some(Type::Bytes(span))
-            }
-            TokenKind::Void => {
-                self.advance();
-                Some(Type::Void(span))
-            }
+            TokenKind::BoolTy => primitive_type!(self, span, Bool),
+            TokenKind::IntTy => primitive_type!(self, span, Int),
+            TokenKind::Int8Ty => primitive_type!(self, span, Int8),
+            TokenKind::Int16Ty => primitive_type!(self, span, Int16),
+            TokenKind::Int32Ty => primitive_type!(self, span, Int32),
+            TokenKind::Int64Ty => primitive_type!(self, span, Int64),
+            TokenKind::U8Ty => primitive_type!(self, span, U8),
+            TokenKind::U16Ty => primitive_type!(self, span, U16),
+            TokenKind::U32Ty => primitive_type!(self, span, U32),
+            TokenKind::U64Ty => primitive_type!(self, span, U64),
+            TokenKind::FloatTy => primitive_type!(self, span, Float),
+            TokenKind::Float32Ty => primitive_type!(self, span, Float32),
+            TokenKind::Float64Ty => primitive_type!(self, span, Float64),
+            TokenKind::StringTy => primitive_type!(self, span, String),
+            TokenKind::BytesTy => primitive_type!(self, span, Bytes),
+            TokenKind::Void => primitive_type!(self, span, Void),
 
-            // ── Generic built-in types ────────────────────────────────────────
-            TokenKind::Optional => {
-                self.advance();
-                self.expect(&TokenKind::Lt)?;
-                let inner = self.parse_type()?;
-                let end = self.expect(&TokenKind::Gt)?;
-                Some(Type::Optional(Box::new(inner), span.cover(end)))
-            }
+            // ── Single-arg generic built-in types ─────────────────────────────
+            TokenKind::Optional => single_generic_type!(self, span, Optional),
+            TokenKind::List => single_generic_type!(self, span, List),
+            TokenKind::Set => single_generic_type!(self, span, Set),
+            TokenKind::Range => single_generic_type!(self, span, Range),
+            TokenKind::Lazy => single_generic_type!(self, span, Lazy),
+
+            // ── Multi-arg generic built-in types ──────────────────────────────
             TokenKind::ResultKw => {
                 self.advance();
                 self.expect(&TokenKind::Lt)?;
@@ -90,13 +58,6 @@ impl<'src> Parser<'src> {
                 let end = self.expect(&TokenKind::Gt)?;
                 Some(Type::Result(Box::new(ok), Box::new(err), span.cover(end)))
             }
-            TokenKind::List => {
-                self.advance();
-                self.expect(&TokenKind::Lt)?;
-                let elem = self.parse_type()?;
-                let end = self.expect(&TokenKind::Gt)?;
-                Some(Type::List(Box::new(elem), span.cover(end)))
-            }
             TokenKind::Map => {
                 self.advance();
                 self.expect(&TokenKind::Lt)?;
@@ -105,27 +66,6 @@ impl<'src> Parser<'src> {
                 let val = self.parse_type()?;
                 let end = self.expect(&TokenKind::Gt)?;
                 Some(Type::Map(Box::new(key), Box::new(val), span.cover(end)))
-            }
-            TokenKind::Set => {
-                self.advance();
-                self.expect(&TokenKind::Lt)?;
-                let elem = self.parse_type()?;
-                let end = self.expect(&TokenKind::Gt)?;
-                Some(Type::Set(Box::new(elem), span.cover(end)))
-            }
-            TokenKind::Range => {
-                self.advance();
-                self.expect(&TokenKind::Lt)?;
-                let elem = self.parse_type()?;
-                let end = self.expect(&TokenKind::Gt)?;
-                Some(Type::Range(Box::new(elem), span.cover(end)))
-            }
-            TokenKind::Lazy => {
-                self.advance();
-                self.expect(&TokenKind::Lt)?;
-                let inner = self.parse_type()?;
-                let end = self.expect(&TokenKind::Gt)?;
-                Some(Type::Lazy(Box::new(inner), span.cover(end)))
             }
             TokenKind::Any => {
                 self.advance();
@@ -169,7 +109,6 @@ impl<'src> Parser<'src> {
             // ── User-defined type: `Name` or `Name<T, U>` ────────────────────
             TokenKind::Ident => {
                 let name = self.parse_qualified_name()?;
-                // Check for generic args `<T, U>`
                 if self.at(&TokenKind::Lt) && self.peek_nth_kind(1) != Some(&TokenKind::Eq) {
                     self.advance(); // <
                     let args = self.parse_type_list(&TokenKind::Gt)?;

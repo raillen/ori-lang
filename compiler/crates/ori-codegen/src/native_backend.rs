@@ -5976,7 +5976,13 @@ impl<'a> FuncCodegen<'a> {
                 let call = self.builder.ins().call(fref, &[handle]);
                 let snapshot = self.builder.inst_results(call)[0];
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)
+                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)?;
+                let free_ref = *self
+                    .func_refs
+                    .get("ori_list_free")
+                    .ok_or_else(|| "missing runtime function `ori_list_free`".to_string())?;
+                self.builder.ins().call(free_ref, &[snapshot]);
+                Ok(())
             }
             _ if matches!(
                 &iterable.ty,
@@ -5997,7 +6003,13 @@ impl<'a> FuncCodegen<'a> {
                 let call = self.builder.ins().call(fref, &[handle]);
                 let snapshot = self.builder.inst_results(call)[0];
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)
+                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)?;
+                let free_ref = *self
+                    .func_refs
+                    .get("ori_list_free")
+                    .ok_or_else(|| "missing runtime function `ori_list_free`".to_string())?;
+                self.builder.ins().call(free_ref, &[snapshot]);
+                Ok(())
             }
             _ if matches!(
                 &iterable.ty,
@@ -6018,7 +6030,13 @@ impl<'a> FuncCodegen<'a> {
                 let call = self.builder.ins().call(fref, &[handle]);
                 let snapshot = self.builder.inst_results(call)[0];
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)
+                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)?;
+                let free_ref = *self
+                    .func_refs
+                    .get("ori_list_free")
+                    .ok_or_else(|| "missing runtime function `ori_list_free`".to_string())?;
+                self.builder.ins().call(free_ref, &[snapshot]);
+                Ok(())
             }
             _ if matches!(
                 &iterable.ty,
@@ -6039,7 +6057,13 @@ impl<'a> FuncCodegen<'a> {
                 let call = self.builder.ins().call(fref, &[handle]);
                 let snapshot = self.builder.inst_results(call)[0];
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)
+                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)?;
+                let free_ref = *self
+                    .func_refs
+                    .get("ori_list_free")
+                    .ok_or_else(|| "missing runtime function `ori_list_free`".to_string())?;
+                self.builder.ins().call(free_ref, &[snapshot]);
+                Ok(())
             }
             _ => {
                 if let Some(next_func) = self.iterable_next_func_name_for_type(&iterable.ty) {
@@ -6319,7 +6343,6 @@ impl<'a> FuncCodegen<'a> {
             let elem = self.from_list_storage_value(elem, elem_ty);
             self.builder.def_var(bvar, elem);
         }
-        // Bind the index variable (0-based counter)
         if let Some(ib_name) = index_binding {
             let cur2 = self.builder.use_var(idx_var);
             let ib_var = self.builder.declare_var(types::I64);
@@ -7795,14 +7818,14 @@ impl<'a> FuncCodegen<'a> {
         })
     }
 
-    /// Compute the length of an Ori string pointer as an i64.
-    /// Prefer the Ori runtime helper; keep libc `strlen` only as a C-pointer fallback.
+    /// Compute the byte length of a nul-terminated Ori string pointer as an i64.
+    /// This is used by print/interpolation paths that write raw bytes.
     fn str_len_from_ptr(&mut self, ptr: ir::Value) -> Result<ir::Value, String> {
-        if let Some(&fref) = self.func_refs.get("ori_string_len") {
+        if let Some(&fref) = self.func_refs.get("strlen") {
             let call = self.builder.ins().call(fref, &[ptr]);
             return Ok(self.builder.inst_results(call)[0]);
         }
-        if let Some(&fref) = self.func_refs.get("strlen") {
+        if let Some(&fref) = self.func_refs.get("ori_string_len") {
             let call = self.builder.ins().call(fref, &[ptr]);
             return Ok(self.builder.inst_results(call)[0]);
         }
@@ -8145,7 +8168,6 @@ impl<'a> FuncCodegen<'a> {
                 let node = self.emit_expr_for_expected(&args[1].value, &node_ty)?;
                 let stored = self.to_list_storage_value(node, &node_ty);
                 self.builder.ins().call(fref, &[graph, stored]);
-                self.emit_arc_register_edge_if_managed(&node_ty, graph, node)?;
                 Ok(self.builder.ins().iconst(types::I8, 0))
             }
             "ori_graph_remove_node"
@@ -8176,8 +8198,6 @@ impl<'a> FuncCodegen<'a> {
                 self.builder
                     .ins()
                     .call(fref, &[graph, stored_from, stored_to]);
-                self.emit_arc_register_edge_if_managed(&node_ty, graph, from)?;
-                self.emit_arc_register_edge_if_managed(&node_ty, graph, to)?;
                 Ok(self.builder.ins().iconst(types::I8, 0))
             }
             "ori_graph_add_weighted_edge" => {
@@ -8195,8 +8215,6 @@ impl<'a> FuncCodegen<'a> {
                 self.builder
                     .ins()
                     .call(fref, &[graph, stored_from, stored_to, weight]);
-                self.emit_arc_register_edge_if_managed(&node_ty, graph, from)?;
-                self.emit_arc_register_edge_if_managed(&node_ty, graph, to)?;
                 Ok(self.builder.ins().iconst(types::I8, 0))
             }
             "ori_graph_remove_edge"
@@ -8347,7 +8365,6 @@ impl<'a> FuncCodegen<'a> {
                 let stored = self.to_list_storage_value(value, &elem_ty);
                 let call = self.builder.ins().call(fref, &[stored]);
                 let tree = self.builder.inst_results(call)[0];
-                self.emit_arc_register_edge_if_managed(&elem_ty, tree, value)?;
                 Ok(tree)
             }
             "ori_tree_add_child" => {
@@ -8360,7 +8377,6 @@ impl<'a> FuncCodegen<'a> {
                 let stored = self.to_list_storage_value(value, &elem_ty);
                 let call = self.builder.ins().call(fref, &[tree, parent, stored]);
                 let node = self.builder.inst_results(call)[0];
-                self.emit_arc_register_edge_if_managed(&elem_ty, tree, value)?;
                 Ok(node)
             }
             "ori_tree_value" => {

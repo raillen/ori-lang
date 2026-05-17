@@ -6,6 +6,7 @@ use ori_ast::stmt::{
     LValue, LocalConst, LocalVar, LoopStmt, MatchCase, MatchStmt, RepeatStmt, ReturnStmt, Stmt,
     UsingStmt, WhileSomeStmt, WhileStmt,
 };
+use ori_ast::ty::Type;
 use ori_diagnostics::Span;
 use ori_lexer::TokenKind;
 use smol_str::SmolStr;
@@ -92,12 +93,7 @@ impl<'src> Parser<'src> {
 
     fn parse_local_const(&mut self) -> Option<Stmt> {
         let start = self.advance().unwrap().span; // const
-        let name = self.parse_name()?;
-        self.expect(&TokenKind::Colon)?;
-        let ty = self.parse_type()?;
-        self.expect(&TokenKind::Eq)?;
-        let value = self.parse_expr()?;
-        let span = start.cover(value.span());
+        let (name, ty, value, span) = self.parse_local_binding_body(start)?;
         Some(Stmt::Const(LocalConst {
             name,
             ty,
@@ -108,18 +104,23 @@ impl<'src> Parser<'src> {
 
     fn parse_local_var(&mut self) -> Option<Stmt> {
         let start = self.advance().unwrap().span; // var
-        let name = self.parse_name()?;
-        self.expect(&TokenKind::Colon)?;
-        let ty = self.parse_type()?;
-        self.expect(&TokenKind::Eq)?;
-        let value = self.parse_expr()?;
-        let span = start.cover(value.span());
+        let (name, ty, value, span) = self.parse_local_binding_body(start)?;
         Some(Stmt::Var(LocalVar {
             name,
             ty,
             value: Box::new(value),
             span,
         }))
+    }
+
+    fn parse_local_binding_body(&mut self, start: Span) -> Option<(Name, Type, Expr, Span)> {
+        let name = self.parse_name()?;
+        self.expect(&TokenKind::Colon)?;
+        let ty = self.parse_type()?;
+        self.expect(&TokenKind::Eq)?;
+        let value = self.parse_expr()?;
+        let span = start.cover(value.span());
+        Some((name, ty, value, span))
     }
 
     fn parse_return(&mut self) -> Option<Stmt> {

@@ -84,6 +84,10 @@ impl DefMap {
         &self.defs[id.0 as usize]
     }
 
+    pub fn try_get(&self, id: DefId) -> Option<&Def> {
+        self.defs.get(id.0 as usize)
+    }
+
     pub fn all_defs(&self) -> &[Def] {
         &self.defs
     }

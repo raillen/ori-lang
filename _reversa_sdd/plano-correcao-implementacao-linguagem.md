@@ -995,3 +995,81 @@ Critério de aceite:
 Resultado:
 
 - [x] Workspace completo passou.
+
+---
+
+## P20 - Fechamento da rodada de auditoria de runtime em 2026-05-17
+
+Origem: nova validacao manual dos achados de runtime e backend nativo:
+
+- `bytes` com NUL interno ainda truncava em `len`, `to_hex` e `from_hex`.
+- `string.len()` e `string.slice()` ainda usavam semantica de byte no runtime nativo.
+- `ori_heap_into_sorted_list` ainda bloqueava `clippy`.
+- Colecoes ainda tinham caminhos de remocao/limpeza sem desfazer arestas ARC.
+- Comparador customizado de heap retinha valores temporariamente sem liberar.
+
+### P20.1 - Corrigir `bytes` com NUL
+
+- [x] Registrar tamanho real das alocacoes gerenciadas no estado ARC.
+- [x] Fazer `cstring_from_bytes` preservar NUL interno em vez de descartar o payload.
+- [x] Fazer `ori_bytes_len` usar tamanho real do payload quando disponivel.
+- [x] Fazer `ori_bytes_concat`, `ori_bytes_slice`, `ori_bytes_to_hex`,
+      `ori_bytes_from_hex`, `ori_bytes_decode_utf8` e `ori_bytes_get`
+      respeitarem payload binario com NUL.
+- [x] Adicionar teste de runtime para bytes com NUL.
+- [x] Adicionar teste E2E nativo para `b"\x41\x00\x42"` e `"410042".from_hex()`.
+
+### P20.2 - Corrigir `string` Unicode no runtime nativo
+
+- [x] Fazer `ori_string_len` contar escalares Unicode em vez de bytes.
+- [x] Fazer `ori_string_slice` receber indices por caractere e converter para
+      offsets de byte seguros.
+- [x] Manter `io.print` e interpolacao usando tamanho em bytes para escrita em
+      stdout, sem confundir com `string.len()`.
+- [x] Adicionar teste de runtime para `"\u{00e1}\u{00e9}".slice(0, 1)`.
+- [x] Adicionar teste E2E nativo para `"áé".len()` e `"áé".slice(0, 1)`.
+
+### P20.3 - Corrigir ARC em caminhos de remocao de colecoes
+
+- [x] Fazer `list.pop`, `list.remove` e `list.clear` removerem arestas ARC.
+- [x] Fazer `deque.pop_front`, `deque.pop_back`, remocao por cursor e
+      `deque.clear` removerem arestas ARC.
+- [x] Fazer `set.remove` e `set.clear` removerem arestas ARC.
+- [x] Fazer `map.set` em chave existente atualizar aresta do valor antigo para
+      o novo valor.
+- [x] Fazer `map.remove`, `map.try_remove` e `map.clear` removerem arestas de
+      chave e valor.
+- [x] Preservar valores gerenciados retornados por pop/remove via optional
+      enquanto o optional estiver vivo.
+- [x] Adicionar teste de runtime para remocao/clear de list, deque, set e map.
+
+### P20.4 - Corrigir heap e `clippy`
+
+- [x] Liberar os retains temporarios usados pelo comparador customizado de heap.
+- [x] Adicionar teste de runtime garantindo que o comparador customizado nao
+      vaza refcount.
+- [x] Reescrever o loop de `ori_heap_into_sorted_list` para remover o erro
+      `clippy::while_immutable_condition`.
+
+### Validacao executada
+
+- [x] `cargo fmt --all -- --check`
+- [x] `cargo check --workspace`
+- [x] `cargo test -p ori-runtime -- --test-threads=1`
+- [x] `cargo test -p ori-driver compile_runs_bytes_preserve_nul_native -- --nocapture --test-threads=1`
+- [x] `cargo test -p ori-driver compile_runs_unicode_string_len_and_slice_native -- --nocapture --test-threads=1`
+- [x] `cargo test --workspace`
+- [x] `cargo clippy --workspace --all-targets`
+- [x] Repro manual de `bytes` com NUL: `len=3` e `410042`.
+- [x] Repro manual de Unicode: `len=2` e slice `á`.
+- [x] Runtime nativo local reestagiado com
+      `tools/stage_native_runtime.ps1 -Profile debug`.
+
+### Resultado
+
+- [x] Os quatro findings novos da auditoria foram corrigidos ou fechados com
+      teste objetivo.
+- [x] O plano de bugs criticos foi fechado; dividas estruturais ficaram
+      registradas em `docs/plano-correcao-implementacao-linguagem.md` para
+      execucao em rodadas separadas.
+- [x] Build, testes e `clippy` passam no estado atual.

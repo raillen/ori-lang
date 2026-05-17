@@ -276,11 +276,9 @@ fn range_for_label(cache: &SourceCache, label: &OriLabel) -> Range {
         end = start + 1;
     }
 
-    let (start_line, start_col) = file.line_col(start);
-    let (end_line, end_col) = file.line_col(end);
     Range::new(
-        Position::new(start_line.saturating_sub(1), start_col.saturating_sub(1)),
-        Position::new(end_line.saturating_sub(1), end_col.saturating_sub(1)),
+        position_for_byte_offset(&file.content, start as usize),
+        position_for_byte_offset(&file.content, end as usize),
     )
 }
 
@@ -782,10 +780,12 @@ fn is_block_end(line: &str) -> bool {
 }
 
 fn range_for_symbol_in_line(line: &str, line_index: usize, symbol: &str) -> Range {
-    let column = line.find(symbol).unwrap_or(0);
+    let byte_column = line.find(symbol).unwrap_or(0);
+    let column = utf16_len(&line[..byte_column]);
+    let end_column = column + utf16_len(symbol);
     Range::new(
         Position::new(line_index as u32, column as u32),
-        Position::new(line_index as u32, (column + symbol.len()) as u32),
+        Position::new(line_index as u32, end_column as u32),
     )
 }
 
@@ -809,14 +809,92 @@ fn word_at_position(source: &str, position: Position) -> Option<String> {
 }
 
 fn offset_at_position(source: &str, position: Position) -> Option<usize> {
-    let line = source.lines().nth(position.line as usize)?;
-    let line_start = source
-        .lines()
-        .take(position.line as usize)
-        .map(|line| line.len() + 1)
-        .sum::<usize>();
-    let column = (position.character as usize).min(line.len());
-    Some(line_start + column)
+    byte_offset_at_position(source, position)
+}
+
+fn position_for_byte_offset(source: &str, offset: usize) -> Position {
+    let offset = previous_char_boundary(source, offset.min(source.len()));
+    let line_start = line_start_before_or_at(source, offset);
+    let line = source[..line_start]
+        .bytes()
+        .filter(|byte| *byte == b'\n')
+        .count();
+    let line_end = line_end_without_ending(source, line_start);
+    let column_offset = previous_char_boundary(source, offset.min(line_end));
+    let character = utf16_len(&source[line_start..column_offset]);
+    Position::new(line as u32, character as u32)
+}
+
+fn byte_offset_at_position(source: &str, position: Position) -> Option<usize> {
+    let line_start = byte_start_for_line(source, position.line as usize)?;
+    let line_end = line_end_without_ending(source, line_start);
+    let line = &source[line_start..line_end];
+    let target = position.character as usize;
+    let mut units = 0usize;
+
+    for (byte_offset, ch) in line.char_indices() {
+        let next = units + ch.len_utf16();
+        if next > target {
+            return Some(line_start + byte_offset);
+        }
+        if next == target {
+            return Some(line_start + byte_offset + ch.len_utf8());
+        }
+        units = next;
+    }
+
+    Some(line_end)
+}
+
+fn byte_start_for_line(source: &str, target_line: usize) -> Option<usize> {
+    if target_line == 0 {
+        return Some(0);
+    }
+    let mut line = 0usize;
+    for (index, ch) in source.char_indices() {
+        if ch == '\n' {
+            line += 1;
+            if line == target_line {
+                return Some(index + 1);
+            }
+        }
+    }
+    None
+}
+
+fn line_start_before_or_at(source: &str, offset: usize) -> usize {
+    let mut line_start = 0usize;
+    for (index, ch) in source.char_indices() {
+        if index >= offset {
+            break;
+        }
+        if ch == '\n' {
+            line_start = index + 1;
+        }
+    }
+    line_start
+}
+
+fn line_end_without_ending(source: &str, line_start: usize) -> usize {
+    let mut end = source[line_start..]
+        .find('\n')
+        .map(|relative| line_start + relative)
+        .unwrap_or(source.len());
+    if end > line_start && source.as_bytes()[end - 1] == b'\r' {
+        end -= 1;
+    }
+    end
+}
+
+fn previous_char_boundary(source: &str, mut offset: usize) -> usize {
+    while offset > 0 && !source.is_char_boundary(offset) {
+        offset -= 1;
+    }
+    offset
+}
+
+fn utf16_len(text: &str) -> usize {
+    text.encode_utf16().count()
 }
 
 fn is_word_byte(byte: u8) -> bool {
@@ -919,6 +997,39 @@ end
         assert!(semantic_hover(source, symbol.as_deref().unwrap())
             .unwrap()
             .contains("Signed integer"));
+    }
+
+    #[test]
+    fn lsp_position_helpers_use_utf16_columns_and_crlf_lines() {
+        let source = "aa\u{1f642}bb\r\nconst value: int = 1\n";
+
+        assert_eq!(
+            position_for_byte_offset(source, "aa\u{1f642}".len()),
+            Position::new(0, 4)
+        );
+        assert_eq!(offset_at_position(source, Position::new(0, 4)), Some(6));
+        assert_eq!(
+            offset_at_position(source, Position::new(1, 6)),
+            Some("aa\u{1f642}bb\r\nconst ".len())
+        );
+
+        let range = range_for_symbol_in_line("\"\u{1f642}\" value", 0, "value");
+        assert_eq!(range.start, Position::new(0, 5));
+        assert_eq!(range.end, Position::new(0, 10));
+    }
+
+    #[test]
+    fn diagnostic_ranges_use_utf16_columns() {
+        let mut cache = SourceCache::default();
+        let content = "\"\u{00e1}\u{00e9}\" value\n".to_string();
+        let file_id = cache.add("main.orl", content.clone());
+        let start = content.find("value").unwrap();
+        let label = Label::primary(file_id, Span::new(start, start + 5), "value here");
+
+        let range = range_for_label(&cache, &label);
+
+        assert_eq!(range.start, Position::new(0, 5));
+        assert_eq!(range.end, Position::new(0, 10));
     }
 
     #[test]

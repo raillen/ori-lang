@@ -51,6 +51,9 @@ impl<'src> Parser<'src> {
                     TokenKind::Ident,
                     TokenKind::At,
                 ]);
+                if self.pos == before {
+                    self.advance();
+                }
             }
         }
         let end = self.tokens.last().map(|t| t.span).unwrap_or(start);
@@ -116,6 +119,7 @@ impl<'src> Parser<'src> {
     fn parse_attr(&mut self) -> Option<Attr> {
         let start = self.advance().unwrap().span; // @
         let name = self.parse_name()?;
+        let mut end = name.span;
         let args = if self.at(&TokenKind::LParen) {
             self.advance();
             let mut args = Vec::new();
@@ -137,15 +141,12 @@ impl<'src> Parser<'src> {
                     break;
                 }
             }
-            self.expect(&TokenKind::RParen)?;
+            let rparen = self.expect(&TokenKind::RParen)?;
+            end = rparen;
             args
         } else {
             Vec::new()
         };
-        let end = args
-            .last()
-            .map(|_| self.current_span())
-            .unwrap_or(name.span);
         Some(Attr {
             name,
             args,

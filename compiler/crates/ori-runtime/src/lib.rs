@@ -4,7 +4,7 @@ pub const ORI_ABI_VERSION: &str = "ori-native-abi-1";
 
 use std::cell::Cell;
 use std::collections::VecDeque;
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::io::Write;
 use std::os::raw::{c_char, c_uchar};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -30,6 +30,7 @@ pub struct OriHeapHeader {
 struct ArcAllocation {
     payload: usize,
     header: usize,
+    size: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -59,7 +60,7 @@ unsafe fn header_for_registered(ptr: *mut u8) -> Option<*mut OriHeapHeader> {
         return None;
     }
     let payload = ptr as usize;
-    let state = arc_state().lock().ok()?;
+    let state = arc_state().lock().unwrap_or_else(|e| e.into_inner());
     state
         .allocations
         .iter()
@@ -67,13 +68,27 @@ unsafe fn header_for_registered(ptr: *mut u8) -> Option<*mut OriHeapHeader> {
         .map(|allocation| allocation.header as *mut OriHeapHeader)
 }
 
-unsafe fn register_allocation(header: *mut OriHeapHeader, payload: *mut u8) {
+unsafe fn register_allocation(header: *mut OriHeapHeader, payload: *mut u8, size: usize) {
     if let Ok(mut state) = arc_state().lock() {
         state.allocations.push(ArcAllocation {
             payload: payload as usize,
             header: header as usize,
+            size,
         });
     }
+}
+
+unsafe fn registered_payload_size(ptr: *const u8) -> Option<usize> {
+    if ptr.is_null() {
+        return None;
+    }
+    let payload = ptr as usize;
+    let state = arc_state().lock().ok()?;
+    state
+        .allocations
+        .iter()
+        .find(|allocation| allocation.payload == payload)
+        .map(|allocation| allocation.size)
 }
 
 unsafe fn unregister_allocation(ptr: *mut u8) -> Option<*mut OriHeapHeader> {
@@ -141,7 +156,7 @@ pub unsafe extern "C" fn ori_alloc(
         std::ptr::write(&mut (*header).refcount, AtomicI64::new(1));
         (*header).destructor = destructor;
         let payload = ptr.add(std::mem::size_of::<OriHeapHeader>());
-        register_allocation(header, payload);
+        register_allocation(header, payload, size);
         payload
     } else {
         ptr
@@ -1271,40 +1286,37 @@ pub unsafe extern "C" fn ori_arc_collect_cycles() -> i64 {
         }
     }
 
-    let mut marks = {
-        let Ok(state) = arc_state().lock() else {
-            return 0;
-        };
-        let mut marks: Vec<Mark> = state
-            .allocations
-            .iter()
-            .map(|allocation| {
-                let header = allocation.header as *mut OriHeapHeader;
-                Mark {
-                    payload: allocation.payload,
-                    header: allocation.header,
-                    trial_count: (*header).refcount.load(Ordering::Acquire),
-                    marked: false,
-                    collect: false,
-                }
-            })
-            .collect();
-        for edge in &state.edges {
-            let owner_known = marks.iter().any(|mark| mark.payload == edge.owner);
-            if owner_known {
-                if let Some(child) = marks.iter_mut().find(|mark| mark.payload == edge.child) {
-                    child.trial_count -= 1;
-                }
-            }
-        }
-        let edges = state.edges.clone();
-        for index in 0..marks.len() {
-            if marks[index].trial_count > 0 {
-                mark_reachable(index, &mut marks, &edges);
-            }
-        }
-        marks
+    let Ok(mut state) = arc_state().lock() else {
+        return 0;
     };
+    let mut marks: Vec<Mark> = state
+        .allocations
+        .iter()
+        .map(|allocation| {
+            let header = allocation.header as *mut OriHeapHeader;
+            Mark {
+                payload: allocation.payload,
+                header: allocation.header,
+                trial_count: (*header).refcount.load(Ordering::Acquire),
+                marked: false,
+                collect: false,
+            }
+        })
+        .collect();
+    for edge in &state.edges {
+        let owner_known = marks.iter().any(|mark| mark.payload == edge.owner);
+        if owner_known {
+            if let Some(child) = marks.iter_mut().find(|mark| mark.payload == edge.child) {
+                child.trial_count -= 1;
+            }
+        }
+    }
+    let edges_clone = state.edges.clone();
+    for index in 0..marks.len() {
+        if marks[index].trial_count > 0 {
+            mark_reachable(index, &mut marks, &edges_clone);
+        }
+    }
 
     let mut collected = 0;
     for mark in &mut marks {
@@ -1329,25 +1341,24 @@ pub unsafe extern "C" fn ori_arc_collect_cycles() -> i64 {
         .collect();
     let mut children_to_release = Vec::new();
 
-    if let Ok(mut state) = arc_state().lock() {
-        state
-            .allocations
-            .retain(|allocation| !collected_payloads.contains(&allocation.payload));
-        let mut index = 0;
-        while index < state.edges.len() {
-            let edge = state.edges[index];
-            let owner_collected = collected_payloads.contains(&edge.owner);
-            let child_collected = collected_payloads.contains(&edge.child);
-            if owner_collected || child_collected {
-                state.edges.swap_remove(index);
-                if owner_collected && !child_collected {
-                    children_to_release.push(edge.child as *mut u8);
-                }
-            } else {
-                index += 1;
+    state
+        .allocations
+        .retain(|allocation| !collected_payloads.contains(&allocation.payload));
+    let mut index = 0;
+    while index < state.edges.len() {
+        let edge = state.edges[index];
+        let owner_collected = collected_payloads.contains(&edge.owner);
+        let child_collected = collected_payloads.contains(&edge.child);
+        if owner_collected || child_collected {
+            state.edges.swap_remove(index);
+            if owner_collected && !child_collected {
+                children_to_release.push(edge.child as *mut u8);
             }
+        } else {
+            index += 1;
         }
     }
+    drop(state);
 
     for (payload, header) in collected_pairs {
         let payload = payload as *mut u8;
@@ -1479,20 +1490,24 @@ unsafe fn write_string_parts(body: String, out_ptr: *mut *mut u8, out_len: *mut 
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_len(ptr: *const u8) -> i64 {
+    cstr_byte_len(ptr) as i64
+}
+
+unsafe fn cstr_byte_len(ptr: *const u8) -> usize {
     if ptr.is_null() {
         return 0;
     }
-    CStr::from_ptr(ptr as *const c_char).to_bytes().len() as i64
+    CStr::from_ptr(ptr as *const c_char).to_bytes().len()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_string_len(ptr: *const u8) -> i64 {
-    ori_len(ptr)
+    cstr_str(ptr).chars().count() as i64
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_string_concat(a: *const u8, b: *const u8) -> *mut u8 {
-    ori_string_concat_parts(a, ori_len(a), b, ori_len(b))
+    ori_string_concat_parts(a, cstr_byte_len(a) as i64, b, cstr_byte_len(b) as i64)
 }
 
 #[no_mangle]
@@ -1515,14 +1530,16 @@ pub unsafe extern "C" fn ori_string_slice(s: *const u8, start: i64, end: i64) ->
     if s.is_null() {
         abort_bounds("ori string slice bounds out of range");
     }
-    let s = cstr_bytes(s);
+    let s = cstr_str(s);
     let (start, end) = checked_slice_bounds(
-        s.len() as i64,
+        s.chars().count() as i64,
         start,
         end,
         "ori string slice bounds out of range",
     );
-    cstring_from_bytes(s[start..end].to_vec())
+    let start = char_index_to_byte_index(s, start);
+    let end = char_index_to_byte_index(s, end);
+    cstring_from_str(&s[start..end])
 }
 
 #[no_mangle]
@@ -1584,7 +1601,9 @@ pub unsafe extern "C" fn ori_string_replace(
 pub unsafe extern "C" fn ori_string_index_of(s: *const u8, sub: *const u8) -> i64 {
     let s = cstr_str(s);
     let sub = cstr_str(sub);
-    s.find(sub).map(|index| index as i64).unwrap_or(-1)
+    s.find(sub)
+        .map(|index| s[..index].chars().count() as i64)
+        .unwrap_or(-1)
 }
 
 #[no_mangle]
@@ -1630,6 +1649,7 @@ pub unsafe extern "C" fn ori_string_pad_right(
     pad_string(cstr_str(s), target_len, cstr_str(fill), false)
 }
 
+#[cfg(test)]
 unsafe fn cstr_bytes<'a>(ptr: *const u8) -> &'a [u8] {
     if ptr.is_null() {
         &[]
@@ -1659,16 +1679,38 @@ fn cstring_from_str(s: &str) -> *mut u8 {
 }
 
 fn cstring_from_bytes(bytes: Vec<u8>) -> *mut u8 {
-    let cstring = CString::new(bytes).unwrap_or_else(|_| CString::new("").unwrap());
-    let bytes_with_nul = cstring.as_bytes_with_nul();
+    let len = bytes.len();
     unsafe {
-        let ptr = ori_alloc(bytes_with_nul.len(), None);
+        let ptr = ori_alloc(len + 1, None);
         if ptr.is_null() {
             return ptr;
         }
-        std::ptr::copy_nonoverlapping(bytes_with_nul.as_ptr(), ptr, bytes_with_nul.len());
+        if len > 0 {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, len);
+        }
+        *ptr.add(len) = 0;
         ptr
     }
+}
+
+unsafe fn bytes_payload<'a>(ptr: *const u8) -> &'a [u8] {
+    if ptr.is_null() {
+        return &[];
+    }
+    if let Some(size) = registered_payload_size(ptr) {
+        return std::slice::from_raw_parts(ptr, size.saturating_sub(1));
+    }
+    CStr::from_ptr(ptr as *const c_char).to_bytes()
+}
+
+fn char_index_to_byte_index(s: &str, index: usize) -> usize {
+    if index == s.chars().count() {
+        return s.len();
+    }
+    s.char_indices()
+        .nth(index)
+        .map(|(byte_index, _)| byte_index)
+        .unwrap_or(s.len())
 }
 
 unsafe fn ori_list_push_owned_managed(list: *mut OriList, value: *mut u8) {
@@ -1699,6 +1741,17 @@ unsafe fn ori_map_register_borrowed_key_value_maybe_managed(
 ) {
     ori_arc_register_edge(map as *mut u8, key as *mut u8);
     ori_arc_register_edge(map as *mut u8, value as *mut u8);
+}
+
+unsafe fn unregister_collection_edge(owner: *mut u8, value: i64) {
+    ori_arc_unregister_edge(owner, value as *mut u8);
+}
+
+unsafe fn transfer_collection_edge_to_return_value(owner: *mut u8, value: i64) -> i64 {
+    let value_ptr = value as *mut u8;
+    ori_arc_retain(value_ptr);
+    ori_arc_unregister_edge(owner, value_ptr);
+    value
 }
 
 fn pad_string(s: &str, target_len: i64, fill: &str, left: bool) -> *mut u8 {
@@ -1796,7 +1849,8 @@ pub unsafe extern "C" fn ori_list_pop(list: *mut OriList) -> i64 {
         return 0;
     }
     (*list).len -= 1;
-    *(*list).data.add((*list).len as usize)
+    let value = *(*list).data.add((*list).len as usize);
+    transfer_collection_edge_to_return_value(list as *mut u8, value)
 }
 
 #[no_mangle]
@@ -1804,7 +1858,8 @@ pub unsafe extern "C" fn ori_list_try_pop(list: *mut OriList) -> *mut OriOptiona
     if list.is_null() || (*list).len <= 0 {
         return alloc_optional_int(0, 0);
     }
-    alloc_optional_int(1, ori_list_pop(list))
+    let value = ori_list_pop(list);
+    alloc_optional_owned_managed_value(1, value)
 }
 
 #[no_mangle]
@@ -1812,6 +1867,8 @@ pub unsafe extern "C" fn ori_list_remove(list: *mut OriList, index: i64) {
     if list.is_null() || index < 0 || index >= (*list).len {
         return;
     }
+    let removed = *(*list).data.add(index as usize);
+    unregister_collection_edge(list as *mut u8, removed);
     for i in index..((*list).len - 1) {
         let next = *(*list).data.add((i + 1) as usize);
         *(*list).data.add(i as usize) = next;
@@ -1916,6 +1973,10 @@ pub unsafe extern "C" fn ori_list_try_get(list: *mut OriList, index: i64) -> *mu
 
 unsafe fn list_clear(list: *mut OriList) {
     if !list.is_null() {
+        for i in 0..(*list).len {
+            let value = *(*list).data.add(i as usize);
+            unregister_collection_edge(list as *mut u8, value);
+        }
         (*list).len = 0;
     }
 }
@@ -1991,6 +2052,16 @@ unsafe fn deque_optional_value(value: Option<i64>) -> *mut u8 {
     }
 }
 
+unsafe fn deque_optional_removed_value(deque: *mut OriDeque, value: Option<i64>) -> *mut u8 {
+    match value {
+        Some(value) => {
+            let value = transfer_collection_edge_to_return_value(deque as *mut u8, value);
+            alloc_optional_owned_managed_value(1, value) as *mut u8
+        }
+        None => alloc_optional_int(0, 0) as *mut u8,
+    }
+}
+
 unsafe fn deque_to_list(deque: *mut OriDeque) -> *mut OriList {
     let out = ori_list_new();
     if deque.is_null() {
@@ -2045,11 +2116,14 @@ unsafe fn deque_insert_before(deque: *mut OriDeque, cursor: i64, value: i64) -> 
 }
 
 unsafe fn deque_remove_at(deque: *mut OriDeque, cursor: i64) -> *mut u8 {
-    deque_optional_value(if deque.is_null() || cursor < 0 {
-        None
-    } else {
-        (*deque).values.remove(cursor as usize)
-    })
+    deque_optional_removed_value(
+        deque,
+        if deque.is_null() || cursor < 0 {
+            None
+        } else {
+            (*deque).values.remove(cursor as usize)
+        },
+    )
 }
 
 unsafe fn deque_find_raw(deque: *mut OriDeque, value: i64, value_kind: u8) -> *mut u8 {
@@ -2086,20 +2160,26 @@ pub unsafe extern "C" fn ori_deque_push_back(deque: *mut OriDeque, value: i64) {
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_deque_pop_front(deque: *mut OriDeque) -> *mut u8 {
-    deque_optional_value(if deque.is_null() {
-        None
-    } else {
-        (*deque).values.pop_front()
-    })
+    deque_optional_removed_value(
+        deque,
+        if deque.is_null() {
+            None
+        } else {
+            (*deque).values.pop_front()
+        },
+    )
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_deque_pop_back(deque: *mut OriDeque) -> *mut u8 {
-    deque_optional_value(if deque.is_null() {
-        None
-    } else {
-        (*deque).values.pop_back()
-    })
+    deque_optional_removed_value(
+        deque,
+        if deque.is_null() {
+            None
+        } else {
+            (*deque).values.pop_back()
+        },
+    )
 }
 
 #[no_mangle]
@@ -2137,6 +2217,9 @@ pub unsafe extern "C" fn ori_deque_is_empty(deque: *mut OriDeque) -> c_uchar {
 #[no_mangle]
 pub unsafe extern "C" fn ori_deque_clear(deque: *mut OriDeque) {
     if !deque.is_null() {
+        for value in (*deque).values.iter().copied() {
+            unregister_collection_edge(deque as *mut u8, value);
+        }
         (*deque).values.clear();
     }
 }
@@ -2542,6 +2625,7 @@ unsafe fn tree_push_node(tree: *mut OriTree, parent: i64, value: i64) -> i64 {
     *(*tree).alive.add(id as usize) = 1;
     (*tree).nodes_len += 1;
     (*tree).len += 1;
+    ori_arc_register_edge(tree as *mut u8, value as *mut u8);
     id
 }
 
@@ -2878,7 +2962,6 @@ unsafe fn tree_clone_subtree(
     } else {
         ori_tree_add_child(target, target_parent, value)
     };
-    ori_arc_register_edge(target as *mut u8, value as *mut u8);
     let children = *(*source).children.add(source_node as usize);
     if !children.is_null() {
         for i in 0..(*children).len {
@@ -2898,7 +2981,6 @@ pub unsafe extern "C" fn ori_tree_clone(tree: *mut OriTree) -> *mut OriTree {
     }
     let root_value = *(*tree).values.add((*tree).root as usize);
     let out = ori_tree_new(root_value);
-    ori_arc_register_edge(out as *mut u8, root_value as *mut u8);
     let children = *(*tree).children.add((*tree).root as usize);
     if !children.is_null() {
         for i in 0..(*children).len {
@@ -2918,7 +3000,6 @@ pub unsafe extern "C" fn ori_tree_clone_subtree(tree: *mut OriTree, node: i64) -
     }
     let root_value = *(*tree).values.add(node as usize);
     let out = ori_tree_new(root_value);
-    ori_arc_register_edge(out as *mut u8, root_value as *mut u8);
     let children = *(*tree).children.add(node as usize);
     if !children.is_null() {
         for i in 0..(*children).len {
@@ -3742,6 +3823,8 @@ unsafe fn ori_set_remove_raw(set: *mut OriSet, value: i64, item_kind: u8) {
         return;
     }
     let dense_idx = *(*set).ht.add(slot) as usize;
+    let removed = *(*set).items.add(dense_idx);
+    unregister_collection_edge(set as *mut u8, removed);
     *(*set).ht.add(slot) = HT_TOMB;
     let last_idx = (*set).len as usize - 1;
     if dense_idx != last_idx {
@@ -3783,6 +3866,10 @@ pub unsafe extern "C" fn ori_set_reserve(set: *mut OriSet, capacity: i64) {
 pub unsafe extern "C" fn ori_set_clear(set: *mut OriSet) {
     if set.is_null() {
         return;
+    }
+    for i in 0..(*set).len {
+        let value = *(*set).items.add(i as usize);
+        unregister_collection_edge(set as *mut u8, value);
     }
     (*set).len = 0;
     (*set).item_kind = SET_ITEM_UNKNOWN;
@@ -4091,6 +4178,8 @@ unsafe fn ori_map_set_raw(map: *mut OriMap, key: i64, value: i64, key_kind: u8) 
     let existing = ht_lookup_map((*map).ht, ht_cap, (*map).keys, key_kind, key);
     if existing != usize::MAX {
         let dense_idx = *(*map).ht.add(existing) as usize;
+        let old_value = *(*map).values.add(dense_idx);
+        ori_arc_update_edge(map as *mut u8, old_value as *mut u8, value as *mut u8);
         *(*map).values.add(dense_idx) = value;
         return;
     }
@@ -4211,6 +4300,10 @@ unsafe fn ori_map_remove_raw(map: *mut OriMap, key: i64, key_kind: u8) {
         return;
     }
     let dense_idx = *(*map).ht.add(slot) as usize;
+    let removed_key = *(*map).keys.add(dense_idx);
+    let removed_value = *(*map).values.add(dense_idx);
+    unregister_collection_edge(map as *mut u8, removed_key);
+    unregister_collection_edge(map as *mut u8, removed_value);
     *(*map).ht.add(slot) = HT_TOMB;
     let last_idx = (*map).len as usize - 1;
     if dense_idx != last_idx {
@@ -4243,8 +4336,9 @@ pub unsafe extern "C" fn ori_map_try_remove(map: *mut OriMap, key: i64) -> *mut 
         alloc_optional_int(0, 0)
     } else {
         let value = ori_map_get(map, key);
+        ori_arc_retain(value as *mut u8);
         ori_map_remove(map, key);
-        alloc_optional_int(1, value)
+        alloc_optional_owned_managed_value(1, value)
     }
 }
 
@@ -4257,8 +4351,9 @@ pub unsafe extern "C" fn ori_map_try_remove_string(
         alloc_optional_int(0, 0)
     } else {
         let value = ori_map_get_string(map, key);
+        ori_arc_retain(value as *mut u8);
         ori_map_remove_string(map, key);
-        alloc_optional_int(1, value)
+        alloc_optional_owned_managed_value(1, value)
     }
 }
 
@@ -4349,6 +4444,12 @@ pub unsafe extern "C" fn ori_map_value_at(map: *mut OriMap, index: i64) -> i64 {
 pub unsafe extern "C" fn ori_map_clear(map: *mut OriMap) {
     if map.is_null() {
         return;
+    }
+    for i in 0..(*map).len {
+        let key = *(*map).keys.add(i as usize);
+        let value = *(*map).values.add(i as usize);
+        unregister_collection_edge(map as *mut u8, key);
+        unregister_collection_edge(map as *mut u8, value);
     }
     (*map).len = 0;
     (*map).key_kind = MAP_KEY_UNKNOWN;
@@ -4712,6 +4813,7 @@ unsafe fn graph_add_node_raw(graph: *mut OriGraph, node: i64, node_kind: u8) {
     graph_reserve_nodes(graph, (*graph).len + 1);
     *(*graph).nodes.add((*graph).len as usize) = node;
     (*graph).len += 1;
+    ori_arc_register_edge(graph as *mut u8, node as *mut u8);
 }
 
 unsafe fn graph_add_edge_raw(graph: *mut OriGraph, from: i64, to: i64, node_kind: u8) {
@@ -5244,7 +5346,6 @@ pub unsafe extern "C" fn ori_graph_clone(graph: *mut OriGraph) -> *mut OriGraph 
     for i in 0..(*graph).len {
         let node = *(*graph).nodes.add(i as usize);
         graph_add_node_raw(out, node, (*graph).node_kind);
-        ori_arc_register_edge(out as *mut u8, node as *mut u8);
     }
     for i in 0..(*graph).edge_len {
         graph_add_weighted_edge_raw(
@@ -5383,7 +5484,6 @@ pub unsafe extern "C" fn ori_graph_transitive_closure(graph: *mut OriGraph) -> *
     for i in 0..(*graph).len {
         let node = *(*graph).nodes.add(i as usize);
         graph_add_node_raw(out, node, (*graph).node_kind);
-        ori_arc_register_edge(out as *mut u8, node as *mut u8);
     }
     for start in 0..(*graph).len as usize {
         let mut visited = vec![false; (*graph).len as usize];
@@ -5648,7 +5748,10 @@ unsafe fn heap_compare(heap: *mut OriHeap, left: i64, right: i64) -> i64 {
             let compare: HeapCompareFn = std::mem::transmute((*heap).compare_fn);
             ori_arc_retain(left as *mut u8);
             ori_arc_retain(right as *mut u8);
-            compare(left, right)
+            let result = compare(left, right);
+            ori_arc_release(left as *mut u8);
+            ori_arc_release(right as *mut u8);
+            result
         }
         _ => match left.cmp(&right) {
             std::cmp::Ordering::Less => -1,
@@ -5980,7 +6083,10 @@ pub unsafe extern "C" fn ori_heap_into_sorted_list(heap: *mut OriHeap) -> *mut O
     if work.is_null() {
         return out;
     }
-    while (*work).len > 0 {
+    loop {
+        if (*work).len <= 0 {
+            break;
+        }
         let item = ori_heap_pop(work);
         if !item.is_null() && (*item).has_value != 0 {
             ori_list_push_borrowed_maybe_managed(out, (*item).value);
@@ -6649,10 +6755,6 @@ pub unsafe extern "C" fn ori_files_write_text(path: *const u8, content: *const u
 pub unsafe extern "C" fn ori_files_read_bytes(path: *const u8) -> *mut u8 {
     let path_str = cstr_str(path);
     match std::fs::read(path_str) {
-        Ok(content) if content.contains(&0) => new_result(
-            false,
-            cstring_from_str("bytes containing NUL are not supported by the current bytes ABI"),
-        ),
         Ok(content) => new_result(true, cstring_from_bytes(content)),
         Err(e) => new_result(false, cstring_from_str(&e.to_string())),
     }
@@ -6661,7 +6763,7 @@ pub unsafe extern "C" fn ori_files_read_bytes(path: *const u8) -> *mut u8 {
 #[no_mangle]
 pub unsafe extern "C" fn ori_files_write_bytes(path: *const u8, content: *const u8) -> *mut u8 {
     let path_str = cstr_str(path);
-    match std::fs::write(path_str, cstr_bytes(content)) {
+    match std::fs::write(path_str, bytes_payload(content)) {
         Ok(_) => new_result(true, cstring_from_str("")),
         Err(e) => new_result(false, cstring_from_str(&e.to_string())),
     }
@@ -6802,12 +6904,17 @@ pub unsafe extern "C" fn ori_files_rename(src: *const u8, dst: *const u8) -> c_u
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_bytes_len(ptr: *const u8) -> i64 {
-    ori_len(ptr)
+    bytes_payload(ptr).len() as i64
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_bytes_concat(a: *const u8, b: *const u8) -> *mut u8 {
-    ori_string_concat(a, b)
+    let a = bytes_payload(a);
+    let b = bytes_payload(b);
+    let mut out = Vec::with_capacity(a.len() + b.len());
+    out.extend_from_slice(a);
+    out.extend_from_slice(b);
+    cstring_from_bytes(out)
 }
 
 #[no_mangle]
@@ -6815,7 +6922,7 @@ pub unsafe extern "C" fn ori_bytes_slice(ptr: *const u8, start: i64, end: i64) -
     if ptr.is_null() {
         abort_bounds("ori bytes slice bounds out of range");
     }
-    let bytes = cstr_bytes(ptr);
+    let bytes = bytes_payload(ptr);
     let (start, end) = checked_slice_bounds(
         bytes.len() as i64,
         start,
@@ -6827,7 +6934,7 @@ pub unsafe extern "C" fn ori_bytes_slice(ptr: *const u8, start: i64, end: i64) -
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_bytes_to_hex(ptr: *const u8) -> *mut u8 {
-    let bytes = cstr_bytes(ptr);
+    let bytes = bytes_payload(ptr);
     let mut hex = String::with_capacity(bytes.len() * 2);
     for &b in bytes {
         use std::fmt::Write;
@@ -6856,7 +6963,13 @@ pub unsafe extern "C" fn ori_bytes_from_hex(ptr: *const u8) -> *mut u8 {
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_bytes_decode_utf8(ptr: *const u8) -> *mut u8 {
-    let bytes = cstr_bytes(ptr);
+    let bytes = bytes_payload(ptr);
+    if bytes.contains(&0) {
+        return new_result(
+            false,
+            cstring_from_str("bytes containing NUL cannot be decoded to string"),
+        );
+    }
     match std::str::from_utf8(bytes) {
         Ok(s) => new_result(true, cstring_from_str(s)),
         Err(e) => new_result(false, cstring_from_str(&e.to_string())),
@@ -6865,7 +6978,7 @@ pub unsafe extern "C" fn ori_bytes_decode_utf8(ptr: *const u8) -> *mut u8 {
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_bytes_get(ptr: *const u8, index: i64) -> u8 {
-    let bytes = cstr_bytes(ptr);
+    let bytes = bytes_payload(ptr);
     if index < 0 || index as usize >= bytes.len() {
         abort_bounds("ori bytes index out of bounds");
     } else {
@@ -6893,12 +7006,15 @@ pub unsafe extern "C" fn ori_string_to_bytes(ptr: *const u8) -> *mut u8 {
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_string_from_bytes(ptr: *const u8) -> *mut u8 {
-    let bytes = cstr_bytes(ptr);
+    let bytes = bytes_payload(ptr);
+    if bytes.contains(&0) {
+        return new_result(
+            false,
+            cstring_from_str("bytes containing NUL cannot be converted to string"),
+        );
+    }
     match std::str::from_utf8(bytes) {
-        Ok(_) => {
-            ori_arc_retain(ptr as *mut u8);
-            new_result(true, ptr as *mut u8)
-        }
+        Ok(s) => new_result(true, cstring_from_str(s)),
         Err(e) => new_result(false, cstring_from_str(&e.to_string())),
     }
 }
@@ -6929,6 +7045,17 @@ mod tests {
 
     unsafe fn result_i64_payload(ptr: *mut u8) -> i64 {
         std::ptr::read_unaligned(ptr.add(std::mem::size_of::<*mut u8>()) as *const i64)
+    }
+
+    unsafe fn result_ptr_payload(ptr: *mut u8) -> *mut u8 {
+        *(ptr.add(std::mem::size_of::<*mut u8>()) as *mut *mut u8)
+    }
+
+    unsafe fn release_result_payload_and_free(ptr: *mut u8) {
+        if !ptr.is_null() {
+            ori_arc_release(result_ptr_payload(ptr));
+            free_result(ptr);
+        }
     }
 
     unsafe fn free_result(ptr: *mut u8) {
@@ -7021,10 +7148,100 @@ mod tests {
 
             let bytes = cstring_from_bytes(vec![1, 2, 3]);
             assert_eq!(ori_bytes_len(bytes), 3);
-            assert_eq!(cstr_bytes(bytes), &[1, 2, 3]);
+            assert_eq!(bytes_payload(bytes), &[1, 2, 3]);
             assert_eq!(*bytes.add(3), 0);
             assert!(header_for_registered(bytes).is_some());
             ori_arc_release(bytes);
+
+            let bytes_with_nul = cstring_from_bytes(vec![1, 0, 3]);
+            assert_eq!(ori_bytes_len(bytes_with_nul), 3);
+            assert_eq!(bytes_payload(bytes_with_nul), &[1, 0, 3]);
+            assert_eq!(*bytes_with_nul.add(3), 0);
+            assert!(header_for_registered(bytes_with_nul).is_some());
+            ori_arc_release(bytes_with_nul);
+        }
+    }
+
+    #[test]
+    fn string_len_and_slice_use_unicode_scalar_indices() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let text = cstring_from_str("\u{00e1}\u{00e9}");
+            assert_eq!(ori_string_len(text), 2);
+
+            let slice = ori_string_slice(text, 0, 1);
+            assert_eq!(cstr_str(slice), "\u{00e1}");
+
+            ori_arc_release(slice);
+            ori_arc_release(text);
+        }
+    }
+
+    #[test]
+    fn string_index_of_uses_unicode_scalar_indices() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let text = cstring_from_str("a\u{00e9}");
+            let accent = cstring_from_str("\u{00e9}");
+            assert_eq!(ori_string_index_of(text, accent), 1);
+
+            let emoji_text = cstring_from_str("\u{1f642}x");
+            let x = cstring_from_str("x");
+            assert_eq!(ori_string_index_of(emoji_text, x), 1);
+
+            ori_arc_release(text);
+            ori_arc_release(accent);
+            ori_arc_release(emoji_text);
+            ori_arc_release(x);
+        }
+    }
+
+    #[test]
+    fn bytes_fs_and_string_conversions_handle_nul_contract() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let base = std::env::temp_dir().join(format!("ori-bytes-nul-{}", std::process::id()));
+            let input_path = base.with_extension("in");
+            let output_path = base.with_extension("out");
+            std::fs::write(&input_path, b"A\0B").unwrap();
+
+            let input = cstring_from_str(input_path.to_str().unwrap());
+            let read_result = ori_files_read_bytes(input);
+            assert_eq!(result_flag(read_result), 1);
+            let read_bytes = result_ptr_payload(read_result);
+            assert_eq!(bytes_payload(read_bytes), b"A\0B");
+
+            let output = cstring_from_str(output_path.to_str().unwrap());
+            let write_result = ori_files_write_bytes(output, read_bytes);
+            assert_eq!(result_flag(write_result), 1);
+            assert_eq!(std::fs::read(&output_path).unwrap(), b"A\0B");
+
+            let decode_result = ori_bytes_decode_utf8(read_bytes);
+            assert_eq!(result_flag(decode_result), 0);
+            assert!(cstr_str(result_ptr_payload(decode_result)).contains("NUL"));
+
+            let from_bytes_result = ori_string_from_bytes(read_bytes);
+            assert_eq!(result_flag(from_bytes_result), 0);
+            assert!(cstr_str(result_ptr_payload(from_bytes_result)).contains("NUL"));
+
+            release_result_payload_and_free(from_bytes_result);
+            release_result_payload_and_free(decode_result);
+            release_result_payload_and_free(write_result);
+            release_result_payload_and_free(read_result);
+            ori_arc_release(input);
+            ori_arc_release(output);
+            let _ = std::fs::remove_file(input_path);
+            let _ = std::fs::remove_file(output_path);
+            assert_eq!(ori_arc_live_allocations(), 0);
         }
     }
 
@@ -7294,6 +7511,35 @@ mod tests {
     }
 
     #[test]
+    fn heap_custom_compare_releases_temporary_retains() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+        TEST_DTOR_CALLS.store(0, AtomicOrdering::SeqCst);
+
+        unsafe {
+            let heap = ori_heap_new_custom(test_score_compare as *const std::ffi::c_void);
+            for value in [3, 1, 2] {
+                let score = ori_alloc(std::mem::size_of::<TestScore>(), Some(test_destructor))
+                    as *mut TestScore;
+                (*score).value = value;
+                ori_heap_push_custom(
+                    heap,
+                    score as i64,
+                    test_score_compare as *const std::ffi::c_void,
+                );
+                ori_arc_register_edge(heap as *mut u8, score as *mut u8);
+                ori_arc_release(score as *mut u8);
+            }
+
+            assert_eq!(ori_arc_live_allocations(), 4);
+            ori_arc_release(heap as *mut u8);
+            assert_eq!(TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst), 3);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
     fn optional_and_result_layouts_match_native_backend() {
         let _guard = TEST_ARC_LOCK.lock().unwrap();
         arc_state().lock().unwrap().allocations.clear();
@@ -7368,8 +7614,6 @@ mod tests {
             ori_graph_add_node_string(graph, from);
             ori_graph_add_node_string(graph, to);
             ori_graph_add_edge_string(graph, from, to);
-            ori_arc_register_edge(graph as *mut u8, from);
-            ori_arc_register_edge(graph as *mut u8, to);
             ori_arc_release(from);
             ori_arc_release(to);
 
@@ -7389,6 +7633,110 @@ mod tests {
             ori_arc_release(nodes as *mut u8);
             ori_arc_release(neighbors as *mut u8);
             ori_arc_release(edges as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn collection_removal_paths_unregister_arc_edges() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let list = ori_list_new();
+            let list_item = cstring_from_str("list");
+            ori_list_push_borrowed_maybe_managed(list, list_item as i64);
+            ori_arc_release(list_item);
+            assert_eq!(ori_arc_live_allocations(), 2);
+            ori_list_clear(list);
+            assert_eq!(ori_arc_live_allocations(), 1);
+            ori_arc_release(list as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+
+            let deque = ori_deque_new();
+            let deque_item = cstring_from_str("deque");
+            deque_push_borrowed_maybe_managed(deque, deque_item as i64, false);
+            ori_arc_release(deque_item);
+            let popped = ori_deque_pop_front(deque) as *mut OriOptionalInt;
+            assert_eq!((*popped).has_value, 1);
+            assert_eq!(cstr_str((*popped).value as *mut u8), "deque");
+            ori_arc_release(deque as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 2);
+            ori_arc_release(popped as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+
+            let set = ori_set_new();
+            let set_item = cstring_from_str("set");
+            ori_set_add_string(set, set_item);
+            ori_set_register_borrowed_maybe_managed(set, set_item as i64);
+            ori_arc_release(set_item);
+            assert_eq!(ori_arc_live_allocations(), 2);
+            ori_set_remove_string(set, set_item);
+            assert_eq!(ori_arc_live_allocations(), 1);
+            ori_arc_release(set as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+
+            let map = ori_map_new();
+            let key = cstring_from_str("key");
+            let old_value = cstring_from_str("old");
+            ori_map_set_string(map, key, old_value as i64);
+            ori_map_register_borrowed_key_value_maybe_managed(map, key as i64, old_value as i64);
+            ori_arc_release(key);
+            ori_arc_release(old_value);
+            assert_eq!(ori_arc_live_allocations(), 3);
+
+            let new_value = cstring_from_str("new");
+            ori_map_set_string(map, key, new_value as i64);
+            ori_map_register_borrowed_key_value_maybe_managed(map, key as i64, new_value as i64);
+            ori_arc_release(new_value);
+            assert_eq!(ori_arc_live_allocations(), 3);
+
+            ori_map_clear(map);
+            assert_eq!(ori_arc_live_allocations(), 1);
+            ori_arc_release(map as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+        }
+    }
+
+    #[test]
+    fn tree_and_graph_runtime_own_managed_edges() {
+        let _guard = TEST_ARC_LOCK.lock().unwrap();
+        arc_state().lock().unwrap().allocations.clear();
+        arc_state().lock().unwrap().edges.clear();
+
+        unsafe {
+            let root = cstring_from_str("root");
+            let tree = ori_tree_new(root as i64);
+            ori_arc_release(root);
+            let tree_live = ori_arc_live_allocations();
+            let child_value = cstring_from_str("child");
+            let child = ori_tree_add_child(tree, ori_tree_root(tree), child_value as i64);
+            ori_arc_release(child_value);
+            assert_eq!(ori_arc_live_allocations(), tree_live + 2);
+
+            ori_tree_remove_subtree(tree, child);
+            assert_eq!(ori_arc_live_allocations(), tree_live);
+            ori_arc_release(tree as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 0);
+
+            let left = cstring_from_str("left");
+            let right = cstring_from_str("right");
+            let graph = ori_graph_new(0);
+            ori_graph_add_edge_string(graph, left, right);
+            ori_arc_release(left);
+            ori_arc_release(right);
+            assert_eq!(ori_arc_live_allocations(), 3);
+
+            let lookup_left = cstring_from_str("left");
+            ori_graph_remove_node_string(graph, lookup_left);
+            ori_arc_release(lookup_left);
+            assert_eq!(ori_arc_live_allocations(), 2);
+
+            let closure = ori_graph_transitive_closure(graph);
+            ori_arc_release(graph as *mut u8);
+            assert_eq!(ori_arc_live_allocations(), 2);
+            ori_arc_release(closure as *mut u8);
             assert_eq!(ori_arc_live_allocations(), 0);
         }
     }
