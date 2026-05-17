@@ -1,0 +1,14 @@
+{
+    "target":  "x86_64-unknown-linux-gnu",
+    "runtime":  "libori_runtime.a",
+    "ori_version":  "0.1.0",
+    "abi_version":  "ori-native-abi-1",
+    "profile":  "debug",
+    "native_static_libs":  [
+                               "-lpthread",
+                               "-ldl",
+                               "-lm",
+                               "-no-pie"
+                           ],
+    "generated_by":  "hermes-agent (manual staging)"
+}
