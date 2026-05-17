@@ -542,6 +542,120 @@ end
 }
 
 #[test]
+fn compile_runs_async_await_in_call_argument_native() {
+    let dir = TestDir::new("compile_async_await_in_call_argument_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.task as task
+
+async func delayed() -> int
+    await task.sleep(1)
+    return 40
+end
+
+func add_one(value: int) -> int
+    return value + 1
+end
+
+async func compute() -> int
+    return add_one(await delayed())
+end
+
+func main()
+    const value: int = task.block_on(compute())
+    io.print(string(value))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "async_await_in_call_argument");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), "41");
+}
+
+#[test]
+fn compile_runs_async_await_inside_operator_native() {
+    let dir = TestDir::new("compile_async_await_inside_operator_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.task as task
+
+async func left() -> int
+    await task.sleep(1)
+    return 20
+end
+
+async func right() -> int
+    await task.sleep(1)
+    return 21
+end
+
+async func compute() -> int
+    return (await left()) + (await right())
+end
+
+func main()
+    const value: int = task.block_on(compute())
+    io.print(string(value))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "async_await_inside_operator");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), "41");
+}
+
+#[test]
+fn compile_runs_async_await_in_condition_native() {
+    let dir = TestDir::new("compile_async_await_in_condition_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.task as task
+
+async func flag() -> bool
+    await task.sleep(1)
+    return true
+end
+
+async func main()
+    if await flag()
+        io.print("yes")
+    end
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "async_await_in_condition");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), "yes");
+}
+
+#[test]
 fn compile_runs_simple_async_state_machine_managed_param_native() {
     let dir = TestDir::new("compile_simple_async_state_machine_managed_param_native");
     dir.write(

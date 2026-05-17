@@ -41,6 +41,9 @@ Objetivo: corrigir bugs reais da linguagem, fechar vazamentos de memoria, alinha
 - [x] `cargo run -p ori-driver --bin ori -- run examples\bytes_usage.orl`.
 - [x] `cargo run -p ori-driver --bin ori -- run examples\native_showcase.orl`.
 - [x] `cargo run -p ori-driver --bin ori -- run examples\collections_demo.orl`.
+- [x] `cargo test -p ori-codegen simple_async_state_machine_plan_accepts_nested_await_return_expression -- --nocapture`.
+- [x] `cargo test -p ori-driver compile_runs_async_await_ -- --nocapture --test-threads=1`.
+- [x] `cargo test -p ori-diagnostics`.
 
 Observacao: `cargo clippy --workspace --all-targets` terminou com exit code 0. Ainda existem avisos antigos nao bloqueantes, principalmente `missing_safety_doc` no runtime FFI e avisos de estilo em arquivos grandes.
 
@@ -171,13 +174,14 @@ Problema: o backend nativo ainda nao cobre todos os formatos validos de `await`.
 - [x] Existe teste positivo para parametro gerenciado e binding gerenciado.
 - [x] Existe teste positivo para `const x = (await value)?`.
 - [x] Existe teste negativo com diagnostico claro para shape ainda nao suportado.
+- [x] Implementar `await` em argumento de chamada.
+- [x] Implementar `await` dentro de operador.
+- [x] Implementar `await` em condicao.
+- [x] Adicionar testes nativos para `await` em chamada, operador e condicao.
 - [ ] Implementar `await` dentro de `if`/blocos aninhados.
-- [ ] Implementar `await` em argumento de chamada.
-- [ ] Implementar `await` dentro de operador.
-- [ ] Implementar `await` em condicao.
-- [ ] Trocar teste negativo por teste positivo quando o lowering completo existir.
+- [ ] Trocar teste negativo de bloco aninhado por teste positivo quando o lowering completo existir.
 
-Ponto atual: a linguagem nao deve ser anunciada como async nativo completo. O contrato correto e "async nativo parcial com erro claro para shapes fora do subset".
+Ponto atual: a linguagem ainda nao deve ser anunciada como async nativo completo. O contrato correto e "async nativo parcial com erro claro para awaits dentro de corpos aninhados".
 
 ## 9. LSP: Unicode e CRLF
 
@@ -191,11 +195,15 @@ Problema: LSP espera colunas UTF-16, mas partes do servidor usavam bytes.
 - [x] Adicionar teste com acentos antes do simbolo.
 - [x] Adicionar teste com emoji antes do simbolo.
 - [x] Adicionar teste com CRLF.
-- [ ] Avaliar se a saida CLI deve mostrar coluna por caractere em vez de byte.
+- [x] Avaliar CLI: coluna humana deve ser por caractere, nao por byte.
+- [x] Corrigir `SourceFile::line_col` para coluna por caractere.
+- [x] Ajustar underline da CLI para tamanho por caractere.
 
 Arquivo principal:
 
 - `compiler/crates/ori-lsp/src/main.rs`
+- `compiler/crates/ori-diagnostics/src/source.rs`
+- `compiler/crates/ori-driver/src/emit.rs`
 
 ## 10. Metadados da stdlib
 
@@ -208,8 +216,8 @@ Problema: a stdlib historicamente podia divergir entre manifesto, typecheck, HIR
 - [x] Codegen nativo consulta `stdlib_native_abi`.
 - [x] Teste garante que entradas do manifesto resolvem tipo semantico.
 - [x] Teste garante que entradas native runtime resolvem ABI nativa.
+- [x] Documentar fluxo oficial para adicionar nova funcao de stdlib.
 - [ ] Reduzir fallbacks antigos ainda existentes em `ori-types/src/check.rs`.
-- [ ] Documentar fluxo oficial para adicionar nova funcao de stdlib.
 
 ## 11. `backend.native_unsupported`
 
@@ -220,10 +228,10 @@ Inventario atual dos pontos explicitos:
 - [x] Indexed assignment base nao suportado: lacuna real de backend.
 - [x] `for` iterable/element sem ABI nativa: lacuna real de backend.
 - [x] Chamadas runtime desconhecidas de map/hash_table/graph/set/tree/heap: erro correto de defesa interna.
-- [ ] Criar matriz publica `feature x backend`.
+- [x] Criar matriz publica `feature x backend`.
+- [x] Separar docs entre "linguagem prometida", "implementado no nativo" e "implementado no C/debug".
 - [ ] Criar fixture positiva para indexed assignment quando suportado.
 - [ ] Criar fixture positiva para os iterables que deveriam compilar no backend nativo.
-- [ ] Separar docs entre "linguagem prometida", "implementado no nativo" e "implementado no C/debug".
 
 ## 12. Arquivos gigantes e duplicacao de teste
 
@@ -245,7 +253,7 @@ Problema: o runtime ainda tem muitas funcoes `unsafe extern "C"` sem documentaca
 
 - [x] Identificado pelo `clippy`.
 - [x] Mantido como aviso nao bloqueante, pois o gate retorna exit code 0.
-- [ ] Documentar funcoes criticas de ARC e memoria.
+- [x] Documentar funcoes criticas de ARC e memoria.
 - [ ] Documentar funcoes de `string` e `bytes`.
 - [ ] Documentar funcoes de colecoes.
 - [ ] Depois da documentacao, avaliar modularizacao por dominio.

@@ -144,6 +144,18 @@ unsafe fn free_registered_object(ptr: *mut u8, release_owned_edges: bool) {
     }
 }
 
+/// Allocates one managed runtime object and returns a pointer to its payload.
+///
+/// The returned payload starts with a reference count of 1. If `destructor` is
+/// present, it is called once with the payload pointer before the allocation is
+/// freed.
+///
+/// # Safety
+///
+/// `size` must be the exact payload size expected by all later reads and writes.
+/// `destructor`, when provided, must accept the same payload layout and must not
+/// free the allocation itself. The returned pointer must be released with
+/// `ori_arc_release` when the owner is done with it.
 #[no_mangle]
 pub unsafe extern "C" fn ori_alloc(
     size: usize,
@@ -165,6 +177,12 @@ pub unsafe extern "C" fn ori_alloc(
 
 /// Increment the reference count of a managed object.
 /// Silently ignores null pointers and non-managed values (e.g. static strings).
+///
+/// # Safety
+///
+/// `ptr` may be null or a non-managed runtime value. When it is managed, it must
+/// be a live payload pointer previously returned by `ori_alloc` or another
+/// runtime constructor that uses `ori_alloc`.
 #[no_mangle]
 pub unsafe extern "C" fn ori_arc_retain(ptr: *mut u8) {
     if ptr.is_null() {
@@ -177,6 +195,12 @@ pub unsafe extern "C" fn ori_arc_retain(ptr: *mut u8) {
 }
 
 /// Decrement the reference count. When it reaches zero, the object is freed.
+///
+/// # Safety
+///
+/// `ptr` may be null or a non-managed runtime value. When it is managed, it must
+/// be a live payload pointer. Each owning reference must be released exactly once;
+/// using `ptr` after the final release is undefined behavior.
 #[no_mangle]
 pub unsafe extern "C" fn ori_arc_release(ptr: *mut u8) {
     if ptr.is_null() {
@@ -191,6 +215,16 @@ pub unsafe extern "C" fn ori_arc_release(ptr: *mut u8) {
     }
 }
 
+/// Registers that `owner` holds a managed reference to `child`.
+///
+/// The runtime retains `child` while the edge is registered. Duplicate edges are
+/// ignored.
+///
+/// # Safety
+///
+/// `owner` and `child` may be null, but non-null managed values must be live
+/// payload pointers. Callers must unregister or update the edge before replacing,
+/// removing, or freeing the slot that owns the child reference.
 #[no_mangle]
 pub unsafe extern "C" fn ori_arc_register_edge(owner: *mut u8, child: *mut u8) {
     if owner.is_null() || child.is_null() {
@@ -1219,6 +1253,16 @@ pub unsafe extern "C" fn ori_atomic_add(value: *mut OriAtomicInt, delta: i64) ->
     (*value).value.fetch_add(delta, Ordering::SeqCst) + delta
 }
 
+/// Removes one registered managed edge from `owner` to `child`.
+///
+/// If the edge exists, the runtime releases the retained child reference.
+///
+/// # Safety
+///
+/// `owner` and `child` may be null, but non-null managed values must be live
+/// payload pointers. The caller must only unregister edges that represent slots
+/// it owns; unregistering the wrong edge can release another owner's child too
+/// early.
 #[no_mangle]
 pub unsafe extern "C" fn ori_arc_unregister_edge(owner: *mut u8, child: *mut u8) {
     if owner.is_null() || child.is_null() {
@@ -1242,6 +1286,16 @@ pub unsafe extern "C" fn ori_arc_unregister_edge(owner: *mut u8, child: *mut u8)
     }
 }
 
+/// Replaces the registered child edge for one owner slot.
+///
+/// This unregisters `old_child` and registers `new_child`. Passing the same
+/// pointer for both children is a no-op.
+///
+/// # Safety
+///
+/// `owner`, `old_child`, and `new_child` may be null, but non-null managed values
+/// must be live payload pointers. Callers must use this for real slot
+/// replacement only, so ARC retain/release balance matches the container state.
 #[no_mangle]
 pub unsafe extern "C" fn ori_arc_update_edge(
     owner: *mut u8,
@@ -1257,6 +1311,12 @@ pub unsafe extern "C" fn ori_arc_update_edge(
 
 /// Collects cycles whose strong edges were registered by generated code.
 /// Returns the number of reclaimed heap objects.
+///
+/// # Safety
+///
+/// All registered allocations and edges must have been produced through the Ori
+/// runtime ARC API. Callers must not mutate registered edges concurrently while
+/// cycle collection is running.
 #[no_mangle]
 pub unsafe extern "C" fn ori_arc_collect_cycles() -> i64 {
     #[derive(Clone)]

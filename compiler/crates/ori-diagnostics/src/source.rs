@@ -38,13 +38,16 @@ impl SourceFile {
         &self.content[span.as_range()]
     }
 
-    /// Converts a byte offset to (line, column), both 1-indexed.
+    /// Converts a byte offset to (line, character column), both 1-indexed.
     pub fn line_col(&self, offset: u32) -> (u32, u32) {
+        let offset = offset.min(self.content.len() as u32);
         let line = self
             .line_starts
             .partition_point(|&s| s <= offset)
             .saturating_sub(1);
-        let col = offset - self.line_starts[line];
+        let line_start = self.line_starts[line] as usize;
+        let offset = previous_char_boundary(&self.content, offset as usize);
+        let col = self.content[line_start..offset].chars().count() as u32;
         (line as u32 + 1, col + 1)
     }
 
@@ -63,6 +66,13 @@ impl SourceFile {
     }
 }
 
+fn previous_char_boundary(source: &str, mut offset: usize) -> usize {
+    while offset > 0 && !source.is_char_boundary(offset) {
+        offset -= 1;
+    }
+    offset
+}
+
 /// Holds all source files for a compilation session.
 #[derive(Debug, Default)]
 pub struct SourceCache {
@@ -78,5 +88,31 @@ impl SourceCache {
 
     pub fn get(&self, id: FileId) -> Option<&SourceFile> {
         self.files.get(id.0 as usize)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn line_col_reports_character_columns_for_unicode() {
+        let file = SourceFile::new(FileId(0), "main.orl", "\"\u{00e1}\u{00e9}\" value\n".into());
+        let offset = file.content.find("value").unwrap() as u32;
+
+        assert_eq!(file.line_col(offset), (1, 6));
+    }
+
+    #[test]
+    fn line_col_handles_emoji_and_crlf() {
+        let file = SourceFile::new(
+            FileId(0),
+            "main.orl",
+            "aa\u{1f642}bb\r\nconst value\n".into(),
+        );
+        let offset = file.content.find("value").unwrap() as u32;
+
+        assert_eq!(file.line_col("aa\u{1f642}".len() as u32), (1, 4));
+        assert_eq!(file.line_col(offset), (2, 7));
     }
 }

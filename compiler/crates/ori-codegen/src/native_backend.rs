@@ -1495,15 +1495,495 @@ fn simple_async_name_used_after_await(
     simple_async_uses_after_await(plan, await_index).contains(name)
 }
 
+fn simple_async_lift_expr_awaits(
+    expr: &HirExpr,
+    awaits: &mut Vec<SimpleAsyncAwaitStep>,
+    first_index: usize,
+) -> Option<HirExpr> {
+    match &expr.kind {
+        HirExprKind::Await(await_future) => {
+            cl_type(&expr.ty, types::I64)?;
+            let Ty::Future(await_ty) = &await_future.ty else {
+                return None;
+            };
+            if await_ty.as_ref() != &expr.ty {
+                return None;
+            }
+            let name = SmolStr::new(format!(
+                ".__async_expr_await_{}",
+                first_index + awaits.len()
+            ));
+            awaits.push(SimpleAsyncAwaitStep {
+                await_future: await_future.as_ref().clone(),
+                binding: Some(SimpleAsyncBinding {
+                    name: name.clone(),
+                    ty: expr.ty.clone(),
+                }),
+                propagate_result_ty: None,
+            });
+            Some(HirExpr {
+                kind: HirExprKind::Var(name),
+                ty: expr.ty.clone(),
+                span: expr.span,
+            })
+        }
+        HirExprKind::Binary { op, lhs, rhs } => Some(HirExpr {
+            kind: HirExprKind::Binary {
+                op: *op,
+                lhs: Box::new(simple_async_lift_expr_awaits(lhs, awaits, first_index)?),
+                rhs: Box::new(simple_async_lift_expr_awaits(rhs, awaits, first_index)?),
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::Unary { op, operand } => Some(HirExpr {
+            kind: HirExprKind::Unary {
+                op: *op,
+                operand: Box::new(simple_async_lift_expr_awaits(operand, awaits, first_index)?),
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::Field { object, field } => Some(HirExpr {
+            kind: HirExprKind::Field {
+                object: Box::new(simple_async_lift_expr_awaits(object, awaits, first_index)?),
+                field: field.clone(),
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::Index { object, index } => Some(HirExpr {
+            kind: HirExprKind::Index {
+                object: Box::new(simple_async_lift_expr_awaits(object, awaits, first_index)?),
+                index: Box::new(simple_async_lift_expr_awaits(index, awaits, first_index)?),
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::TupleIndex { object, index } => Some(HirExpr {
+            kind: HirExprKind::TupleIndex {
+                object: Box::new(simple_async_lift_expr_awaits(object, awaits, first_index)?),
+                index: *index,
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::Call { callee, args } => Some(HirExpr {
+            kind: HirExprKind::Call {
+                callee: Box::new(simple_async_lift_expr_awaits(callee, awaits, first_index)?),
+                args: args
+                    .iter()
+                    .map(|arg| {
+                        Some(HirArg {
+                            label: arg.label.clone(),
+                            spread: arg.spread,
+                            value: simple_async_lift_expr_awaits(&arg.value, awaits, first_index)?,
+                        })
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::MethodCall {
+            receiver,
+            method,
+            args,
+        } => Some(HirExpr {
+            kind: HirExprKind::MethodCall {
+                receiver: Box::new(simple_async_lift_expr_awaits(
+                    receiver,
+                    awaits,
+                    first_index,
+                )?),
+                method: method.clone(),
+                args: args
+                    .iter()
+                    .map(|arg| simple_async_lift_expr_awaits(arg, awaits, first_index))
+                    .collect::<Option<Vec<_>>>()?,
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::StructLit { def_id, fields } => Some(HirExpr {
+            kind: HirExprKind::StructLit {
+                def_id: *def_id,
+                fields: fields
+                    .iter()
+                    .map(|(name, value)| {
+                        Some((
+                            name.clone(),
+                            simple_async_lift_expr_awaits(value, awaits, first_index)?,
+                        ))
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::EnumVariant {
+            def_id,
+            variant,
+            fields,
+        } => Some(HirExpr {
+            kind: HirExprKind::EnumVariant {
+                def_id: *def_id,
+                variant: variant.clone(),
+                fields: fields
+                    .iter()
+                    .map(|(name, value)| {
+                        Some((
+                            name.clone(),
+                            simple_async_lift_expr_awaits(value, awaits, first_index)?,
+                        ))
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::ListLit { elem_ty, elements } => Some(HirExpr {
+            kind: HirExprKind::ListLit {
+                elem_ty: elem_ty.clone(),
+                elements: elements
+                    .iter()
+                    .map(|element| simple_async_lift_expr_awaits(element, awaits, first_index))
+                    .collect::<Option<Vec<_>>>()?,
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::ListSpreadLit { elem_ty, elements } => Some(HirExpr {
+            kind: HirExprKind::ListSpreadLit {
+                elem_ty: elem_ty.clone(),
+                elements: elements
+                    .iter()
+                    .map(|element| {
+                        Some(HirListElement {
+                            spread: element.spread,
+                            value: simple_async_lift_expr_awaits(
+                                &element.value,
+                                awaits,
+                                first_index,
+                            )?,
+                        })
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::TupleLit(elements) => Some(HirExpr {
+            kind: HirExprKind::TupleLit(
+                elements
+                    .iter()
+                    .map(|element| simple_async_lift_expr_awaits(element, awaits, first_index))
+                    .collect::<Option<Vec<_>>>()?,
+            ),
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::Some_(inner) => Some(HirExpr {
+            kind: HirExprKind::Some_(Box::new(simple_async_lift_expr_awaits(
+                inner,
+                awaits,
+                first_index,
+            )?)),
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::Ok_(inner) => Some(HirExpr {
+            kind: HirExprKind::Ok_(Box::new(simple_async_lift_expr_awaits(
+                inner,
+                awaits,
+                first_index,
+            )?)),
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::Err_(inner) => Some(HirExpr {
+            kind: HirExprKind::Err_(Box::new(simple_async_lift_expr_awaits(
+                inner,
+                awaits,
+                first_index,
+            )?)),
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::Propagate(inner) => {
+            if expr_contains_await(inner) {
+                None
+            } else {
+                Some(expr.clone())
+            }
+        }
+        HirExprKind::IfExpr { cond, then, else_ } => {
+            if expr_contains_await(then) || expr_contains_await(else_) {
+                return None;
+            }
+            Some(HirExpr {
+                kind: HirExprKind::IfExpr {
+                    cond: Box::new(simple_async_lift_expr_awaits(cond, awaits, first_index)?),
+                    then: then.clone(),
+                    else_: else_.clone(),
+                },
+                ty: expr.ty.clone(),
+                span: expr.span,
+            })
+        }
+        HirExprKind::Range { start, end } => Some(HirExpr {
+            kind: HirExprKind::Range {
+                start: Box::new(simple_async_lift_expr_awaits(start, awaits, first_index)?),
+                end: Box::new(simple_async_lift_expr_awaits(end, awaits, first_index)?),
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::MapLit {
+            key_ty,
+            value_ty,
+            entries,
+        } => Some(HirExpr {
+            kind: HirExprKind::MapLit {
+                key_ty: key_ty.clone(),
+                value_ty: value_ty.clone(),
+                entries: entries
+                    .iter()
+                    .map(|(key, value)| {
+                        Some((
+                            simple_async_lift_expr_awaits(key, awaits, first_index)?,
+                            simple_async_lift_expr_awaits(value, awaits, first_index)?,
+                        ))
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::SetLit { elem_ty, elements } => Some(HirExpr {
+            kind: HirExprKind::SetLit {
+                elem_ty: elem_ty.clone(),
+                elements: elements
+                    .iter()
+                    .map(|element| simple_async_lift_expr_awaits(element, awaits, first_index))
+                    .collect::<Option<Vec<_>>>()?,
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::StructUpdate {
+            def_id,
+            base,
+            updates,
+        } => Some(HirExpr {
+            kind: HirExprKind::StructUpdate {
+                def_id: *def_id,
+                base: Box::new(simple_async_lift_expr_awaits(base, awaits, first_index)?),
+                updates: updates
+                    .iter()
+                    .map(|(name, value)| {
+                        Some((
+                            name.clone(),
+                            simple_async_lift_expr_awaits(value, awaits, first_index)?,
+                        ))
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::InterpolatedStr(parts) => Some(HirExpr {
+            kind: HirExprKind::InterpolatedStr(
+                parts
+                    .iter()
+                    .map(|part| match part {
+                        HirStrPart::Literal(text) => Some(HirStrPart::Literal(text.clone())),
+                        HirStrPart::Expr(expr) => Some(HirStrPart::Expr(
+                            simple_async_lift_expr_awaits(expr, awaits, first_index)?,
+                        )),
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+            ),
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::IsCheck { value, check_ty } => Some(HirExpr {
+            kind: HirExprKind::IsCheck {
+                value: Box::new(simple_async_lift_expr_awaits(value, awaits, first_index)?),
+                check_ty: check_ty.clone(),
+            },
+            ty: expr.ty.clone(),
+            span: expr.span,
+        }),
+        HirExprKind::BoolLit(_)
+        | HirExprKind::IntLit(_)
+        | HirExprKind::FloatLit(_)
+        | HirExprKind::StrLit(_)
+        | HirExprKind::BytesLit(_)
+        | HirExprKind::Unit
+        | HirExprKind::None_
+        | HirExprKind::Var(_)
+        | HirExprKind::Closure { .. } => Some(expr.clone()),
+    }
+}
+
+fn simple_async_lift_stmt_awaits(
+    stmt: &HirStmt,
+    first_index: usize,
+) -> Option<(HirStmt, Vec<SimpleAsyncAwaitStep>)> {
+    let mut awaits = Vec::new();
+    let lifted = match stmt {
+        HirStmt::Let {
+            name,
+            ty,
+            mutable,
+            value,
+            span,
+        } => HirStmt::Let {
+            name: name.clone(),
+            ty: ty.clone(),
+            mutable: *mutable,
+            value: simple_async_lift_expr_awaits(value, &mut awaits, first_index)?,
+            span: *span,
+        },
+        HirStmt::Assign {
+            lvalue,
+            value,
+            span,
+        } => HirStmt::Assign {
+            lvalue: lvalue.clone(),
+            value: simple_async_lift_expr_awaits(value, &mut awaits, first_index)?,
+            span: *span,
+        },
+        HirStmt::Return(Some(expr), span) => HirStmt::Return(
+            Some(simple_async_lift_expr_awaits(
+                expr,
+                &mut awaits,
+                first_index,
+            )?),
+            *span,
+        ),
+        HirStmt::Expr(expr) => HirStmt::Expr(simple_async_lift_expr_awaits(
+            expr,
+            &mut awaits,
+            first_index,
+        )?),
+        HirStmt::If {
+            cond,
+            then,
+            else_ifs,
+            else_,
+            span,
+        } => {
+            if block_contains_await(then)
+                || else_ifs
+                    .iter()
+                    .any(|(_, block)| block_contains_await(block))
+                || else_.as_ref().is_some_and(block_contains_await)
+            {
+                return None;
+            }
+            HirStmt::If {
+                cond: simple_async_lift_expr_awaits(cond, &mut awaits, first_index)?,
+                then: then.clone(),
+                else_ifs: else_ifs
+                    .iter()
+                    .map(|(cond, block)| {
+                        Some((
+                            simple_async_lift_expr_awaits(cond, &mut awaits, first_index)?,
+                            block.clone(),
+                        ))
+                    })
+                    .collect::<Option<Vec<_>>>()?,
+                else_: else_.clone(),
+                span: *span,
+            }
+        }
+        HirStmt::IfSome {
+            binding,
+            inner_ty,
+            value,
+            then,
+            else_,
+            span,
+        } => {
+            if block_contains_await(then) || else_.as_ref().is_some_and(block_contains_await) {
+                return None;
+            }
+            HirStmt::IfSome {
+                binding: binding.clone(),
+                inner_ty: inner_ty.clone(),
+                value: simple_async_lift_expr_awaits(value, &mut awaits, first_index)?,
+                then: then.clone(),
+                else_: else_.clone(),
+                span: *span,
+            }
+        }
+        HirStmt::Match {
+            scrutinee,
+            arms,
+            span,
+        } => {
+            if arms.iter().any(|arm| arm_body_contains_await(&arm.body)) {
+                return None;
+            }
+            HirStmt::Match {
+                scrutinee: simple_async_lift_expr_awaits(scrutinee, &mut awaits, first_index)?,
+                arms: arms.clone(),
+                span: *span,
+            }
+        }
+        HirStmt::Check {
+            condition,
+            message,
+            span,
+        } => HirStmt::Check {
+            condition: simple_async_lift_expr_awaits(condition, &mut awaits, first_index)?,
+            message: message.clone(),
+            span: *span,
+        },
+        HirStmt::For {
+            binding,
+            index_binding,
+            elem_ty,
+            iterable,
+            body,
+            span,
+        } => {
+            if block_contains_await(body) {
+                return None;
+            }
+            HirStmt::For {
+                binding: binding.clone(),
+                index_binding: index_binding.clone(),
+                elem_ty: elem_ty.clone(),
+                iterable: simple_async_lift_expr_awaits(iterable, &mut awaits, first_index)?,
+                body: body.clone(),
+                span: *span,
+            }
+        }
+        HirStmt::Return(None, _)
+        | HirStmt::Break(_)
+        | HirStmt::Continue(_)
+        | HirStmt::While { .. }
+        | HirStmt::Loop { .. }
+        | HirStmt::Repeat { .. }
+        | HirStmt::WhileSome { .. }
+        | HirStmt::Using { .. } => return None,
+    };
+    if awaits.is_empty() {
+        return None;
+    }
+    Some((lifted, awaits))
+}
+
 fn simple_async_state_machine_plan(f: &HirFunc) -> Option<SimpleAsyncStateMachinePlan> {
     if f.body.stmts.is_empty() {
         return None;
     }
     let mut params = Vec::with_capacity(f.params.len());
     for param in &f.params {
-        if cl_type(&param.ty, types::I64).is_none() {
-            return None;
-        }
+        cl_type(&param.ty, types::I64)?;
         params.push(SimpleAsyncParam {
             name: param.name.clone(),
             ty: param.ty.clone(),
@@ -1534,9 +2014,7 @@ fn simple_async_state_machine_plan(f: &HirFunc) -> Option<SimpleAsyncStateMachin
                 name, ty, value, ..
             } => {
                 if let HirExprKind::Await(await_future) = &value.kind {
-                    if cl_type(ty, types::I64).is_none() {
-                        return None;
-                    }
+                    cl_type(ty, types::I64)?;
                     Some((
                         await_future.as_ref().clone(),
                         Some(SimpleAsyncBinding {
@@ -1550,9 +2028,7 @@ fn simple_async_state_machine_plan(f: &HirFunc) -> Option<SimpleAsyncStateMachin
                     let HirExprKind::Await(await_future) = &inner.kind else {
                         return None;
                     };
-                    if cl_type(ty, types::I64).is_none() {
-                        return None;
-                    }
+                    cl_type(ty, types::I64)?;
                     let Ty::Future(await_result_ty) = &await_future.ty else {
                         return None;
                     };
@@ -1616,7 +2092,14 @@ fn simple_async_state_machine_plan(f: &HirFunc) -> Option<SimpleAsyncStateMachin
         }
 
         if stmt_contains_await(stmt) {
-            return None;
+            if !tail_stmts.is_empty() {
+                return None;
+            }
+            let (lifted_stmt, lifted_awaits) = simple_async_lift_stmt_awaits(stmt, awaits.len())?;
+            saw_await = true;
+            awaits.extend(lifted_awaits);
+            tail_stmts.push(lifted_stmt);
+            continue;
         }
 
         if !saw_await {
@@ -1626,9 +2109,7 @@ fn simple_async_state_machine_plan(f: &HirFunc) -> Option<SimpleAsyncStateMachin
             else {
                 return None;
             };
-            if cl_type(ty, types::I64).is_none() {
-                return None;
-            }
+            cl_type(ty, types::I64)?;
             locals.push(SimpleAsyncLocal {
                 name: name.clone(),
                 ty: ty.clone(),
@@ -3458,7 +3939,7 @@ impl<'a> FuncCodegen<'a> {
             return self.emit(f);
         }
         Err(native_codegen_unsupported(format!(
-            "async function `{}` contains an `await` shape not yet covered by the native state machine; use top-level `await value`, `const x: T = await value`, `return await value`, or `const x = (await value)?` until nested await lowering lands",
+            "async function `{}` contains an `await` shape not yet covered by the native state machine; supported forms include top-level `await value`, `const x: T = await value`, `return await value`, expression-level awaits in calls/operators/conditions, and `const x = (await value)?`; awaits inside nested statement bodies are still blocked",
             f.name
         )))
     }
@@ -9811,7 +10292,7 @@ mod tests {
     }
 
     #[test]
-    fn simple_async_state_machine_plan_rejects_non_tail_nested_await_return() {
+    fn simple_async_state_machine_plan_accepts_nested_await_return_expression() {
         let callee = hir_expr(HirExprKind::Var(SmolStr::new("compute")), Ty::Int);
         let awaited_value = hir_expr(
             HirExprKind::Await(Box::new(hir_expr(
@@ -9849,7 +10330,12 @@ mod tests {
             HirStmt::Return(Some(awaited_return), Span::DUMMY),
         ]);
 
-        assert!(simple_async_state_machine_plan(&func).is_none());
+        let plan = simple_async_state_machine_plan(&func).expect("simple async state machine plan");
+        assert_eq!(plan.awaits.len(), 2);
+        assert!(matches!(
+            plan.return_expr.as_ref().map(|expr| &expr.kind),
+            Some(HirExprKind::Binary { .. })
+        ));
     }
 
     #[test]

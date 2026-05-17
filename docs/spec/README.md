@@ -4,13 +4,14 @@
 > Status: current
 > Surface: spec
 
-This directory contains implementation-facing specifications.
+This directory contains implementation-facing specifications for Ori.
 
 Use:
 
-- `docs/spec/language/README.md` for the Zenith language specs.
-- `docs/spec/language/final-language-contract.md` before reading older closure
-  or historical files.
+- `01-overview.md` through `13-error-catalog.md` for the current language
+  contract.
+- `14-backend-support.md` for the feature x backend matrix.
+- `15-stdlib-maintenance.md` for the stdlib update flow.
 
 Do not place public tutorials here. User-facing explanations belong in
 `docs/public/` or `docs/reference/`.

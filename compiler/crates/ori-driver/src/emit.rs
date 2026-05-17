@@ -73,9 +73,15 @@ fn render_one(cache: &SourceCache, diag: &Diagnostic, color: bool) {
 
             // Underline
             let col0 = (col as usize).saturating_sub(1);
-            let len = (label.span.len())
-                .max(1)
-                .min(line_text.len().saturating_sub(col0));
+            let (end_line, end_col) = file.line_col(label.span.end);
+            let line_width = line_text.chars().count();
+            let len = if end_line == line {
+                end_col.saturating_sub(col) as usize
+            } else {
+                line_width.saturating_sub(col0)
+            }
+            .max(1)
+            .min(line_width.saturating_sub(col0));
             let under = "^".repeat(len);
             eprintln!(
                 "   {}{}|{} {}{}{}{}{}",
