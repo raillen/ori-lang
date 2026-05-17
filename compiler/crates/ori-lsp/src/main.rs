@@ -881,6 +881,36 @@ mod tests {
     }
 
     #[test]
+    fn open_document_source_diagnostics_use_unsaved_text() {
+        let dir = std::env::temp_dir().join(format!(
+            "ori_lsp_open_doc_{}_{}",
+            std::process::id(),
+            "diagnostics"
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("main.orl");
+        std::fs::write(&path, "namespace app.main\n\nfunc main()\nend\n").unwrap();
+
+        let source = r#"namespace app.main
+
+func main()
+    const value: int = "x"
+end
+"#
+        .to_string();
+        let output = ori_driver::pipeline::run_check_source(&path, source).unwrap();
+        let diagnostics = diagnostics_for_path(&output.cache, &output.diagnostics, &path);
+
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(
+            diagnostics[0].code,
+            Some(NumberOrString::String("type.type_mismatch".to_string()))
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn hover_word_detection_finds_builtin_type() {
         let source = "namespace app.main\n\nfunc main(value: int)\nend\n";
         let symbol = word_at_position(source, Position::new(2, 18));
@@ -923,6 +953,17 @@ mod tests {
         assert!(field_hover.contains("name: string"));
         assert!(field_hover.contains("struct User"));
         assert!(binding_hover.contains("const active: bool"));
+    }
+
+    #[test]
+    fn semantic_hover_finds_struct_field_contract() {
+        let source = "namespace app.main\n\nstruct User\n    age: int if it >= 0\nend\n";
+
+        let hover = semantic_hover(source, "age").unwrap();
+
+        assert!(hover.contains("age: int"));
+        assert!(hover.contains("Field of `struct User`"));
+        assert!(hover.contains("Contract: `it >= 0`"));
     }
 
     #[test]

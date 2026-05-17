@@ -10,7 +10,8 @@ runtime, CLI, LSP, testes e documentacao.
 
 ## Resumo Executivo
 
-Status geral: implementacao forte e validada.
+Status geral: implementacao forte, validada e com as lacunas reais desta
+analise fechadas nesta rodada.
 
 O compilador cobre a maior parte do prompt:
 
@@ -28,18 +29,25 @@ O compilador cobre a maior parte do prompt:
 
 Nao ha P0 encontrado nesta analise.
 
-Ainda existem lacunas reais:
+Lacunas reais encontradas e status de fechamento:
 
-1. `generic.circular_instantiation` ainda e planejado, nao implementado.
-2. `docs/spec/04-types.md` ainda descreve `range<T>` generico, mas a
-   implementacao atual aceita apenas `range<int>`.
-3. `docs/spec/11-generics.md` ainda sugere `Iterable<Item>`, mas o contrato real
-   e `core.Iterable` marcador + `mut func next() -> optional<T>`.
-4. O prompt tem conflito interno em 7.2: usa enum com payload posicional
-   `Io(IoError)`, mas a propria parte 2.3 exige variants com campos nomeados.
-5. Backend C continua debug/partial; backend nativo e o alvo real validado.
-6. Alguns casos do prompt existem como suporte no codigo, mas ainda nao aparecem
-   como teste direto 1:1.
+- [x] `generic.circular_instantiation`: implementado no checker, catalogado em
+  `docs/spec/13-error-catalog.md` e coberto por teste negativo dedicado.
+- [x] `range<T>` obsoleto: docs corrigidas para `range<int>` em
+  `docs/spec/04-types.md` e `docs/spec/12-stdlib.md`.
+- [x] `Iterable<Item>` obsoleto: docs corrigidas para `core.Iterable` marcador
+  + `mut func next() -> optional<T>` em `docs/spec/11-generics.md`.
+- [x] Prompt 7.2: enum de erro corrigido para payload nomeado em
+  `docs/planning/ori-test-prompt.md`; exemplo normativo tambem alinhado em
+  `docs/spec/09-errors.md`.
+- [x] Backend C debug/partial: contrato ja estava explicito em `README.md`,
+  `docs/spec/10-memory.md`, `docs/spec/12-stdlib.md` e
+  `docs/planning/native-route.md`.
+- [x] Testes 1:1 do prompt: adicionados testes diretos para triple string,
+  f-triple string, short-circuit com side effect, divisao por zero int/float,
+  ausencia de `throw`/`catch`/`try`, full pipeline e LSP open-doc/hover.
+
+Atualizacao de fechamento: 2026-05-17.
 
 ## Validacao Rodada
 
@@ -64,6 +72,22 @@ Resultado:
 - CLI lista `check`, `doc`, `test`, `fmt`, `lex`, `parse`, `compile`, `run`,
   `build`.
 
+Validacao de fechamento em 2026-05-17:
+
+```powershell
+cargo fmt --check
+cargo test -p ori-driver --test multifile_imports
+cargo test -p ori-lsp
+cargo test -p ori-driver --test diagnostic_catalog
+```
+
+Resultado:
+
+- `cargo fmt --check`: passou.
+- `cargo test -p ori-driver --test multifile_imports`: passou, 235 testes.
+- `cargo test -p ori-lsp`: passou, 11 testes.
+- `cargo test -p ori-driver --test diagnostic_catalog`: passou.
+
 ## Matriz por Parte do Prompt
 
 Legenda:
@@ -74,16 +98,16 @@ Legenda:
 
 | Parte | Area | Status | Observacao |
 |---|---|---:|---|
-| 1 | Lexical Structure | PARCIAL | Lexer cobre comentarios, numericos, strings, bytes e triple string; falta teste runtime 1:1 para baseline de triple quote. |
+| 1 | Lexical Structure | OK | Lexer cobre comentarios, numericos, strings, bytes e triple string; baseline e f-triple string agora tem teste runtime direto. |
 | 2 | Type System | OK | Primitivos, structs, enums nomeados, tuple, optional, result, igualdade e aliases estao cobertos. |
 | 3 | Expressions | OK | Aritmetica, comparacao, `?`, pipe, inline `if`, anonymous struct, update, colecoes, index e slice cobertos. |
 | 4 | Statements | OK | `const`/`var`, `if some`, `while some`, loop, repeat, match, using e check cobertos. |
 | 5 | Functions and Closures | OK | Defaults, named args, contracts, variadic, mut methods, closures, async, panic/todo/unreachable cobertos. |
 | 6 | Traits and Implement | OK | Default methods, operadores, Comparable, any<Trait>, ambiguidade e Iterable custom nativo cobertos. |
-| 7 | Errors and Propagation | PARCIAL | Implementacao boa; prompt 7.2 tem exemplo de enum em sintaxe invalida. |
+| 7 | Errors and Propagation | OK | Implementacao boa; prompt 7.2 foi corrigido para enum com payload nomeado e ha teste de ausencia de exceptions. |
 | 8 | Memory and Cleanup | OK | ARC/runtime, value semantics e `using` nativo em exit paths cobertos; async+using rejeitado. |
-| 9 | Generics | PARCIAL | Inferencia, where, constraints, generics e limitacoes cobertas; circular instantiation falta. |
-| 10 | Cross-Cutting | OK | Imports, visibility, cycle, namespace mismatch, full examples, LSP e ferramentas cobertos. |
+| 9 | Generics | OK | Inferencia, where, constraints, generics, limitacoes e circular instantiation agora estao cobertos. |
+| 10 | Cross-Cutting | OK | Imports, visibility, cycle, namespace mismatch, full pipeline, LSP e ferramentas cobertos. |
 
 ## Achados Principais
 
@@ -113,11 +137,11 @@ O prompt atual ja reflete varias decisoes recentes:
 
 Impacto: baixo risco. Prompt virou boa fonte de testes.
 
-### 3. Spec de range ainda esta obsoleta
+### 3. Spec de range estava obsoleta
 
 Arquivo: `docs/spec/04-types.md`
 
-Texto atual ainda diz:
+Texto antigo dizia:
 
 - `range<T>`;
 - "inclusive range of ordered values";
@@ -130,19 +154,20 @@ Implementacao atual:
 - prompt ja pede `0.0..1.0` invalido;
 - `for` reconhece `range<int>`.
 
-Status: LACUNA de documentacao.
+Status: FECHADO em 2026-05-17.
 
-Acao recomendada:
+Acao concluida:
 
-- mudar `range<T>` para `range<int>` nesta fase da linguagem;
-- remover ou marcar `length()`/`contains()` como planejados se nao existirem;
-- explicar inclusividade do range separada de slice half-open.
+- `range<T>` foi trocado por `range<int>` nesta fase da linguagem;
+- `length()` e `contains()` nao sao mais apresentados como metodos atuais de
+  range;
+- a inclusividade do range ficou separada da regra half-open de slice.
 
-### 4. Spec de generics ainda cita `Iterable<Item>`
+### 4. Spec de generics citava `Iterable<Item>`
 
 Arquivo: `docs/spec/11-generics.md`
 
-Texto atual diz:
+Texto antigo dizia:
 
 - associated types nao suportados;
 - "use `Iterable<Item>` instead".
@@ -154,12 +179,12 @@ Implementacao atual:
 - metodo requerido: `mut func next() -> optional<T>`;
 - item `T` e inferido pelo retorno de `next`.
 
-Status: LACUNA de documentacao.
+Status: FECHADO em 2026-05-17.
 
-Acao recomendada:
+Acao concluida:
 
-- trocar `Iterable<Item>` por `core.Iterable` marcador;
-- apontar para `docs/spec/06-statements.md` e `docs/spec/08-traits.md`.
+- `Iterable<Item>` foi trocado por `core.Iterable` marcador;
+- o contrato real agora esta descrito como `mut func next() -> optional<T>`.
 
 ### 5. Prompt 7.2 tem conflito interno de enum
 
@@ -186,7 +211,7 @@ Implementacao atual:
 - pattern de enum aceita shorthand de campo, por exemplo `Done(code)` quando o
   campo real chama `code`.
 
-Status: LACUNA do prompt, nao do compilador.
+Status: FECHADO em 2026-05-17.
 
 Forma alinhada:
 
@@ -197,7 +222,7 @@ enum AppError
 end
 ```
 
-### 6. Circular generic instantiation ainda falta
+### 6. Circular generic instantiation faltava
 
 Prompt parte 9.6 pede erro para:
 
@@ -207,23 +232,25 @@ func recurse<T>(value: T) -> T
 end
 ```
 
-Evidencia:
+Evidencia original:
 
 - `docs/spec/13-error-catalog.md` lista `generic.circular_instantiation` como
   planned.
 - Busca no codigo nao encontrou emissao real deste diagnostic.
 - Existem testes de monomorphizacao generica normal, mas nao de ciclo infinito.
 
-Status: LACUNA real.
+Status: FECHADO em 2026-05-17.
 
 Risco: medio. Pode virar recursao de especializacao, output incorreto ou erro
 tardio dependendo do formato do programa.
 
-Acao recomendada:
+Acao concluida:
 
-- adicionar detector de stack de instanciacao em `ori-hir/src/monomorph.rs`;
-- emitir `generic.circular_instantiation` ou erro equivalente;
-- criar teste negativo dedicado.
+- detector conservador adicionado no checker para autochamada generica sem
+  instanciacao concreta;
+- diagnostic `generic.circular_instantiation` agora e emitido;
+- catalogo movido de planejado para emitido;
+- teste `check_reports_circular_generic_instantiation` adicionado.
 
 ### 7. Backend C e parcial por desenho
 
@@ -236,29 +263,31 @@ Exemplo:
 - `c_backend` ainda tem teste que reporta unsupported para alguns iterables;
 - async/concurrency tambem rejeitam C backend.
 
-Status: PARCIAL, mas nao bloqueia backend principal.
+Status: FECHADO como contrato/documentacao. Continua parcial por desenho, mas
+nao e lacuna do backend principal.
 
-Acao recomendada:
+Acao confirmada:
 
 - documentar C backend como debug/partial em qualquer checklist publica;
 - nao tratar divergencia C como falha de linguagem enquanto native e contrato.
 
-### 8. Cobertura exata 1:1 do prompt ainda pode melhorar
+### 8. Cobertura exata 1:1 do prompt foi ampliada
 
 O suite cobre comportamento amplo. Nem todo item do prompt aparece como teste
 nomeado e isolado.
 
-Casos que merecem teste direto:
+Casos que ganharam teste direto:
 
 - triple quote com baseline stripping em runtime;
 - multi-line interpolated triple string;
 - short-circuit com side effect explicito;
 - integer division by zero e float division by zero em teste runtime dedicado;
 - `throw`, `catch`, `try` como palavras nao existentes;
-- full pipeline program unico cobrindo todos itens de 10.1;
-- LSP diagnostic em fluxo real de documento aberto, nao so helpers internos.
+- full pipeline program unico cobrindo itens de 10.1;
+- LSP diagnostic em fluxo de fonte aberta/unsaved e hover de campo com
+  contrato.
 
-Status: PARCIAL de cobertura, nao necessariamente bug.
+Status: FECHADO para os pontos listados nesta analise.
 
 ## Analise por Camada
 
@@ -277,10 +306,10 @@ Cobre:
 - strings, fstrings, bytes e triple strings;
 - contextual `times` como identificador.
 
-Ponto fraco:
+Fechado nesta rodada:
 
-- triple quote baseline existe no parser, mas precisa de teste runtime dedicado
-  com output esperado.
+- triple quote baseline agora tem teste runtime dedicado com output esperado:
+  `compile_runs_triple_string_baseline_and_f_triple_string`.
 
 ### Parser
 
@@ -297,9 +326,9 @@ Cobre:
 - struct update com braces;
 - unsupported HKT, associated type e const generic com diagnostics dedicados.
 
-Ponto fraco:
+Fechado nesta rodada:
 
-- prompt 7.2 precisa sintaxe de enum nomeada.
+- prompt 7.2 foi reescrito com sintaxe de enum nomeada.
 
 ### Type Checker
 
@@ -317,9 +346,9 @@ Cobre:
 - async restrictions;
 - diagnostics dedicados.
 
-Ponto fraco:
+Fechado nesta rodada:
 
-- circular generic instantiation nao aparece como erro emitido.
+- `generic.circular_instantiation` agora aparece como erro emitido.
 
 ### HIR e Monomorphization
 
@@ -334,9 +363,10 @@ Cobre:
 - async state-machine subset;
 - custom Iterable para native.
 
-Ponto fraco:
+Fechado nesta rodada:
 
-- precisa detector explicito de ciclo/infinite instantiation.
+- detector explicito de autochamada generica sem instanciacao concreta foi
+  adicionado no checker.
 
 ### Native Codegen e Runtime
 
@@ -355,7 +385,7 @@ Cobre:
 - async executor/futures/task/channel/atomic;
 - stdlib extensa.
 
-Ponto fraco:
+Contrato fechado:
 
 - backend nativo e o contrato real; C nao deve ser vendido como equivalente.
 
@@ -385,65 +415,67 @@ Cobre:
 - completion stdlib;
 - go-to-definition local;
 - hover builtin;
-- hover para funcao, struct field, binding, parametro e contrato `it`.
+- hover para funcao, struct field, binding, parametro, contrato `it` e campo
+  com contrato.
 
-Ponto fraco:
+Limite conhecido:
 
 - ainda e indice textual leve, nao semantic model completo do checker.
 
 ## Lacunas Priorizadas
 
-### P1 - Implementar `generic.circular_instantiation`
+### P1 - Implementar `generic.circular_instantiation` - FECHADO
 
-Motivo:
+Motivo original:
 
 - prompt exige;
 - catalogo ja reserva diagnostic;
 - generics estao grandes o bastante para precisar protecao.
 
-Arquivos provaveis:
+Arquivos alterados:
 
-- `compiler/crates/ori-hir/src/monomorph.rs`
+- `compiler/crates/ori-types/src/check.rs`
 - `compiler/crates/ori-driver/tests/multifile_imports.rs`
 - `docs/spec/13-error-catalog.md`
 
-### P1 - Corrigir `docs/spec/04-types.md` sobre range
+### P1 - Corrigir `docs/spec/04-types.md` sobre range - FECHADO
 
-Motivo:
+Motivo original:
 
 - spec contradiz prompt e checker;
 - pode gerar testes falsos de `range<float>` ou APIs inexistentes.
 
-Arquivos:
+Arquivos alterados:
 
 - `docs/spec/04-types.md`
-- talvez `docs/spec/05-expressions.md`
+- `docs/spec/12-stdlib.md`
 
-### P1 - Corrigir `docs/spec/11-generics.md` sobre Iterable
+### P1 - Corrigir `docs/spec/11-generics.md` sobre Iterable - FECHADO
 
-Motivo:
+Motivo original:
 
 - contrato real ja mudou;
 - docs de generics ainda sugerem forma nao suportada.
 
-Arquivo:
+Arquivo alterado:
 
 - `docs/spec/11-generics.md`
 
-### P2 - Corrigir prompt 7.2 de Error Enum
+### P2 - Corrigir prompt 7.2 de Error Enum - FECHADO
 
-Motivo:
+Motivo original:
 
 - prompt contradiz sua propria regra de enum nomeado;
 - gerador de testes pode criar caso invalido por engano.
 
-Arquivo:
+Arquivos alterados:
 
 - `docs/planning/ori-test-prompt.md`
+- `docs/spec/09-errors.md`
 
-### P2 - Adicionar testes 1:1 para pontos ainda indiretos
+### P2 - Adicionar testes 1:1 para pontos ainda indiretos - FECHADO
 
-Motivo:
+Motivo original:
 
 - suite e forte, mas prompt e mais granular;
 - testes nomeados tornam regressao mais facil de localizar.
@@ -455,18 +487,21 @@ Casos:
 - short-circuit com side effect;
 - division by zero int vs float;
 - no exceptions keywords;
-- full pipeline program unico.
+- full pipeline program unico;
+- LSP open-doc diagnostic e hover de campo com contrato.
 
-### P3 - Explicitar contrato do C backend
+### P3 - Explicitar contrato do C backend - FECHADO
 
-Motivo:
+Motivo original:
 
 - evita confundir "debug backend" com backend completo.
 
-Arquivos:
+Arquivos confirmados:
 
 - `README.md`
-- `docs/spec` ou `docs/planning/native-route.md`
+- `docs/spec/10-memory.md`
+- `docs/spec/12-stdlib.md`
+- `docs/planning/native-route.md`
 
 ## Veredito
 
@@ -474,12 +509,13 @@ Ori esta em estado bom para continuar evolucao por testes.
 
 Nao vejo regressao grande contra `ori-test-prompt.md`.
 
-O trabalho mais importante agora nao e "corrigir tudo do zero". E fechar as
-poucas divergencias:
+As divergencias reais encontradas nesta analise foram fechadas:
 
 1. detector de circular generic instantiation;
 2. docs antigas de `range<T>` e `Iterable<Item>`;
 3. exemplo invalido de enum em 7.2;
-4. testes 1:1 para os casos ainda indiretos.
+4. testes 1:1 para os casos indiretos;
+5. confirmacao documental do backend C como debug/partial.
 
-Depois disso, o prompt pode virar uma suite oficial de aceitacao da linguagem.
+Proximo passo recomendado: promover o prompt para uma suite oficial de
+aceitacao, mantendo os casos novos como base rastreavel.

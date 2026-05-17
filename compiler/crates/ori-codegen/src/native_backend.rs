@@ -2,7 +2,7 @@ use smol_str::SmolStr;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use cranelift_codegen::ir::{self, types, AbiParam, InstBuilder, MemFlags};
+use cranelift_codegen::ir::{self, types, AbiParam, BlockArg, InstBuilder, MemFlags};
 use cranelift_codegen::settings;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module};
@@ -6981,6 +6981,9 @@ impl<'a> FuncCodegen<'a> {
                 }
             }
             HirExprKind::Binary { op, lhs, rhs } => {
+                if matches!(op, BinaryOp::And | BinaryOp::Or) {
+                    return self.emit_short_circuit_binary(*op, lhs, rhs);
+                }
                 let lv = self.emit_expr(lhs)?;
                 let rv = self.emit_expr(rhs)?;
                 self.emit_binary(*op, lv, rv, &lhs.ty)?
@@ -8708,6 +8711,53 @@ impl<'a> FuncCodegen<'a> {
             Ty::Int32 | Ty::U32 => self.builder.ins().ireduce(types::I32, value),
             _ => value,
         }
+    }
+
+    fn emit_short_circuit_binary(
+        &mut self,
+        op: BinaryOp,
+        lhs: &HirExpr,
+        rhs: &HirExpr,
+    ) -> Result<ir::Value, String> {
+        let lhs_value = self.emit_expr(lhs)?;
+        let rhs_block = self.builder.create_block();
+        let merge_block = self.builder.create_block();
+        self.builder.append_block_param(merge_block, types::I8);
+
+        let skip_value = match op {
+            BinaryOp::And => self.builder.ins().iconst(types::I8, 0),
+            BinaryOp::Or => self.builder.ins().iconst(types::I8, 1),
+            _ => unreachable!("short-circuit only handles logical operators"),
+        };
+        let skip_args = [BlockArg::Value(skip_value)];
+
+        match op {
+            BinaryOp::And => {
+                self.builder
+                    .ins()
+                    .brif(lhs_value, rhs_block, &[], merge_block, &skip_args);
+            }
+            BinaryOp::Or => {
+                self.builder
+                    .ins()
+                    .brif(lhs_value, merge_block, &skip_args, rhs_block, &[]);
+            }
+            _ => unreachable!("short-circuit only handles logical operators"),
+        }
+
+        self.builder.seal_block(rhs_block);
+        self.builder.switch_to_block(rhs_block);
+        self.terminated = false;
+        let rhs_value = self.emit_expr(rhs)?;
+        if !self.terminated {
+            let rhs_args = [BlockArg::Value(rhs_value)];
+            self.builder.ins().jump(merge_block, &rhs_args);
+        }
+
+        self.builder.seal_block(merge_block);
+        self.builder.switch_to_block(merge_block);
+        self.terminated = false;
+        Ok(self.builder.block_params(merge_block)[0])
     }
 
     fn emit_binary(

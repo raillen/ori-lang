@@ -80,6 +80,8 @@ pub struct Checker<'a> {
     aliases: HashMap<SmolStr, SmolStr>,
     used_aliases: HashSet<SmolStr>,
     current_return_ty: Option<Ty>,
+    current_func_def_id: Option<DefId>,
+    current_func_is_generic: bool,
     current_async_depth: usize,
     loop_depth: usize,
     closure_scope_roots: Vec<usize>,
@@ -127,6 +129,8 @@ impl<'a> Checker<'a> {
             aliases: HashMap::new(),
             used_aliases: HashSet::new(),
             current_return_ty: None,
+            current_func_def_id: None,
+            current_func_is_generic: false,
             current_async_depth: 0,
             loop_depth: 0,
             closure_scope_roots: Vec::new(),
@@ -587,6 +591,7 @@ impl<'a> Checker<'a> {
     fn check_func(&mut self, func: &FuncDecl, outer_tp: &[SmolStr], implicit_self_ty: Option<Ty>) {
         let mut tp = outer_tp.to_vec();
         tp.extend(func.type_params.iter().map(|p| p.name.text.clone()));
+        let has_implicit_self = implicit_self_ty.is_some();
         self.push_scope();
         if !has_explicit_self_param(&func.params) {
             if let Some(self_ty) = implicit_self_ty {
@@ -632,6 +637,8 @@ impl<'a> Checker<'a> {
             self.check_collection_runtime_limits(&expected_ret, return_ty.span());
         }
         let prev_ret_ty = self.current_return_ty.take();
+        let prev_func_def_id = self.current_func_def_id;
+        let prev_func_is_generic = self.current_func_is_generic;
         let prev_async_depth = self.current_async_depth;
         let current_where_constraints = self.lower_current_where_constraints(func, &tp);
         let prev_where_constraints = std::mem::replace(
@@ -639,6 +646,12 @@ impl<'a> Checker<'a> {
             current_where_constraints,
         );
         self.current_return_ty = Some(expected_ret.clone());
+        self.current_func_def_id = if !has_implicit_self && !func.type_params.is_empty() {
+            self.resolve_def_id(func.name.text.as_str())
+        } else {
+            None
+        };
+        self.current_func_is_generic = !func.type_params.is_empty();
         if func.is_async {
             self.current_async_depth += 1;
         }
@@ -663,6 +676,8 @@ impl<'a> Checker<'a> {
             );
         }
         self.current_return_ty = prev_ret_ty;
+        self.current_func_def_id = prev_func_def_id;
+        self.current_func_is_generic = prev_func_is_generic;
         self.current_where_constraints = prev_where_constraints;
         self.pop_scope();
     }
@@ -1697,6 +1712,12 @@ impl<'a> Checker<'a> {
                                     || contains_generic_param(&ret)
                                 {
                                     subst = self.infer_generic_call_substitutions(args, &sig);
+                                    if self.is_generic_self_call_without_concrete_instantiation(
+                                        def_id, &subst,
+                                    ) {
+                                        self.emit_generic_circular_instantiation(q, expr.span());
+                                        return Ty::Error;
+                                    }
                                     if !subst.is_empty() {
                                         params = params
                                             .iter()
@@ -2521,6 +2542,14 @@ impl<'a> Checker<'a> {
         }
 
         subst
+    }
+
+    fn is_generic_self_call_without_concrete_instantiation(
+        &self,
+        def_id: DefId,
+        subst: &HashMap<u32, Ty>,
+    ) -> bool {
+        self.current_func_is_generic && self.current_func_def_id == Some(def_id) && subst.is_empty()
     }
 
     fn infer_generic_single_arg_substitution(
@@ -4040,6 +4069,24 @@ impl<'a> Checker<'a> {
             Diagnostic::error("name.undefined", format!("undefined name `{}`", name))
                 .with_label(Label::primary(self.file_id, span, "not in scope"))
                 .with_action("declare or import the name before using it"),
+        );
+    }
+
+    fn emit_generic_circular_instantiation(
+        &mut self,
+        q: &QualifiedName,
+        span: ori_diagnostics::Span,
+    ) {
+        self.sink.emit(
+            Diagnostic::error(
+                "generic.circular_instantiation",
+                format!(
+                    "generic function `{}` recursively instantiates itself without a concrete type",
+                    q.last().text
+                ),
+            )
+            .with_label(Label::primary(self.file_id, span, "recursive generic call here"))
+            .with_action("move recursion into a non-generic helper or call the function with a concrete type"),
         );
     }
 

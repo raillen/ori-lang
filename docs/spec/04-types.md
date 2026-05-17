@@ -130,7 +130,7 @@ These types are built into the language and require no import.
 | `set<T>` | Unordered unique values. Current runtime supports `int`, `string`, and user-defined elements that implement `Hashable` and `Equatable` |
 | `optional<T>` | A value that may be absent |
 | `result<T, E>` | A value that represents success or failure |
-| `range<T>` | An inclusive range of ordered values |
+| `range<int>` | An inclusive integer range |
 | `lazy<T>` | Lazy value computed at most once through `lazy.once` and `lazy.force` |
 | `any<Trait>` | Dynamic dispatch over a trait |
 
@@ -214,7 +214,7 @@ end
 
 ## Range
 
-`range<T>` is an inclusive range with a start and end value.
+`range<int>` is an inclusive integer range with a start and end value.
 
 ```ori
 const r: range<int> = 0..9
@@ -225,14 +225,16 @@ The range `a..b` includes both `a` and `b`.
 - If `a > b`: descending (9, 8, 7, ..., 0)
 - If `a == b`: single element
 
-Properties:
+Current v1 contract:
 
 ```ori
 r.start       -- int: first value
 r.end         -- int: last value
-r.length()    -- int: number of elements (abs(end - start) + 1)
-r.contains(v) -- bool: true if v is in the range
 ```
+
+`length()` and `contains(...)` are not range methods in v1. Use `for` to
+iterate a range, or compute membership with integer comparisons when needed.
+Float ranges are not accepted by the current checker.
 
 ---
 

@@ -209,7 +209,7 @@ alias Callback<T> = func(T) -> bool
 The following generic features are not supported in Ori v1:
 
 - **Higher-kinded types** (type constructors as type parameters): `trait Functor<F<_>>` — not supported.
-- **Associated types** in traits: `trait Iterator { type Item }` — not supported; use `Iterable<Item>` instead.
+- **Associated types** in traits: `trait Iterator { type Item }` - not supported. Use `core.Iterable` as a marker trait and implement `mut func next() -> optional<T>` on the concrete type. The item type is inferred from `next`.
 - **Const generics** (type parameters that are values): `struct Matrix<const N: int>` — not supported.
 - **Variadic type parameters**: `tuple<T...>` — not supported; use `tuple<A, B, ...>` with fixed arity.
 

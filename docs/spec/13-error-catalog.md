@@ -227,6 +227,7 @@ when the compiler starts producing it.
 |---|---|---|
 | `generic.constraint_not_satisfied` | error | Type does not satisfy a generic constraint |
 | `generic.constraint_not_trait` | error | Generic constraint target is not a trait |
+| `generic.circular_instantiation` | error | Generic function recursively instantiates itself without a concrete type |
 | `generic.negative_constraint_violated` | error | Type violates a negative generic constraint |
 | `generic.unsupported_associated_type` | error | Trait associated types are not supported yet |
 | `generic.unsupported_const_generic` | error | Const generic parameters are not supported yet |
@@ -270,7 +271,6 @@ They are not emitted by the compiler today.
 | `extern.managed_type_in_ffi` | error | planned FFI diagnostics |
 | `extern.unknown_abi` | error | planned FFI diagnostics |
 | `generic.ambiguous_type_arg` | error | planned generic diagnostics |
-| `generic.circular_instantiation` | error | planned generic diagnostics |
 | `match.duplicate_case` | warning | planned match diagnostics |
 | `match.guard_not_exhaustive` | warning | planned match diagnostics |
 | `match.unreachable_case` | warning | planned match diagnostics |

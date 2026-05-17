@@ -70,7 +70,7 @@ No import required. These types and functions are built into the language.
 
 `bool`, `int`, `int8`–`int64`, `u8`–`u64`, `float`, `float32`–`float64`,
 `string`, `bytes`, `void`, `list<T>`, `map<K,V>`, `set<T>`, `optional<T>`,
-`result<T,E>`, `range<T>`, `lazy<T>`, `future<T>`, `any<Trait>`,
+`result<T,E>`, `range<int>`, `lazy<T>`, `future<T>`, `any<Trait>`,
 `tuple<...>`
 
 Current collection limit:

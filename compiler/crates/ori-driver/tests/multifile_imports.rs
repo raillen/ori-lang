@@ -55,6 +55,15 @@ fn ori_path_literal(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
+fn exe_path(dir: &TestDir, name: &str) -> PathBuf {
+    let file_name = if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    };
+    dir.path(&file_name)
+}
+
 fn compile_c_source(dir: &TestDir, name: &str, source: &str) {
     let c_path = dir.path(&format!("{name}.c"));
     let obj_path = dir.path(&format!("{name}.o"));
@@ -5118,6 +5127,32 @@ end
 }
 
 #[test]
+fn check_reports_circular_generic_instantiation() {
+    let dir = TestDir::new("generic_circular_instantiation");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+func recurse<T>(value: T) -> T
+    return recurse(value)
+end
+
+func main()
+    const value: int = recurse(1)
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"generic.circular_instantiation"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
 fn check_accepts_grouped_where_clause_with_and() {
     let dir = TestDir::new("grouped_where_and");
     dir.write(
@@ -8621,6 +8656,282 @@ end
     assert_eq!(
         stdout.replace("\r\n", "\n"),
         "line\nnext\nhi!\nhello Ori 5\nbrace { Ori }\nalpha\nbeta\nmulti Ori\n"
+    );
+}
+
+#[test]
+fn compile_runs_triple_string_baseline_and_f_triple_string() {
+    let dir = TestDir::new("triple_string_baseline");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+func main()
+    const name: string = "Ada"
+    io.print("""
+        line one
+          line two
+        """)
+    io.print(f"""
+        hello {name}
+          score {1 + 2}
+        """)
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "triple_string_baseline");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(
+        stdout.replace("\r\n", "\n"),
+        "line one\n  line two\nhello Ada\n  score 3\n"
+    );
+}
+
+#[test]
+fn compile_runs_short_circuit_without_rhs_side_effects() {
+    let dir = TestDir::new("short_circuit_side_effect");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+func explode() -> bool
+    panic("short-circuit failed")
+    return true
+end
+
+func main()
+    if false and explode()
+        io.print("bad-and")
+    end
+    if true or explode()
+        io.print("ok")
+    end
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "short_circuit_side_effect");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.replace("\r\n", "\n"), "ok\n");
+}
+
+#[test]
+fn compile_runtime_panics_on_integer_division_by_zero() {
+    let dir = TestDir::new("runtime_int_div_zero");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+func main()
+    var zero: int = 0
+    io.print(string(10 / zero))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "runtime_int_div_zero");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(!output.status.success(), "{:?}", output);
+}
+
+#[test]
+fn compile_runs_float_division_by_zero_as_infinity() {
+    let dir = TestDir::new("runtime_float_div_zero");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+func main()
+    var zero: float = 0.0
+    io.print(string(10.0 / zero))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "runtime_float_div_zero");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.to_ascii_lowercase().contains("inf"), "{stdout}");
+}
+
+#[test]
+fn check_reports_exception_words_as_plain_missing_names() {
+    let dir = TestDir::new("exception_words_missing_names");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+func main()
+    throw("bad")
+    catch("bad")
+    try("bad")
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    let codes = diagnostic_codes(&out);
+    assert!(
+        !codes.iter().any(|code| code.starts_with("parse.")),
+        "{:?}",
+        out.diagnostics
+    );
+    assert!(
+        codes
+            .iter()
+            .filter(|code| **code == "name.undefined")
+            .count()
+            >= 3,
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn compile_runs_prompt_full_pipeline_program() {
+    let dir = TestDir::new("prompt_full_pipeline_program");
+    dir.write(
+        "util.orl",
+        r#"namespace app.util
+
+public func seed() -> int
+    return 2
+end
+"#,
+    );
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import app.util as util
+import ori.io as io
+import ori.iter as iter
+
+var disposed: int = 0
+
+struct Resource
+    id: int if it > 0
+    name: string
+end
+
+enum AppError
+    Validation(message: string)
+end
+
+trait Disposable
+    mut func dispose(self)
+end
+
+trait Named
+    func name(self) -> string
+
+    func kind(self) -> string
+        return "resource"
+    end
+end
+
+implement Disposable for Resource
+    mut func dispose(self)
+        disposed = disposed + self.id
+    end
+end
+
+implement Named for Resource
+    func name(self) -> string
+        return self.name
+    end
+end
+
+func make_resource(id: int) -> result<Resource, AppError>
+    if id > 0
+        return success(Resource(id: id, name: "item-" + string(id)))
+    end
+    return error(AppError.Validation(message: "bad id"))
+end
+
+func load() -> result<Resource, AppError>
+    const resource: Resource = make_resource(util.seed())?
+    return success(resource)
+end
+
+func describe<T>(item: T) -> string where T is Named
+    return item.name()
+end
+
+func main()
+    match load()
+    case success(resource):
+        using cleanup: Resource = resource
+        io.print(describe(resource))
+        io.print(resource.kind())
+        const maybe_name: optional<string> = some(resource.name)
+        if some(name) = maybe_name
+            io.print(name)
+        end
+
+        const doubled: list<int> = iter.map([1, 2, 3], do(x: int) => x * util.seed())
+        var total: int = 0
+        for value, index in doubled
+            total = total + value + index
+        end
+        check total == 15
+        io.print(string(total))
+
+        match total
+        case n if n >= 15:
+            io.print("high")
+        case else:
+            io.print("low")
+        end
+    case error(err):
+        match err
+        case .Validation(message):
+            io.print(message)
+        end
+    end
+
+    io.print(string(disposed))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "prompt_full_pipeline_program");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(
+        stdout.replace("\r\n", "\n"),
+        "item-2\nresource\nitem-2\n15\nhigh\n2\n"
     );
 }
 

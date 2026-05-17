@@ -411,15 +411,15 @@ Inside `b`, use `a()?` → expect a type error (error type mismatch).
 ### 7.2 Error Enum (Union)
 ```
 enum AppError
-    Io(IoError)
-    Validation(ValidationError)
+    Io(error: IoError)
+    Validation(error: ValidationError)
 end
 
 implement Error for AppError
     func message() -> string
         match self
-        case .Io(e):     return e.message()
-        case .Validation(e): return e.message()
+        case .Io(error):     return error.message()
+        case .Validation(error): return error.message()
         end
     end
 end

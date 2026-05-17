@@ -231,20 +231,20 @@ When a function may fail with multiple distinct error types, use an enum:
 
 ```ori
 enum AppError
-    Network(NetworkError)
-    Validation(ValidationError)
-    Parse(ParseError)
+    Network(error: NetworkError)
+    Validation(error: ValidationError)
+    Parse(error: ParseError)
 end
 
 implement Error for AppError
     func message() -> string
         match self
-        case .Network(e):
-            return e.message()
-        case .Validation(e):
-            return e.message()
-        case .Parse(e):
-            return e.message()
+        case .Network(error):
+            return error.message()
+        case .Validation(error):
+            return error.message()
+        case .Parse(error):
+            return error.message()
         end
     end
 end
