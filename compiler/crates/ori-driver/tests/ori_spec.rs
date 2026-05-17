@@ -2461,8 +2461,8 @@ fn check_rejects_duplicate_struct_fields() {
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
     assert!(
-        diagnostic_codes(&out).contains(&"name.duplicate_field"),
-        "expected name.duplicate_field, got {:?}",
+        diagnostic_codes(&out).contains(&"bind.duplicate_field"),
+        "expected bind.duplicate_field, got {:?}",
         out.diagnostics
     );
 }
@@ -2477,8 +2477,8 @@ fn check_rejects_duplicate_enum_variants() {
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
     assert!(
-        diagnostic_codes(&out).contains(&"name.duplicate_variant"),
-        "expected name.duplicate_variant, got {:?}",
+        diagnostic_codes(&out).contains(&"bind.duplicate_variant"),
+        "expected bind.duplicate_variant, got {:?}",
         out.diagnostics
     );
 }
@@ -2493,8 +2493,8 @@ fn check_rejects_duplicate_fields_in_enum_variant() {
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
     assert!(
-        diagnostic_codes(&out).contains(&"name.duplicate_field"),
-        "expected name.duplicate_field, got {:?}",
+        diagnostic_codes(&out).contains(&"bind.duplicate_field"),
+        "expected bind.duplicate_field, got {:?}",
         out.diagnostics
     );
 }

@@ -173,6 +173,7 @@ when the compiler starts producing it.
 | `bind.import_not_found` | error | Imported namespace could not be resolved to a file |
 | `bind.shadowing` | error | Binding shadows another binding in the same scope |
 | `bind.stdlib_module_unknown` | error | Standard library module name is unknown |
+| `bind.stdlib_module_unavailable` | warning | Standard library function is not yet available in the native runtime |
 | `bind.unused_import` | warning | Private import is not used |
 
 ### `attr`
@@ -261,7 +262,6 @@ They are not emitted by the compiler today.
 |---|---|---|
 | `bind.duplicate_param` | error | planned duplicate declaration detail |
 | `bind.self_outside_method` | error | planned binding diagnostic |
-| `bind.stdlib_module_unavailable` | error | reserved for future stdlib modules that are documented but intentionally blocked |
 | `bind.undefined` | error | reserved alias; emitted code is `name.undefined` |
 | `contract.check_failure` | runtime panic | runtime contract reporting |
 | `contract.field_violation` | runtime panic | runtime contract reporting |

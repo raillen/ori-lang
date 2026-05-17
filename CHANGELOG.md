@@ -22,9 +22,9 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Checker:** `emit_undefined_name()` — nomes desconhecidos geram `name.undefined` + `Ty::Error`
 - **Checker:** Validação de runtime para map/set com `type.collection_hash_unsupported`
 - **Checker:** `stdlib_native_runtime_available()` — warning para funções stdlib sem runtime nativo (`bind.stdlib_module_unavailable`)
-- **Resolver:** Validação de campos duplicados em struct (`name.duplicate_field`)
-- **Resolver:** Validação de variantes duplicadas em enum (`name.duplicate_variant`)
-- **Resolver:** Validação de campos duplicados em variantes de enum (`name.duplicate_field`)
+- **Resolver:** Validação de campos duplicados em struct (`bind.duplicate_field`)
+- **Resolver:** Validação de variantes duplicadas em enum (`bind.duplicate_variant`)
+- **Resolver:** Validação de campos duplicados em variantes de enum (`bind.duplicate_field`)
 - **Lexer:** Aceita BOM UTF-8 no início do arquivo e rejeita no meio
 - **Lexer:** `find_unclosed_block_comment()` respeita strings, bytes, f-strings e triple-quoted
 - **Lexer:** Diagnóstico dedicado `lex.unclosed_block_comment` com span e ação

@@ -190,7 +190,7 @@ pub fn resolve_many<S: Into<SmolStr>>(
                                 if !seen_fields.insert(name.clone()) {
                                     sink.emit(
                                         Diagnostic::error(
-                                            "name.duplicate_field",
+                                            "bind.duplicate_field",
                                             format!("duplicate field `{}` in struct `{}`", name, s.name.text),
                                         )
                                         .with_label(Label::primary(
@@ -286,7 +286,7 @@ pub fn resolve_many<S: Into<SmolStr>>(
                                 if !seen_variants.insert(variant_name.clone()) {
                                     sink.emit(
                                         Diagnostic::error(
-                                            "name.duplicate_variant",
+                                            "bind.duplicate_variant",
                                             format!("duplicate variant `{}` in enum `{}`", variant_name, e.name.text),
                                         )
                                         .with_label(Label::primary(
@@ -311,7 +311,7 @@ pub fn resolve_many<S: Into<SmolStr>>(
                                         if !seen_variant_fields.insert(field_name.clone()) {
                                             sink.emit(
                                                 Diagnostic::error(
-                                                    "name.duplicate_field",
+                                                    "bind.duplicate_field",
                                                     format!("duplicate field `{}` in variant `{}` of enum `{}`", field_name, variant_name, e.name.text),
                                                 )
                                                 .with_label(Label::primary(
