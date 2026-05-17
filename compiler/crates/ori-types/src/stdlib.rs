@@ -632,6 +632,7 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             Ty::Result(Box::new(Ty::String), Box::new(Ty::String)),
         ),
         "ori.bytes.get" => (vec![Ty::Bytes, Ty::Int], Ty::U8),
+        "ori.mem.size_of" | "ori.mem.align_of" => (vec![Ty::Infer(0)], Ty::Int),
         "ori.time.now" => (vec![], Ty::Int),
         "ori.time.sleep" => (vec![Ty::Int], Ty::Void),
         "ori.time.duration_ms" => (vec![Ty::Int, Ty::Int], Ty::Int),

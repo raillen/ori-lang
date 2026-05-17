@@ -1,6 +1,5 @@
 ﻿# Rust / Cargo
 target/
-Cargo.lock
 *.pdb
 
 # Ori compiler output
@@ -45,3 +44,4 @@ Thumbs.db
 
 node_modules/
 *.lock
+!Cargo.lock
