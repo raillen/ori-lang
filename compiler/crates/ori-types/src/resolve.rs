@@ -5,7 +5,7 @@ use ori_ast::common::{AttrArg, WhereClause, WhereConstraint};
 use ori_ast::item::{ImportDecl, Item, ItemWithAttrs, Param, ParamKind, SourceFile};
 use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label};
 use smol_str::SmolStr;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Resolved type information for a single function (signature only for now).
 #[derive(Debug, Clone)]
@@ -178,14 +178,32 @@ pub fn resolve_many<S: Into<SmolStr>>(
                     if let Some(def_id) = def_map.lookup(&path) {
                         let tp: Vec<SmolStr> =
                             s.type_params.iter().map(|p| p.name.text.clone()).collect();
-                        let fields = s
+                        let mut seen_fields: HashSet<SmolStr> = HashSet::new();
+                        let fields: Vec<(SmolStr, Ty)> = s
                             .fields
                             .iter()
-                            .map(|f| {
+                            .filter_map(|f| {
                                 let ty = lower_type_with_aliases(
                                     &f.ty, &namespace, &tp, &def_map, *file_id, sink, &aliases,
                                 );
-                                (f.name.text.clone(), ty)
+                                let name = f.name.text.clone();
+                                if !seen_fields.insert(name.clone()) {
+                                    sink.emit(
+                                        Diagnostic::error(
+                                            "name.duplicate_field",
+                                            format!("duplicate field `{}` in struct `{}`", name, s.name.text),
+                                        )
+                                        .with_label(Label::primary(
+                                            *file_id,
+                                            f.name.span,
+                                            "duplicate field name",
+                                        ))
+                                        .with_action("rename or remove one of the duplicate fields"),
+                                    );
+                                    // Still collect the field so lowering doesn't panic on missing
+                                    // fields, but the error has been emitted.
+                                }
+                                Some((name, ty))
                             })
                             .collect();
                         struct_sigs.push(StructSig { def_id, fields });
@@ -259,29 +277,63 @@ pub fn resolve_many<S: Into<SmolStr>>(
                     if let Some(def_id) = def_map.lookup(&path) {
                         let tp: Vec<SmolStr> =
                             e.type_params.iter().map(|p| p.name.text.clone()).collect();
+                        let mut seen_variants: HashSet<SmolStr> = HashSet::new();
+                        let variants: Vec<EnumVariantSig> = e
+                            .variants
+                            .iter()
+                            .filter_map(|variant| {
+                                let variant_name = variant.name.text.clone();
+                                if !seen_variants.insert(variant_name.clone()) {
+                                    sink.emit(
+                                        Diagnostic::error(
+                                            "name.duplicate_variant",
+                                            format!("duplicate variant `{}` in enum `{}`", variant_name, e.name.text),
+                                        )
+                                        .with_label(Label::primary(
+                                            *file_id,
+                                            variant.name.span,
+                                            "duplicate variant name",
+                                        ))
+                                        .with_action("rename or remove one of the duplicate variants"),
+                                    );
+                                    // Still collect the variant so lowering doesn't panic.
+                                }
+                                let mut seen_variant_fields: HashSet<SmolStr> = HashSet::new();
+                                let fields = variant
+                                    .fields
+                                    .iter()
+                                    .filter_map(|field| {
+                                        let ty = lower_type_with_aliases(
+                                            &field.ty, &namespace, &tp, &def_map, *file_id,
+                                            sink, &aliases,
+                                        );
+                                        let field_name = field.name.text.clone();
+                                        if !seen_variant_fields.insert(field_name.clone()) {
+                                            sink.emit(
+                                                Diagnostic::error(
+                                                    "name.duplicate_field",
+                                                    format!("duplicate field `{}` in variant `{}` of enum `{}`", field_name, variant_name, e.name.text),
+                                                )
+                                                .with_label(Label::primary(
+                                                    *file_id,
+                                                    field.name.span,
+                                                    "duplicate field name",
+                                                ))
+                                                .with_action("rename or remove one of the duplicate fields"),
+                                            );
+                                        }
+                                        Some((field_name, ty))
+                                    })
+                                    .collect();
+                                Some(EnumVariantSig {
+                                    name: variant_name,
+                                    fields,
+                                })
+                            })
+                            .collect();
                         enum_sigs.push(EnumSig {
                             def_id,
-                            variants: e
-                                .variants
-                                .iter()
-                                .map(|variant| {
-                                    let fields = variant
-                                        .fields
-                                        .iter()
-                                        .map(|field| {
-                                            let ty = lower_type_with_aliases(
-                                                &field.ty, &namespace, &tp, &def_map, *file_id,
-                                                sink, &aliases,
-                                            );
-                                            (field.name.text.clone(), ty)
-                                        })
-                                        .collect();
-                                    EnumVariantSig {
-                                        name: variant.name.text.clone(),
-                                        fields,
-                                    }
-                                })
-                                .collect(),
+                            variants,
                         });
                     }
                 }

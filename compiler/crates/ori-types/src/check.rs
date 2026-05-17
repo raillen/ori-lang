@@ -2802,6 +2802,20 @@ impl<'a> Checker<'a> {
             return Some(ret);
         }
         let (params, ret) = stdlib_func_sig(path)?;
+        // Warn if this stdlib function lacks native runtime support.
+        if !crate::stdlib::stdlib_native_runtime_available(path) {
+            self.sink.emit(
+                Diagnostic::warning(
+                    "bind.stdlib_module_unavailable",
+                    format!(
+                        "`{}` is not yet available in the native runtime",
+                        path,
+                    ),
+                )
+                .with_label(Label::primary(self.file_id, span, "used here"))
+                .with_action("use an alternative function or wait for native runtime support"),
+            );
+        }
         let (params, mut ret) = freshen_stdlib_infers(params, ret, span.start as u32);
         self.check_call_args(args, &params, span);
         let first_arg_ty = args.first().and_then(|arg| match &arg.value {

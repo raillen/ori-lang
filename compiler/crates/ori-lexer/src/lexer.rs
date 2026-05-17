@@ -81,21 +81,6 @@ pub fn lex(source: &str, file_id: FileId, sink: &mut DiagnosticSink) -> Vec<Toke
     tokens
 }
 
-#[allow(dead_code)]
-/// An unclosed block comment was detected during lexing.
-pub fn check_unclosed_block_comments(
-    tokens: &[Token],
-    source: &str,
-    file_id: FileId,
-    sink: &mut DiagnosticSink,
-) {
-    // If lex_block_comment callback returns false, logos emits Err(()).
-    // An unclosed `--|` will already have been reported as an unexpected
-    // character sequence above.  This function is a secondary pass to look for
-    // partial `--|` without a matching `|--` — currently a no-op placeholder.
-    let _ = (tokens, source, file_id, sink);
-}
-
 fn find_unclosed_block_comment(source: &str, start_at: usize) -> Option<Span> {
     let bytes = source.as_bytes();
     let mut cursor = start_at;

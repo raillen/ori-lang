@@ -566,6 +566,14 @@ pub fn stdlib_runtime_symbol(path: &str) -> Option<&'static str> {
     stdlib_entry_for_path(path).map(|entry| entry.runtime_symbol)
 }
 
+/// Returns true if the given stdlib path has native runtime support.
+/// Functions without native runtime will fail at codegen/link time.
+pub fn stdlib_native_runtime_available(path: &str) -> bool {
+    stdlib_entry_for_path(path)
+        .map(|entry| entry.native_runtime)
+        .unwrap_or(false)
+}
+
 pub fn canonical_stdlib_path(path: &str) -> Option<&'static str> {
     stdlib_entry_for_path(path).map(|entry| entry.canonical_path)
 }

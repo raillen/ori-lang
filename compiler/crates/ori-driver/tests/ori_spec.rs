@@ -2448,3 +2448,75 @@ end
     assert!(build.c_source.contains("int main(int argc, char** argv)"));
     assert!(build.c_source.contains("ori_io_print"));
 }
+
+// ─── Regression: duplicate struct fields and enum variants ────────────────────
+
+#[test]
+fn check_rejects_duplicate_struct_fields() {
+    let dir = TestDir::new("dup_struct_fields");
+    dir.write(
+        "main.orl",
+        "namespace app.test\nstruct S\n    x: int\n    x: int\nend\nfunc main()\nend\n",
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"name.duplicate_field"),
+        "expected name.duplicate_field, got {:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_rejects_duplicate_enum_variants() {
+    let dir = TestDir::new("dup_enum_variants");
+    dir.write(
+        "main.orl",
+        "namespace app.test\nenum E\n    A\n    A\nend\nfunc main()\nend\n",
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"name.duplicate_variant"),
+        "expected name.duplicate_variant, got {:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_rejects_duplicate_fields_in_enum_variant() {
+    let dir = TestDir::new("dup_variant_fields");
+    dir.write(
+        "main.orl",
+        "namespace app.test\nenum E\n    A(x: int, x: int)\nend\nfunc main()\nend\n",
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"name.duplicate_field"),
+        "expected name.duplicate_field, got {:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_accepts_struct_with_unique_fields() {
+    let dir = TestDir::new("ok_struct_unique");
+    dir.write(
+        "main.orl",
+        "namespace app.test\nstruct S\n    x: int\n    y: string\nend\nfunc main()\nend\n",
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn check_accepts_enum_with_unique_variants() {
+    let dir = TestDir::new("ok_enum_unique");
+    dir.write(
+        "main.orl",
+        "namespace app.test\nenum E\n    A\n    B\nend\nfunc main()\nend\n",
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
