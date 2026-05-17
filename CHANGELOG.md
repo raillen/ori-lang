@@ -49,6 +49,9 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **LSP:** Servidor LSP funcional com diagnostics, hover, go-to-definition, completions de stdlib
 - **LSP:** Índice semântico para hover de structs, enums, traits, funções e bindings locais
 - **LSP:** Suporte a texto em buffer (didOpen/didChange) + fallback a arquivo em disco
+- **LSP:** Refatoração modular (Sprint 1): main.rs focado em orquestração, handlers/ (diagnostics, hover, completion), index/ (semantic, project), utils/ (position, uri)
+- **LSP:** Sprint 2 — context-aware completions (AfterDot, Import, Default), find references (word-boundary scan), cross-file goto-definition (resolve imports via AST)
+- **LSP:** Sprint 3 — diagnósticos com debounce (300ms), Document Symbols hierárquico, Code Actions (quick fixes para `type.unused_result`), Lint warnings (`lint.unused_variable`, `lint.prefer_const`)
 - **Spec:** Capítulo 14 — Backend Support
 - **Spec:** Capítulo 15 — Stdlib Maintenance
 - **Spec:** Capítulo 16 — Runtime FFI Safety

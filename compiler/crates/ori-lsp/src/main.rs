@@ -4,29 +4,38 @@ mod utils;
 
 use index::project::ProjectManager;
 use index::semantic::{CompletionContext, SemanticIndex};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
+use tokio::time::Instant;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionOptions, CompletionParams, CompletionResponse,
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    DidSaveTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, Hover, HoverParams,
-    InitializeParams, InitializeResult, InitializedParams, Location, MessageType, OneOf,
-    ReferenceParams, SaveOptions, ServerCapabilities, ServerInfo,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TextDocumentSyncSaveOptions, Url,
+    CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams, CodeActionResponse,
+    CompletionItem, CompletionItemKind, CompletionOptions, CompletionParams,
+    CompletionResponse, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, DidSaveTextDocumentParams, DocumentSymbol,
+    DocumentSymbolParams, DocumentSymbolResponse, GotoDefinitionParams,
+    GotoDefinitionResponse, Hover, HoverParams, InitializeParams, InitializeResult,
+    InitializedParams, Location, MessageType, OneOf, Range, ReferenceParams,
+    SaveOptions, ServerCapabilities, ServerInfo, SymbolKind, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
+    TextEdit, Url, WorkspaceEdit,
 };
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 struct Backend {
     client: Client,
-    project: RwLock<ProjectManager>,
+    project: Arc<RwLock<ProjectManager>>,
+    last_change: Arc<RwLock<HashMap<Url, Instant>>>,
 }
 
 impl Backend {
     fn new(client: Client) -> Self {
         Self {
             client,
-            project: RwLock::new(ProjectManager::new()),
+            project: Arc::new(RwLock::new(ProjectManager::new())),
+            last_change: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -36,12 +45,12 @@ impl Backend {
             project.document_content(&uri)
         };
         let path = utils::uri::document_path_from_uri(&uri);
-        let result = match (path.as_deref(), source) {
+        let result = match (path.as_deref(), source.clone()) {
             (Some(path), Some(source)) => ori_driver::pipeline::run_check_source(path, source),
             (Some(path), None) => ori_driver::pipeline::run_check(path),
             _ => return,
         };
-        let diagnostics = match result {
+        let mut diagnostics = match result {
             Ok(output) => {
                 if let Some(target) = &path {
                     handlers::diagnostics::diagnostics_for_path(
@@ -53,10 +62,72 @@ impl Backend {
             }
             Err(message) => vec![handlers::diagnostics::file_error_diagnostic(message)],
         };
-        self.client.publish_diagnostics(uri, diagnostics, None).await;
+        // Add lint diagnostics
+        if let Some(ref src) = source {
+            let config = handlers::lint::LintConfig::default();
+            let lint_diags = handlers::lint::lint(src, &config);
+            diagnostics.extend(lint_diags);
+        }
+        self.client
+            .publish_diagnostics(uri, diagnostics, None)
+            .await;
     }
 
-    /// Get source and index for a URI.
+    /// Schedule a debounced validation for the given URI (300ms cooldown).
+    async fn schedule_debounced_validate(&self, uri: Url) {
+        let now = Instant::now();
+        {
+            let mut last = self.last_change.write().await;
+            last.insert(uri.clone(), now);
+        }
+
+        let client = self.client.clone();
+        let project = Arc::clone(&self.project);
+        let last_change = Arc::clone(&self.last_change);
+
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+
+            let should_run = {
+                let last = last_change.read().await;
+                last.get(&uri).map(|t| *t <= now).unwrap_or(false)
+            };
+            if !should_run {
+                return;
+            }
+
+            let source = {
+                let proj = project.read().await;
+                proj.document_content(&uri)
+            };
+            let path = utils::uri::document_path_from_uri(&uri);
+            let result = match (path.as_deref(), source) {
+                (Some(path), Some(source)) => {
+                    ori_driver::pipeline::run_check_source(path, source)
+                }
+                (Some(path), None) => ori_driver::pipeline::run_check(path),
+                _ => return,
+            };
+            let diagnostics = match result {
+                Ok(output) => {
+                    if let Some(target) = &path {
+                        handlers::diagnostics::diagnostics_for_path(
+                            &output.cache, &output.diagnostics, target,
+                        )
+                    } else {
+                        Vec::new()
+                    }
+                }
+                Err(message) => {
+                    vec![handlers::diagnostics::file_error_diagnostic(message)]
+                }
+            };
+            client
+                .publish_diagnostics(uri, diagnostics, None)
+                .await;
+        });
+    }
+
     async fn get_source_and_index(&self, uri: &Url) -> Option<(String, SemanticIndex)> {
         let source = {
             let project = self.project.read().await;
@@ -90,15 +161,21 @@ impl LanguageServer for Backend {
     }
 
     async fn initialized(&self, _: InitializedParams) {
-        self.client.log_message(MessageType::INFO, "ori-lsp initialized").await;
+        self.client
+            .log_message(MessageType::INFO, "ori-lsp initialized")
+            .await;
     }
 
-    async fn shutdown(&self) -> Result<()> { Ok(()) }
+    async fn shutdown(&self) -> Result<()> {
+        Ok(())
+    }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = params.text_document.uri.clone();
         self.project.write().await.upsert_document(
-            uri.clone(), params.text_document.text, params.text_document.version,
+            uri.clone(),
+            params.text_document.text,
+            params.text_document.version,
         );
         self.validate_uri(uri).await;
     }
@@ -106,9 +183,12 @@ impl LanguageServer for Backend {
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri.clone();
         if let Some(change) = params.content_changes.into_iter().last() {
-            self.project.write().await.upsert_document(uri.clone(), change.text, 0);
+            self.project
+                .write()
+                .await
+                .upsert_document(uri.clone(), change.text, 0);
         }
-        self.validate_uri(uri).await;
+        self.schedule_debounced_validate(uri).await;
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {
@@ -132,13 +212,13 @@ impl LanguageServer for Backend {
         let Some(symbol) = utils::uri::word_at_position(&source, position) else {
             return Ok(None);
         };
-
         if let Some(hover_text) = handlers::hover::builtin_type_hover(&symbol) {
             return Ok(Some(handlers::hover::markdown_hover(hover_text)));
         }
         if symbol == "it" && source.contains(" if it") {
             return Ok(Some(handlers::hover::markdown_hover(
-                "`it`\n\nCurrent value checked by a contract on a field or parameter.".into(),
+                "`it`\n\nCurrent value checked by a contract on a field or parameter."
+                    .into(),
             )));
         }
         if let Some(hover_text) = index.hover(&symbol) {
@@ -150,7 +230,8 @@ impl LanguageServer for Backend {
     // ── Go-to-definition ─────────────────────────────────────────────────────
 
     async fn goto_definition(
-        &self, params: GotoDefinitionParams,
+        &self,
+        params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
@@ -160,29 +241,27 @@ impl LanguageServer for Backend {
         let Some(symbol) = utils::uri::word_at_position(&source, position) else {
             return Ok(None);
         };
-
-        // Try local definition first
         if let Some(range) = index.definition(&symbol) {
             return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(uri, range))));
         }
-
-        // Try cross-file: check if it's an imported name
         if let Some(target_uri) = self.resolve_import_target(&index, &symbol).await {
             if let Some((target_source, _)) = self.get_source_and_index(&target_uri).await {
                 let target_index = SemanticIndex::build(&target_source);
                 if let Some(range) = target_index.definition(&symbol) {
-                    return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(target_uri, range))));
+                    return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
+                        target_uri, range,
+                    ))));
                 }
             }
         }
-
         Ok(None)
     }
 
     // ── Find references ──────────────────────────────────────────────────────
 
     async fn references(
-        &self, params: ReferenceParams,
+        &self,
+        params: ReferenceParams,
     ) -> Result<Option<Vec<Location>>> {
         let uri = params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
@@ -192,13 +271,11 @@ impl LanguageServer for Backend {
         let Some(symbol) = utils::uri::word_at_position(&source, position) else {
             return Ok(None);
         };
-
         let refs = index.find_references(&source, &symbol);
         let locations: Vec<Location> = refs
             .into_iter()
             .map(|range| Location::new(uri.clone(), range))
             .collect();
-
         if locations.is_empty() {
             Ok(None)
         } else {
@@ -209,13 +286,13 @@ impl LanguageServer for Backend {
     // ── Completions (context-aware) ──────────────────────────────────────────
 
     async fn completion(
-        &self, params: CompletionParams,
+        &self,
+        params: CompletionParams,
     ) -> Result<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
         let mut items: Vec<CompletionItem> = Vec::new();
 
-        // Determine context
         let context = if let Some((source, index)) = self.get_source_and_index(&uri).await {
             index.completion_context(&source, position)
         } else {
@@ -223,13 +300,10 @@ impl LanguageServer for Backend {
         };
 
         match context {
-            CompletionContext::AfterDot { receiver } => {
-                // Add fields/methods for the receiver type
-                // For now, show all symbols as potential members
+            CompletionContext::AfterDot { .. } => {
                 items.extend(handlers::completion::stdlib_completion_items());
             }
             CompletionContext::Import => {
-                // Show stdlib modules and keywords
                 items.extend(handlers::completion::stdlib_completion_items());
                 items.extend(handlers::completion::keyword_completion_items());
             }
@@ -237,10 +311,7 @@ impl LanguageServer for Backend {
                 items.extend(handlers::completion::stdlib_completion_items());
                 items.extend(handlers::completion::keyword_completion_items());
                 items.extend(handlers::completion::snippet_completion_items());
-
-                // Add local symbols from the index
                 if let Some((source, index)) = self.get_source_and_index(&uri).await {
-                    // Get the partial word being typed
                     let partial = utils::uri::word_at_position(&source, position)
                         .unwrap_or_default();
                     for sym in index.all_symbols() {
@@ -249,7 +320,6 @@ impl LanguageServer for Backend {
                                 label: sym.name.clone(),
                                 kind: Some(symbol_kind_to_lsp(&sym.kind)),
                                 detail: Some(sym.summary.clone()),
-                                documentation: None,
                                 ..CompletionItem::default()
                             });
                         }
@@ -262,19 +332,168 @@ impl LanguageServer for Backend {
         items.dedup_by(|a, b| a.label == b.label);
         Ok(Some(CompletionResponse::Array(items)))
     }
+
+    // ── Document Symbols ─────────────────────────────────────────────────────
+
+    async fn document_symbol(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> Result<Option<DocumentSymbolResponse>> {
+        let uri = params.text_document.uri;
+        let Some((_source, index)) = self.get_source_and_index(&uri).await else {
+            return Ok(None);
+        };
+
+        let mut symbols: Vec<DocumentSymbol> = Vec::new();
+
+        for sym in index.all_symbols() {
+            if matches!(
+                sym.kind,
+                index::semantic::SymbolKind::Function
+                    | index::semantic::SymbolKind::Struct
+                    | index::semantic::SymbolKind::Enum
+                    | index::semantic::SymbolKind::Trait
+            ) {
+                let children = if sym.kind == index::semantic::SymbolKind::Struct {
+                    index
+                        .all_symbols()
+                        .filter(|s| {
+                            s.kind == index::semantic::SymbolKind::Field
+                                && s.range.start.line >= sym.range.start.line
+                                && s.range.end.line <= sym.range.end.line + 5
+                        })
+                        .map(|s| DocumentSymbol {
+                            name: s.name.clone(),
+                            detail: Some(s.summary.clone()),
+                            kind: SymbolKind::FIELD,
+                            range: s.range,
+                            selection_range: s.range,
+                            children: None,
+                            tags: None,
+                            deprecated: None,
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+
+                symbols.push(DocumentSymbol {
+                    name: sym.name.clone(),
+                    detail: Some(sym.summary.clone()),
+                    kind: semantic_kind_to_lsp(&sym.kind),
+                    range: sym.range,
+                    selection_range: sym.range,
+                    children: if children.is_empty() {
+                        None
+                    } else {
+                        Some(children)
+                    },
+                    tags: None,
+                    deprecated: None,
+                });
+            }
+        }
+
+        if symbols.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(DocumentSymbolResponse::Nested(symbols)))
+        }
+    }
+
+    // ── Code Actions ─────────────────────────────────────────────────────────
+
+    async fn code_action(
+        &self,
+        params: CodeActionParams,
+    ) -> Result<Option<CodeActionResponse>> {
+        let mut actions: Vec<CodeActionOrCommand> = Vec::new();
+
+        for diag in &params.context.diagnostics {
+            let code = diag
+                .code
+                .as_ref()
+                .and_then(|c| match c {
+                    tower_lsp::lsp_types::NumberOrString::String(s) => Some(s.as_str()),
+                    _ => None,
+                })
+                .unwrap_or("");
+
+            match code {
+                "type.unused_result" => {
+                    actions.push(CodeActionOrCommand::CodeAction(CodeAction {
+                        title: "Discard result explicitly with `const _ =`".into(),
+                        kind: Some(CodeActionKind::QUICKFIX),
+                        diagnostics: Some(vec![diag.clone()]),
+                        edit: Some(WorkspaceEdit {
+                            changes: Some({
+                                let mut map = HashMap::new();
+                                map.insert(
+                                    params.text_document.uri.clone(),
+                                    vec![TextEdit {
+                                        range: Range::new(diag.range.start, diag.range.start),
+                                        new_text: "const _ = ".into(),
+                                    }],
+                                );
+                                map
+                            }),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    }));
+
+                    actions.push(CodeActionOrCommand::CodeAction(CodeAction {
+                        title: "Propagate result with `?`".into(),
+                        kind: Some(CodeActionKind::QUICKFIX),
+                        diagnostics: Some(vec![diag.clone()]),
+                        edit: Some(WorkspaceEdit {
+                            changes: Some({
+                                let mut map = HashMap::new();
+                                map.insert(
+                                    params.text_document.uri.clone(),
+                                    vec![TextEdit {
+                                        range: Range::new(diag.range.end, diag.range.end),
+                                        new_text: "?".into(),
+                                    }],
+                                );
+                                map
+                            }),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    }));
+                }
+                "type.expected_bool" => {
+                    actions.push(CodeActionOrCommand::CodeAction(CodeAction {
+                        title: "Wrap in boolean check".into(),
+                        kind: Some(CodeActionKind::QUICKFIX),
+                        diagnostics: Some(vec![diag.clone()]),
+                        ..Default::default()
+                    }));
+                }
+                _ => {}
+            }
+        }
+
+        if actions.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(actions))
+        }
+    }
 }
 
-/// Try to resolve an imported name to a file URI.
 impl Backend {
     async fn resolve_import_target(
-        &self, index: &SemanticIndex, _name: &str,
+        &self,
+        index: &SemanticIndex,
+        _name: &str,
     ) -> Option<Url> {
         let imports = index.imports();
         for import in imports {
             if let Some(file_path) = &import.file_path {
-                if let Ok(url) = Url::from_file_path(file_path) {
-                    // Check if the file exists
-                    if file_path.exists() {
+                if file_path.exists() {
+                    if let Ok(url) = Url::from_file_path(file_path) {
                         return Some(url);
                     }
                 }
@@ -295,6 +514,19 @@ fn symbol_kind_to_lsp(kind: &index::semantic::SymbolKind) -> CompletionItemKind 
         index::semantic::SymbolKind::Parameter => CompletionItemKind::VARIABLE,
         index::semantic::SymbolKind::Field => CompletionItemKind::FIELD,
         index::semantic::SymbolKind::Import => CompletionItemKind::MODULE,
+    }
+}
+
+fn semantic_kind_to_lsp(kind: &index::semantic::SymbolKind) -> SymbolKind {
+    match kind {
+        index::semantic::SymbolKind::Function => SymbolKind::FUNCTION,
+        index::semantic::SymbolKind::Method => SymbolKind::METHOD,
+        index::semantic::SymbolKind::Struct => SymbolKind::STRUCT,
+        index::semantic::SymbolKind::Enum => SymbolKind::ENUM,
+        index::semantic::SymbolKind::Trait => SymbolKind::INTERFACE,
+        index::semantic::SymbolKind::Variable => SymbolKind::VARIABLE,
+        index::semantic::SymbolKind::Field => SymbolKind::FIELD,
+        _ => SymbolKind::OBJECT,
     }
 }
 
@@ -319,6 +551,10 @@ fn server_capabilities() -> ServerCapabilities {
             trigger_characters: Some(vec![".".to_string()]),
             ..CompletionOptions::default()
         }),
+        document_symbol_provider: Some(OneOf::Left(true)),
+        code_action_provider: Some(tower_lsp::lsp_types::CodeActionProviderCapability::Simple(
+            true,
+        )),
         ..ServerCapabilities::default()
     }
 }
