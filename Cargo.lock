@@ -866,8 +866,11 @@ name = "ori-lsp"
 version = "0.1.0"
 dependencies = [
  "lsp-types 0.95.1",
+ "ori-ast",
  "ori-diagnostics",
  "ori-driver",
+ "ori-lexer",
+ "ori-parser",
  "ori-types",
  "tokio",
  "tower-lsp",

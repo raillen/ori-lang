@@ -10,8 +10,11 @@ name = "ori-lsp"
 path = "src/main.rs"
 
 [dependencies]
+ori-ast         = { workspace = true }
 ori-diagnostics = { workspace = true }
 ori-driver      = { workspace = true }
+ori-lexer       = { workspace = true }
+ori-parser      = { workspace = true }
 ori-types       = { workspace = true }
 lsp-types       = { workspace = true }
 tower-lsp       = { workspace = true }
