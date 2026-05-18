@@ -3622,6 +3622,14 @@ impl NativeBackend {
                 }
                 .emit_user_func(f)?;
             }
+            // Dump CLIF for debugging when ORI_DUMP_CLIF is set
+            if std::env::var("ORI_DUMP_CLIF").is_ok() {
+                eprintln!(
+                    "--- CLIF for `{}` ---\n{}",
+                    f.name,
+                    ctx.func.display()
+                );
+            }
             self.module
                 .define_function(func_id, &mut ctx)
                 .map_err(|e| format!("define '{}': {e}", f.name))?;
@@ -6611,6 +6619,9 @@ impl<'a> FuncCodegen<'a> {
         self.builder.ins().jump(header, &[]);
         self.builder.switch_to_block(header);
         let iter_current = self.builder.use_var(iter_var);
+        // Retain the iterable before each next() call to balance the
+        // managed parameter release inside next() which drops the refcount.
+        self.emit_arc_retain_if_managed(&iterable.ty, iter_current)?;
         let call = self.builder.ins().call(next_ref, &[iter_current]);
         let opt_ptr = self.builder.inst_results(call)[0];
         let has_val = self
