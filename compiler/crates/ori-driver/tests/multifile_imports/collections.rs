@@ -1050,6 +1050,57 @@ end
 }
 
 #[test]
+fn compile_runs_heap_managed_pop_and_peek_after_heap_scope_native() {
+    let dir = TestDir::new("heap_managed_pop_peek_after_scope");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.core as core
+import ori.heap as heap
+import ori.io as io
+
+struct Score
+    value: int
+end
+
+implement core.Comparable for Score
+    func compare(self, other: Score) -> int
+        return self.value - other.value
+    end
+end
+
+func main()
+    const pop_scores: heap.Heap<Score> = heap.new()
+    heap.push(pop_scores, Score(value: 5))
+    heap.push(pop_scores, Score(value: 2))
+    match heap.pop(pop_scores)
+        case some(score):
+            heap.clear(pop_scores)
+            io.print(string(score.value))
+        case none:
+            io.print("missing")
+    end
+
+    const peek_scores: heap.Heap<Score> = heap.new()
+    heap.push(peek_scores, Score(value: 8))
+    heap.push(peek_scores, Score(value: 3))
+    match heap.peek(peek_scores)
+        case some(score):
+            heap.clear(peek_scores)
+            io.print(string(score.value))
+        case none:
+            io.print("missing")
+    end
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "heap_managed_pop_peek_after_scope");
+    assert_eq!(stdout, "2\n3\n");
+}
+
+#[test]
 fn compile_runs_completed_collection_gap_apis_native() {
     let dir = TestDir::new("compile_completed_collection_gap_apis_native");
     dir.write(

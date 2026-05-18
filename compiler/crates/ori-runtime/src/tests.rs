@@ -517,6 +517,53 @@ fn heap_custom_compare_releases_temporary_retains() {
 }
 
 #[test]
+fn heap_pop_and_peek_keep_managed_values_alive() {
+    let _guard = TEST_ARC_LOCK.lock().unwrap();
+    arc_state().lock().unwrap().allocations.clear();
+    arc_state().lock().unwrap().edges.clear();
+
+    unsafe {
+        let heap = ori_heap_new_custom(test_score_compare as *const std::ffi::c_void);
+        let score =
+            ori_alloc(std::mem::size_of::<TestScore>(), Some(test_destructor)) as *mut TestScore;
+        (*score).value = 9;
+        ori_heap_push_custom(
+            heap,
+            score as i64,
+            test_score_compare as *const std::ffi::c_void,
+        );
+        ori_arc_release(score as *mut u8);
+
+        let peeked = ori_heap_peek(heap);
+        assert_eq!((*peeked).has_value, 1);
+        assert_eq!((*((*peeked).value as *mut TestScore)).value, 9);
+        ori_arc_release(heap as *mut u8);
+        assert_eq!(ori_arc_live_allocations(), 2);
+        ori_arc_release(peeked as *mut u8);
+        assert_eq!(ori_arc_live_allocations(), 0);
+
+        let heap = ori_heap_new_custom(test_score_compare as *const std::ffi::c_void);
+        let score =
+            ori_alloc(std::mem::size_of::<TestScore>(), Some(test_destructor)) as *mut TestScore;
+        (*score).value = 4;
+        ori_heap_push_custom(
+            heap,
+            score as i64,
+            test_score_compare as *const std::ffi::c_void,
+        );
+        ori_arc_release(score as *mut u8);
+
+        let popped = ori_heap_pop(heap);
+        assert_eq!((*popped).has_value, 1);
+        assert_eq!((*((*popped).value as *mut TestScore)).value, 4);
+        ori_arc_release(heap as *mut u8);
+        assert_eq!(ori_arc_live_allocations(), 2);
+        ori_arc_release(popped as *mut u8);
+        assert_eq!(ori_arc_live_allocations(), 0);
+    }
+}
+
+#[test]
 fn optional_and_result_layouts_match_native_backend() {
     let _guard = TEST_ARC_LOCK.lock().unwrap();
     arc_state().lock().unwrap().allocations.clear();

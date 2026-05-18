@@ -5957,7 +5957,7 @@ pub unsafe extern "C" fn ori_heap_pop(heap: *mut OriHeap) -> *mut OriOptionalInt
         *(*heap).data = *(*heap).data.add((*heap).len as usize);
         heap_sift_down(heap, 0);
     }
-    alloc_optional_int(1, root)
+    heap_alloc_optional_value(heap, 1, root, true)
 }
 
 #[no_mangle]
@@ -5965,7 +5965,7 @@ pub unsafe extern "C" fn ori_heap_peek(heap: *mut OriHeap) -> *mut OriOptionalIn
     if heap.is_null() || (*heap).len == 0 {
         return alloc_optional_int(0, 0);
     }
-    alloc_optional_int(1, *(*heap).data)
+    heap_alloc_optional_value(heap, 1, *(*heap).data, false)
 }
 
 #[no_mangle]
@@ -5988,8 +5988,30 @@ unsafe fn heap_push_borrowed_maybe_managed(
     item_kind: u8,
     compare_fn: *const std::ffi::c_void,
 ) {
-    heap_push_raw(heap, value, item_kind, compare_fn);
     ori_arc_register_edge(heap as *mut u8, value as *mut u8);
+    heap_push_raw(heap, value, item_kind, compare_fn);
+}
+
+unsafe fn heap_alloc_optional_value(
+    heap: *mut OriHeap,
+    has_value: c_uchar,
+    value: i64,
+    transfer_from_heap: bool,
+) -> *mut OriOptionalInt {
+    if has_value == 0 || heap.is_null() {
+        return alloc_optional_int(has_value, value);
+    }
+    match (*heap).item_kind {
+        HEAP_ITEM_STRING | HEAP_ITEM_CUSTOM => {
+            if transfer_from_heap {
+                let value = transfer_collection_edge_to_return_value(heap as *mut u8, value);
+                alloc_optional_owned_managed_value(1, value)
+            } else {
+                alloc_optional_borrowed_managed_value(1, value)
+            }
+        }
+        _ => alloc_optional_int(has_value, value),
+    }
 }
 
 #[no_mangle]
@@ -6679,6 +6701,17 @@ unsafe fn alloc_optional_owned_managed_value(
     if has_value != 0 {
         ori_arc_register_edge(ptr as *mut u8, value as *mut u8);
         ori_arc_release(value as *mut u8);
+    }
+    ptr
+}
+
+unsafe fn alloc_optional_borrowed_managed_value(
+    has_value: c_uchar,
+    value: i64,
+) -> *mut OriOptionalInt {
+    let ptr = alloc_optional_int(has_value, value);
+    if has_value != 0 {
+        ori_arc_register_edge(ptr as *mut u8, value as *mut u8);
     }
     ptr
 }

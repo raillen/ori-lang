@@ -1,7 +1,7 @@
 # Status das Fases — Ori Language
 
 > Última atualização: 2026-05-18
-> Baseline: 100% testes passando (244/244 multifile, 102/102 ori_spec, 38/38 concurrency)
+> Baseline: 100% testes passando (245/245 multifile, 102/102 ori_spec, 38/38 concurrency)
 
 ---
 

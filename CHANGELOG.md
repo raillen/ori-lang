@@ -89,6 +89,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Codegen:** `?` no backend C sem propagação → propaga com cleanup de escopo
 - **Codegen:** Runtime bounds não seguiam spec → `ori_abort_bounds` para out-of-bounds
 - **Codegen:** `optional<T>` e `result<T,E>` com `!=` podiam comparar payload da variante errada → agora comparam payload apenas quando as variantes batem
+- **Runtime:** `heap.pop`/`heap.peek` para valores gerenciados não transferiam a aresta ARC ao `optional` retornado → agora o valor continua vivo após o heap sair de escopo
 - **Stdlib:** `panic`/`todo`/`unreachable` não implementados → implementados
 - **Stdlib:** `.or`/`.or_return`/`.or_wrap` inexistentes ou incompletos → implementados para o escopo atual (`.or_wrap` em `result<T, string>`)
 - **CLI:** `ori compile` help dizia "no C compiler needed" → atualizado para refletir dependência de linker
