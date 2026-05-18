@@ -1646,7 +1646,7 @@ fn temp_test_paths() -> (PathBuf, PathBuf) {
     (obj_path, tmp_dir.join(exe_name))
 }
 
-fn format_source_text(source: &str) -> String {
+pub fn format_source_text(source: &str) -> String {
     let mut indent = 0usize;
     let mut out = String::new();
 

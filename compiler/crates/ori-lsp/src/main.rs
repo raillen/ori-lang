@@ -15,7 +15,9 @@ use tower_lsp::lsp_types::{
     CodeLens, CodeLensOptions, CodeLensParams, Command, CompletionItem, CompletionItemKind,
     CompletionOptions, CompletionParams, CompletionResponse, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams,
-    DocumentSymbol, DocumentSymbolParams, DocumentSymbolResponse, GotoDefinitionParams,
+    DocumentFormattingParams, DocumentRangeFormattingParams,
+    DocumentSymbol, DocumentSymbolParams, DocumentSymbolResponse, ExecuteCommandParams,
+    GotoDefinitionParams,
     GotoDefinitionResponse, Hover, HoverParams, InlayHint, InlayHintKind, InlayHintLabel,
     InlayHintParams, InitializeParams, InitializeResult, InitializedParams, Location,
     MessageType, OneOf, Position, PrepareRenameResponse, Range, ReferenceParams, RenameParams,
@@ -822,6 +824,114 @@ impl LanguageServer for Backend {
             Ok(Some(lenses))
         }
     }
+
+    // ── Formatting ───────────────────────────────────────────────────────────
+
+    async fn formatting(
+        &self,
+        params: DocumentFormattingParams,
+    ) -> Result<Option<Vec<TextEdit>>> {
+        let uri = params.text_document.uri;
+        let Some((source, _)) = self.get_source_and_index(&uri).await else {
+            return Ok(None);
+        };
+        let formatted = ori_driver::pipeline::format_source_text(&source);
+        if formatted == source {
+            return Ok(None);
+        }
+        let range = range_for_whole_document(&source);
+        Ok(Some(vec![TextEdit {
+            range,
+            new_text: formatted,
+        }]))
+    }
+
+    async fn range_formatting(
+        &self,
+        params: DocumentRangeFormattingParams,
+    ) -> Result<Option<Vec<TextEdit>>> {
+        // For range formatting, format the whole file and return the changed range
+        self.formatting(DocumentFormattingParams {
+            text_document: params.text_document,
+            options: params.options,
+            work_done_progress_params: params.work_done_progress_params,
+        })
+        .await
+    }
+
+    // ── Execute Command (Test Runner) ────────────────────────────────────────
+
+    async fn execute_command(
+        &self,
+        params: ExecuteCommandParams,
+    ) -> Result<Option<serde_json::Value>> {
+        match params.command.as_str() {
+            "ori.runTests" => {
+                let args: Vec<String> = params
+                    .arguments
+                    .iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect();
+                if args.is_empty() {
+                    self.client
+                        .log_message(
+                            MessageType::WARNING,
+                            "ori.runTests requires a file path",
+                        )
+                        .await;
+                    return Ok(None);
+                }
+                let file_path = &args[0];
+                let test_filter = args.get(1).map(|s| s.as_str());
+
+                // Run tests via ori driver
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    ori_driver::pipeline::run_test(
+                        &std::path::PathBuf::from(file_path),
+                    )
+                }));
+
+                match result {
+                    Ok(Ok(output)) => {
+                        let passed = output.results.iter().filter(|r| r.passed).count();
+                        let total = output.results.len();
+                        let msg = format!(
+                            "Tests completed: {passed} passed, {total} total",
+                        );
+                        self.client
+                            .log_message(MessageType::INFO, msg)
+                            .await;
+                    }
+                    Ok(Err(err)) => {
+                        self.client
+                            .log_message(
+                                MessageType::ERROR,
+                                format!("Test run failed: {err}"),
+                            )
+                            .await;
+                    }
+                    Err(_) => {
+                        self.client
+                            .log_message(
+                                MessageType::ERROR,
+                                "Test run panicked",
+                            )
+                            .await;
+                    }
+                }
+                Ok(None)
+            }
+            _ => {
+                self.client
+                    .log_message(
+                        MessageType::WARNING,
+                        format!("Unknown command: {}", params.command),
+                    )
+                    .await;
+                Ok(None)
+            }
+        }
+    }
 }
 
 impl Backend {
@@ -1060,6 +1170,16 @@ fn parse_params_from_signature(sig: &str) -> Vec<String> {
         .collect()
 }
 
+/// Build a Range covering the entire document.
+fn range_for_whole_document(source: &str) -> Range {
+    let lines = source.lines().count().saturating_sub(1);
+    let last_len = source.lines().last().map(|l| l.len()).unwrap_or(0);
+    Range {
+        start: Position::new(0, 0),
+        end: Position::new(lines as u32, last_len as u32),
+    }
+}
+
 fn server_capabilities() -> ServerCapabilities {
     ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Options(
@@ -1106,6 +1226,14 @@ fn server_capabilities() -> ServerCapabilities {
         }),
         code_lens_provider: Some(CodeLensOptions {
             resolve_provider: Some(false),
+        }),
+        document_formatting_provider: Some(OneOf::Left(true)),
+        document_range_formatting_provider: Some(OneOf::Left(true)),
+        execute_command_provider: Some(tower_lsp::lsp_types::ExecuteCommandOptions {
+            commands: vec!["ori.runTests".to_string()],
+            work_done_progress_options: WorkDoneProgressOptions {
+                work_done_progress: None,
+            },
         }),
         ..ServerCapabilities::default()
     }

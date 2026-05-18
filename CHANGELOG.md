@@ -53,6 +53,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **LSP:** Sprint 2 — context-aware completions (AfterDot, Import, Default), find references (word-boundary scan), cross-file goto-definition (resolve imports via AST)
 - **LSP:** Sprint 3 — diagnósticos com debounce (300ms), Document Symbols hierárquico, Code Actions (quick fixes), Lint engine (unused_variable, prefer_const)
 - **LSP:** Sprint 4 — Inlay Hints (type annotations), Semantic Tokens (syntax highlighting), Workspace Symbols (busca global), Rename (refatoração), Signature Help, Code Lens (contagem de referências)
+- **LSP:** Sprint 5 — Formatting via `ori fmt` pipeline, Test Runner (`ori.runTests` via executeCommand), range_for_whole_document helper
 - **Spec:** Capítulo 14 — Backend Support
 - **Spec:** Capítulo 15 — Stdlib Maintenance
 - **Spec:** Capítulo 16 — Runtime FFI Safety

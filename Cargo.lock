@@ -872,6 +872,7 @@ dependencies = [
  "ori-lexer",
  "ori-parser",
  "ori-types",
+ "serde_json",
  "tokio",
  "tower-lsp",
 ]
