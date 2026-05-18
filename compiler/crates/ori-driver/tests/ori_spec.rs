@@ -1404,6 +1404,31 @@ end
 }
 
 #[test]
+fn func_rejects_self_field_mutation_in_non_mut_method() {
+    let dir = TestDir::new("func_self_field_mutation_non_mut");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+struct Counter
+    value: int
+    func increment()
+        self.value = self.value + 1
+    end
+end
+func main()
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"mut.field_mutation_in_func"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
 fn func_rejects_closure_capturing_var() {
     let dir = TestDir::new("func_closure_capture_var");
     dir.write(

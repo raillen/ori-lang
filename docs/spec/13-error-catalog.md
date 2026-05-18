@@ -227,6 +227,7 @@ when the compiler starts producing it.
 | `mut.closure_captures_var` | error | Closure captures a mutable binding |
 | `mut.const_method_call` | error | `mut func` is called on a `const` receiver |
 | `mut.const_mutation` | error | Code tries to mutate a `const` value |
+| `mut.field_mutation_in_func` | error | Non-`mut` method mutates `self` state |
 | `mut.using_binding_mutated` | error | `using` binding is reassigned |
 
 ### `generic`
@@ -283,7 +284,6 @@ They are not emitted by the compiler today.
 | `match.duplicate_case` | warning | planned match diagnostics |
 | `match.guard_not_exhaustive` | warning | planned match diagnostics |
 | `match.unreachable_case` | warning | planned match diagnostics |
-| `mut.field_mutation_in_func` | error | planned method mutability diagnostic |
 | `parse.unterminated_block` | error | planned parser recovery diagnostic |
 | `parse.unterminated_string` | error | planned lexer/parser split diagnostic |
 | `project.circular_import` | error | planned project-level diagnostic |

@@ -5527,15 +5527,26 @@ impl<'a> Checker<'a> {
                 .with_action("bind a separate `var` if mutable state is needed"),
             );
         } else if !mutable {
-            let code = if matches!(lv, LValue::Ident(_)) {
-                "bind.const_reassignment"
+            let (code, action) = if matches!(lv, LValue::Ident(_)) {
+                (
+                    "bind.const_reassignment",
+                    "declare it with `var` if reassignment is intended",
+                )
+            } else if root.text == "self" {
+                (
+                    "mut.field_mutation_in_func",
+                    "declare this method as `mut func` before mutating `self`",
+                )
             } else {
-                "mut.const_mutation"
+                (
+                    "mut.const_mutation",
+                    "declare it with `var` if reassignment is intended",
+                )
             };
             self.sink.emit(
                 Diagnostic::error(code, format!("`{}` is not mutable", root.text))
                     .with_label(Label::primary(self.file_id, root.span, "immutable binding"))
-                    .with_action("declare it with `var` if reassignment is intended"),
+                    .with_action(action),
             );
         }
     }
