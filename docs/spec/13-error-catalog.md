@@ -262,6 +262,7 @@ when the compiler starts producing it.
 
 | Code | Severity | Description |
 |---|---|---|
+| `extern.managed_type_in_ffi` | error | `extern` member uses an Ori-managed type at the raw FFI boundary |
 | `extern.unknown_abi` | error | `extern` block names an unsupported ABI |
 
 ---
@@ -278,7 +279,6 @@ They are not emitted by the compiler today.
 | `contract.field_violation` | runtime panic | runtime contract reporting |
 | `contract.param_violation` | runtime panic | runtime contract reporting |
 | `doc.unclosed_block` | error | planned documentation/comment lexer work |
-| `extern.managed_type_in_ffi` | error | planned FFI diagnostics |
 | `generic.ambiguous_type_arg` | error | planned generic diagnostics |
 | `match.duplicate_case` | warning | planned match diagnostics |
 | `match.guard_not_exhaustive` | warning | planned match diagnostics |

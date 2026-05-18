@@ -9,7 +9,9 @@ use crate::ty::{expand_ty_aliases, substitute_ty_params};
 use crate::ty::{OpaqueTy, Ty};
 use ori_ast::common::{Attr, AttrArg, Name, QualifiedName, WhereConstraint};
 use ori_ast::expr::{Arg, ArgValue, BinaryOp, ClosureBody, Expr, FStrPart, UnaryOp};
-use ori_ast::item::{FuncDecl, ImplementDecl, Item, ItemWithAttrs, Param, ParamKind, SourceFile};
+use ori_ast::item::{
+    ExternBlock, FuncDecl, ImplementDecl, Item, ItemWithAttrs, Param, ParamKind, SourceFile,
+};
 use ori_ast::pattern::Pattern;
 use ori_ast::stmt::{Block, LValue, Stmt};
 use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label, Span};
@@ -486,6 +488,7 @@ impl<'a> Checker<'a> {
                     }
                     restore_alias(&mut self.aliases, "Self", previous_self);
                 }
+                Item::Extern(ext) => self.check_extern(ext),
                 _ => {}
             }
         }
@@ -511,6 +514,50 @@ impl<'a> Checker<'a> {
                 );
             }
         }
+    }
+
+    fn check_extern(&mut self, ext: &ExternBlock) {
+        for member in &ext.members {
+            match member {
+                ori_ast::item::ExternMember::Func {
+                    params,
+                    return_ty,
+                    span,
+                    ..
+                } => {
+                    for param in params {
+                        let ty = self.lower(&param.ty, &[]);
+                        self.check_extern_ffi_ty(&ty, param.ty.span(), "extern function parameter");
+                    }
+                    if let Some(return_ty) = return_ty {
+                        let ty = self.lower(return_ty, &[]);
+                        self.check_extern_ffi_ty(&ty, return_ty.span(), "extern function return");
+                    } else {
+                        let ty = Ty::Void;
+                        self.check_extern_ffi_ty(&ty, *span, "extern function return");
+                    }
+                }
+                ori_ast::item::ExternMember::Var { ty, span, .. } => {
+                    let ty = self.lower(ty, &[]);
+                    self.check_extern_ffi_ty(&ty, *span, "extern variable");
+                }
+            }
+        }
+    }
+
+    fn check_extern_ffi_ty(&mut self, ty: &Ty, span: Span, position: &str) {
+        if !ty.is_runtime_managed() {
+            return;
+        }
+        self.sink.emit(
+            Diagnostic::error(
+                "extern.managed_type_in_ffi",
+                format!("{position} uses managed type `{}`", ty.display()),
+            )
+            .with_label(Label::primary(self.file_id, span, "managed FFI type here"))
+            .with_why("managed Ori values have ARC ownership and runtime layout that cannot cross raw FFI directly")
+            .with_action("use primitive numeric types, bool, or an explicit unmanaged handle at the FFI boundary"),
+        );
     }
 
     fn check_item_attrs(&mut self, item: &ItemWithAttrs) {

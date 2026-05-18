@@ -86,6 +86,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Parser:** Variadic `...` não parseava → parseia `...` e `..` (compat)
 - **Parser:** Default antes de required não validado → emite `parse.default_before_required`
 - **Parser:** ABI desconhecida em `extern` usava fallback silencioso para `C` → agora emite `extern.unknown_abi`
+- **Checker:** Tipos managed em fronteira `extern c` passavam até o backend → agora emitem `extern.managed_type_in_ffi`
 - **Parser:** Inline `if` sem `else` emitia erro genérico → agora emite `parse.missing_else_in_if_expr`
 - **Checker:** Nomes desconhecidos passavam como `Ty::Infer(0)` → emitem `name.undefined` + `Ty::Error`
 - **Docs:** Função documentada com retorno não-`void` e sem `@return` → agora emite warning `doc.missing_return`

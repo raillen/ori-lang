@@ -412,41 +412,7 @@ fn cl_stdlib_abi_type(ty: StdlibNativeAbiTy, ptr_ty: types::Type) -> types::Type
 }
 
 fn is_managed_ty(ty: &Ty) -> bool {
-    matches!(
-        ty,
-        Ty::String
-            | Ty::Bytes
-            | Ty::List(_)
-            | Ty::Map(_, _)
-            | Ty::Set(_)
-            | Ty::Range(_)
-            | Ty::Optional(_)
-            | Ty::Result(_, _)
-            | Ty::Tuple(_)
-            | Ty::Named(_, _)
-            | Ty::Any(_)
-            | Ty::Func { .. }
-            | Ty::Lazy(_)
-            | Ty::Future(_)
-            | Ty::TaskJob(_)
-            | Ty::Channel(_)
-            | Ty::AtomicInt
-            | Ty::TaskJoinError
-            | Ty::ChannelSendError
-            | Ty::ChannelReceiveError
-            | Ty::Opaque {
-                kind: OpaqueTy::Deque
-                    | OpaqueTy::Queue
-                    | OpaqueTy::Stack
-                    | OpaqueTy::LinkedList
-                    | OpaqueTy::DoublyLinkedList
-                    | OpaqueTy::Tree
-                    | OpaqueTy::HashTable
-                    | OpaqueTy::Graph
-                    | OpaqueTy::Heap,
-                ..
-            }
-    )
+    ty.is_runtime_managed()
 }
 
 #[derive(Clone, Copy)]

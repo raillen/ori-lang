@@ -2478,6 +2478,28 @@ end
 }
 
 #[test]
+fn crosscut_rejects_managed_extern_ffi_types() {
+    let dir = TestDir::new("crosscut_managed_extern_ffi_types");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+extern c
+    func read_name(input: string) -> string
+    var last_name: string
+end
+
+func main()
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    let codes = diagnostic_codes(&out);
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(codes.contains(&"extern.managed_type_in_ffi"), "{codes:?}");
+}
+
+#[test]
 fn crosscut_fmt_preserves_valid_source_unchanged() {
     let dir = TestDir::new("crosscut_fmt_idempotent");
     let source = r#"namespace app.main
