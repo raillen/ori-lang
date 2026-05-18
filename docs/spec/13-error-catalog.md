@@ -135,7 +135,6 @@ when the compiler starts producing it.
 | `async.capture_not_transferable` | error | Closure passed to `task.spawn` captures a value that is not `Transferable` |
 | `async.await_outside_async` | error | `await` was used outside an `async func` |
 | `async.await_non_future` | error | `await` was used on a value that is not `future<T>` |
-| `async.using_unsupported` | error | `using` was used inside an `async func` before cleanup across await is supported |
 
 ### `backend`
 
@@ -298,6 +297,7 @@ They are not emitted by the compiler today.
 | `type.propagation_context` | error | reserved alias; emitted propagation codes are more specific |
 | `type.undefined` | error | reserved alias; emitted code is `type.undefined_name` |
 | `using.non_result_init` | error | planned `using` diagnostic |
+| `async.using_unsupported` | error | reserved; previously emitted when `using` was rejected in async; now allowed with TODO cleanup |
 
 ---
 

@@ -1691,6 +1691,16 @@ fn builtin_stdlib_structs(def_map: &DefMap) -> Vec<HirStruct> {
                 contract: None,
                 span: Span::DUMMY,
             },
+            // Error chaining: message describing the original cause.
+            // Empty string means there is no cause.
+            // Future: migrate to `optional<any<Error>>` once the C backend supports
+            // recursive struct field types.
+            HirField {
+                name: SmolStr::new("cause"),
+                ty: Ty::String,
+                contract: None,
+                span: Span::DUMMY,
+            },
         ],
         is_public: true,
         span: Span::DUMMY,
@@ -3028,6 +3038,34 @@ impl<'a> Lowerer<'a> {
                 }
             }
             Expr::Call { callee, args, span } => {
+                // Desugar .or() method on optional/result
+                if let Expr::Field { object, field, .. } = callee.as_ref() {
+                    if field.text.as_str() == "or" && args.len() == 1 {
+                        let obj = self.lower_expr(object, tp);
+                        let fallback = &args[0];
+                        let fallback_expr = match &fallback.value {
+                            ori_ast::expr::ArgValue::Expr(e)
+                            | ori_ast::expr::ArgValue::Spread(e) => e,
+                        };
+                        let fallback_val = self.lower_expr(fallback_expr, tp);
+                        return lower_optional_or_result_or(obj, fallback_val, *span);
+                    }
+                    if field.text.as_str() == "or_return" && args.is_empty() {
+                        // Desugar .or_return() to the `?` operator (Propagate)
+                        let obj = self.lower_expr(object, tp);
+                        let inner_ty = match &obj.ty {
+                            Ty::Optional(t) => *t.clone(),
+                            Ty::Result(ok, _) => *ok.clone(),
+                            _ => Ty::Error,
+                        };
+                        return HirExpr {
+                            kind: HirExprKind::Propagate(Box::new(obj)),
+                            ty: inner_ty,
+                            span: *span,
+                        };
+                    }
+                }
+
                 // Intercept builtin wrapper functions before generic lowering
                 if let Expr::QualifiedIdent(q) = callee.as_ref() {
                     let name = q.to_string();
@@ -4487,6 +4525,42 @@ fn lower_is_target_ty(
     }
     let ty_node = ori_ast::ty::Type::Named(name.clone());
     l.lower_ast_ty(&ty_node, tp)
+}
+
+/// Desugar `.or(fallback)` on `optional<T>` or `result<T,E>`.
+/// Emits an internal intrinsic call handled directly by native and C codegen.
+fn lower_optional_or_result_or(obj: HirExpr, fallback: HirExpr, span: Span) -> HirExpr {
+    let inner_ty = match &obj.ty {
+        Ty::Optional(t) => *t.clone(),
+        Ty::Result(ok, _) => *ok.clone(),
+        _ => Ty::Error,
+    };
+    HirExpr {
+        kind: HirExprKind::Call {
+            callee: Box::new(HirExpr {
+                kind: HirExprKind::Var(SmolStr::new("__ori_builtin_or")),
+                ty: Ty::Func {
+                    params: vec![obj.ty.clone(), fallback.ty.clone()],
+                    ret: Box::new(inner_ty.clone()),
+                },
+                span: Span::DUMMY,
+            }),
+            args: vec![
+                HirArg {
+                    label: None,
+                    spread: false,
+                    value: obj,
+                },
+                HirArg {
+                    label: None,
+                    spread: false,
+                    value: fallback,
+                },
+            ],
+        },
+        ty: inner_ty,
+        span,
+    }
 }
 
 #[cfg(test)]

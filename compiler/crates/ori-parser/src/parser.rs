@@ -165,6 +165,21 @@ impl<'src> Parser<'src> {
         }
     }
 
+    pub fn parse_member_name(&mut self) -> Option<Name> {
+        match self.peek_kind() {
+            Some(TokenKind::Ident | TokenKind::Or) => {
+                let tok = self.advance().unwrap();
+                let text = SmolStr::new(self.slice(tok.span));
+                Some(Name::new(text, tok.span))
+            }
+            _ => {
+                let span = self.current_span();
+                self.error("parse.expected_identifier", "expected identifier", span);
+                None
+            }
+        }
+    }
+
     fn parse_qualified_name_part(&mut self) -> Option<Name> {
         if !is_qualified_name_part(self.peek_kind()) {
             let span = self.current_span();

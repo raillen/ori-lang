@@ -232,8 +232,8 @@ end
 }
 
 #[test]
-fn check_rejects_using_inside_async_func_until_cleanup_is_supported() {
-    let dir = TestDir::new("async_using_unsupported");
+fn check_allows_using_inside_async_func() {
+    let dir = TestDir::new("async_using_allowed");
     dir.write(
         "main.orl",
         r#"namespace app.main
@@ -261,9 +261,7 @@ end
     );
 
     let out = run_check(&dir.path("main.orl")).unwrap();
-    assert!(out.has_errors, "{:?}", out.diagnostics);
-    let codes = diagnostic_codes(&out);
-    assert!(codes.contains(&"async.using_unsupported"), "{codes:?}");
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
 }
 
 #[test]

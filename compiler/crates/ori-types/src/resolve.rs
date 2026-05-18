@@ -191,14 +191,19 @@ pub fn resolve_many<S: Into<SmolStr>>(
                                     sink.emit(
                                         Diagnostic::error(
                                             "bind.duplicate_field",
-                                            format!("duplicate field `{}` in struct `{}`", name, s.name.text),
+                                            format!(
+                                                "duplicate field `{}` in struct `{}`",
+                                                name, s.name.text
+                                            ),
                                         )
                                         .with_label(Label::primary(
                                             *file_id,
                                             f.name.span,
                                             "duplicate field name",
                                         ))
-                                        .with_action("rename or remove one of the duplicate fields"),
+                                        .with_action(
+                                            "rename or remove one of the duplicate fields",
+                                        ),
                                     );
                                     // Still collect the field so lowering doesn't panic on missing
                                     // fields, but the error has been emitted.
@@ -331,10 +336,7 @@ pub fn resolve_many<S: Into<SmolStr>>(
                                 })
                             })
                             .collect();
-                        enum_sigs.push(EnumSig {
-                            def_id,
-                            variants,
-                        });
+                        enum_sigs.push(EnumSig { def_id, variants });
                     }
                 }
                 Item::Implement(i) => {
@@ -1020,6 +1022,11 @@ fn builtin_stdlib_error_struct_sig(def_id: DefId) -> StructSig {
         fields: vec![
             (SmolStr::new("code"), Ty::String),
             (SmolStr::new("message"), Ty::String),
+            // Error chaining: message describing the original cause.
+            // Empty string means there is no cause.
+            // Future: migrate to `optional<any<Error>>` once the C backend supports
+            // recursive struct field types.
+            (SmolStr::new("cause"), Ty::String),
         ],
     }
 }
@@ -1075,6 +1082,14 @@ fn builtin_core_trait_sigs(core_traits: &[(SmolStr, DefId)]) -> Vec<TraitSig> {
                     params: vec![self_ty],
                     return_ty: Ty::Void,
                     is_mut: true,
+                    has_default: false,
+                    span: ori_diagnostics::Span::DUMMY,
+                }],
+                "Displayable" => vec![TraitMethodSig {
+                    name: SmolStr::new("display"),
+                    params: vec![self_ty],
+                    return_ty: Ty::String,
+                    is_mut: false,
                     has_default: false,
                     span: ori_diagnostics::Span::DUMMY,
                 }],

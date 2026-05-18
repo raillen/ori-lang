@@ -2126,6 +2126,9 @@ impl CCodegen {
                     if n.as_str() == "ori_lazy_force" && args.len() == 1 {
                         return self.emit_lazy_force(&args[0].value, &expr.ty);
                     }
+                    if n.as_str() == "__ori_builtin_or" && args.len() == 2 {
+                        return self.emit_builtin_or(&args[0].value, &args[1].value);
+                    }
                 }
                 let params = match &callee.ty {
                     Ty::Func { params, .. } => params.clone(),
@@ -2719,6 +2722,41 @@ impl CCodegen {
             "({{ {lazy_ptr_ty} {tmp} = {lazy_s}; if (!{tmp}->forced) {{ {}; }} {tmp}->value; }})",
             force_body.join("; ")
         )
+    }
+
+    fn emit_builtin_or(&mut self, value: &HirExpr, fallback: &HirExpr) -> String {
+        let value_s = self.expr_to_c(value);
+        let tmp = self.fresh_tmp();
+        match &value.ty {
+            Ty::Optional(inner) => {
+                let fallback_s = self.expr_to_c_for_expected(fallback, inner);
+                format!(
+                    "({{ {} {} = {}; {}.has_value ? {}.value : {}; }})",
+                    ty_to_c(&value.ty),
+                    tmp,
+                    value_s,
+                    tmp,
+                    tmp,
+                    fallback_s
+                )
+            }
+            Ty::Result(ok, _) => {
+                let fallback_s = self.expr_to_c_for_expected(fallback, ok);
+                format!(
+                    "({{ {} {} = {}; {}.is_ok ? {}.value.ok : {}; }})",
+                    ty_to_c(&value.ty),
+                    tmp,
+                    value_s,
+                    tmp,
+                    tmp,
+                    fallback_s
+                )
+            }
+            other => self.unsupported_expr(format!(
+                "C backend cannot lower `.or()` for `{}`",
+                other.display()
+            )),
+        }
     }
 
     fn emit_string_parse_int(&mut self, input: &str, result_ty: &Ty) -> String {

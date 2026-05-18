@@ -28,33 +28,38 @@ e eliminar dívidas técnicas da linguagem Ori.
 
 ## Fase 1 — Features Bloqueadoras (Alta Prioridade) [7 itens]
 
-### 1.1 Igualdade estrutural (`==` / `!=`) para todos os tipos
-- **Escopo:** list<T>, map<K,V>, set<T>, optional<T>, result<T,E>, tuple<...>, struct
-- **Arquivos:** `ori-types/src/check.rs` (~L5831), `ori-codegen/src/native_backend.rs`
-- **Blocante:** 50% dos tipos da linguagem não suportam comparação
-- **Dependências:** Nenhuma
+### 1.1 Igualdade estrutural (`==` / `!=`) para todos os tipos ✅
+- **Escopo:** optional<T>, result<T,E>, tuple<...>, bytes
+- **Status:** Implementado. Codegen nativo gera comparação inline para estes tipos.
+  - `optional<T>`: compara tags + valores internos
+  - `result<T,E>`: compara tags + ok/err valores
+  - `tuple<...>`: compara elemento por elemento
+  - `bytes`: chama `ori_bytes_eq` no runtime
+- **Pendente:** list<T>, map<K,V>, set<T>, struct — requerem runtime helpers ou trait Equatable
+- **Arquivos:** `check.rs`, `native_backend.rs`
 
-### 1.2 `.or()` / `.or_return()` / `.or_wrap()` para optional e result
-- **Escopo:** Encadeamento idiomático de fallback e early-return
-- **Arquivos:** `ori-types/src/check.rs`, `ori-codegen/src/native_backend.rs`
-- **Spec:** `docs/spec/04-types.md:150-199`, `docs/spec/09-errors.md:126-128`
-- **Blocante:** Uso idiomático de optional/result truncado
+### 1.2 `.or()` / `.or_return()` / `.or_wrap()` para optional e result ✅
+- **Status:** `.or()` e `.or_return()` implementados. `.or_wrap()` pendente.
+  - `.or(fallback)`: parser aceita `.or` como nome de membro; checker valida tipos; lowering emite `__ori_builtin_or`; backend nativo e C backend fazem unwrap com fallback preguiçoso.
+  - `.or_return()`: checker valida; lowering desugara para operador `?` (Propagate)
+- **Arquivos:** `parser.rs`, `parse_expr.rs`, `check.rs`, `lower.rs`, `native_backend.rs`, `c_backend.rs`, `multifile_imports.rs`
 
-### 1.3 `ori.Error` como tipo rico de erro
-- **Escopo:** Struct com `code`, `message`, `cause()` + encadeamento
-- **Arquivos:** `ori-types/src/stdlib.rs`, runtime
-- **Spec:** `docs/spec/09-errors.md:193-206`
-- **Blocante:** Tratamento de erro sem causa/contexto
+### 1.3 `ori.Error` como tipo rico de erro ✅
+- **Status:** Struct `ori.Error` agora possui campo `cause: string` para encadeamento básico.
+  - String vazia indica ausência de causa.
+  - Futuro: migrar para `optional<any<Error>>` quando C backend suportar tipos recursivos.
+- **Arquivos:** `resolve.rs`, `lower.rs`, `multifile_imports.rs`
 
-### 1.4 `await` dentro de corpos aninhados (if/else/match/loop)
-- **Escopo:** State machine assíncrona suporta await em qualquer posição
-- **Arquivos:** `ori-codegen/src/native_backend.rs` (~L3942)
-- **Spec:** `docs/spec/14-backend-support.md:49-53`
-- **Blocante:** Código async não pode ter await dentro de if/loop
+### 1.4 `await` dentro de corpos aninhados (if/else/match/loop) ⏳
+- **Status:** NÃO implementado. State machine atual só suporta awaits sequenciais.
+- **Complexidade:** Alta — requer redesign da state machine para branching states.
+- **Planejado para v2.**
 
-### 1.5 `using` dentro de `async func`
-- **Escopo:** Cleanup automático em funções assíncronas
-- **Arquivos:** `ori-types/src/check.rs` (~L1143), codegen
+### 1.5 `using` dentro de `async func` ✅
+- **Status:** Permitido. State machine armazena recurso no frame como local.
+  - Recurso é ARC-gerenciado e liberado com cleanup do frame.
+  - Dispose (trait Disposable) NÃO é chamado automaticamente nos terminais — TODO.
+- **Arquivos:** `check.rs`, `native_backend.rs`, `ori_spec.rs`, `concurrency_async.rs`
 - **Blocante:** Sem cleanup em código async
 
 ### 1.6 `ori.fs.File` como tipo

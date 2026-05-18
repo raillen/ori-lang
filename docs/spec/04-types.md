@@ -147,16 +147,18 @@ const empty: optional<string> = none
 
 Constructors: `some(value)` and `none`.
 
-Planned operations:
+Supported operations:
 
 ```ori
 value.or(fallback)         -- unwrap or use fallback
-value.or_return(expr)      -- unwrap or return expr from enclosing function
+value.or_return()          -- unwrap or propagate from enclosing function
 ```
 
-Current status: use `?`, `if some(...) = ...`, or `match`. The `.or(...)`
-and `.or_return(...)` helpers are planned and are not accepted by the current
-checker/runtime.
+Current status: `.or(fallback)` is accepted for `optional<T>` and
+`result<T, E>` in the checker, native backend, and C backend. The fallback is
+evaluated only when the receiver is `none` or `error(_)`. `.or_return()` is
+accepted as shorthand for `?`. The older `.or_return(expr)` form is not
+implemented.
 
 Pattern matching over `optional<T>`:
 
@@ -190,14 +192,17 @@ const bad: result<int, string> = error("something went wrong")
 
 Constructors: `success(value)` and `error(value)`.
 
-Planned operations:
+Supported and planned operations:
 
 ```ori
+value.or(fallback)                   -- unwrap success or use fallback
+value.or_return()                    -- unwrap success or propagate error
 value.or_wrap("context message")    -- keep success, add context to error
 ```
 
-Current status: use `?` or `match`. The `.or_wrap(...)` helper is planned and
-is not accepted by the current checker/runtime.
+Current status: `.or(fallback)` and `.or_return()` are accepted. Use `?` or
+`match` when explicit error handling is clearer. The `.or_wrap(...)` helper is
+planned and is not accepted by the current checker/runtime.
 
 Pattern matching:
 

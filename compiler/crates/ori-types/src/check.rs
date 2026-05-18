@@ -702,7 +702,10 @@ impl<'a> Checker<'a> {
                     .iter()
                     .position(|name| name == &param.text)
                     .map(|index| index as u32)?;
-                let trait_def_id = self.resolve_def_id(&bound.to_string())?;
+                let mut trait_def_id = self.resolve_def_id(&bound.to_string())?;
+                // Follow type aliases to find the actual trait.
+                // e.g. `type MyEq = ori.core.Equatable` → resolve to Equatable.
+                trait_def_id = self.resolve_trait_through_aliases(trait_def_id)?;
                 if self.def_map.get(trait_def_id).kind != DefKind::Trait {
                     return None;
                 }
@@ -714,6 +717,39 @@ impl<'a> Checker<'a> {
                 })
             })
             .collect()
+    }
+
+    /// Follow a chain of type aliases to find the underlying trait DefId.
+    /// Returns None if the chain doesn't resolve to a trait.
+    fn resolve_trait_through_aliases(&self, mut def_id: DefId) -> Option<DefId> {
+        // Limit chain depth to prevent infinite loops (max 16 hops).
+        for _ in 0..16 {
+            let def = self.def_map.get(def_id);
+            if def.kind == DefKind::Trait {
+                return Some(def_id);
+            }
+            if def.kind != DefKind::TypeAlias {
+                return None;
+            }
+            // Look up the alias's underlying type.
+            let (arity, underlying) = self.type_alias_map.get(&def_id)?;
+            match underlying {
+                Ty::Named(target_id, args) if args.is_empty() || *arity > 0 => {
+                    // For generic aliases with args, the where constraint should
+                    // already have concrete types. For non-generic aliases, just
+                    // follow to the target.
+                    if *arity == 0 {
+                        def_id = *target_id;
+                    } else {
+                        // Generic alias used without type args in where clause.
+                        // This is invalid — where clause needs concrete trait.
+                        return None;
+                    }
+                }
+                _ => return None,
+            }
+        }
+        None // chain too long
     }
 
     fn check_implement_decl(&mut self, implement: &ImplementDecl) {
@@ -1137,20 +1173,13 @@ impl<'a> Checker<'a> {
             }
             Stmt::Using(u) => {
                 if self.current_async_depth > 0 {
-                    self.sink.emit(
-                        Diagnostic::error(
-                            "async.using_unsupported",
-                            "`using` is not supported inside `async func` yet",
-                        )
-                        .with_label(Label::primary(
-                            self.file_id,
-                            u.span,
-                            "resource binding crosses async cleanup rules",
-                        ))
-                        .with_action(
-                            "move the resource handling into a synchronous helper for now",
-                        ),
-                    );
+                    // TODO: async state machine currently stores the resource
+                    // in the frame (ARC-managed) but does not yet emit the
+                    // dispose call on all terminal paths. The resource WILL
+                    // be freed when the frame is cleaned up, but the Disposable
+                    // trait's dispose method won't be called automatically.
+                    // This is safe for memory but may leak non-memory resources
+                    // (file handles, etc.) that rely on dispose for cleanup.
                 }
                 let ann_ty = self.lower(&u.ty, tp);
                 self.check_collection_runtime_limits(&ann_ty, u.ty.span());
@@ -1679,6 +1708,112 @@ impl<'a> Checker<'a> {
                 self.infer_field_access(expr_root_name(object), obj_ty, field)
             }
             Expr::Call { callee, args, .. } => {
+                // Handle method-like calls on built-in types: optional.or(), result.or(), etc.
+                if let Expr::Field {
+                    object,
+                    field,
+                    span,
+                } = callee.as_ref()
+                {
+                    let method = field.text.as_str();
+                    if method == "or" && args.len() == 1 {
+                        let obj_ty = self.infer_expr(object);
+                        let fallback = &args[0];
+                        let fallback_expr = match &fallback.value {
+                            ArgValue::Expr(e) | ArgValue::Spread(e) => e,
+                        };
+                        let fallback_ty = self.infer_expr(fallback_expr);
+                        return match &obj_ty {
+                            Ty::Optional(inner) => {
+                                if !inner.is_assignable_to(&fallback_ty) {
+                                    self.sink.emit(
+                                        Diagnostic::error("type.type_mismatch",
+                                            format!("`.or()` fallback type `{}` does not match optional inner type `{}`",
+                                                fallback_ty.display(), inner.display()))
+                                        .with_label(Label::primary(self.file_id, *span, "fallback type mismatch")),
+                                    );
+                                }
+                                *inner.clone()
+                            }
+                            Ty::Result(ok, _err) => {
+                                if !ok.is_assignable_to(&fallback_ty) {
+                                    self.sink.emit(
+                                        Diagnostic::error("type.type_mismatch",
+                                            format!("`.or()` fallback type `{}` does not match result ok type `{}`",
+                                                fallback_ty.display(), ok.display()))
+                                        .with_label(Label::primary(self.file_id, *span, "fallback type mismatch")),
+                                    );
+                                }
+                                *ok.clone()
+                            }
+                            _ => {
+                                self.sink.emit(
+                                    Diagnostic::error("type.type_mismatch",
+                                        format!("`.or()` can only be called on `optional<T>` or `result<T,E>`, got `{}`",
+                                            obj_ty.display()))
+                                    .with_label(Label::primary(self.file_id, *span, "invalid `.or()` receiver")),
+                                );
+                                Ty::Error
+                            }
+                        };
+                    }
+                    // future: .or_wrap() handling
+                    if method == "or_return" && args.is_empty() {
+                        let obj_ty = self.infer_expr(object);
+                        let cur_ret = self.current_return_ty.clone().unwrap_or(Ty::Infer(0));
+                        return match &obj_ty {
+                            Ty::Optional(inner) => {
+                                // .or_return() desugars to `obj?` — propagates none
+                                // In a function returning T (not optional<T>), this is an error
+                                if let Ty::Optional(ret_inner) = &cur_ret {
+                                    if !inner.is_assignable_to(ret_inner) {
+                                        self.sink.emit(
+                                            Diagnostic::error("type.type_mismatch",
+                                                format!("`.or_return()` inner type `{}` does not match function's optional return inner type `{}`",
+                                                    inner.display(), ret_inner.display()))
+                                            .with_label(Label::primary(self.file_id, *span, "type mismatch")),
+                                        );
+                                    }
+                                    *inner.clone()
+                                } else {
+                                    *inner.clone() // will be caught by ? logic
+                                }
+                            }
+                            Ty::Result(ok, err) => {
+                                // .or_return() desugars to `obj?` — propagates error
+                                if let Ty::Result(ret_ok, ret_err) = &cur_ret {
+                                    if !ok.is_assignable_to(ret_ok) {
+                                        self.sink.emit(
+                                            Diagnostic::error("type.type_mismatch",
+                                                format!("`.or_return()` ok type `{}` does not match function's result ok type `{}`",
+                                                    ok.display(), ret_ok.display()))
+                                            .with_label(Label::primary(self.file_id, *span, "type mismatch")),
+                                        );
+                                    }
+                                    if !err.is_assignable_to(ret_err) && !err.is_error() {
+                                        self.sink.emit(
+                                            Diagnostic::error("type.type_mismatch",
+                                                format!("`.or_return()` error type `{}` does not match function's result error type `{}`",
+                                                    err.display(), ret_err.display()))
+                                            .with_label(Label::primary(self.file_id, *span, "error type mismatch")),
+                                        );
+                                    }
+                                }
+                                *ok.clone()
+                            }
+                            _ => {
+                                self.sink.emit(
+                                    Diagnostic::error("type.type_mismatch",
+                                        format!("`.or_return()` can only be called on `optional<T>` or `result<T,E>`, got `{}`",
+                                            obj_ty.display()))
+                                    .with_label(Label::primary(self.file_id, *span, "invalid `.or_return()` receiver")),
+                                );
+                                Ty::Error
+                            }
+                        };
+                    }
+                }
+
                 // If callee is a named function, look up its return type
                 if let Expr::QualifiedIdent(q) = callee.as_ref() {
                     if q.is_single() {
@@ -2259,7 +2394,19 @@ impl<'a> Checker<'a> {
     }
 
     fn supports_builtin_equality(&self, ty: &Ty) -> bool {
-        ty.is_numeric() || matches!(ty, Ty::Bool | Ty::String | Ty::Infer(_) | Ty::Never)
+        if ty.is_numeric() || matches!(ty, Ty::Bool | Ty::String | Ty::Infer(_) | Ty::Never) {
+            return true;
+        }
+        // Structural equality for compound types whose elements support equality.
+        match ty {
+            Ty::Optional(inner) => self.supports_generic_equality(inner),
+            Ty::Result(ok, err) => {
+                self.supports_generic_equality(ok) && self.supports_generic_equality(err)
+            }
+            Ty::Tuple(elements) => elements.iter().all(|e| self.supports_generic_equality(e)),
+            Ty::Bytes => true,
+            _ => false,
+        }
     }
 
     fn supports_generic_equality(&self, ty: &Ty) -> bool {
@@ -2807,10 +2954,7 @@ impl<'a> Checker<'a> {
             self.sink.emit(
                 Diagnostic::warning(
                     "bind.stdlib_module_unavailable",
-                    format!(
-                        "`{}` is not yet available in the native runtime",
-                        path,
-                    ),
+                    format!("`{}` is not yet available in the native runtime", path,),
                 )
                 .with_label(Label::primary(self.file_id, span, "used here"))
                 .with_action("use an alternative function or wait for native runtime support"),

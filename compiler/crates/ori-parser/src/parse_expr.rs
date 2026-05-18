@@ -221,7 +221,7 @@ impl<'src> Parser<'src> {
                             };
                         }
                         _ => {
-                            let field = self.parse_name()?;
+                            let field = self.parse_member_name()?;
                             let span = span_start.cover(field.span);
                             expr = Expr::Field {
                                 object: Box::new(expr),

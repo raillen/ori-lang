@@ -1846,6 +1846,17 @@ fn simple_async_lift_stmt_awaits(
             value: simple_async_lift_expr_awaits(value, &mut awaits, first_index)?,
             span: *span,
         },
+        HirStmt::Using {
+            name,
+            ty,
+            value,
+            span,
+        } => HirStmt::Using {
+            name: name.clone(),
+            ty: ty.clone(),
+            value: simple_async_lift_expr_awaits(value, &mut awaits, first_index)?,
+            span: *span,
+        },
         HirStmt::Assign {
             lvalue,
             value,
@@ -1968,8 +1979,7 @@ fn simple_async_lift_stmt_awaits(
         | HirStmt::While { .. }
         | HirStmt::Loop { .. }
         | HirStmt::Repeat { .. }
-        | HirStmt::WhileSome { .. }
-        | HirStmt::Using { .. } => return None,
+        | HirStmt::WhileSome { .. } => return None,
     };
     if awaits.is_empty() {
         return None;
@@ -2011,6 +2021,9 @@ fn simple_async_state_machine_plan(f: &HirFunc) -> Option<SimpleAsyncStateMachin
                 _ => None,
             },
             HirStmt::Let {
+                name, ty, value, ..
+            }
+            | HirStmt::Using {
                 name, ty, value, ..
             } => {
                 if let HirExprKind::Await(await_future) = &value.kind {
@@ -2103,18 +2116,22 @@ fn simple_async_state_machine_plan(f: &HirFunc) -> Option<SimpleAsyncStateMachin
         }
 
         if !saw_await {
-            let HirStmt::Let {
-                name, ty, value, ..
-            } = stmt
-            else {
-                return None;
-            };
-            cl_type(ty, types::I64)?;
-            locals.push(SimpleAsyncLocal {
-                name: name.clone(),
-                ty: ty.clone(),
-                value: value.clone(),
-            });
+            match stmt {
+                HirStmt::Let {
+                    name, ty, value, ..
+                }
+                | HirStmt::Using {
+                    name, ty, value, ..
+                } => {
+                    cl_type(ty, types::I64)?;
+                    locals.push(SimpleAsyncLocal {
+                        name: name.clone(),
+                        ty: ty.clone(),
+                        value: value.clone(),
+                    });
+                }
+                _ => return None,
+            }
         } else {
             tail_stmts.push(stmt.clone());
         }
@@ -3624,11 +3641,7 @@ impl NativeBackend {
             }
             // Dump CLIF for debugging when ORI_DUMP_CLIF is set
             if std::env::var("ORI_DUMP_CLIF").is_ok() {
-                eprintln!(
-                    "--- CLIF for `{}` ---\n{}",
-                    f.name,
-                    ctx.func.display()
-                );
+                eprintln!("--- CLIF for `{}` ---\n{}", f.name, ctx.func.display());
             }
             self.module
                 .define_function(func_id, &mut ctx)
@@ -7412,6 +7425,119 @@ impl<'a> FuncCodegen<'a> {
 
     // == Expressions ==
 
+    fn emit_builtin_or(
+        &mut self,
+        value: &HirExpr,
+        fallback: &HirExpr,
+    ) -> Result<ir::Value, String> {
+        let wrapper = self.emit_expr(value)?;
+        match &value.ty {
+            Ty::Optional(inner) => {
+                let (value_offset, _) = optional_layout(inner, self.ptr_ty);
+                let value_ty = cl_type(inner, self.ptr_ty).ok_or_else(|| {
+                    format!(
+                        "optional inner type `{}` has no native layout",
+                        inner.display()
+                    )
+                })?;
+                let tag = self
+                    .builder
+                    .ins()
+                    .load(types::I8, MemFlags::new(), wrapper, 0);
+                let one = self.builder.ins().iconst(types::I8, 1);
+                let has_value = self
+                    .builder
+                    .ins()
+                    .icmp(ir::condcodes::IntCC::Equal, tag, one);
+                self.emit_lazy_or_result(
+                    has_value,
+                    value_ty,
+                    |this| {
+                        Ok(this.builder.ins().load(
+                            value_ty,
+                            MemFlags::new(),
+                            wrapper,
+                            value_offset as i32,
+                        ))
+                    },
+                    fallback,
+                )
+            }
+            Ty::Result(ok, err) => {
+                let (value_offset, _, _) = result_layout(ok, err, self.ptr_ty);
+                let value_ty = cl_type(ok, self.ptr_ty).ok_or_else(|| {
+                    format!("result ok type `{}` has no native layout", ok.display())
+                })?;
+                let tag = self
+                    .builder
+                    .ins()
+                    .load(types::I8, MemFlags::new(), wrapper, 0);
+                let one = self.builder.ins().iconst(types::I8, 1);
+                let is_ok = self
+                    .builder
+                    .ins()
+                    .icmp(ir::condcodes::IntCC::Equal, tag, one);
+                self.emit_lazy_or_result(
+                    is_ok,
+                    value_ty,
+                    |this| {
+                        Ok(this.builder.ins().load(
+                            value_ty,
+                            MemFlags::new(),
+                            wrapper,
+                            value_offset as i32,
+                        ))
+                    },
+                    fallback,
+                )
+            }
+            other => Err(format!(
+                "`.or()` expects optional/result receiver, got `{}`",
+                other.display()
+            )),
+        }
+    }
+
+    fn emit_lazy_or_result(
+        &mut self,
+        condition: ir::Value,
+        value_ty: ir::Type,
+        emit_present_value: impl FnOnce(&mut Self) -> Result<ir::Value, String>,
+        fallback: &HirExpr,
+    ) -> Result<ir::Value, String> {
+        let present_block = self.builder.create_block();
+        let fallback_block = self.builder.create_block();
+        let merge_block = self.builder.create_block();
+        self.builder.append_block_param(merge_block, value_ty);
+
+        self.builder
+            .ins()
+            .brif(condition, present_block, &[], fallback_block, &[]);
+
+        self.builder.seal_block(present_block);
+        self.builder.switch_to_block(present_block);
+        self.terminated = false;
+        let present_value = emit_present_value(self)?;
+        if !self.terminated {
+            let args = [BlockArg::Value(present_value)];
+            self.builder.ins().jump(merge_block, &args);
+        }
+
+        self.builder.seal_block(fallback_block);
+        self.builder.switch_to_block(fallback_block);
+        self.terminated = false;
+        let fallback_value = self.emit_expr(fallback)?;
+        if !self.terminated {
+            let args = [BlockArg::Value(fallback_value)];
+            self.builder.ins().jump(merge_block, &args);
+        }
+
+        self.builder.seal_block(merge_block);
+        self.builder.switch_to_block(merge_block);
+        self.terminated = false;
+        Ok(self.builder.block_params(merge_block)[0])
+    }
+
     fn emit_expr(&mut self, expr: &HirExpr) -> Result<ir::Value, String> {
         Ok(match &expr.kind {
             HirExprKind::BoolLit(b) => self.builder.ins().iconst(types::I8, if *b { 1 } else { 0 }),
@@ -7525,6 +7651,9 @@ impl<'a> FuncCodegen<'a> {
             }
             HirExprKind::Call { callee, args } => {
                 if let HirExprKind::Var(name) = &callee.kind {
+                    if name.as_str() == "__ori_builtin_or" && args.len() == 2 {
+                        return self.emit_builtin_or(&args[0].value, &args[1].value);
+                    }
                     if name.as_str() == "ori_lazy_once" && args.len() == 1 {
                         return self.emit_lazy_once(&args[0].value, &expr.ty);
                     }
@@ -9339,6 +9468,14 @@ impl<'a> FuncCodegen<'a> {
                     let cmp = self.builder.inst_results(call)[0];
                     let zero = self.builder.ins().iconst(types::I32, 0);
                     self.builder.ins().icmp(IntCC::Equal, cmp, zero)
+                } else if let Ty::Optional(inner) = ty {
+                    return self.emit_optional_equality(lv, rv, inner, true);
+                } else if let Ty::Result(ok, err) = ty {
+                    return self.emit_result_equality(lv, rv, ok, err, true);
+                } else if let Ty::Tuple(elements) = ty {
+                    return self.emit_tuple_equality(lv, rv, elements, true);
+                } else if let Ty::Bytes = ty {
+                    return self.emit_bytes_equality(lv, rv, true);
                 } else if float {
                     self.builder.ins().fcmp(FloatCC::Equal, lv, rv)
                 } else {
@@ -9355,6 +9492,14 @@ impl<'a> FuncCodegen<'a> {
                     let cmp = self.builder.inst_results(call)[0];
                     let zero = self.builder.ins().iconst(types::I32, 0);
                     self.builder.ins().icmp(IntCC::NotEqual, cmp, zero)
+                } else if let Ty::Optional(inner) = ty {
+                    return self.emit_optional_equality(lv, rv, inner, false);
+                } else if let Ty::Result(ok, err) = ty {
+                    return self.emit_result_equality(lv, rv, ok, err, false);
+                } else if let Ty::Tuple(elements) = ty {
+                    return self.emit_tuple_equality(lv, rv, elements, false);
+                } else if let Ty::Bytes = ty {
+                    return self.emit_bytes_equality(lv, rv, false);
                 } else if float {
                     self.builder.ins().fcmp(FloatCC::NotEqual, lv, rv)
                 } else {
@@ -9396,6 +9541,166 @@ impl<'a> FuncCodegen<'a> {
             And => self.builder.ins().band(lv, rv),
             Or => self.builder.ins().bor(lv, rv),
         })
+    }
+
+    /// Compare two `optional<T>` values for equality (eq=true) or inequality (eq=false).
+    fn emit_optional_equality(
+        &mut self,
+        lv: ir::Value,
+        rv: ir::Value,
+        inner: &Ty,
+        eq: bool,
+    ) -> Result<ir::Value, String> {
+        use ir::condcodes::IntCC;
+        let zero = self.builder.ins().iconst(types::I8, 0);
+        let one = self.builder.ins().iconst(types::I8, 1);
+        let ltag = self.builder.ins().load(types::I8, MemFlags::new(), lv, 0);
+        let rtag = self.builder.ins().load(types::I8, MemFlags::new(), rv, 0);
+        let ltag_some = self.builder.ins().icmp(IntCC::Equal, ltag, one);
+        let rtag_some = self.builder.ins().icmp(IntCC::Equal, rtag, one);
+        let both_some = self.builder.ins().band(ltag_some, rtag_some);
+        let ltag_none = self.builder.ins().icmp(IntCC::Equal, ltag, zero);
+        let rtag_none = self.builder.ins().icmp(IntCC::Equal, rtag, zero);
+        let both_none = self.builder.ins().band(ltag_none, rtag_none);
+        let (val_off, _) = optional_layout(inner, self.ptr_ty);
+        let inner_cl =
+            cl_type(inner, self.ptr_ty).ok_or("optional inner type has no native layout")?;
+        let lval = self
+            .builder
+            .ins()
+            .load(inner_cl, MemFlags::new(), lv, val_off as i32);
+        let rval = self
+            .builder
+            .ins()
+            .load(inner_cl, MemFlags::new(), rv, val_off as i32);
+        let values_eq = self.emit_binary(
+            if eq { BinaryOp::Eq } else { BinaryOp::Ne },
+            lval,
+            rval,
+            inner,
+        )?;
+        let some_eq = self.builder.ins().band(both_some, values_eq);
+        let result = self.builder.ins().bor(both_none, some_eq);
+        if eq {
+            Ok(result)
+        } else {
+            Ok(self.builder.ins().bnot(result))
+        }
+    }
+
+    /// Compare two `result<T,E>` values.
+    fn emit_result_equality(
+        &mut self,
+        lv: ir::Value,
+        rv: ir::Value,
+        ok: &Ty,
+        err: &Ty,
+        eq: bool,
+    ) -> Result<ir::Value, String> {
+        use ir::condcodes::IntCC;
+        let zero = self.builder.ins().iconst(types::I8, 0);
+        let one = self.builder.ins().iconst(types::I8, 1);
+        let ltag = self.builder.ins().load(types::I8, MemFlags::new(), lv, 0);
+        let rtag = self.builder.ins().load(types::I8, MemFlags::new(), rv, 0);
+        let ltag_ok = self.builder.ins().icmp(IntCC::Equal, ltag, one);
+        let rtag_ok = self.builder.ins().icmp(IntCC::Equal, rtag, one);
+        let both_ok = self.builder.ins().band(ltag_ok, rtag_ok);
+        let ltag_err = self.builder.ins().icmp(IntCC::Equal, ltag, zero);
+        let rtag_err = self.builder.ins().icmp(IntCC::Equal, rtag, zero);
+        let both_err = self.builder.ins().band(ltag_err, rtag_err);
+        let (pay_off, _, _) = result_layout(ok, err, self.ptr_ty);
+        let ok_cl = cl_type(ok, self.ptr_ty).ok_or("result ok type has no native layout")?;
+        let lok_val = self
+            .builder
+            .ins()
+            .load(ok_cl, MemFlags::new(), lv, pay_off as i32);
+        let rok_val = self
+            .builder
+            .ins()
+            .load(ok_cl, MemFlags::new(), rv, pay_off as i32);
+        let ok_eq_val = self.emit_binary(
+            if eq { BinaryOp::Eq } else { BinaryOp::Ne },
+            lok_val,
+            rok_val,
+            ok,
+        )?;
+        let ok_match = self.builder.ins().band(both_ok, ok_eq_val);
+        let err_cl = cl_type(err, self.ptr_ty).ok_or("result err type has no native layout")?;
+        let lerr_val = self
+            .builder
+            .ins()
+            .load(err_cl, MemFlags::new(), lv, pay_off as i32);
+        let rerr_val = self
+            .builder
+            .ins()
+            .load(err_cl, MemFlags::new(), rv, pay_off as i32);
+        let err_eq_val = self.emit_binary(
+            if eq { BinaryOp::Eq } else { BinaryOp::Ne },
+            lerr_val,
+            rerr_val,
+            err,
+        )?;
+        let err_match = self.builder.ins().band(both_err, err_eq_val);
+        let result = self.builder.ins().bor(ok_match, err_match);
+        if eq {
+            Ok(result)
+        } else {
+            Ok(self.builder.ins().bnot(result))
+        }
+    }
+
+    /// Compare two `tuple<...>` values element-by-element.
+    fn emit_tuple_equality(
+        &mut self,
+        lv: ir::Value,
+        rv: ir::Value,
+        elements: &[Ty],
+        eq: bool,
+    ) -> Result<ir::Value, String> {
+        let mut offset: i32 = 0;
+        // All elements must match for equality
+        let mut result = self.builder.ins().iconst(types::I8, if eq { 1 } else { 0 });
+        for elem_ty in elements {
+            let cl_ty =
+                cl_type(elem_ty, self.ptr_ty).ok_or("tuple element has no native layout")?;
+            let le = self.builder.ins().load(cl_ty, MemFlags::new(), lv, offset);
+            let re = self.builder.ins().load(cl_ty, MemFlags::new(), rv, offset);
+            let elem_eq = self.emit_binary(
+                if eq { BinaryOp::Eq } else { BinaryOp::Ne },
+                le,
+                re,
+                elem_ty,
+            )?;
+            if eq {
+                result = self.builder.ins().band(result, elem_eq);
+            } else {
+                result = self.builder.ins().bor(result, elem_eq);
+            }
+            offset += cl_ty.bytes() as i32;
+        }
+        Ok(result)
+    }
+
+    /// Compare two `bytes` values.
+    fn emit_bytes_equality(
+        &mut self,
+        lv: ir::Value,
+        rv: ir::Value,
+        eq: bool,
+    ) -> Result<ir::Value, String> {
+        use ir::condcodes::IntCC;
+        let bytes_eq_ref = *self
+            .func_refs
+            .get("ori_bytes_eq")
+            .ok_or_else(|| "missing runtime function `ori_bytes_eq`".to_string())?;
+        let call = self.builder.ins().call(bytes_eq_ref, &[lv, rv]);
+        let cmp = self.builder.inst_results(call)[0];
+        if eq {
+            Ok(cmp)
+        } else {
+            let zero = self.builder.ins().iconst(types::I8, 0);
+            Ok(self.builder.ins().icmp(IntCC::Equal, cmp, zero))
+        }
     }
 }
 

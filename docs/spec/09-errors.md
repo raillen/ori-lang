@@ -59,22 +59,27 @@ if some(user) = find_user(42)
 end
 ```
 
-**Planned `.or(fallback)`** — unwrap or use a default:
+**`.or(fallback)`** — unwrap or use a default:
 
 ```ori
 const name: string = find_name(id).or("Anonymous")
 ```
 
-**Planned `.or_return(value)`** — unwrap or return from the enclosing function:
+Current status: `.or(fallback)` is accepted for `optional<T>` and
+`result<T, E>` in the checker, native backend, and C backend. The fallback is
+evaluated only when the receiver is `none` or `error(_)`.
+
+**`.or_return()`** — unwrap or propagate from the enclosing function:
 
 ```ori
-const user: User = find_user(id).or_return(none)
+const user: User = find_user(id).or_return()
 -- If find_user returns none, the enclosing function returns none immediately.
 -- The enclosing function must return optional<_>.
 ```
 
-These helpers are not accepted by the current checker/runtime. Use `?`,
-`if some(...) = ...`, or `match` today.
+Current status: `.or_return()` is accepted as shorthand for `?`. The older
+`.or_return(value)` form is not implemented. Use `?`, `if some(...) = ...`, or
+`match` when explicit control flow is clearer.
 
 **`?` propagation** — unwrap or propagate absence:
 

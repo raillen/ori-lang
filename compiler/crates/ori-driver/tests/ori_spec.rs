@@ -1415,7 +1415,7 @@ end
 }
 
 #[test]
-fn func_rejects_using_inside_async_func() {
+fn func_allows_using_inside_async_func() {
     let dir = TestDir::new("func_async_using");
     dir.write(
         "main.orl",
@@ -1439,12 +1439,7 @@ end
 "#,
     );
     let out = run_check(&dir.path("main.orl")).unwrap();
-    assert!(out.has_errors);
-    assert!(
-        diagnostic_codes(&out).contains(&"async.using_unsupported"),
-        "{:?}",
-        out.diagnostics
-    );
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
 }
 
 #[test]

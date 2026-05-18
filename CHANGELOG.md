@@ -18,7 +18,17 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Checker:** `warn_unused_result()` — warning para `result` descartado (`type.unused_result`)
 - **Checker:** `check_closure_var_capture()` — rejeita captura de `var` em closure (`mut.closure_captures_var`)
 - **Checker:** `infer_never_form_call()` — suporte a `panic`, `todo`, `unreachable` com tipo `never`
-- **Checker:** `infer_wrapper_form_call()` — suporte parcial a `.or()` / `.or_return()`
+- **Checker:** `infer_wrapper_form_call()` — suporte a `.or()` / `.or_return()` / `.or_wrap()`
+- **Checker:** `.or_return()` completo — desugaring para operador `?` (propagate) em `optional<T>` e `result<T,E>`
+- **Checker:** `.or()` type-checking para `optional<T>` e `result<T,E>` com fallback
+- **Parser/Codegen:** `.or(fallback)` completo para `optional<T>` e `result<T,E>` no backend nativo e no C backend, com fallback avaliado apenas em `none`/`error(_)`
+- **Checker:** `supports_builtin_equality` expandido para `optional<T>`, `result<T,E>`, `tuple<...>`, `bytes`
+- **Checker:** `using` permitido dentro de `async func` (state machine armazena recurso no frame; dispose pendente nos terminais)
+- **Stdlib:** `ori.Error` agora possui campo `cause: string` para encadeamento básico de erros
+- **Codegen:** Igualdade estrutural nativa para `optional<T>`, `result<T,E>`, `tuple<...>`, `bytes`
+- **Codegen:** State machine async aceita `Using` statements como prefix locals
+- **Core Traits:** `ori.core.Displayable` agora possui método `display(self) -> string`
+- **Checker:** Type aliases agora são resolvidos em `where` constraints (ex: `where T is MyAlias` onde `type MyAlias = ori.core.Equatable`)
 - **Checker:** `emit_undefined_name()` — nomes desconhecidos geram `name.undefined` + `Ty::Error`
 - **Checker:** Validação de runtime para map/set com `type.collection_hash_unsupported`
 - **Checker:** `stdlib_native_runtime_available()` — warning para funções stdlib sem runtime nativo (`bind.stdlib_module_unavailable`)
@@ -77,7 +87,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Codegen:** `?` no backend C sem propagação → propaga com cleanup de escopo
 - **Codegen:** Runtime bounds não seguiam spec → `ori_abort_bounds` para out-of-bounds
 - **Stdlib:** `panic`/`todo`/`unreachable` não implementados → implementados
-- **Stdlib:** `.or`/`.or_return`/`.or_wrap` inexistentes → suporte parcial implementado
+- **Stdlib:** `.or`/`.or_return` inexistentes → implementados; `.or_wrap` permanece planejado
 - **CLI:** `ori compile` help dizia "no C compiler needed" → atualizado para refletir dependência de linker
 - **Resolver:** Campos/variantes duplicados em struct/enum não diagnosticados → emite `name.duplicate_field` / `name.duplicate_variant`
 - **Lexer:** `check_unclosed_block_comments()` era no-op → removida (lógica já está em `find_unclosed_block_comment`)

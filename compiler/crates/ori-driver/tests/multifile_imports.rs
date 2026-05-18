@@ -1,4 +1,4 @@
-﻿use std::io::Write;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -1527,31 +1527,80 @@ end
 }
 
 #[test]
-fn check_reports_planned_optional_or_keyword_helper() {
-    let dir = TestDir::new("planned_optional_or_keyword_helper");
+fn compile_runs_optional_result_or_helper_native() {
+    let dir = TestDir::new("optional_result_or_helper_native");
     dir.write(
         "main.orl",
         r#"namespace app.main
 
+import ori.io as io
+
 func maybe() -> optional<int>
-    return some(1)
+    return some(7)
+end
+
+func empty() -> optional<int>
+    return none
+end
+
+func parse(flag: bool) -> result<int, string>
+    if flag
+        return success(9)
+    end
+    return error("bad")
+end
+
+func unexpected() -> int
+    io.print("unexpected")
+    return 99
 end
 
 func main()
-    const fallback: int = maybe().or(0)
+    io.print(string(maybe().or(unexpected())))
+    io.print(string(empty().or(2)))
+    io.print(string(parse(true).or(unexpected())))
+    io.print(string(parse(false).or(4)))
 end
 "#,
     );
 
-    let out = run_check(&dir.path("main.orl")).unwrap();
-    assert!(out.has_errors, "planned `.or(...)` should not parse yet");
-    let messages = out
-        .diagnostics
-        .iter()
-        .map(|d| d.message.as_str())
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(messages.contains("expected identifier"), "{messages}");
+    let stdout = compile_and_run(&dir, "optional_result_or_helper");
+    assert_eq!(stdout, "7\n2\n9\n4\n");
+}
+
+#[test]
+fn build_c_backend_optional_result_or_helper() {
+    let dir = TestDir::new("c_backend_optional_result_or_helper");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+func maybe(flag: bool) -> optional<int>
+    if flag
+        return some(1)
+    end
+    return none
+end
+
+func parse(flag: bool) -> result<int, string>
+    if flag
+        return success(2)
+    end
+    return error("bad")
+end
+
+func main()
+    const first: int = maybe(false).or(10)
+    const second: int = parse(false).or(20)
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(out.c_source.contains(".has_value ?"), "{}", out.c_source);
+    assert!(out.c_source.contains(".is_ok ?"), "{}", out.c_source);
+    compile_c_source(&dir, "c_backend_optional_result_or_helper", &out.c_source);
 }
 
 #[test]
@@ -4124,7 +4173,7 @@ import ori.Error as StdError
 import ori.io as io
 
 func main()
-    const err: StdError = StdError(code: "E_TEST", message: "failed")
+    const err: StdError = StdError(code: "E_TEST", message: "failed", cause: "")
     io.print(err.code)
     io.print(err.message)
 end
@@ -4155,7 +4204,7 @@ fn build_c_backend_compiles_standard_error_type() {
 import ori.Error as StdError
 
 func main()
-    const err: StdError = StdError(code: "E_C", message: "compiled")
+    const err: StdError = StdError(code: "E_C", message: "compiled", cause: "")
     const code: string = err.code
     const message: string = err.message
 end
@@ -4174,6 +4223,8 @@ end
         "{}",
         out.c_source
     );
+    // Verifies that the generated struct includes the string cause field.
+    assert!(out.c_source.contains("cause;"), "{}", out.c_source);
     compile_c_source(&dir, "c_backend_standard_error_type", &out.c_source);
 }
 
