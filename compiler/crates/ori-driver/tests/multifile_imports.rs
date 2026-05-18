@@ -2565,6 +2565,114 @@ end
 }
 
 #[test]
+fn compile_runs_list_structural_equality_native() {
+    let dir = TestDir::new("list_structural_equality_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+func main()
+    const left: list<int> = [1, 2, 3]
+    const same: list<int> = [1, 2, 3]
+    const different_value: list<int> = [1, 2, 4]
+    const different_len: list<int> = [1, 2]
+
+    io.print(string(left == same))
+    io.print(string(left == different_value))
+    io.print(string(left != different_value))
+    io.print(string(left != different_len))
+
+    const words: list<string> = ["ori", "lang"]
+    const same_words: list<string> = ["ori", "lang"]
+    const other_words: list<string> = ["ori", "runtime"]
+
+    io.print(string(words == same_words))
+    io.print(string(words != other_words))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "list_structural_equality");
+    assert_eq!(stdout, "true\nfalse\ntrue\ntrue\ntrue\ntrue\n");
+}
+
+#[test]
+fn build_c_backend_list_structural_equality() {
+    let dir = TestDir::new("c_backend_list_structural_equality");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+func main()
+    const left: list<int> = [1, 2, 3]
+    const same: list<int> = [1, 2, 3]
+    const different: list<int> = [1, 2, 4]
+    const words: list<string> = ["ori", "lang"]
+    const same_words: list<string> = ["ori", "lang"]
+
+    const ints_equal: bool = left == same
+    const ints_different: bool = left != different
+    const words_equal: bool = words == same_words
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        out.c_source.contains("ori_list_at") && out.c_source.contains("ori_string_eq"),
+        "{}",
+        out.c_source
+    );
+    compile_c_source(&dir, "c_backend_list_structural_equality", &out.c_source);
+}
+
+#[test]
+fn compile_runs_optional_result_inequality_native() {
+    let dir = TestDir::new("optional_result_inequality_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+func fail_a() -> result<int, string>
+    return error("a")
+end
+
+func fail_b() -> result<int, string>
+    return error("b")
+end
+
+func main()
+    const maybe_one: optional<int> = some(1)
+    const maybe_two: optional<int> = some(2)
+    const missing: optional<int> = none
+
+    io.print(string(maybe_one != maybe_two))
+    io.print(string(maybe_one != missing))
+    io.print(string(missing != none))
+
+    const ok_one: result<int, string> = success(1)
+    const ok_two: result<int, string> = success(2)
+    const err_a: result<int, string> = fail_a()
+    const err_b: result<int, string> = fail_b()
+
+    io.print(string(ok_one != ok_two))
+    io.print(string(ok_one != err_a))
+    io.print(string(err_a != err_b))
+    io.print(string(err_a != fail_a()))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "optional_result_inequality");
+    assert_eq!(stdout, "true\ntrue\nfalse\ntrue\ntrue\ntrue\nfalse\n");
+}
+
+#[test]
 fn check_reports_non_numeric_ordering() {
     let dir = TestDir::new("non_numeric_ordering");
     dir.write(

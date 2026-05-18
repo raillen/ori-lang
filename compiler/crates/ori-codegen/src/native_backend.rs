@@ -9578,6 +9578,8 @@ impl<'a> FuncCodegen<'a> {
                     return self.emit_result_equality(lv, rv, ok, err, true);
                 } else if let Ty::Tuple(elements) = ty {
                     return self.emit_tuple_equality(lv, rv, elements, true);
+                } else if let Ty::List(inner) = ty {
+                    return self.emit_list_equality(lv, rv, inner, true);
                 } else if let Ty::Bytes = ty {
                     return self.emit_bytes_equality(lv, rv, true);
                 } else if float {
@@ -9602,6 +9604,8 @@ impl<'a> FuncCodegen<'a> {
                     return self.emit_result_equality(lv, rv, ok, err, false);
                 } else if let Ty::Tuple(elements) = ty {
                     return self.emit_tuple_equality(lv, rv, elements, false);
+                } else if let Ty::List(inner) = ty {
+                    return self.emit_list_equality(lv, rv, inner, false);
                 } else if let Ty::Bytes = ty {
                     return self.emit_bytes_equality(lv, rv, false);
                 } else if float {
@@ -9666,6 +9670,33 @@ impl<'a> FuncCodegen<'a> {
         let ltag_none = self.builder.ins().icmp(IntCC::Equal, ltag, zero);
         let rtag_none = self.builder.ins().icmp(IntCC::Equal, rtag, zero);
         let both_none = self.builder.ins().band(ltag_none, rtag_none);
+
+        let none_block = self.builder.create_block();
+        let maybe_some_block = self.builder.create_block();
+        let some_block = self.builder.create_block();
+        let not_equal_block = self.builder.create_block();
+        let merge_block = self.builder.create_block();
+        self.builder.append_block_param(merge_block, types::I8);
+
+        self.builder
+            .ins()
+            .brif(both_none, none_block, &[], maybe_some_block, &[]);
+
+        self.builder.seal_block(none_block);
+        self.builder.switch_to_block(none_block);
+        let true_value = self.builder.ins().iconst(types::I8, 1);
+        self.builder
+            .ins()
+            .jump(merge_block, &[BlockArg::Value(true_value)]);
+
+        self.builder.seal_block(maybe_some_block);
+        self.builder.switch_to_block(maybe_some_block);
+        self.builder
+            .ins()
+            .brif(both_some, some_block, &[], not_equal_block, &[]);
+
+        self.builder.seal_block(some_block);
+        self.builder.switch_to_block(some_block);
         let (val_off, _) = optional_layout(inner, self.ptr_ty);
         let inner_cl =
             cl_type(inner, self.ptr_ty).ok_or("optional inner type has no native layout")?;
@@ -9677,19 +9708,23 @@ impl<'a> FuncCodegen<'a> {
             .builder
             .ins()
             .load(inner_cl, MemFlags::new(), rv, val_off as i32);
-        let values_eq = self.emit_binary(
-            if eq { BinaryOp::Eq } else { BinaryOp::Ne },
-            lval,
-            rval,
-            inner,
-        )?;
-        let some_eq = self.builder.ins().band(both_some, values_eq);
-        let result = self.builder.ins().bor(both_none, some_eq);
-        if eq {
-            Ok(result)
-        } else {
-            Ok(self.builder.ins().bnot(result))
-        }
+        let values_eq = self.emit_binary(BinaryOp::Eq, lval, rval, inner)?;
+        self.builder
+            .ins()
+            .jump(merge_block, &[BlockArg::Value(values_eq)]);
+
+        self.builder.seal_block(not_equal_block);
+        self.builder.switch_to_block(not_equal_block);
+        let false_value = self.builder.ins().iconst(types::I8, 0);
+        self.builder
+            .ins()
+            .jump(merge_block, &[BlockArg::Value(false_value)]);
+
+        self.builder.seal_block(merge_block);
+        self.builder.switch_to_block(merge_block);
+        self.terminated = false;
+        let result = self.builder.block_params(merge_block)[0];
+        Ok(self.maybe_invert_equality(result, eq))
     }
 
     /// Compare two `result<T,E>` values.
@@ -9712,6 +9747,20 @@ impl<'a> FuncCodegen<'a> {
         let ltag_err = self.builder.ins().icmp(IntCC::Equal, ltag, zero);
         let rtag_err = self.builder.ins().icmp(IntCC::Equal, rtag, zero);
         let both_err = self.builder.ins().band(ltag_err, rtag_err);
+
+        let ok_block = self.builder.create_block();
+        let maybe_err_block = self.builder.create_block();
+        let err_block = self.builder.create_block();
+        let not_equal_block = self.builder.create_block();
+        let merge_block = self.builder.create_block();
+        self.builder.append_block_param(merge_block, types::I8);
+
+        self.builder
+            .ins()
+            .brif(both_ok, ok_block, &[], maybe_err_block, &[]);
+
+        self.builder.seal_block(ok_block);
+        self.builder.switch_to_block(ok_block);
         let (pay_off, _, _) = result_layout(ok, err, self.ptr_ty);
         let ok_cl = cl_type(ok, self.ptr_ty).ok_or("result ok type has no native layout")?;
         let lok_val = self
@@ -9722,13 +9771,19 @@ impl<'a> FuncCodegen<'a> {
             .builder
             .ins()
             .load(ok_cl, MemFlags::new(), rv, pay_off as i32);
-        let ok_eq_val = self.emit_binary(
-            if eq { BinaryOp::Eq } else { BinaryOp::Ne },
-            lok_val,
-            rok_val,
-            ok,
-        )?;
-        let ok_match = self.builder.ins().band(both_ok, ok_eq_val);
+        let ok_eq_val = self.emit_binary(BinaryOp::Eq, lok_val, rok_val, ok)?;
+        self.builder
+            .ins()
+            .jump(merge_block, &[BlockArg::Value(ok_eq_val)]);
+
+        self.builder.seal_block(maybe_err_block);
+        self.builder.switch_to_block(maybe_err_block);
+        self.builder
+            .ins()
+            .brif(both_err, err_block, &[], not_equal_block, &[]);
+
+        self.builder.seal_block(err_block);
+        self.builder.switch_to_block(err_block);
         let err_cl = cl_type(err, self.ptr_ty).ok_or("result err type has no native layout")?;
         let lerr_val = self
             .builder
@@ -9738,19 +9793,23 @@ impl<'a> FuncCodegen<'a> {
             .builder
             .ins()
             .load(err_cl, MemFlags::new(), rv, pay_off as i32);
-        let err_eq_val = self.emit_binary(
-            if eq { BinaryOp::Eq } else { BinaryOp::Ne },
-            lerr_val,
-            rerr_val,
-            err,
-        )?;
-        let err_match = self.builder.ins().band(both_err, err_eq_val);
-        let result = self.builder.ins().bor(ok_match, err_match);
-        if eq {
-            Ok(result)
-        } else {
-            Ok(self.builder.ins().bnot(result))
-        }
+        let err_eq_val = self.emit_binary(BinaryOp::Eq, lerr_val, rerr_val, err)?;
+        self.builder
+            .ins()
+            .jump(merge_block, &[BlockArg::Value(err_eq_val)]);
+
+        self.builder.seal_block(not_equal_block);
+        self.builder.switch_to_block(not_equal_block);
+        let false_value = self.builder.ins().iconst(types::I8, 0);
+        self.builder
+            .ins()
+            .jump(merge_block, &[BlockArg::Value(false_value)]);
+
+        self.builder.seal_block(merge_block);
+        self.builder.switch_to_block(merge_block);
+        self.terminated = false;
+        let result = self.builder.block_params(merge_block)[0];
+        Ok(self.maybe_invert_equality(result, eq))
     }
 
     /// Compare two `tuple<...>` values element-by-element.
@@ -9804,6 +9863,110 @@ impl<'a> FuncCodegen<'a> {
         } else {
             let zero = self.builder.ins().iconst(types::I8, 0);
             Ok(self.builder.ins().icmp(IntCC::Equal, cmp, zero))
+        }
+    }
+
+    /// Compare two `list<T>` values by length and ordered elements.
+    fn emit_list_equality(
+        &mut self,
+        lv: ir::Value,
+        rv: ir::Value,
+        elem_ty: &Ty,
+        eq: bool,
+    ) -> Result<ir::Value, String> {
+        use ir::condcodes::IntCC;
+
+        let len_ref = *self
+            .func_refs
+            .get("ori_list_len")
+            .ok_or_else(|| "missing runtime function `ori_list_len`".to_string())?;
+        let get_ref = *self
+            .func_refs
+            .get("ori_list_get")
+            .ok_or_else(|| "missing runtime function `ori_list_get`".to_string())?;
+
+        let left_len_call = self.builder.ins().call(len_ref, &[lv]);
+        let left_len = self.builder.inst_results(left_len_call)[0];
+        let right_len_call = self.builder.ins().call(len_ref, &[rv]);
+        let right_len = self.builder.inst_results(right_len_call)[0];
+        let same_len = self.builder.ins().icmp(IntCC::Equal, left_len, right_len);
+
+        let index_var = self.builder.declare_var(types::I64);
+        let len_var = self.builder.declare_var(types::I64);
+        let equal_var = self.builder.declare_var(types::I8);
+        let zero_i64 = self.builder.ins().iconst(types::I64, 0);
+        let one_i64 = self.builder.ins().iconst(types::I64, 1);
+        let false_i8 = self.builder.ins().iconst(types::I8, 0);
+        let true_i8 = self.builder.ins().iconst(types::I8, 1);
+        self.builder.def_var(index_var, zero_i64);
+        self.builder.def_var(len_var, left_len);
+        self.builder.def_var(equal_var, false_i8);
+
+        let init_block = self.builder.create_block();
+        let header_block = self.builder.create_block();
+        let body_block = self.builder.create_block();
+        let step_block = self.builder.create_block();
+        let fail_block = self.builder.create_block();
+        let exit_block = self.builder.create_block();
+
+        self.builder
+            .ins()
+            .brif(same_len, init_block, &[], exit_block, &[]);
+
+        self.builder.seal_block(init_block);
+        self.builder.switch_to_block(init_block);
+        self.builder.def_var(equal_var, true_i8);
+        self.builder.ins().jump(header_block, &[]);
+
+        self.builder.switch_to_block(header_block);
+        let index = self.builder.use_var(index_var);
+        let len = self.builder.use_var(len_var);
+        let keep_going = self.builder.ins().icmp(IntCC::SignedLessThan, index, len);
+        self.builder
+            .ins()
+            .brif(keep_going, body_block, &[], exit_block, &[]);
+
+        self.builder.seal_block(body_block);
+        self.builder.switch_to_block(body_block);
+        let index = self.builder.use_var(index_var);
+        let left_call = self.builder.ins().call(get_ref, &[lv, index]);
+        let left_stored = self.builder.inst_results(left_call)[0];
+        let right_call = self.builder.ins().call(get_ref, &[rv, index]);
+        let right_stored = self.builder.inst_results(right_call)[0];
+        let left_value = self.from_list_storage_value(left_stored, elem_ty);
+        let right_value = self.from_list_storage_value(right_stored, elem_ty);
+        let elem_equal = self.emit_binary(BinaryOp::Eq, left_value, right_value, elem_ty)?;
+        self.builder
+            .ins()
+            .brif(elem_equal, step_block, &[], fail_block, &[]);
+
+        self.builder.seal_block(step_block);
+        self.builder.switch_to_block(step_block);
+        let index = self.builder.use_var(index_var);
+        let next = self.builder.ins().iadd(index, one_i64);
+        self.builder.def_var(index_var, next);
+        self.builder.ins().jump(header_block, &[]);
+
+        self.builder.seal_block(fail_block);
+        self.builder.switch_to_block(fail_block);
+        self.builder.def_var(equal_var, false_i8);
+        self.builder.ins().jump(exit_block, &[]);
+
+        self.builder.seal_block(header_block);
+        self.builder.seal_block(exit_block);
+        self.builder.switch_to_block(exit_block);
+        self.terminated = false;
+        let result = self.builder.use_var(equal_var);
+        Ok(self.maybe_invert_equality(result, eq))
+    }
+
+    fn maybe_invert_equality(&mut self, equal: ir::Value, eq: bool) -> ir::Value {
+        if eq {
+            equal
+        } else {
+            use ir::condcodes::IntCC;
+            let zero = self.builder.ins().iconst(types::I8, 0);
+            self.builder.ins().icmp(IntCC::Equal, equal, zero)
         }
     }
 }

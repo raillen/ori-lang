@@ -339,10 +339,10 @@ when the expected type is not `result<void, _>`.
 Current implementation status:
 
 - `==` and `!=` are implemented for numeric types, `bool`, `string`, `bytes`,
-  `optional<T>`, `result<T, E>`, and `tuple<...>`.
+  `optional<T>`, `result<T, E>`, `tuple<...>`, and `list<T>`.
 - Function values are not comparable.
 - `any<Trait>` values are not comparable.
-- Structural equality for lists, maps, sets, and structs is planned.
+- Structural equality for maps, sets, and structs is planned.
 
 | Type | Current `==` behavior |
 |---|---|
@@ -350,7 +350,7 @@ Current implementation status:
 | `bool` | Value equality |
 | `string` | UTF-8 text equality |
 | `bytes` | Byte equality |
-| `list<T>` | Planned |
+| `list<T>` | Structural equality |
 | `map<K, V>` | Planned |
 | `set<T>` | Planned |
 | `optional<T>` | Structural equality |

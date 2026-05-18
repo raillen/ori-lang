@@ -29,13 +29,14 @@ e eliminar dívidas técnicas da linguagem Ori.
 ## Fase 1 — Features Bloqueadoras (Alta Prioridade) [7 itens]
 
 ### 1.1 Igualdade estrutural (`==` / `!=`) para todos os tipos ✅
-- **Escopo:** optional<T>, result<T,E>, tuple<...>, bytes
+- **Escopo:** optional<T>, result<T,E>, tuple<...>, bytes, list<T>
 - **Status:** Implementado. Codegen nativo gera comparação inline para estes tipos.
   - `optional<T>`: compara tags + valores internos
   - `result<T,E>`: compara tags + ok/err valores
   - `tuple<...>`: compara elemento por elemento
   - `bytes`: chama `ori_bytes_eq` no runtime
-- **Pendente:** list<T>, map<K,V>, set<T>, struct — requerem runtime helpers ou trait Equatable
+  - `list<T>`: compara tamanho + elementos em ordem
+- **Pendente:** map<K,V>, set<T>, struct — requerem runtime helpers ou trait Equatable
 - **Arquivos:** `check.rs`, `native_backend.rs`
 
 ### 1.2 `.or()` / `.or_return()` / `.or_wrap()` para optional e result ✅

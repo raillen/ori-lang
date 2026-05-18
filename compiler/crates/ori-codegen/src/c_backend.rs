@@ -2099,12 +2099,13 @@ impl CCodegen {
             HirExprKind::Binary { op, lhs, rhs } => {
                 let l = self.expr_to_c(lhs);
                 let r = self.expr_to_c(rhs);
+                if matches!(op, BinaryOp::Eq | BinaryOp::Ne) {
+                    return self.equality_to_c(l, r, &lhs.ty, matches!(op, BinaryOp::Eq));
+                }
                 let is_str = matches!(&lhs.ty, Ty::String) || matches!(&rhs.ty, Ty::String);
                 if is_str {
                     match op {
                         BinaryOp::Add => format!("ori_string_concat({}, {})", l, r),
-                        BinaryOp::Eq => format!("ori_string_eq({}, {})", l, r),
-                        BinaryOp::Ne => format!("(!ori_string_eq({}, {}))", l, r),
                         _ => format!("({} {} {})", l, binop_to_c(*op), r),
                     }
                 } else {
@@ -2693,6 +2694,101 @@ impl CCodegen {
                 format!("({{ {}; {}; }})", parts.join("; "), tmp)
             }
         }
+    }
+
+    fn equality_to_c(&mut self, left: String, right: String, ty: &Ty, eq: bool) -> String {
+        let equal = match ty {
+            Ty::String => format!("ori_string_eq({}, {})", left, right),
+            Ty::List(inner) => self.list_equality_to_c(left, right, inner),
+            Ty::Optional(inner) => self.optional_equality_to_c(left, right, inner),
+            Ty::Result(ok, err) => self.result_equality_to_c(left, right, ok, err),
+            Ty::Tuple(elements) => self.tuple_equality_to_c(left, right, elements),
+            _ if ty.is_numeric() || matches!(ty, Ty::Bool) => format!("({} == {})", left, right),
+            _ => format!("({} == {})", left, right),
+        };
+        if eq {
+            equal
+        } else {
+            format!("(!{})", equal)
+        }
+    }
+
+    fn list_equality_to_c(&mut self, left: String, right: String, inner: &Ty) -> String {
+        let left_tmp = self.fresh_tmp();
+        let right_tmp = self.fresh_tmp();
+        let index_tmp = self.fresh_tmp();
+        let same_tmp = self.fresh_tmp();
+        let elem_c = ty_to_c(inner);
+        let left_elem = format!(
+            "*(({}*)ori_list_at(&{}, (int64_t){}))",
+            elem_c, left_tmp, index_tmp
+        );
+        let right_elem = format!(
+            "*(({}*)ori_list_at(&{}, (int64_t){}))",
+            elem_c, right_tmp, index_tmp
+        );
+        let elem_equal = self.equality_to_c(left_elem, right_elem, inner, true);
+        format!(
+            "({{ ori_list_t {left_tmp} = {left}; ori_list_t {right_tmp} = {right}; bool {same_tmp} = {left_tmp}.len == {right_tmp}.len; if ({same_tmp}) {{ for (size_t {index_tmp} = 0; {index_tmp} < {left_tmp}.len; {index_tmp}++) {{ if (!({elem_equal})) {{ {same_tmp} = false; break; }} }} }} {same_tmp}; }})"
+        )
+    }
+
+    fn optional_equality_to_c(&mut self, left: String, right: String, inner: &Ty) -> String {
+        let left_tmp = self.fresh_tmp();
+        let right_tmp = self.fresh_tmp();
+        let same_tmp = self.fresh_tmp();
+        let ty_c = ty_to_c(&Ty::Optional(Box::new(inner.clone())));
+        let value_equal = self.equality_to_c(
+            format!("{left_tmp}.value"),
+            format!("{right_tmp}.value"),
+            inner,
+            true,
+        );
+        format!(
+            "({{ {ty_c} {left_tmp} = {left}; {ty_c} {right_tmp} = {right}; bool {same_tmp} = {left_tmp}.has_value == {right_tmp}.has_value; if ({same_tmp} && {left_tmp}.has_value) {{ {same_tmp} = {value_equal}; }} {same_tmp}; }})"
+        )
+    }
+
+    fn result_equality_to_c(&mut self, left: String, right: String, ok: &Ty, err: &Ty) -> String {
+        let left_tmp = self.fresh_tmp();
+        let right_tmp = self.fresh_tmp();
+        let same_tmp = self.fresh_tmp();
+        let ty_c = ty_to_c(&Ty::Result(Box::new(ok.clone()), Box::new(err.clone())));
+        let ok_equal = self.equality_to_c(
+            format!("{left_tmp}.value.ok"),
+            format!("{right_tmp}.value.ok"),
+            ok,
+            true,
+        );
+        let err_equal = self.equality_to_c(
+            format!("{left_tmp}.value.err"),
+            format!("{right_tmp}.value.err"),
+            err,
+            true,
+        );
+        format!(
+            "({{ {ty_c} {left_tmp} = {left}; {ty_c} {right_tmp} = {right}; bool {same_tmp} = {left_tmp}.is_ok == {right_tmp}.is_ok; if ({same_tmp}) {{ {same_tmp} = {left_tmp}.is_ok ? ({ok_equal}) : ({err_equal}); }} {same_tmp}; }})"
+        )
+    }
+
+    fn tuple_equality_to_c(&mut self, left: String, right: String, elements: &[Ty]) -> String {
+        let left_tmp = self.fresh_tmp();
+        let right_tmp = self.fresh_tmp();
+        let same_tmp = self.fresh_tmp();
+        let ty_c = ty_to_c(&Ty::Tuple(elements.to_vec()));
+        let mut checks = String::new();
+        for (index, elem) in elements.iter().enumerate() {
+            let equal = self.equality_to_c(
+                format!("{left_tmp}._f{index}"),
+                format!("{right_tmp}._f{index}"),
+                elem,
+                true,
+            );
+            checks.push_str(&format!(" if ({same_tmp}) {{ {same_tmp} = {equal}; }}"));
+        }
+        format!(
+            "({{ {ty_c} {left_tmp} = {left}; {ty_c} {right_tmp} = {right}; bool {same_tmp} = true;{checks} {same_tmp}; }})"
+        )
     }
 
     fn emit_lazy_once(&mut self, thunk: &HirExpr, lazy_ty: &Ty) -> String {

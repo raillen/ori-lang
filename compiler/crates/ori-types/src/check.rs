@@ -2464,6 +2464,7 @@ impl<'a> Checker<'a> {
                 self.supports_generic_equality(ok) && self.supports_generic_equality(err)
             }
             Ty::Tuple(elements) => elements.iter().all(|e| self.supports_generic_equality(e)),
+            Ty::List(inner) => self.supports_generic_equality(inner),
             Ty::Bytes => true,
             _ => false,
         }
