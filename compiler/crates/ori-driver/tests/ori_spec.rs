@@ -2457,6 +2457,27 @@ end
 }
 
 #[test]
+fn crosscut_rejects_unknown_extern_abi() {
+    let dir = TestDir::new("crosscut_unknown_extern_abi");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+extern wasm
+    func host_value() -> int
+end
+
+func main()
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    let codes = diagnostic_codes(&out);
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(codes.contains(&"extern.unknown_abi"), "{codes:?}");
+}
+
+#[test]
 fn crosscut_fmt_preserves_valid_source_unchanged() {
     let dir = TestDir::new("crosscut_fmt_idempotent");
     let source = r#"namespace app.main

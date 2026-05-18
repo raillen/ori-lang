@@ -682,7 +682,15 @@ impl<'src> Parser<'src> {
                     self.advance();
                     AbiLabel::Host
                 }
-                _ => AbiLabel::C,
+                abi => {
+                    self.error(
+                        "extern.unknown_abi",
+                        format!("unknown extern ABI `{abi}`"),
+                        tok.span,
+                    );
+                    self.advance();
+                    AbiLabel::C
+                }
             }
         } else {
             AbiLabel::C

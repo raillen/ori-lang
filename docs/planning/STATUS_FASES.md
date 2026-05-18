@@ -1,7 +1,7 @@
 # Status das Fases — Ori Language
 
 > Última atualização: 2026-05-18
-> Baseline: 100% testes passando (257/257 multifile, 104/104 ori_spec, 38/38 concurrency)
+> Baseline: 100% testes passando (257/257 multifile, 105/105 ori_spec, 38/38 concurrency)
 
 ---
 
@@ -66,7 +66,7 @@
 
 ---
 
-## Fase 5 — Diagnósticos Planejados (29 códigos; 8 emitidos)
+## Fase 5 — Diagnósticos Planejados (29 códigos; 9 emitidos)
 
 Subconjunto de códigos planejados rastreados nesta fase. O catálogo completo,
 incluindo aliases reservados, fica em `docs/spec/13-error-catalog.md`.
@@ -79,7 +79,6 @@ incluindo aliases reservados, fica em `docs/spec/13-error-catalog.md`.
 | `contract.param_violation` | runtime | Violação de contrato de parâmetro |
 | `doc.unclosed_block` | error | Bloco de documentação não fechado |
 | `extern.managed_type_in_ffi` | error | Tipo managed em FFI |
-| `extern.unknown_abi` | error | ABI desconhecida |
 | `generic.ambiguous_type_arg` | error | Argumento de tipo ambíguo |
 | `match.duplicate_case` | warning | Case duplicado em match |
 | `match.guard_not_exhaustive` | warning | Guarda não exaustiva |
@@ -119,9 +118,9 @@ incluindo aliases reservados, fica em `docs/spec/13-error-catalog.md`.
 | 2 — Compilador | 11 | 3 | 0 | 8 |
 | 3 — Runtime/ARC | 2 | 0 | 0 | 2 |
 | 4 — LSP/Tooling | 4 | 0 | 0 | 4 |
-| 5 — Diagnósticos | 29 | 8 | 0 | 21 |
+| 5 — Diagnósticos | 29 | 9 | 0 | 20 |
 | 6 — Finalização | 5 | 1 | 2 | 2 |
-| **TOTAL** | **60** | **17** | **3** | **40** |
+| **TOTAL** | **60** | **18** | **3** | **39** |
 
 ### Itens GRANDES (redesign de subsistemas)
 1.4 await aninhado, 1.6 ori.fs.File, 1.7 Cancelamento, 2.5 Associated types, 2.6 Const generics, 2.7 HKT, 3.1 Destrutores, 3.2 Cycle collector

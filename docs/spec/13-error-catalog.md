@@ -258,6 +258,12 @@ when the compiler starts producing it.
 |---|---|---|
 | `using.not_disposable` | error | `using` value does not satisfy the disposable contract |
 
+### `extern`
+
+| Code | Severity | Description |
+|---|---|---|
+| `extern.unknown_abi` | error | `extern` block names an unsupported ABI |
+
 ---
 
 ## Planned Or Reserved Diagnostics
@@ -273,7 +279,6 @@ They are not emitted by the compiler today.
 | `contract.param_violation` | runtime panic | runtime contract reporting |
 | `doc.unclosed_block` | error | planned documentation/comment lexer work |
 | `extern.managed_type_in_ffi` | error | planned FFI diagnostics |
-| `extern.unknown_abi` | error | planned FFI diagnostics |
 | `generic.ambiguous_type_arg` | error | planned generic diagnostics |
 | `match.duplicate_case` | warning | planned match diagnostics |
 | `match.guard_not_exhaustive` | warning | planned match diagnostics |
