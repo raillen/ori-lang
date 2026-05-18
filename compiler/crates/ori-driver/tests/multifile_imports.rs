@@ -2537,19 +2537,20 @@ end
 }
 
 #[test]
-fn check_blocks_structural_equality_until_supported() {
-    let dir = TestDir::new("structural_equality_blocked");
+fn check_blocks_generic_struct_equality_until_layout_support() {
+    let dir = TestDir::new("generic_structural_equality_blocked");
     dir.write(
         "main.orl",
         r#"namespace app.main
 
-struct User
-    id: int
+struct Pair<A, B>
+    first: A
+    second: B
 end
 
 func main()
-    const a: User = User(id: 1)
-    const b: User = User(id: 1)
+    const a: Pair<int, string> = Pair(first: 1, second: "one")
+    const b: Pair<int, string> = Pair(first: 1, second: "one")
     const same: bool = a == b
 end
 "#,
@@ -2562,6 +2563,71 @@ end
         "{:?}",
         out.diagnostics
     );
+}
+
+#[test]
+fn compile_runs_struct_structural_equality_native() {
+    let dir = TestDir::new("struct_structural_equality_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+struct Address
+    city: string
+    zip: int
+end
+
+struct User
+    id: int
+    name: string
+    scores: list<int>
+    address: Address
+end
+
+func main()
+    const left: User = User(
+        id: 1,
+        name: "Ada",
+        scores: [10, 20],
+        address: Address(city: "Recife", zip: 50000),
+    )
+    const same: User = User(
+        id: 1,
+        name: "Ada",
+        scores: [10, 20],
+        address: Address(city: "Recife", zip: 50000),
+    )
+    const different_name: User = User(
+        id: 1,
+        name: "Bia",
+        scores: [10, 20],
+        address: Address(city: "Recife", zip: 50000),
+    )
+    const different_nested: User = User(
+        id: 1,
+        name: "Ada",
+        scores: [10, 20],
+        address: Address(city: "Olinda", zip: 50000),
+    )
+    const different_list: User = User(
+        id: 1,
+        name: "Ada",
+        scores: [10, 21],
+        address: Address(city: "Recife", zip: 50000),
+    )
+
+    io.print(string(left == same))
+    io.print(string(left != different_name))
+    io.print(string(left != different_nested))
+    io.print(string(left == different_list))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "struct_structural_equality");
+    assert_eq!(stdout, "true\ntrue\ntrue\nfalse\n");
 }
 
 #[test]
@@ -2716,6 +2782,47 @@ end
         out.c_source
     );
     compile_c_source(&dir, "c_backend_list_structural_equality", &out.c_source);
+}
+
+#[test]
+fn build_c_backend_struct_structural_equality() {
+    let dir = TestDir::new("c_backend_struct_structural_equality");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+struct Address
+    city: string
+    zip: int
+end
+
+struct User
+    id: int
+    name: string
+    address: Address
+end
+
+func main()
+    const left: User = User(id: 1, name: "Ada", address: Address(city: "Recife", zip: 50000))
+    const same: User = User(id: 1, name: "Ada", address: Address(city: "Recife", zip: 50000))
+    const different: User = User(id: 1, name: "Ada", address: Address(city: "Olinda", zip: 50000))
+
+    const users_equal: bool = left == same
+    const users_different: bool = left != different
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        out.c_source.contains("ori_string_eq")
+            && out.c_source.contains(".address")
+            && out.c_source.contains(".city"),
+        "{}",
+        out.c_source
+    );
+    compile_c_source(&dir, "c_backend_struct_structural_equality", &out.c_source);
 }
 
 #[test]

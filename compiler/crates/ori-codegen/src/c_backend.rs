@@ -1,7 +1,7 @@
 use ori_ast::expr::{BinaryOp, UnaryOp};
 use ori_hir::hir::*;
 use ori_types::{DefId, Ty};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write as FmtWrite;
 
 // ── Runtime header ────────────────────────────────────────────────────────────
@@ -1111,9 +1111,10 @@ pub struct CCodegen {
     errors: Vec<String>,
     /// Set of top-level Ori function names (unmangled). Used to prefix calls with `ORI__`.
     func_names: HashSet<smol_str::SmolStr>,
-    type_names: std::collections::HashMap<DefId, smol_str::SmolStr>,
-    trait_layouts: std::collections::HashMap<DefId, HirTrait>,
-    trait_impls: std::collections::HashMap<(DefId, DefId), HirTraitImpl>,
+    type_names: HashMap<DefId, smol_str::SmolStr>,
+    struct_fields: HashMap<DefId, Vec<(smol_str::SmolStr, Ty)>>,
+    trait_layouts: HashMap<DefId, HirTrait>,
+    trait_impls: HashMap<(DefId, DefId), HirTraitImpl>,
     using_stack: Vec<(String, Ty)>,
     managed_stack: Vec<(String, Ty)>,
     loop_stack: Vec<(usize, usize)>,
@@ -1129,6 +1130,7 @@ impl CCodegen {
             errors: Vec::new(),
             func_names: Default::default(),
             type_names: Default::default(),
+            struct_fields: Default::default(),
             trait_layouts: Default::default(),
             trait_impls: Default::default(),
             using_stack: Default::default(),
@@ -1185,6 +1187,13 @@ impl CCodegen {
         }
         for s in &module.structs {
             self.type_names.insert(s.def_id, s.name.clone());
+            self.struct_fields.insert(
+                s.def_id,
+                s.fields
+                    .iter()
+                    .map(|field| (field.name.clone(), field.ty.clone()))
+                    .collect(),
+            );
         }
         for e in &module.enums {
             self.type_names.insert(e.def_id, e.name.clone());
@@ -2709,6 +2718,7 @@ impl CCodegen {
             Ty::Map(_, _) => self.unsupported_expr(
                 "C backend cannot lower map structural equality yet; use the native backend",
             ),
+            Ty::Named(def_id, args) => self.struct_equality_to_c(left, right, *def_id, args),
             _ if ty.is_numeric() || matches!(ty, Ty::Bool) => format!("({} == {})", left, right),
             _ => format!("({} == {})", left, right),
         };
@@ -2788,6 +2798,42 @@ impl CCodegen {
                 format!("{left_tmp}._f{index}"),
                 format!("{right_tmp}._f{index}"),
                 elem,
+                true,
+            );
+            checks.push_str(&format!(" if ({same_tmp}) {{ {same_tmp} = {equal}; }}"));
+        }
+        format!(
+            "({{ {ty_c} {left_tmp} = {left}; {ty_c} {right_tmp} = {right}; bool {same_tmp} = true;{checks} {same_tmp}; }})"
+        )
+    }
+
+    fn struct_equality_to_c(
+        &mut self,
+        left: String,
+        right: String,
+        def_id: DefId,
+        args: &[Ty],
+    ) -> String {
+        if !args.is_empty() {
+            return self
+                .unsupported_expr("C backend cannot lower generic struct structural equality yet");
+        }
+        let Some(fields) = self.struct_fields.get(&def_id).cloned() else {
+            return self.unsupported_expr(
+                "C backend cannot lower non-struct user-defined structural equality",
+            );
+        };
+        let left_tmp = self.fresh_tmp();
+        let right_tmp = self.fresh_tmp();
+        let same_tmp = self.fresh_tmp();
+        let ty_c = def_c_name(def_id);
+        let mut checks = String::new();
+        for (name, ty) in fields {
+            let name = mangle(&name);
+            let equal = self.equality_to_c(
+                format!("{left_tmp}.{name}"),
+                format!("{right_tmp}.{name}"),
+                &ty,
                 true,
             );
             checks.push_str(&format!(" if ({same_tmp}) {{ {same_tmp} = {equal}; }}"));

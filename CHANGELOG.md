@@ -23,11 +23,11 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Checker:** `.or()` type-checking para `optional<T>` e `result<T,E>` com fallback
 - **Parser/Codegen:** `.or(fallback)` completo para `optional<T>` e `result<T,E>` no backend nativo e no C backend, com fallback avaliado apenas em `none`/`error(_)`
 - **Parser/Checker/Codegen:** `.or_wrap(context)` completo para `result<T, string>` no backend nativo e no C backend, com contexto avaliado apenas em `error(_)`
-- **Checker:** `supports_builtin_equality` expandido para `optional<T>`, `result<T,E>`, `tuple<...>`, `bytes`, `list<T>`
+- **Checker:** `supports_builtin_equality` expandido para `optional<T>`, `result<T,E>`, `tuple<...>`, `bytes`, `list<T>` e structs sem genéricos
 - **Checker:** `using` permitido dentro de `async func` (state machine armazena recurso no frame; dispose pendente nos terminais)
 - **Stdlib:** `ori.Error` agora possui campo `cause: string` para encadeamento básico de erros
-- **Codegen:** Igualdade estrutural nativa para `optional<T>`, `result<T,E>`, `tuple<...>`, `bytes`, `list<T>`
-- **C Backend:** Igualdade estrutural para `optional<T>`, `result<T,E>`, `tuple<...>` e `list<T>` no backend de debug
+- **Codegen:** Igualdade estrutural nativa para `optional<T>`, `result<T,E>`, `tuple<...>`, `bytes`, `list<T>` e structs sem genéricos
+- **C Backend:** Igualdade estrutural para `optional<T>`, `result<T,E>`, `tuple<...>`, `list<T>` e structs sem genéricos no backend de debug
 - **Codegen:** State machine async aceita `Using` statements como prefix locals
 - **Core Traits:** `ori.core.Displayable` agora possui método `display(self) -> string`
 - **Checker:** Type aliases agora são resolvidos em `where` constraints (ex: `where T is MyAlias` onde `type MyAlias = ori.core.Equatable`)
@@ -89,6 +89,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Codegen:** `?` no backend C sem propagação → propaga com cleanup de escopo
 - **Codegen:** Runtime bounds não seguiam spec → `ori_abort_bounds` para out-of-bounds
 - **Codegen:** `optional<T>` e `result<T,E>` com `!=` podiam comparar payload da variante errada → agora comparam payload apenas quando as variantes batem
+- **Codegen:** Structs sem genéricos não suportavam igualdade estrutural → agora comparam campos em ordem de declaração nos backends nativo e C
 - **Codegen:** `set<int|string>` e `map<int|string, V>` não suportavam igualdade estrutural no backend nativo → agora comparam por tamanho, presença de chaves/itens e igualdade dos valores
 - **Runtime:** `heap.pop`/`heap.peek` para valores gerenciados não transferiam a aresta ARC ao `optional` retornado → agora o valor continua vivo após o heap sair de escopo
 - **Stdlib:** `panic`/`todo`/`unreachable` não implementados → implementados

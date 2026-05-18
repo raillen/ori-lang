@@ -2454,32 +2454,73 @@ impl<'a> Checker<'a> {
     }
 
     fn supports_builtin_equality(&self, ty: &Ty) -> bool {
+        self.supports_builtin_equality_inner(ty, &mut Vec::new())
+    }
+
+    fn supports_builtin_equality_inner(&self, ty: &Ty, visiting_named: &mut Vec<DefId>) -> bool {
         if ty.is_numeric() || matches!(ty, Ty::Bool | Ty::String | Ty::Infer(_) | Ty::Never) {
             return true;
         }
         // Structural equality for compound types whose elements support equality.
         match ty {
-            Ty::Optional(inner) => self.supports_generic_equality(inner),
+            Ty::Optional(inner) => self.supports_generic_equality_inner(inner, visiting_named),
             Ty::Result(ok, err) => {
-                self.supports_generic_equality(ok) && self.supports_generic_equality(err)
+                self.supports_generic_equality_inner(ok, visiting_named)
+                    && self.supports_generic_equality_inner(err, visiting_named)
             }
-            Ty::Tuple(elements) => elements.iter().all(|e| self.supports_generic_equality(e)),
-            Ty::List(inner) => self.supports_generic_equality(inner),
+            Ty::Tuple(elements) => elements
+                .iter()
+                .all(|e| self.supports_generic_equality_inner(e, visiting_named)),
+            Ty::List(inner) => self.supports_generic_equality_inner(inner, visiting_named),
             Ty::Set(inner) => {
                 self.supports_runtime_collection_key_equality(inner)
-                    && self.supports_generic_equality(inner)
+                    && self.supports_generic_equality_inner(inner, visiting_named)
             }
             Ty::Map(key, value) => {
                 self.supports_runtime_collection_key_equality(key)
-                    && self.supports_generic_equality(value)
+                    && self.supports_generic_equality_inner(value, visiting_named)
             }
             Ty::Bytes => true,
+            Ty::Named(def_id, args) => {
+                self.supports_structural_struct_equality(*def_id, args, visiting_named)
+            }
             _ => false,
         }
     }
 
     fn supports_generic_equality(&self, ty: &Ty) -> bool {
         self.supports_builtin_equality(ty) || self.user_type_has_equatable(ty)
+    }
+
+    fn supports_generic_equality_inner(&self, ty: &Ty, visiting_named: &mut Vec<DefId>) -> bool {
+        self.supports_builtin_equality_inner(ty, visiting_named) || self.user_type_has_equatable(ty)
+    }
+
+    fn supports_structural_struct_equality(
+        &self,
+        def_id: DefId,
+        args: &[Ty],
+        visiting_named: &mut Vec<DefId>,
+    ) -> bool {
+        if !args.is_empty() || visiting_named.contains(&def_id) {
+            return false;
+        }
+        let Some(def) = self.def_map.all_defs().get(def_id.0 as usize) else {
+            return false;
+        };
+        if def.kind != DefKind::Struct {
+            return false;
+        }
+        let Some(sig) = self.struct_sigs.iter().find(|sig| sig.def_id == def_id) else {
+            return false;
+        };
+        visiting_named.push(def_id);
+        let supported = sig
+            .fields
+            .iter()
+            .all(|(_, ty)| self.supports_generic_equality_inner(ty, visiting_named));
+        visiting_named.pop();
+        supported
     }
 
     fn supports_runtime_collection_key_equality(&self, ty: &Ty) -> bool {

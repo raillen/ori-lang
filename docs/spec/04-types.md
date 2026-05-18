@@ -339,10 +339,13 @@ when the expected type is not `result<void, _>`.
 Current implementation status:
 
 - `==` and `!=` are implemented for numeric types, `bool`, `string`, `bytes`,
-  `optional<T>`, `result<T, E>`, `tuple<...>`, and `list<T>`.
+  `optional<T>`, `result<T, E>`, `tuple<...>`, `list<T>`, and non-generic
+  structs whose fields also support equality.
 - Function values are not comparable.
 - `any<Trait>` values are not comparable.
-- Structural equality for maps, sets, and structs is planned.
+- Native structural equality for `set<int|string>` and `map<int|string, V>`
+  is implemented. C/debug parity for maps and sets is planned.
+- Structural equality for generic structs is planned.
 
 | Type | Current `==` behavior |
 |---|---|
@@ -351,12 +354,15 @@ Current implementation status:
 | `string` | UTF-8 text equality |
 | `bytes` | Byte equality |
 | `list<T>` | Structural equality |
-| `map<K, V>` | Planned |
-| `set<T>` | Planned |
+| `map<int|string, V>` | Native structural equality when values support equality |
+| `map<K, V>` | Planned for other key types and C/debug parity |
+| `set<int|string>` | Native structural equality |
+| `set<T>` | Planned for other element types and C/debug parity |
 | `optional<T>` | Structural equality |
 | `result<T, E>` | Structural equality |
 | `tuple<...>` | Structural equality |
-| `struct` | Planned |
+| non-generic `struct` | Structural equality when all fields support equality |
+| generic `struct<T>` | Planned |
 | `any<Trait>` | Compile error |
 | `func(...)` | Compile error |
 
@@ -380,8 +386,9 @@ end
 For user-defined types, `==` and `!=` use `equals()` when the type implements
 `ori.core.Equatable`.
 
-**Planned rule for structs with incomparable fields:** if a struct contains a
-`func` or `any<Trait>` field, using `==` on that struct will be a compile error.
+**Structs with incomparable fields:** if a struct contains a `func`,
+`any<Trait>`, or another unsupported field, using `==` on that struct is a
+compile error.
 
 ---
 

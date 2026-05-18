@@ -9586,6 +9586,8 @@ impl<'a> FuncCodegen<'a> {
                     return self.emit_map_equality(lv, rv, key, value, true);
                 } else if let Ty::Bytes = ty {
                     return self.emit_bytes_equality(lv, rv, true);
+                } else if let Ty::Named(def_id, args) = ty {
+                    return self.emit_struct_equality(lv, rv, *def_id, args, true);
                 } else if float {
                     self.builder.ins().fcmp(FloatCC::Equal, lv, rv)
                 } else {
@@ -9616,6 +9618,8 @@ impl<'a> FuncCodegen<'a> {
                     return self.emit_map_equality(lv, rv, key, value, false);
                 } else if let Ty::Bytes = ty {
                     return self.emit_bytes_equality(lv, rv, false);
+                } else if let Ty::Named(def_id, args) = ty {
+                    return self.emit_struct_equality(lv, rv, *def_id, args, false);
                 } else if float {
                     self.builder.ins().fcmp(FloatCC::NotEqual, lv, rv)
                 } else {
@@ -9872,6 +9876,53 @@ impl<'a> FuncCodegen<'a> {
             let zero = self.builder.ins().iconst(types::I8, 0);
             Ok(self.builder.ins().icmp(IntCC::Equal, cmp, zero))
         }
+    }
+
+    /// Compare two non-generic struct values field-by-field.
+    fn emit_struct_equality(
+        &mut self,
+        lv: ir::Value,
+        rv: ir::Value,
+        def_id: ori_types::DefId,
+        args: &[Ty],
+        eq: bool,
+    ) -> Result<ir::Value, String> {
+        if !args.is_empty() {
+            return Err(native_codegen_unsupported(
+                "generic struct structural equality requires monomorphized layouts",
+            ));
+        }
+        let layout = self
+            .struct_layouts
+            .get(&def_id)
+            .cloned()
+            .ok_or_else(|| format!("missing native struct layout for def {}", def_id.0))?;
+
+        let mut result = self.builder.ins().iconst(types::I8, if eq { 1 } else { 0 });
+        for (_, field) in layout.fields {
+            let cl_ty = cl_type(&field.ty, self.ptr_ty)
+                .ok_or_else(|| "struct field has no native layout".to_string())?;
+            let left = self
+                .builder
+                .ins()
+                .load(cl_ty, MemFlags::new(), lv, field.offset as i32);
+            let right = self
+                .builder
+                .ins()
+                .load(cl_ty, MemFlags::new(), rv, field.offset as i32);
+            let field_equal = self.emit_binary(
+                if eq { BinaryOp::Eq } else { BinaryOp::Ne },
+                left,
+                right,
+                &field.ty,
+            )?;
+            if eq {
+                result = self.builder.ins().band(result, field_equal);
+            } else {
+                result = self.builder.ins().bor(result, field_equal);
+            }
+        }
+        Ok(result)
     }
 
     /// Compare two `list<T>` values by length and ordered elements.
