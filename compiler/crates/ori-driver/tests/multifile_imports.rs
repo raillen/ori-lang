@@ -2644,7 +2644,12 @@ end
             .iter()
             .filter(|code| **code == "type.comparison_not_supported")
             .count()
-            >= 3,
+            >= 2,
+        "{:?}",
+        out.diagnostics
+    );
+    assert!(
+        codes.contains(&"type.equality_unsupported_field"),
         "{:?}",
         out.diagnostics
     );

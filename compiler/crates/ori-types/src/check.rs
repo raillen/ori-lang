@@ -2465,6 +2465,10 @@ impl<'a> Checker<'a> {
                 .operator_trait_method_sig(lt, "Equatable", "equals")
                 .is_none()
         {
+            if let Some((field, field_ty)) = self.unsupported_struct_equality_field(lt) {
+                self.emit_equality_unsupported_field(&field, &field_ty, span);
+                return Ty::Error;
+            }
             self.emit_comparison_not_supported(op, lt, span);
             return Ty::Error;
         }
@@ -2568,6 +2572,67 @@ impl<'a> Checker<'a> {
             .all(|(_, ty)| self.supports_generic_equality_inner(ty, visiting_named));
         visiting_named.pop();
         supported
+    }
+
+    fn unsupported_struct_equality_field(&self, ty: &Ty) -> Option<(SmolStr, Ty)> {
+        self.unsupported_struct_equality_field_inner(ty, &mut Vec::new())
+    }
+
+    fn unsupported_struct_equality_field_inner(
+        &self,
+        ty: &Ty,
+        visiting_named: &mut Vec<DefId>,
+    ) -> Option<(SmolStr, Ty)> {
+        let Ty::Named(def_id, args) = ty else {
+            return None;
+        };
+        if !args.is_empty() || visiting_named.contains(def_id) {
+            return None;
+        }
+        let Some(def) = self.def_map.all_defs().get(def_id.0 as usize) else {
+            return None;
+        };
+        if def.kind != DefKind::Struct {
+            return None;
+        }
+        let Some(sig) = self.struct_sigs.iter().find(|sig| sig.def_id == *def_id) else {
+            return None;
+        };
+        visiting_named.push(*def_id);
+        let unsupported = sig
+            .fields
+            .iter()
+            .find(|(_, field_ty)| !self.supports_generic_equality_inner(field_ty, visiting_named))
+            .map(|(name, field_ty)| (name.clone(), field_ty.clone()));
+        visiting_named.pop();
+        unsupported
+    }
+
+    fn emit_equality_unsupported_field(
+        &mut self,
+        field: &str,
+        field_ty: &Ty,
+        span: ori_diagnostics::Span,
+    ) {
+        self.sink.emit(
+            Diagnostic::error(
+                "type.equality_unsupported_field",
+                format!(
+                    "field `{}` has type `{}` which does not support equality",
+                    field,
+                    field_ty.display()
+                ),
+            )
+            .with_label(Label::primary(
+                self.file_id,
+                span,
+                "struct equality comparison here",
+            ))
+            .with_why("struct equality compares every field; one field cannot be compared safely")
+            .with_action(
+                "implement `ori.core.Equatable` for the type or compare supported fields manually",
+            ),
+        );
     }
 
     fn supports_runtime_collection_key_equality(&self, ty: &Ty) -> bool {

@@ -66,7 +66,7 @@
 
 ---
 
-## Fase 5 — Diagnósticos Planejados (29 códigos; 11 emitidos)
+## Fase 5 — Diagnósticos Planejados (29 códigos; 12 emitidos)
 
 Subconjunto de códigos planejados rastreados nesta fase. O catálogo completo,
 incluindo aliases reservados, fica em `docs/spec/13-error-catalog.md`.
@@ -90,7 +90,6 @@ incluindo aliases reservados, fica em `docs/spec/13-error-catalog.md`.
 | `project.no_proj_file` | error | Arquivo de projeto ausente |
 | `type.ambiguous_generic` | error | Genérico ambíguo |
 | `type.annotation_required` | error | Anotação de tipo necessária |
-| `type.equality_unsupported_field` | error | Campo sem suporte a igualdade |
 | `using.non_result_init` | error | `using` sem result |
 
 ---
@@ -116,9 +115,9 @@ incluindo aliases reservados, fica em `docs/spec/13-error-catalog.md`.
 | 2 — Compilador | 11 | 3 | 0 | 8 |
 | 3 — Runtime/ARC | 2 | 0 | 0 | 2 |
 | 4 — LSP/Tooling | 4 | 0 | 0 | 4 |
-| 5 — Diagnósticos | 29 | 11 | 0 | 18 |
+| 5 — Diagnósticos | 29 | 12 | 0 | 17 |
 | 6 — Finalização | 5 | 1 | 2 | 2 |
-| **TOTAL** | **60** | **20** | **3** | **37** |
+| **TOTAL** | **60** | **21** | **3** | **36** |
 
 ### Itens GRANDES (redesign de subsistemas)
 1.4 await aninhado, 1.6 ori.fs.File, 1.7 Cancelamento, 2.5 Associated types, 2.6 Const generics, 2.7 HKT, 3.1 Destrutores, 3.2 Cycle collector

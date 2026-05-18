@@ -79,6 +79,7 @@ when the compiler starts producing it.
 | `type.duplicate_arg_label` | error | Named argument is passed more than once |
 | `type.enum_variant_named_fields_required` | error | Enum variant construction requires named fields |
 | `type.expected_bool` | error | Expression must have type `bool` |
+| `type.equality_unsupported_field` | error | Struct equality has a field whose type cannot be compared |
 | `type.field_on_non_struct` | error | Field access was used on a non-struct value |
 | `type.field_on_tuple_not_int` | error | Tuple field access must use an integer index |
 | `type.hash_key_not_supported` | error | Computed hash key type is not supported by the current runtime |
@@ -294,7 +295,6 @@ They are not emitted by the compiler today.
 | `type.annotation_required` | error | planned inference diagnostic |
 | `type.callable_mismatch` | error | reserved alias; emitted calls use `type.arg_*` |
 | `type.constraint_not_satisfied` | error | reserved alias; emitted code is `generic.constraint_not_satisfied` |
-| `type.equality_unsupported_field` | error | planned structural equality diagnostic |
 | `type.incompatible_result_error` | error | reserved alias; emitted code is `type.propagate_err_mismatch` |
 | `type.index_non_indexable` | error | reserved alias; emitted code is `type.not_indexable` |
 | `type.invalid_is_check` | error | reserved alias; emitted code is `type.is_target_not_type` |

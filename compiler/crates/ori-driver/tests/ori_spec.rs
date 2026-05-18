@@ -647,6 +647,34 @@ end
 }
 
 #[test]
+fn type_rejects_struct_equality_with_unsupported_field() {
+    let dir = TestDir::new("type_struct_equality_unsupported_field");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+struct Handler
+    run: func(int) -> int
+end
+func id(x: int) -> int
+    return x
+end
+func main()
+    const a: Handler = Handler(run: id)
+    const b: Handler = Handler(run: id)
+    const same: bool = a == b
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"type.equality_unsupported_field"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
 fn type_accepts_type_alias() {
     let dir = TestDir::new("type_alias");
     dir.write(
