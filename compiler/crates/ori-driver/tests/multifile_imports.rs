@@ -7282,10 +7282,11 @@ end
 
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors, "{:?}", out.diagnostics);
+    let codes = diagnostic_codes(&out);
+    assert!(codes.contains(&"parse.invalid_range"), "{codes:?}");
     assert!(
-        diagnostic_codes(&out).contains(&"type.type_mismatch"),
-        "{:?}",
-        out.diagnostics
+        !codes.contains(&"type.type_mismatch"),
+        "range endpoint errors should use the dedicated diagnostic: {codes:?}"
     );
 }
 

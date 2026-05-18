@@ -1502,32 +1502,10 @@ impl<'a> Checker<'a> {
                 let start_ty = self.infer_expr(start);
                 let end_ty = self.infer_expr(end);
                 if !start_ty.is_error() && !start_ty.contains_infer() && start_ty != Ty::Int {
-                    self.sink.emit(
-                        Diagnostic::error(
-                            "type.type_mismatch",
-                            format!("range start must be `int`, found `{}`", start_ty.display()),
-                        )
-                        .with_label(Label::primary(
-                            self.file_id,
-                            start.span(),
-                            "expected `int` here",
-                        ))
-                        .with_action("use an integer expression for the range start"),
-                    );
+                    self.emit_invalid_range_endpoint("start", start.span(), &start_ty);
                 }
                 if !end_ty.is_error() && !end_ty.contains_infer() && end_ty != Ty::Int {
-                    self.sink.emit(
-                        Diagnostic::error(
-                            "type.type_mismatch",
-                            format!("range end must be `int`, found `{}`", end_ty.display()),
-                        )
-                        .with_label(Label::primary(
-                            self.file_id,
-                            end.span(),
-                            "expected `int` here",
-                        ))
-                        .with_action("use an integer expression for the range end"),
-                    );
+                    self.emit_invalid_range_endpoint("end", end.span(), &end_ty);
                 }
                 let _ = *span;
                 Ty::Range(Box::new(Ty::Int))
@@ -4402,6 +4380,24 @@ impl<'a> Checker<'a> {
                 "`self` is not in method scope",
             ))
             .with_action("move this code into a method or pass the value explicitly"),
+        );
+    }
+
+    fn emit_invalid_range_endpoint(
+        &mut self,
+        endpoint: &str,
+        span: ori_diagnostics::Span,
+        ty: &Ty,
+    ) {
+        self.sink.emit(
+            Diagnostic::error(
+                "parse.invalid_range",
+                format!("range {endpoint} must be `int`, found `{}`", ty.display()),
+            )
+            .with_label(Label::primary(self.file_id, span, "expected `int` here"))
+            .with_action(format!(
+                "use an integer expression for the range {endpoint}"
+            )),
         );
     }
 

@@ -82,6 +82,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Lexer:** `--|` dentro de strings tratado como comentário → tratado como texto
 - **Lexer:** Comentário não fechado virava erro genérico → diagnóstico dedicado
 - **Parser:** `b.value = 2` descartado silenciosamente → emite `parse.invalid_lvalue`
+- **Parser/Checker:** Range com limite não inteiro emitia `type.type_mismatch` → agora emite `parse.invalid_range`
 - **Parser:** Variadic `...` não parseava → parseia `...` e `..` (compat)
 - **Parser:** Default antes de required não validado → emite `parse.default_before_required`
 - **Parser:** Inline `if` sem `else` emitia erro genérico → agora emite `parse.missing_else_in_if_expr`
