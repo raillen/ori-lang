@@ -176,6 +176,33 @@ end
 }
 
 #[test]
+fn doc_warns_missing_return_tag() {
+    let dir = TestDir::new("doc_missing_return");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+--|
+Computes an area.
+
+@param width Width in pixels.
+@param height Height in pixels.
+|--
+public func area(width: int, height: int) -> int
+    return width * height
+end
+
+func main()
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    let codes = diagnostic_codes(&out);
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(codes.contains(&"doc.missing_return"), "{codes:?}");
+}
+
+#[test]
 fn lex_accepts_integer_literal_variants() {
     let dir = TestDir::new("lex_int_literals");
     dir.write(

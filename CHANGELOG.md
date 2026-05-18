@@ -87,6 +87,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Parser:** Default antes de required não validado → emite `parse.default_before_required`
 - **Parser:** Inline `if` sem `else` emitia erro genérico → agora emite `parse.missing_else_in_if_expr`
 - **Checker:** Nomes desconhecidos passavam como `Ty::Infer(0)` → emitem `name.undefined` + `Ty::Error`
+- **Docs:** Função documentada com retorno não-`void` e sem `@return` → agora emite warning `doc.missing_return`
 - **Checker:** `and`/`or`/`not` não validavam booleanos → validam com `expect_bool()`
 - **Checker:** `break`/`continue` fora de loop passavam → emitem `control.loop_required`
 - **Checker:** Result descartado sem warning → emite `type.unused_result`

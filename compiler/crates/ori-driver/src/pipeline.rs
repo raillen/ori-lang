@@ -1432,7 +1432,7 @@ fn check_loaded_sources(
     sink: &mut DiagnosticSink,
 ) {
     for source in loaded {
-        validate_doc_param_tags(source, sink);
+        validate_doc_tags(source, sink);
         let namespace = namespace_of(&source.ast);
         let mut checker = ori_types::check::Checker::new(
             &resolved.def_map,
@@ -1718,7 +1718,7 @@ fn is_comment_line(line: &str) -> bool {
     line.starts_with("--") || line.starts_with("|--")
 }
 
-fn validate_doc_param_tags(source: &LoadedSource, sink: &mut DiagnosticSink) {
+fn validate_doc_tags(source: &LoadedSource, sink: &mut DiagnosticSink) {
     for item in &source.ast.items {
         let leading_start = item
             .attrs
@@ -1726,20 +1726,22 @@ fn validate_doc_param_tags(source: &LoadedSource, sink: &mut DiagnosticSink) {
             .map(|attr| attr.span.start)
             .unwrap_or_else(|| item.item.span().start);
         match &item.item {
-            Item::Func(func) => validate_func_doc_params(
+            Item::Func(func) => validate_func_doc_tags(
                 source,
                 leading_start,
                 func.name.as_str(),
                 &func.params,
+                func.return_ty.as_ref(),
                 sink,
             ),
             Item::Struct(decl) => {
                 for method in &decl.methods {
-                    validate_func_doc_params(
+                    validate_func_doc_tags(
                         source,
                         method.span.start,
                         method.name.as_str(),
                         &method.params,
+                        method.return_ty.as_ref(),
                         sink,
                     );
                 }
@@ -1747,18 +1749,20 @@ fn validate_doc_param_tags(source: &LoadedSource, sink: &mut DiagnosticSink) {
             Item::Trait(decl) => {
                 for member in &decl.members {
                     match member {
-                        TraitMember::Required(sig) => validate_signature_doc_params(
+                        TraitMember::Required(sig) => validate_signature_doc_tags(
                             source,
                             sig.span.start,
                             sig.name.as_str(),
                             &sig.params,
+                            sig.return_ty.as_ref(),
                             sink,
                         ),
-                        TraitMember::Default(func) => validate_func_doc_params(
+                        TraitMember::Default(func) => validate_func_doc_tags(
                             source,
                             func.span.start,
                             func.name.as_str(),
                             &func.params,
+                            func.return_ty.as_ref(),
                             sink,
                         ),
                     }
@@ -1766,11 +1770,12 @@ fn validate_doc_param_tags(source: &LoadedSource, sink: &mut DiagnosticSink) {
             }
             Item::Implement(decl) => {
                 for method in &decl.methods {
-                    validate_func_doc_params(
+                    validate_func_doc_tags(
                         source,
                         method.span.start,
                         method.name.as_str(),
                         &method.params,
+                        method.return_ty.as_ref(),
                         sink,
                     );
                 }
@@ -1778,14 +1783,19 @@ fn validate_doc_param_tags(source: &LoadedSource, sink: &mut DiagnosticSink) {
             Item::Extern(decl) => {
                 for member in &decl.members {
                     if let ExternMember::Func {
-                        name, params, span, ..
+                        name,
+                        params,
+                        return_ty,
+                        span,
+                        ..
                     } = member
                     {
-                        validate_signature_doc_params(
+                        validate_signature_doc_tags(
                             source,
                             span.start,
                             name.as_str(),
                             params,
+                            return_ty.as_ref(),
                             sink,
                         );
                     }
@@ -1796,38 +1806,42 @@ fn validate_doc_param_tags(source: &LoadedSource, sink: &mut DiagnosticSink) {
     }
 }
 
-fn validate_func_doc_params(
+fn validate_func_doc_tags(
     source: &LoadedSource,
     leading_start: u32,
     func_name: &str,
     params: &[Param],
+    return_ty: Option<&Type>,
     sink: &mut DiagnosticSink,
 ) {
-    validate_doc_params_for_signature(source, leading_start, func_name, params, sink);
+    validate_doc_tags_for_signature(source, leading_start, func_name, params, return_ty, sink);
 }
 
-fn validate_signature_doc_params(
+fn validate_signature_doc_tags(
     source: &LoadedSource,
     leading_start: u32,
     func_name: &str,
     params: &[Param],
+    return_ty: Option<&Type>,
     sink: &mut DiagnosticSink,
 ) {
-    validate_doc_params_for_signature(source, leading_start, func_name, params, sink);
+    validate_doc_tags_for_signature(source, leading_start, func_name, params, return_ty, sink);
 }
 
-fn validate_doc_params_for_signature(
+fn validate_doc_tags_for_signature(
     source: &LoadedSource,
     leading_start: u32,
     func_name: &str,
     params: &[Param],
+    return_ty: Option<&Type>,
     sink: &mut DiagnosticSink,
 ) {
     let Some(doc_span) = leading_block_comment_before(&source.tokens, leading_start) else {
         return;
     };
+    let comment = &source.source[doc_span.as_range()];
     let param_names: HashSet<&str> = params.iter().map(|param| param.name.as_str()).collect();
-    for tag in doc_param_tags(&source.source[doc_span.as_range()]) {
+    for tag in doc_param_tags(comment) {
         if tag.name.is_empty() || !param_names.contains(tag.name) {
             let name = if tag.name.is_empty() {
                 "missing parameter name"
@@ -1847,6 +1861,20 @@ fn validate_doc_params_for_signature(
                 .with_action("rename the @param tag or remove it"),
             );
         }
+    }
+    if return_type_requires_doc(return_ty) && !doc_has_return_tag(comment) {
+        sink.emit(
+            Diagnostic::warning(
+                "doc.missing_return",
+                format!("documentation for `{func_name}` is missing `@return`"),
+            )
+            .with_label(Label::primary(
+                source.file_id,
+                doc_span,
+                "documentation comment here",
+            ))
+            .with_action("add `@return` or `@returns` for the returned value"),
+        );
     }
 }
 
@@ -1892,6 +1920,18 @@ fn doc_param_tags(comment: &str) -> Vec<DocParamTag<'_>> {
             Some(DocParamTag { name })
         })
         .collect()
+}
+
+fn return_type_requires_doc(return_ty: Option<&Type>) -> bool {
+    !matches!(return_ty, None | Some(Type::Void(_)))
+}
+
+fn doc_has_return_tag(comment: &str) -> bool {
+    cleaned_doc_lines(comment).iter().any(|line| {
+        line.strip_prefix("@returns")
+            .or_else(|| line.strip_prefix("@return"))
+            .is_some_and(|text| !text.trim().is_empty())
+    })
 }
 
 #[derive(Default)]

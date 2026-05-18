@@ -197,6 +197,7 @@ when the compiler starts producing it.
 
 | Code | Severity | Description |
 |---|---|---|
+| `doc.missing_return` | warning | Documentation for a non-void function is missing `@return` or `@returns` |
 | `doc.param_name_mismatch` | warning | Documentation `@param` tag names a parameter that does not exist on the documented function |
 
 ### `name`
@@ -270,7 +271,6 @@ They are not emitted by the compiler today.
 | `contract.check_failure` | runtime panic | runtime contract reporting |
 | `contract.field_violation` | runtime panic | runtime contract reporting |
 | `contract.param_violation` | runtime panic | runtime contract reporting |
-| `doc.missing_return` | warning | planned documentation tooling |
 | `doc.unclosed_block` | error | planned documentation/comment lexer work |
 | `extern.managed_type_in_ffi` | error | planned FFI diagnostics |
 | `extern.unknown_abi` | error | planned FFI diagnostics |
