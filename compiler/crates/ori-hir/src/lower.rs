@@ -1314,6 +1314,37 @@ impl<'a> Lowerer<'a> {
         }
         None
     }
+    fn displayable_conversion_expr(
+        &self,
+        value: HirExpr,
+        callee_span: Span,
+        span: Span,
+    ) -> Option<HirExpr> {
+        let Ty::Named(type_def_id, _) = &value.ty else {
+            return None;
+        };
+        let displayable_def_id =
+            self.resolve_def_id_with_kind("ori.core.Displayable", DefKind::Trait)?;
+        let (method_path, return_ty) =
+            self.trait_method_func_for_trait_and_type(displayable_def_id, *type_def_id, "display")?;
+        let callee = HirExpr {
+            kind: HirExprKind::Var(method_path.clone()),
+            ty: self.ty_for_def_path(method_path.as_str()),
+            span: callee_span,
+        };
+        Some(HirExpr {
+            kind: HirExprKind::Call {
+                callee: Box::new(callee),
+                args: vec![HirArg {
+                    label: None,
+                    spread: false,
+                    value,
+                }],
+            },
+            ty: return_ty,
+            span,
+        })
+    }
     fn iterable_element_ty(&self, ty: &Ty) -> Ty {
         match ty {
             Ty::List(t) | Ty::Set(t) | Ty::Range(t) => *t.clone(),
@@ -2794,7 +2825,13 @@ impl<'a> Lowerer<'a> {
                     .iter()
                     .map(|p| match p {
                         FStrPart::Literal(s) => HirStrPart::Literal(s.clone()),
-                        FStrPart::Interpolated(e) => HirStrPart::Expr(self.lower_expr(e, tp)),
+                        FStrPart::Interpolated(e) => {
+                            let value = self.lower_expr(e, tp);
+                            let value = self
+                                .displayable_conversion_expr(value.clone(), e.span(), e.span())
+                                .unwrap_or(value);
+                            HirStrPart::Expr(value)
+                        }
                     })
                     .collect();
                 HirExpr {
@@ -3085,6 +3122,11 @@ impl<'a> Lowerer<'a> {
                     if name == "string" {
                         let args_h = self.lower_call_args(args, tp);
                         if let Some(first) = args_h.first() {
+                            if matches!(first.value.ty, Ty::String) {
+                                let mut value = first.value.clone();
+                                value.span = *span;
+                                return value;
+                            }
                             if let Some(c_name) = string_conversion_c_name(&first.value.ty) {
                                 let sig_ty = stdlib_c_func_ty(c_name);
                                 return HirExpr {
@@ -3099,6 +3141,13 @@ impl<'a> Lowerer<'a> {
                                     ty: Ty::String,
                                     span: *span,
                                 };
+                            }
+                            if let Some(display_call) = self.displayable_conversion_expr(
+                                first.value.clone(),
+                                callee.span(),
+                                *span,
+                            ) {
+                                return display_call;
                             }
                         }
                     }

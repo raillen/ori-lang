@@ -3715,9 +3715,9 @@ impl CCodegen {
     /// Emit string interpolation: `f"hello {name}, age {age}"`
     /// Strategy: build with snprintf into a heap buffer.
     fn emit_interp_str(&mut self, parts: &[HirStrPart]) -> String {
-        // Build format string and args for snprintf
         let mut fmt = String::new();
         let mut args: Vec<String> = Vec::new();
+        let mut prelude: Vec<String> = Vec::new();
         for part in parts {
             match part {
                 HirStrPart::Literal(s) => {
@@ -3727,26 +3727,35 @@ impl CCodegen {
                     let val = self.expr_to_c(e);
                     match &e.ty {
                         Ty::Int | Ty::Int8 | Ty::Int16 | Ty::Int32 | Ty::Int64 => {
+                            let tmp = self.fresh_tmp();
                             // Use PRId64 via C string concatenation in the emitted format
                             fmt.push_str("%\" PRId64 \"");
-                            args.push(format!("(int64_t)({})", val));
+                            prelude.push(format!("int64_t {tmp} = (int64_t)({val});"));
+                            args.push(tmp);
                         }
                         Ty::Float | Ty::Float32 | Ty::Float64 => {
+                            let tmp = self.fresh_tmp();
                             fmt.push_str("%g");
-                            args.push(format!("(double)({})", val));
+                            prelude.push(format!("double {tmp} = (double)({val});"));
+                            args.push(tmp);
                         }
                         Ty::Bool => {
+                            let tmp = self.fresh_tmp();
                             fmt.push_str("%s");
-                            args.push(format!("({} ? \"true\" : \"false\")", val));
+                            prelude.push(format!("bool {tmp} = (bool)({val});"));
+                            args.push(format!("({tmp} ? \"true\" : \"false\")"));
                         }
                         Ty::String => {
+                            let tmp = self.fresh_tmp();
                             fmt.push_str("%.*s");
-                            args.push(format!("(int)({}).len, ({}).data", val, val));
+                            prelude.push(format!("ori_string_t {tmp} = {val};"));
+                            args.push(format!("(int){tmp}.len, {tmp}.data"));
                         }
                         _ => {
-                            // Fallback: try to print as string
+                            let tmp = self.fresh_tmp();
                             fmt.push_str("%.*s");
-                            args.push(format!("(int)({}).len, ({}).data", val, val));
+                            prelude.push(format!("ori_string_t {tmp} = {val};"));
+                            args.push(format!("(int){tmp}.len, {tmp}.data"));
                         }
                     }
                 }
@@ -3754,15 +3763,23 @@ impl CCodegen {
         }
         let tmp_buf = self.fresh_tmp();
         let tmp_len = self.fresh_tmp();
+        let prelude = if prelude.is_empty() {
+            String::new()
+        } else {
+            format!("{} ", prelude.join(" "))
+        };
         let args_str = if args.is_empty() {
             String::new()
         } else {
             format!(", {}", args.join(", "))
         };
-        // Use compound literal + statement expression
         format!(
-            "({{ char* {buf} = (char*)malloc(1024); int {len} = snprintf({buf}, 1024, \"{fmt}\"{args}); (ori_string_t){{ .data = {buf}, .len = (size_t){len} }}; }})",
-            buf = tmp_buf, len = tmp_len, fmt = fmt, args = args_str,
+            "({{ {prelude}int {len} = snprintf(NULL, 0, \"{fmt}\"{args}); char* {buf} = (char*)malloc((size_t){len} + 1); snprintf({buf}, (size_t){len} + 1, \"{fmt}\"{args}); (ori_string_t){{ .data = {buf}, .len = (size_t){len} }}; }})",
+            prelude = prelude,
+            buf = tmp_buf,
+            len = tmp_len,
+            fmt = fmt,
+            args = args_str,
         )
     }
 

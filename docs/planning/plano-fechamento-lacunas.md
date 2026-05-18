@@ -88,8 +88,11 @@ e eliminar dívidas técnicas da linguagem Ori.
 ### 2.3 Type alias no lado esquerdo de `where` constraints
 - **Arquivos:** parser, checker
 
-### 2.4 `Displayable` trait-driven conversion
-- **Spec:** `docs/spec/04-types.md:394`
+### 2.4 `Displayable` trait-driven conversion ✅
+- **Status:** Implementado para tipos concretos definidos pelo usuário.
+- **Escopo:** `string(value)` e f-strings chamam `display(self)` quando o tipo implementa `ori.core.Displayable`.
+- **Backends:** Nativo e C backend.
+- **Arquivos:** `check.rs`, `lower.rs`, `c_backend.rs`, `multifile_imports.rs`
 
 ### 2.5 Associated types em traits
 - **Arquivo:** `ori-parser/src/parse_item.rs:~495`

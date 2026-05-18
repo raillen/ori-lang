@@ -880,6 +880,120 @@ end
 }
 
 #[test]
+fn compile_runs_displayable_string_conversion_native() {
+    let dir = TestDir::new("displayable_string_conversion_native");
+    dir.write(
+        "main.orl",
+        r##"namespace app.main
+
+import ori.core as core
+import ori.io as io
+
+struct Resource
+    id: int
+end
+
+implement core.Displayable for Resource
+    func display(self) -> string
+        return "Resource#" + string(self.id)
+    end
+end
+
+func main()
+    const resource: Resource = Resource(id: 7)
+    io.print(string(resource))
+    io.print(string("ready"))
+    io.print(f"value={resource}")
+end
+"##,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "displayable_string_conversion.exe"
+    } else {
+        "displayable_string_conversion"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(
+        stdout.replace("\r\n", "\n"),
+        "Resource#7\nready\nvalue=Resource#7\n"
+    );
+}
+
+#[test]
+fn build_c_backend_displayable_string_conversion() {
+    let dir = TestDir::new("c_backend_displayable_string_conversion");
+    dir.write(
+        "main.orl",
+        r##"namespace app.main
+
+import ori.core as core
+import ori.io as io
+
+struct Resource
+    id: int
+end
+
+implement core.Displayable for Resource
+    func display(self) -> string
+        return "Resource#" + string(self.id)
+    end
+end
+
+func main()
+    const resource: Resource = Resource(id: 7)
+    io.print(string(resource))
+    io.print(string("ready"))
+    io.print(f"value={resource}")
+end
+"##,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        out.c_source
+            .contains("ORI__app_dot_main_dot_Resource_dot_Displayable_dot_display"),
+        "{}",
+        out.c_source
+    );
+
+    compile_c_source(
+        &dir,
+        "c_backend_displayable_string_conversion",
+        &out.c_source,
+    );
+}
+
+#[test]
+fn check_rejects_non_displayable_f_string_interpolation() {
+    let dir = TestDir::new("non_displayable_f_string");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+struct Secret
+    id: int
+end
+
+func main()
+    const secret: Secret = Secret(id: 7)
+    const text: string = f"value={secret}"
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(diagnostic_codes(&out).contains(&"type.arg_type_mismatch"));
+}
+
+#[test]
 fn compile_runs_native_interpolation_with_string_length_helper() {
     let dir = TestDir::new("compile_native_interpolation_string_len");
     dir.write(

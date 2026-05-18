@@ -1406,7 +1406,29 @@ impl<'a> Checker<'a> {
             Expr::FStrLit { parts, .. } => {
                 for part in parts {
                     if let FStrPart::Interpolated(expr) = part {
-                        self.infer_expr(expr);
+                        let part_ty = self.infer_expr(expr);
+                        if !self.supports_string_conversion_ty(&part_ty)
+                            && !part_ty.is_error()
+                            && !part_ty.contains_infer()
+                        {
+                            self.sink.emit(
+                                Diagnostic::error(
+                                    "type.arg_type_mismatch",
+                                    format!(
+                                        "`f-string` interpolation expects `int`, `float`, `bool`, `string`, or a `Displayable` value, found `{}`",
+                                        part_ty.display()
+                                    ),
+                                )
+                                .with_label(Label::primary(
+                                    self.file_id,
+                                    expr.span(),
+                                    "interpolated value here",
+                                ))
+                                .with_action(
+                                    "interpolate a scalar/string value or implement `ori.core.Displayable`",
+                                ),
+                            );
+                        }
                     }
                 }
                 Ty::String
@@ -3808,7 +3830,7 @@ impl<'a> Checker<'a> {
             ArgValue::Expr(expr) | ArgValue::Spread(expr) => expr.as_ref(),
         };
         let arg_ty = self.infer_expr(expr);
-        if arg_ty.is_integer() || arg_ty.is_float() || matches!(arg_ty, Ty::Bool) {
+        if self.supports_string_conversion_ty(&arg_ty) {
             return Some(Ty::String);
         }
         if arg_ty.is_error() || arg_ty.contains_infer() {
@@ -3819,7 +3841,7 @@ impl<'a> Checker<'a> {
             Diagnostic::error(
                 "type.arg_type_mismatch",
                 format!(
-                    "`string` expects `int`, `float`, or `bool`, found `{}`",
+                    "`string` expects `int`, `float`, `bool`, `string`, or a `Displayable` value, found `{}`",
                     arg_ty.display()
                 ),
             )
@@ -3828,9 +3850,16 @@ impl<'a> Checker<'a> {
                 arg.span,
                 "value converted here",
             ))
-            .with_action("convert only supported scalar values with `string(...)`"),
+            .with_action("pass a scalar/string value or implement `ori.core.Displayable`"),
         );
         Some(Ty::Error)
+    }
+
+    fn supports_string_conversion_ty(&self, ty: &Ty) -> bool {
+        ty.is_integer()
+            || ty.is_float()
+            || matches!(ty, Ty::Bool | Ty::String)
+            || self.user_type_implements_core_trait(ty, "Displayable")
     }
 
     fn infer_primitive_conversion_call(

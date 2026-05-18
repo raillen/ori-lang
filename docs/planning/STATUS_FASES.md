@@ -1,7 +1,7 @@
 # Status das Fases — Ori Language
 
 > Última atualização: 2026-05-18
-> Baseline: 100% testes passando (249/249 multifile, 102/102 ori_spec, 38/38 concurrency)
+> Baseline: 100% testes passando (252/252 multifile, 102/102 ori_spec, 38/38 concurrency)
 
 ---
 
@@ -35,7 +35,7 @@
 | 2.1 | Igualdade para `bytes` | ✅ | Feito em 1.1 (chama `ori_bytes_eq`) |
 | 2.2 | Igualdade para `any<Trait>` | ❌ | Requer method lookup via vtable |
 | 2.3 | Type alias no lado esquerdo de `where` | ✅ | `resolve_trait_through_aliases()` segue cadeia de aliases |
-| 2.4 | `Displayable` trait-driven conversion | ✅ Parcial | Método `display(self) -> string` adicionado. Sem implementações built-in |
+| 2.4 | `Displayable` trait-driven conversion | ✅ | `string(value)` e f-strings chamam `display(self)` para tipos concretos definidos pelo usuário nos backends nativo e C |
 | 2.5 | Associated types em traits | ❌ | Feature grande de type system |
 | 2.6 | Const generics | ❌ | Feature grande de type system |
 | 2.7 | Higher-kinded types (HKT) | ❌ | Feature grande de type system |

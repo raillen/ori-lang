@@ -30,6 +30,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **C Backend:** Igualdade estrutural para `optional<T>`, `result<T,E>`, `tuple<...>`, `list<T>`, structs sem genéricos, `set<int|string>` e `map<int|string, V>` no backend de debug
 - **Codegen:** State machine async aceita `Using` statements como prefix locals
 - **Core Traits:** `ori.core.Displayable` agora possui método `display(self) -> string`
+- **Checker/Lowering:** `string(value)` e f-strings agora usam `ori.core.Displayable` para tipos concretos definidos pelo usuário
 - **Checker:** Type aliases agora são resolvidos em `where` constraints (ex: `where T is MyAlias` onde `type MyAlias = ori.core.Equatable`)
 - **Checker:** `emit_undefined_name()` — nomes desconhecidos geram `name.undefined` + `Ty::Error`
 - **Checker:** Validação de runtime para map/set com `type.collection_hash_unsupported`
@@ -86,11 +87,13 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Checker:** Result descartado sem warning → emite `type.unused_result`
 - **Checker:** Closure capturando `var` → emite `mut.closure_captures_var`
 - **Checker:** Literais numéricos corrompidos para zero → validados com diagnóstico
+- **Checker:** F-strings aceitavam valores sem conversão para texto até falhar no backend → agora emitem `type.arg_type_mismatch`
 - **Codegen:** `?` no backend C sem propagação → propaga com cleanup de escopo
 - **Codegen:** Runtime bounds não seguiam spec → `ori_abort_bounds` para out-of-bounds
 - **Codegen:** `optional<T>` e `result<T,E>` com `!=` podiam comparar payload da variante errada → agora comparam payload apenas quando as variantes batem
 - **Codegen:** Structs sem genéricos não suportavam igualdade estrutural → agora comparam campos em ordem de declaração nos backends nativo e C
 - **Codegen:** `set<int|string>` e `map<int|string, V>` não suportavam igualdade estrutural completa nos backends nativo e C → agora comparam por tamanho, presença de chaves/itens e igualdade dos valores
+- **C Backend:** F-strings podiam avaliar expressões interpoladas de string duas vezes e truncar buffers fixos → agora avaliam cada parte uma vez e alocam pelo tamanho real
 - **Runtime:** `heap.pop`/`heap.peek` para valores gerenciados não transferiam a aresta ARC ao `optional` retornado → agora o valor continua vivo após o heap sair de escopo
 - **Stdlib:** `panic`/`todo`/`unreachable` não implementados → implementados
 - **Stdlib:** `.or`/`.or_return`/`.or_wrap` inexistentes ou incompletos → implementados para o escopo atual (`.or_wrap` em `result<T, string>`)

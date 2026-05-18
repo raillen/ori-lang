@@ -404,13 +404,29 @@ const b: u8   = u8(n)         -- explicit narrowing (runtime check)
 const w: int64 = int64(n)     -- explicit widening
 ```
 
-**String conversion:** the current compiler accepts built-in scalar values.
-Trait-driven `Displayable` conversion is planned, but not implemented yet.
+**Conversao para string:** o compilador aceita escalares built-in, `string`
+e valores concretos definidos pelo usuario que implementam
+`ori.core.Displayable`.
 
 ```ori
 const s: string = string(42)
 const t: string = string(3.14)
 const b: string = string(true)
+const same: string = string("ready")
+
+struct Resource
+    id: int
+end
+
+implement ori.core.Displayable for Resource
+    func display(self) -> string
+        return "Resource#" + string(self.id)
+    end
+end
+
+const r: Resource = Resource(id: 7)
+const label: string = string(r)
+const line: string = f"value={r}"
 ```
 
 **Type checking at runtime** (for `any<Trait>`):

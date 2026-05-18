@@ -141,18 +141,15 @@ The common path through Ori code:
 namespace app.main
 
 import ori.io as io
+import ori.core as core
 
 struct User
     name: string
     age: int if it >= 0
 end
 
-trait Displayable
-    func display() -> string
-end
-
-implement Displayable for User
-    func display() -> string
+implement core.Displayable for User
+    func display(self) -> string
         return f"{self.name} ({self.age})"
     end
 end
@@ -166,7 +163,7 @@ end
 
 func main() -> result<void, string>
     const user: User = load_user(1)?
-    io.print(user.display())
+    io.print(string(user))
     return success()
 end
 ```
@@ -187,7 +184,7 @@ Key differences from Zenith:
 | `func f(mut self)` | `mut func f()` |
 | `while true` | `loop` |
 | `type Alias = T` | `alias Alias = T` |
-| `to_text()` | `string()` builtin (trait method stays `to_string()`) |
+| `to_text()` | `string()` builtin (trait method is `display(self)`) |
 | `TextRepresentable` | `Displayable` |
 | Ranges are exclusive (`0..9` = 0–8) | Ranges are inclusive (`0..9` = 0–9) |
 | Anonymous functions use `func` | Anonymous functions use `do` |

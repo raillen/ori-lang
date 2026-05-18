@@ -96,6 +96,8 @@ len(text: string)            -- int: byte length of a string
 string(value: int)           -- string: convert an integer to text
 string(value: float)         -- string: convert a float to text
 string(value: bool)          -- string: convert a boolean to text
+string(value: string)        -- string: return the same string value
+string(value: Displayable)   -- string: call display(self) for user types
 int(value)                   -- int: explicit numeric conversion where supported
 float(value)                 -- float: explicit numeric conversion where supported
 u8(value)                    -- u8: explicit narrowing conversion where supported
@@ -119,8 +121,9 @@ is enforced by `using`. `Transferable` is enforced for values that cross task
 or channel boundaries. `Addable`, `Subtractable`, `Equatable`, and
 `Comparable` are used by operator overloading for user-defined concrete types.
 `Iterable` is recognized by `for` when the implementation exposes
-`mut func next() -> optional<T>`. Other trait-driven behaviors, such as broad
-`Displayable` conversion, are planned rather than complete.
+`mut func next() -> optional<T>`. `Displayable` is used by `string(value)` and
+interpolated strings for user-defined concrete values that provide
+`func display(self) -> string`.
 
 ---
 

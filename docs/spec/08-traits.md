@@ -38,10 +38,10 @@ Traits may provide default implementations:
 
 ```ori
 trait Displayable
-    func to_string() -> string
+    func display(self) -> string
 
-    func print()
-        io.print(self.to_string())
+    func print(self)
+        io.print(self.display())
     end
 end
 ```
@@ -192,7 +192,7 @@ Core traits defined in `ori.core`:
 
 | Trait | Purpose |
 |---|---|
-| `Displayable` | `func to_string() -> string` — converts to string representation |
+| `Displayable` | `func display(self) -> string` — converts a value to string text |
 | `Equatable` | Custom equality via `func equals(other: Self) -> bool` |
 | `Comparable` | Ordering via `func compare(other: Self) -> int` |
 | `Hashable` | Hash for map/set keys via `func hash() -> u64` |
