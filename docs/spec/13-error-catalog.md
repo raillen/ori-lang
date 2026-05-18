@@ -50,6 +50,7 @@ when the compiler starts producing it.
 | `parse.fstring_expr_trailing_tokens` | error | Interpolated string expression has extra tokens |
 | `parse.fstring_unclosed_expr` | error | Interpolated string expression is not closed |
 | `parse.fstring_unmatched_brace` | error | Interpolated string contains an unmatched brace |
+| `parse.import_after_declaration` | error | Import appears after a top-level declaration |
 | `parse.invalid_escape` | error | String or byte literal contains an invalid escape |
 | `parse.invalid_lvalue` | error | Assignment target is not assignable |
 | `parse.tuple_arity` | error | Tuple type or expression has invalid arity |
@@ -165,6 +166,7 @@ when the compiler starts producing it.
 | `bind.duplicate_alias` | error | More than one import uses the same alias |
 | `bind.duplicate_field` | error | Struct or enum variant field is declared more than once |
 | `bind.duplicate_implement` | error | Same trait/type implementation pair is declared twice |
+| `bind.duplicate_param` | error | Function, method, or signature parameter is declared more than once |
 | `bind.duplicate_variant` | error | Enum variant is declared more than once |
 | `bind.import_ambiguous` | error | Import path matches more than one file |
 | `bind.import_cycle` | error | Local imports form a cycle |
@@ -259,7 +261,6 @@ They are not emitted by the compiler today.
 
 | Code | Intended severity | Status |
 |---|---|---|
-| `bind.duplicate_param` | error | planned duplicate declaration detail |
 | `bind.self_outside_method` | error | planned binding diagnostic |
 | `bind.undefined` | error | reserved alias; emitted code is `name.undefined` |
 | `contract.check_failure` | runtime panic | runtime contract reporting |
@@ -274,7 +275,6 @@ They are not emitted by the compiler today.
 | `match.guard_not_exhaustive` | warning | planned match diagnostics |
 | `match.unreachable_case` | warning | planned match diagnostics |
 | `mut.field_mutation_in_func` | error | planned method mutability diagnostic |
-| `parse.import_after_declaration` | error | planned parser recovery diagnostic |
 | `parse.invalid_range` | error | planned range parse/type split diagnostic |
 | `parse.missing_else_in_if_expr` | error | planned inline if diagnostic |
 | `parse.namespace_missing` | error | planned parser recovery diagnostic |

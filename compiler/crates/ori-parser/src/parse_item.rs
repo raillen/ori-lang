@@ -163,6 +163,19 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_item(&mut self) -> Option<Item> {
+        if self.at(&TokenKind::Import)
+            || (self.at(&TokenKind::Public) && self.peek_nth_kind(1) == Some(&TokenKind::Import))
+        {
+            let span = self.current_span();
+            self.error(
+                "parse.import_after_declaration",
+                "imports must appear before declarations",
+                span,
+            );
+            let _ = self.parse_import();
+            return None;
+        }
+
         let vis = self.parse_visibility();
         if self.at_contextual("async") {
             return Some(Item::Func(self.parse_func_decl(vis)?));
@@ -334,7 +347,16 @@ impl<'src> Parser<'src> {
 
     fn validate_param_list(&mut self, params: &[Param]) {
         let mut seen_default = false;
+        let mut seen_names = HashSet::new();
         for (index, param) in params.iter().enumerate() {
+            if !seen_names.insert(param.name.text.clone()) {
+                self.error(
+                    "bind.duplicate_param",
+                    format!("duplicate parameter `{}`", param.name.text),
+                    param.name.span,
+                );
+            }
+
             if matches!(param.kind, ParamKind::Variadic) && index + 1 != params.len() {
                 self.error(
                     "parse.variadic_not_last",

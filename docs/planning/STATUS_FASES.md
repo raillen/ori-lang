@@ -1,7 +1,7 @@
 # Status das Fases — Ori Language
 
 > Última atualização: 2026-05-18
-> Baseline: 100% testes passando (252/252 multifile, 102/102 ori_spec, 38/38 concurrency)
+> Baseline: 100% testes passando (254/254 multifile, 102/102 ori_spec, 38/38 concurrency)
 
 ---
 
@@ -66,13 +66,13 @@
 
 ---
 
-## Fase 5 — Diagnósticos Planejados (29 códigos)
+## Fase 5 — Diagnósticos Planejados (29 códigos; 2 emitidos)
 
-Códigos catalogados em `docs/spec/13-error-catalog.md` como "planned" mas ainda não emitidos:
+Subconjunto de códigos planejados rastreados nesta fase. O catálogo completo,
+incluindo aliases reservados, fica em `docs/spec/13-error-catalog.md`.
 
 | Código | Severidade | Descrição |
 |--------|-----------|-----------|
-| `bind.duplicate_param` | error | Parâmetro duplicado |
 | `bind.self_outside_method` | error | `self` fora de método |
 | `bind.undefined` | error | Alias reservado; emitido como `name.undefined` |
 | `contract.check_failure` | runtime | Falha de contrato em runtime |
@@ -87,7 +87,6 @@ Códigos catalogados em `docs/spec/13-error-catalog.md` como "planned" mas ainda
 | `match.guard_not_exhaustive` | warning | Guarda não exaustiva |
 | `match.unreachable_case` | warning | Case inalcançável |
 | `mut.field_mutation_in_func` | error | Mutação de campo em função |
-| `parse.import_after_declaration` | error | Import após declaração |
 | `parse.invalid_range` | error | Range inválido |
 | `parse.missing_else_in_if_expr` | error | `else` ausente em if-expr |
 | `parse.namespace_missing` | error | Namespace ausente |
@@ -123,12 +122,12 @@ Códigos catalogados em `docs/spec/13-error-catalog.md` como "planned" mas ainda
 |------|-------|-----------|---------|----------|
 | 0 — Bugs | 2 | 2 | 0 | 0 |
 | 1 — Bloqueadoras | 7 | 3 | 1 | 3 |
-| 2 — Compilador | 11 | 2 | 1 | 8 |
+| 2 — Compilador | 11 | 3 | 0 | 8 |
 | 3 — Runtime/ARC | 2 | 0 | 0 | 2 |
 | 4 — LSP/Tooling | 4 | 0 | 0 | 4 |
-| 5 — Diagnósticos | 29 | 0 | 0 | 29 |
+| 5 — Diagnósticos | 29 | 2 | 0 | 27 |
 | 6 — Finalização | 5 | 1 | 2 | 2 |
-| **TOTAL** | **60** | **8** | **4** | **48** |
+| **TOTAL** | **60** | **11** | **3** | **46** |
 
 ### Itens GRANDES (redesign de subsistemas)
 1.4 await aninhado, 1.6 ori.fs.File, 1.7 Cancelamento, 2.5 Associated types, 2.6 Const generics, 2.7 HKT, 3.1 Destrutores, 3.2 Cycle collector

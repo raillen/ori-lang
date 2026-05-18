@@ -4552,6 +4552,43 @@ end
 }
 
 #[test]
+fn check_reports_duplicate_parameter_names() {
+    let dir = TestDir::new("duplicate_param_names");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+func add(value: int, value: int) -> int
+    return value
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(diagnostic_codes(&out).contains(&"bind.duplicate_param"));
+}
+
+#[test]
+fn check_reports_import_after_declaration() {
+    let dir = TestDir::new("import_after_declaration");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+func ready()
+end
+
+import ori.io as io
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(diagnostic_codes(&out).contains(&"parse.import_after_declaration"));
+}
+
+#[test]
 fn check_reports_type_error_inside_imported_top_level_const() {
     let dir = TestDir::new("imported_const_type_error");
     dir.write(
