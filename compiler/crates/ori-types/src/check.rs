@@ -1435,7 +1435,7 @@ impl<'a> Checker<'a> {
             }
             Expr::BytesLit { .. } => Ty::Bytes,
             Expr::None(_) => Ty::Optional(Box::new(Ty::Infer(0))),
-            Expr::SelfExpr(span) => self.lookup_var("self", *span),
+            Expr::SelfExpr(span) => self.lookup_self(*span),
             Expr::Ident(n) => self.lookup_var(&n.text, n.span),
             Expr::QualifiedIdent(q) => {
                 // Single-segment names may be local variables — check scope first
@@ -4353,6 +4353,15 @@ impl<'a> Checker<'a> {
         Ty::Error
     }
 
+    fn lookup_self(&mut self, span: ori_diagnostics::Span) -> Ty {
+        if let Some((ty, scope_idx, mutable)) = self.lookup_local_var_binding("self") {
+            self.check_closure_var_capture("self", span, scope_idx, mutable, &ty);
+            return ty;
+        }
+        self.emit_self_outside_method(span);
+        Ty::Error
+    }
+
     fn check_closure_var_capture(
         &mut self,
         name: &str,
@@ -4378,6 +4387,21 @@ impl<'a> Checker<'a> {
             Diagnostic::error("name.undefined", format!("undefined name `{}`", name))
                 .with_label(Label::primary(self.file_id, span, "not in scope"))
                 .with_action("declare or import the name before using it"),
+        );
+    }
+
+    fn emit_self_outside_method(&mut self, span: ori_diagnostics::Span) {
+        self.sink.emit(
+            Diagnostic::error(
+                "bind.self_outside_method",
+                "`self` can only be used inside a method",
+            )
+            .with_label(Label::primary(
+                self.file_id,
+                span,
+                "`self` is not in method scope",
+            ))
+            .with_action("move this code into a method or pass the value explicitly"),
         );
     }
 

@@ -4228,6 +4228,29 @@ end
 }
 
 #[test]
+fn check_reports_self_outside_method() {
+    let dir = TestDir::new("self_outside_method");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+func main()
+    const value: int = self
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "expected self usage diagnostic");
+    let codes = diagnostic_codes(&out);
+    assert!(codes.contains(&"bind.self_outside_method"), "{codes:?}");
+    assert!(
+        !codes.contains(&"name.undefined"),
+        "`self` should not fall back to name.undefined: {codes:?}"
+    );
+}
+
+#[test]
 fn check_reports_logical_operator_non_bool_operands() {
     let dir = TestDir::new("logical_operator_non_bool_operands");
     dir.write(

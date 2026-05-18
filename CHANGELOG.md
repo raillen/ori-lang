@@ -91,6 +91,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Checker:** Closure capturando `var` → emite `mut.closure_captures_var`
 - **Checker:** Literais numéricos corrompidos para zero → validados com diagnóstico
 - **Checker:** F-strings aceitavam valores sem conversão para texto até falhar no backend → agora emitem `type.arg_type_mismatch`
+- **Checker:** `self` fora de método caía em `name.undefined` → agora emite `bind.self_outside_method`
 - **Codegen:** `?` no backend C sem propagação → propaga com cleanup de escopo
 - **Codegen:** Runtime bounds não seguiam spec → `ori_abort_bounds` para out-of-bounds
 - **Codegen:** `optional<T>` e `result<T,E>` com `!=` podiam comparar payload da variante errada → agora comparam payload apenas quando as variantes batem
