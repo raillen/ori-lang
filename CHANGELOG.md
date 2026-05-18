@@ -22,6 +22,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Checker:** `.or_return()` completo — desugaring para operador `?` (propagate) em `optional<T>` e `result<T,E>`
 - **Checker:** `.or()` type-checking para `optional<T>` e `result<T,E>` com fallback
 - **Parser/Codegen:** `.or(fallback)` completo para `optional<T>` e `result<T,E>` no backend nativo e no C backend, com fallback avaliado apenas em `none`/`error(_)`
+- **Parser/Checker/Codegen:** `.or_wrap(context)` completo para `result<T, string>` no backend nativo e no C backend, com contexto avaliado apenas em `error(_)`
 - **Checker:** `supports_builtin_equality` expandido para `optional<T>`, `result<T,E>`, `tuple<...>`, `bytes`
 - **Checker:** `using` permitido dentro de `async func` (state machine armazena recurso no frame; dispose pendente nos terminais)
 - **Stdlib:** `ori.Error` agora possui campo `cause: string` para encadeamento básico de erros
@@ -87,7 +88,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Codegen:** `?` no backend C sem propagação → propaga com cleanup de escopo
 - **Codegen:** Runtime bounds não seguiam spec → `ori_abort_bounds` para out-of-bounds
 - **Stdlib:** `panic`/`todo`/`unreachable` não implementados → implementados
-- **Stdlib:** `.or`/`.or_return` inexistentes → implementados; `.or_wrap` permanece planejado
+- **Stdlib:** `.or`/`.or_return`/`.or_wrap` inexistentes ou incompletos → implementados para o escopo atual (`.or_wrap` em `result<T, string>`)
 - **CLI:** `ori compile` help dizia "no C compiler needed" → atualizado para refletir dependência de linker
 - **Resolver:** Campos/variantes duplicados em struct/enum não diagnosticados → emite `name.duplicate_field` / `name.duplicate_variant`
 - **Lexer:** `check_unclosed_block_comments()` era no-op → removida (lógica já está em `find_unclosed_block_comment`)
@@ -129,7 +130,6 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Não implementado (planejado)
 - `ori.Error` como tipo rico de erro (atual: `string`)
-- `.or()` / `.or_return()` / `.or_wrap()` completos
 - Cycle collector para ARC
 - `ori.fs.File` como tipo
 - `using` dentro de `async func`

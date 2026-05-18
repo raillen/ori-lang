@@ -39,9 +39,10 @@ e eliminar dívidas técnicas da linguagem Ori.
 - **Arquivos:** `check.rs`, `native_backend.rs`
 
 ### 1.2 `.or()` / `.or_return()` / `.or_wrap()` para optional e result ✅
-- **Status:** `.or()` e `.or_return()` implementados. `.or_wrap()` pendente.
+- **Status:** `.or()`, `.or_return()` e `.or_wrap(context)` implementados.
   - `.or(fallback)`: parser aceita `.or` como nome de membro; checker valida tipos; lowering emite `__ori_builtin_or`; backend nativo e C backend fazem unwrap com fallback preguiçoso.
-  - `.or_return()`: checker valida; lowering desugara para operador `?` (Propagate)
+  - `.or_return()`: checker valida; lowering reescreve para operador `?` (Propagate)
+  - `.or_wrap(context)`: checker valida `result<T, string>`; lowering emite `__ori_builtin_or_wrap`; backend nativo e C backend mantêm `success(v)` e transformam `error(e)` em `error(context + ": " + e)`, com contexto avaliado apenas no caminho de erro.
 - **Arquivos:** `parser.rs`, `parse_expr.rs`, `check.rs`, `lower.rs`, `native_backend.rs`, `c_backend.rs`, `multifile_imports.rs`
 
 ### 1.3 `ori.Error` como tipo rico de erro ✅

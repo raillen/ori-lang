@@ -1493,8 +1493,8 @@ end
 }
 
 #[test]
-fn check_reports_planned_optional_result_helpers() {
-    let dir = TestDir::new("planned_optional_result_helpers");
+fn check_reports_unsupported_optional_result_helper_forms() {
+    let dir = TestDir::new("unsupported_optional_result_helper_forms");
     dir.write(
         "main.orl",
         r#"namespace app.main
@@ -1509,13 +1509,17 @@ end
 
 func main()
     const early: int = maybe().or_return(none)
-    const wrapped: result<int, string> = parse().or_wrap("context")
+    const wrong_context: result<int, string> = parse().or_wrap(123)
+    const wrong_receiver: optional<int> = maybe().or_wrap("context")
 end
 "#,
     );
 
     let out = run_check(&dir.path("main.orl")).unwrap();
-    assert!(out.has_errors, "planned helpers should not type-check yet");
+    assert!(
+        out.has_errors,
+        "unsupported helper forms should not type-check"
+    );
     let messages = out
         .diagnostics
         .iter()
@@ -1523,7 +1527,8 @@ end
         .collect::<Vec<_>>()
         .join("\n");
     assert!(messages.contains("`or_return`"), "{messages}");
-    assert!(messages.contains("`or_wrap`"), "{messages}");
+    assert!(messages.contains("`.or_wrap()` context"), "{messages}");
+    assert!(messages.contains("`.or_wrap()` can only"), "{messages}");
 }
 
 #[test]
@@ -1601,6 +1606,79 @@ end
     assert!(out.c_source.contains(".has_value ?"), "{}", out.c_source);
     assert!(out.c_source.contains(".is_ok ?"), "{}", out.c_source);
     compile_c_source(&dir, "c_backend_optional_result_or_helper", &out.c_source);
+}
+
+#[test]
+fn compile_runs_result_or_wrap_helper_native() {
+    let dir = TestDir::new("result_or_wrap_helper_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+func parse(flag: bool) -> result<int, string>
+    if flag
+        return success(7)
+    end
+    return error("bad")
+end
+
+func wrapped(flag: bool) -> result<int, string>
+    return parse(flag).or_wrap("loading")
+end
+
+func main()
+    match wrapped(true)
+    case success(value):
+        io.print(string(value))
+    case error(message):
+        io.print(message)
+    end
+
+    match wrapped(false)
+    case success(value):
+        io.print(string(value))
+    case error(message):
+        io.print(message)
+    end
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "result_or_wrap_helper");
+    assert_eq!(stdout, "7\nloading: bad\n");
+}
+
+#[test]
+fn build_c_backend_result_or_wrap_helper() {
+    let dir = TestDir::new("c_backend_result_or_wrap_helper");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+func parse(flag: bool) -> result<int, string>
+    if flag
+        return success(1)
+    end
+    return error("bad")
+end
+
+func main()
+    const first: result<int, string> = parse(true).or_wrap("load")
+    const second: result<int, string> = parse(false).or_wrap("load")
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        out.c_source.contains("ori_string_concat"),
+        "{}",
+        out.c_source
+    );
+    compile_c_source(&dir, "c_backend_result_or_wrap_helper", &out.c_source);
 }
 
 #[test]

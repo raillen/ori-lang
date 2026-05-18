@@ -4961,10 +4961,6 @@ impl<'a> FuncCodegen<'a> {
         &mut self,
         parts: &[HirStrPart],
     ) -> Result<StringParts, String> {
-        let concat_ref = *self
-            .func_refs
-            .get("ori_string_concat_parts")
-            .ok_or_else(|| "missing runtime function `ori_string_concat_parts`".to_string())?;
         let mut current = StringParts {
             ptr: self.string_ptr("")?,
             len: self.builder.ins().iconst(types::I64, 0),
@@ -4977,21 +4973,33 @@ impl<'a> FuncCodegen<'a> {
                 },
                 HirStrPart::Expr(expr) => self.emit_as_string_parts(expr)?,
             };
-            let call = self
-                .builder
-                .ins()
-                .call(concat_ref, &[current.ptr, current.len, next.ptr, next.len]);
-            let len = self.builder.ins().iadd(current.len, next.len);
-            current = StringParts {
-                ptr: self.builder.inst_results(call)[0],
-                len,
-            };
+            current = self.concat_string_parts(current, next)?;
         }
         Ok(current)
     }
 
     fn emit_interpolated_string(&mut self, parts: &[HirStrPart]) -> Result<ir::Value, String> {
         Ok(self.emit_interpolated_string_parts(parts)?.ptr)
+    }
+
+    fn concat_string_parts(
+        &mut self,
+        left: StringParts,
+        right: StringParts,
+    ) -> Result<StringParts, String> {
+        let concat_ref = *self
+            .func_refs
+            .get("ori_string_concat_parts")
+            .ok_or_else(|| "missing runtime function `ori_string_concat_parts`".to_string())?;
+        let call = self
+            .builder
+            .ins()
+            .call(concat_ref, &[left.ptr, left.len, right.ptr, right.len]);
+        let len = self.builder.ins().iadd(left.len, right.len);
+        Ok(StringParts {
+            ptr: self.builder.inst_results(call)[0],
+            len,
+        })
     }
 
     // == Statements ==
@@ -7498,6 +7506,99 @@ impl<'a> FuncCodegen<'a> {
         }
     }
 
+    fn emit_builtin_or_wrap(
+        &mut self,
+        value: &HirExpr,
+        context: &HirExpr,
+    ) -> Result<ir::Value, String> {
+        let wrapper = self.emit_expr(value)?;
+        let Ty::Result(ok_ty, err_ty) = &value.ty else {
+            return Err(format!(
+                "`.or_wrap()` expects result receiver, got `{}`",
+                value.ty.display()
+            ));
+        };
+        if !matches!(**err_ty, Ty::String) {
+            return Err(format!(
+                "`.or_wrap()` currently requires `result<T, string>`, got `{}`",
+                value.ty.display()
+            ));
+        }
+
+        let (payload_offset, _, total) = result_layout(ok_ty, err_ty, self.ptr_ty);
+        let tag = self
+            .builder
+            .ins()
+            .load(types::I8, MemFlags::new(), wrapper, 0);
+        let ok_block = self.builder.create_block();
+        let err_block = self.builder.create_block();
+        let merge_block = self.builder.create_block();
+        self.builder.append_block_param(merge_block, self.ptr_ty);
+        self.builder.ins().brif(tag, ok_block, &[], err_block, &[]);
+
+        self.builder.seal_block(ok_block);
+        self.builder.switch_to_block(ok_block);
+        self.terminated = false;
+        let ok_value_ty = cl_type(ok_ty, self.ptr_ty)
+            .ok_or_else(|| format!("result ok type `{}` has no native layout", ok_ty.display()))?;
+        let ok_value =
+            self.builder
+                .ins()
+                .load(ok_value_ty, MemFlags::new(), wrapper, payload_offset as i32);
+        let ok_result = self.malloc_bytes(total)?;
+        let one = self.builder.ins().iconst(types::I8, 1);
+        self.builder.ins().store(MemFlags::new(), one, ok_result, 0);
+        self.builder
+            .ins()
+            .store(MemFlags::new(), ok_value, ok_result, payload_offset as i32);
+        self.emit_arc_register_edge_if_managed(ok_ty, ok_result, ok_value)?;
+        self.builder
+            .ins()
+            .jump(merge_block, &[BlockArg::Value(ok_result)]);
+
+        self.builder.seal_block(err_block);
+        self.builder.switch_to_block(err_block);
+        self.terminated = false;
+        let original_error =
+            self.builder
+                .ins()
+                .load(self.ptr_ty, MemFlags::new(), wrapper, payload_offset as i32);
+        let original_error_len = self.str_len_from_ptr(original_error)?;
+        let context_parts = self.emit_as_string_parts(context)?;
+        let separator_parts = StringParts {
+            ptr: self.bytes_ptr(b": ")?,
+            len: self.builder.ins().iconst(types::I64, 2),
+        };
+        let prefix = self.concat_string_parts(context_parts, separator_parts)?;
+        let wrapped_error = self.concat_string_parts(
+            prefix,
+            StringParts {
+                ptr: original_error,
+                len: original_error_len,
+            },
+        )?;
+        let err_result = self.malloc_bytes(total)?;
+        let zero = self.builder.ins().iconst(types::I8, 0);
+        self.builder
+            .ins()
+            .store(MemFlags::new(), zero, err_result, 0);
+        self.builder.ins().store(
+            MemFlags::new(),
+            wrapped_error.ptr,
+            err_result,
+            payload_offset as i32,
+        );
+        self.emit_arc_register_edge_if_managed(err_ty, err_result, wrapped_error.ptr)?;
+        self.builder
+            .ins()
+            .jump(merge_block, &[BlockArg::Value(err_result)]);
+
+        self.builder.seal_block(merge_block);
+        self.builder.switch_to_block(merge_block);
+        self.terminated = false;
+        Ok(self.builder.block_params(merge_block)[0])
+    }
+
     fn emit_lazy_or_result(
         &mut self,
         condition: ir::Value,
@@ -7653,6 +7754,9 @@ impl<'a> FuncCodegen<'a> {
                 if let HirExprKind::Var(name) = &callee.kind {
                     if name.as_str() == "__ori_builtin_or" && args.len() == 2 {
                         return self.emit_builtin_or(&args[0].value, &args[1].value);
+                    }
+                    if name.as_str() == "__ori_builtin_or_wrap" && args.len() == 2 {
+                        return self.emit_builtin_or_wrap(&args[0].value, &args[1].value);
                     }
                     if name.as_str() == "ori_lazy_once" && args.len() == 1 {
                         return self.emit_lazy_once(&args[0].value, &expr.ty);

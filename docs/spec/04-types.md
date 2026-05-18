@@ -192,7 +192,7 @@ const bad: result<int, string> = error("something went wrong")
 
 Constructors: `success(value)` and `error(value)`.
 
-Supported and planned operations:
+Supported operations:
 
 ```ori
 value.or(fallback)                   -- unwrap success or use fallback
@@ -200,9 +200,11 @@ value.or_return()                    -- unwrap success or propagate error
 value.or_wrap("context message")    -- keep success, add context to error
 ```
 
-Current status: `.or(fallback)` and `.or_return()` are accepted. Use `?` or
-`match` when explicit error handling is clearer. The `.or_wrap(...)` helper is
-planned and is not accepted by the current checker/runtime.
+Current status: `.or(fallback)` and `.or_return()` are accepted. `.or_wrap(...)`
+is accepted for `result<T, string>` and returns `success(v)` unchanged or
+`error(context + ": " + e)` for `error(e)`. The context expression is evaluated
+only on the error path. Use `?` or `match` when explicit error handling is
+clearer.
 
 Pattern matching:
 
@@ -336,29 +338,29 @@ when the expected type is not `result<void, _>`.
 
 Current implementation status:
 
-- `==` and `!=` are implemented for numeric types, `bool`, and `string`.
+- `==` and `!=` are implemented for numeric types, `bool`, `string`, `bytes`,
+  `optional<T>`, `result<T, E>`, and `tuple<...>`.
 - Function values are not comparable.
 - `any<Trait>` values are not comparable.
-- Structural equality for structs, tuples, collections, `optional`, `result`,
-  and `bytes` is planned, not implemented.
+- Structural equality for lists, maps, sets, and structs is planned.
 
 | Type | Current `==` behavior |
 |---|---|
 | numeric types | Value equality |
 | `bool` | Value equality |
 | `string` | UTF-8 text equality |
-| `bytes` | Planned |
+| `bytes` | Byte equality |
 | `list<T>` | Planned |
 | `map<K, V>` | Planned |
 | `set<T>` | Planned |
-| `optional<T>` | Planned |
-| `result<T, E>` | Planned |
-| `tuple<...>` | Planned |
+| `optional<T>` | Structural equality |
+| `result<T, E>` | Structural equality |
+| `tuple<...>` | Structural equality |
 | `struct` | Planned |
 | `any<Trait>` | Compile error |
 | `func(...)` | Compile error |
 
-Planned structural equality rules:
+Structural equality rules:
 
 - Lists compare length and elements in order.
 - Maps compare key-value pairs independent of insertion order.

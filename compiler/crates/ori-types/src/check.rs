@@ -1757,7 +1757,67 @@ impl<'a> Checker<'a> {
                             }
                         };
                     }
-                    // future: .or_wrap() handling
+                    if method == "or_wrap" && args.len() == 1 {
+                        let obj_ty = self.infer_expr(object);
+                        let context = &args[0];
+                        let context_expr = match &context.value {
+                            ArgValue::Expr(e) | ArgValue::Spread(e) => e,
+                        };
+                        let context_ty = self.infer_expr(context_expr);
+                        if !context_ty.is_assignable_to(&Ty::String) && !context_ty.is_error() {
+                            self.sink.emit(
+                                Diagnostic::error(
+                                    "type.type_mismatch",
+                                    format!(
+                                        "`.or_wrap()` context must be `string`, got `{}`",
+                                        context_ty.display()
+                                    ),
+                                )
+                                .with_label(Label::primary(
+                                    self.file_id,
+                                    *span,
+                                    "context type mismatch",
+                                )),
+                            );
+                        }
+                        return match &obj_ty {
+                            Ty::Result(_, err) if err.is_assignable_to(&Ty::String) => obj_ty,
+                            Ty::Result(_, err) => {
+                                self.sink.emit(
+                                    Diagnostic::error(
+                                        "type.type_mismatch",
+                                        format!(
+                                            "`.or_wrap()` currently requires `result<T, string>`, got error type `{}`",
+                                            err.display()
+                                        ),
+                                    )
+                                    .with_label(Label::primary(
+                                        self.file_id,
+                                        *span,
+                                        "unsupported result error type",
+                                    )),
+                                );
+                                Ty::Error
+                            }
+                            _ => {
+                                self.sink.emit(
+                                    Diagnostic::error(
+                                        "type.type_mismatch",
+                                        format!(
+                                            "`.or_wrap()` can only be called on `result<T, string>`, got `{}`",
+                                            obj_ty.display()
+                                        ),
+                                    )
+                                    .with_label(Label::primary(
+                                        self.file_id,
+                                        *span,
+                                        "invalid `.or_wrap()` receiver",
+                                    )),
+                                );
+                                Ty::Error
+                            }
+                        };
+                    }
                     if method == "or_return" && args.is_empty() {
                         let obj_ty = self.infer_expr(object);
                         let cur_ret = self.current_return_ty.clone().unwrap_or(Ty::Infer(0));

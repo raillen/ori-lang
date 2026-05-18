@@ -128,9 +128,10 @@ end
 Rules for `?` on `result<T, E>`:
 1. The enclosing function must return `result<_, F>` where `F` is compatible with `E`.
 2. If `E == F`: the error is propagated as-is.
-3. If `E != F`: a compile error. Use explicit conversion. `.or_wrap()` is planned.
+3. If `E != F`: a compile error. Use explicit conversion. For `result<T, string>`,
+   `.or_wrap(context)` can add string context before propagation.
 
-### Planned `.or_wrap(context)`
+### `.or_wrap(context)`
 
 Adds a context string to an existing error without losing the original:
 
@@ -141,8 +142,11 @@ const config: Config = read_config(path).or_wrap("loading configuration")?
 If `read_config` returns `error("empty path")`, the result becomes
 `error("loading configuration: empty path")`.
 
-Current status: `.or_wrap(...)` is not accepted by the current checker/runtime.
-Use `?` with matching error types or handle the error with `match` today.
+Current status: `.or_wrap(...)` is accepted for `result<T, string>` in the
+checker, HIR lowering, native backend, and C backend. It keeps `success(v)`
+unchanged and evaluates the context expression only when the receiver is
+`error(_)`. For non-string error types, use explicit conversion or handle the
+error with `match`.
 
 ### Pattern Match on `result<T, E>`
 

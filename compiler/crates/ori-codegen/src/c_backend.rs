@@ -32,6 +32,19 @@ static inline void ori_abort_bounds(const char* message) {
 static inline bool ori_string_eq(ori_string_t a, ori_string_t b) {
     return a.len == b.len && (a.len == 0 || memcmp(a.data, b.data, a.len) == 0);
 }
+static inline ori_string_t ori_string_concat(ori_string_t a, ori_string_t b) {
+    size_t len = a.len + b.len;
+    char* out = (char*)malloc(len + 1);
+    if (!out) abort();
+    if (a.len > 0) {
+        memcpy(out, a.data, a.len);
+    }
+    if (b.len > 0) {
+        memcpy(out + a.len, b.data, b.len);
+    }
+    out[len] = '\0';
+    return (ori_string_t){ .data = out, .len = len };
+}
 static inline ori_string_t ori_string_slice(ori_string_t s, int64_t start, int64_t end) {
     if (start < 0 || end < start || end > (int64_t)s.len) {
         ori_abort_bounds("ori string slice bounds out of range");
@@ -2129,6 +2142,9 @@ impl CCodegen {
                     if n.as_str() == "__ori_builtin_or" && args.len() == 2 {
                         return self.emit_builtin_or(&args[0].value, &args[1].value);
                     }
+                    if n.as_str() == "__ori_builtin_or_wrap" && args.len() == 2 {
+                        return self.emit_builtin_or_wrap(&args[0].value, &args[1].value);
+                    }
                 }
                 let params = match &callee.ty {
                     Ty::Func { params, .. } => params.clone(),
@@ -2754,6 +2770,35 @@ impl CCodegen {
             }
             other => self.unsupported_expr(format!(
                 "C backend cannot lower `.or()` for `{}`",
+                other.display()
+            )),
+        }
+    }
+
+    fn emit_builtin_or_wrap(&mut self, value: &HirExpr, context: &HirExpr) -> String {
+        let value_s = self.expr_to_c(value);
+        let tmp = self.fresh_tmp();
+        let context_tmp = self.fresh_tmp();
+        let prefix_tmp = self.fresh_tmp();
+        let context_s = self.expr_to_c_for_expected(context, &Ty::String);
+        match &value.ty {
+            Ty::Result(_, err) if matches!(**err, Ty::String) => format!(
+                "({{ {} {} = {}; if (!{}.is_ok) {{ ori_string_t {} = {}; ori_string_t {} = ori_string_concat({}, ORI_STR(\": \")); {}.value.err = ori_string_concat({}, {}.value.err); }} {}; }})",
+                ty_to_c(&value.ty),
+                tmp,
+                value_s,
+                tmp,
+                context_tmp,
+                context_s,
+                prefix_tmp,
+                context_tmp,
+                tmp,
+                prefix_tmp,
+                tmp,
+                tmp
+            ),
+            other => self.unsupported_expr(format!(
+                "C backend cannot lower `.or_wrap()` for `{}`",
                 other.display()
             )),
         }

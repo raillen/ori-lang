@@ -1,7 +1,7 @@
 # Status das Fases — Ori Language
 
 > Última atualização: 2026-05-18
-> Baseline: 100% testes passando (239/239 multifile, 102/102 ori_spec, 38/38 concurrency)
+> Baseline: 100% testes passando (241/241 multifile, 102/102 ori_spec, 38/38 concurrency)
 
 ---
 
@@ -19,7 +19,7 @@
 | # | Item | Status | Notas |
 |---|------|--------|-------|
 | 1.1 | Igualdade estrutural (`==`/`!=`) | ✅ Parcial | `optional<T>`, `result<T,E>`, `tuple<...>`, `bytes`. Pendente: `list`, `map`, `set`, structs |
-| 1.2 | `.or()` / `.or_return()` / `.or_wrap()` | ✅ Parcial | `.or()`: parser, checker, lowering, backend nativo e C backend completos. `.or_return()`: completo (desugar → `?`). `.or_wrap()`: pendente |
+| 1.2 | `.or()` / `.or_return()` / `.or_wrap()` | ✅ | `.or()`: parser, checker, lowering, backend nativo e C backend completos. `.or_return()`: completo (desugar → `?`). `.or_wrap(context)`: completo para `result<T, string>`, com contexto avaliado apenas em `error(_)` |
 | 1.3 | `ori.Error` como tipo rico | ✅ | Campo `cause: string` adicionado; `optional<any<Error>>` bloqueado por tipos recursivos no C backend |
 | 1.4 | `await` dentro de if/else/match/loop | ❌ | Requer redesign da state machine para branching states |
 | 1.5 | `using` dentro de `async func` | ✅ | State machine armazena recurso no frame; dispose pendente nos terminais |
@@ -122,13 +122,13 @@ Códigos catalogados em `docs/spec/13-error-catalog.md` como "planned" mas ainda
 | Fase | Total | Concluído | Parcial | Pendente |
 |------|-------|-----------|---------|----------|
 | 0 — Bugs | 2 | 2 | 0 | 0 |
-| 1 — Bloqueadoras | 7 | 2 | 2 | 3 |
+| 1 — Bloqueadoras | 7 | 3 | 1 | 3 |
 | 2 — Compilador | 11 | 2 | 1 | 8 |
 | 3 — Runtime/ARC | 2 | 0 | 0 | 2 |
 | 4 — LSP/Tooling | 4 | 0 | 0 | 4 |
 | 5 — Diagnósticos | 29 | 0 | 0 | 29 |
 | 6 — Finalização | 5 | 1 | 2 | 2 |
-| **TOTAL** | **60** | **7** | **5** | **48** |
+| **TOTAL** | **60** | **8** | **4** | **48** |
 
 ### Itens GRANDES (redesign de subsistemas)
 1.4 await aninhado, 1.6 ori.fs.File, 1.7 Cancelamento, 2.5 Associated types, 2.6 Const generics, 2.7 HKT, 3.1 Destrutores, 3.2 Cycle collector

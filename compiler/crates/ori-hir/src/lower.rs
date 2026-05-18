@@ -3050,6 +3050,16 @@ impl<'a> Lowerer<'a> {
                         let fallback_val = self.lower_expr(fallback_expr, tp);
                         return lower_optional_or_result_or(obj, fallback_val, *span);
                     }
+                    if field.text.as_str() == "or_wrap" && args.len() == 1 {
+                        let obj = self.lower_expr(object, tp);
+                        let context = &args[0];
+                        let context_expr = match &context.value {
+                            ori_ast::expr::ArgValue::Expr(e)
+                            | ori_ast::expr::ArgValue::Spread(e) => e,
+                        };
+                        let context_val = self.lower_expr(context_expr, tp);
+                        return lower_result_or_wrap(obj, context_val, *span);
+                    }
                     if field.text.as_str() == "or_return" && args.is_empty() {
                         // Desugar .or_return() to the `?` operator (Propagate)
                         let obj = self.lower_expr(object, tp);
@@ -4559,6 +4569,38 @@ fn lower_optional_or_result_or(obj: HirExpr, fallback: HirExpr, span: Span) -> H
             ],
         },
         ty: inner_ty,
+        span,
+    }
+}
+
+/// Desugar `.or_wrap(context)` on `result<T, string>`.
+/// Emits an internal intrinsic call handled directly by native and C codegen.
+fn lower_result_or_wrap(obj: HirExpr, context: HirExpr, span: Span) -> HirExpr {
+    let result_ty = obj.ty.clone();
+    HirExpr {
+        kind: HirExprKind::Call {
+            callee: Box::new(HirExpr {
+                kind: HirExprKind::Var(SmolStr::new("__ori_builtin_or_wrap")),
+                ty: Ty::Func {
+                    params: vec![obj.ty.clone(), context.ty.clone()],
+                    ret: Box::new(result_ty.clone()),
+                },
+                span: Span::DUMMY,
+            }),
+            args: vec![
+                HirArg {
+                    label: None,
+                    spread: false,
+                    value: obj,
+                },
+                HirArg {
+                    label: None,
+                    spread: false,
+                    value: context,
+                },
+            ],
+        },
+        ty: result_ty,
         span,
     }
 }
