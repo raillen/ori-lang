@@ -2599,6 +2599,95 @@ end
 }
 
 #[test]
+fn compile_runs_set_map_structural_equality_native() {
+    let dir = TestDir::new("set_map_structural_equality_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.map as maps
+import ori.set as sets
+
+func main()
+    const left_set: set<int> = sets.new()
+    sets.add(left_set, 1)
+    sets.add(left_set, 2)
+
+    const same_set: set<int> = sets.new()
+    sets.add(same_set, 2)
+    sets.add(same_set, 1)
+
+    const different_set: set<int> = sets.new()
+    sets.add(different_set, 1)
+    sets.add(different_set, 3)
+
+    io.print(string(left_set == same_set))
+    io.print(string(left_set != different_set))
+
+    const words: set<string> = sets.new()
+    sets.add(words, "red")
+    sets.add(words, "blue")
+
+    const same_words: set<string> = sets.new()
+    sets.add(same_words, "blue")
+    sets.add(same_words, "red")
+
+    const other_words: set<string> = sets.new()
+    sets.add(other_words, "red")
+    sets.add(other_words, "green")
+
+    io.print(string(words == same_words))
+    io.print(string(words == other_words))
+
+    const scores: map<int, int> = maps.new()
+    maps.set(scores, 1, 10)
+    maps.set(scores, 2, 20)
+
+    const same_scores: map<int, int> = maps.new()
+    maps.set(same_scores, 2, 20)
+    maps.set(same_scores, 1, 10)
+
+    const changed_scores: map<int, int> = maps.new()
+    maps.set(changed_scores, 1, 10)
+    maps.set(changed_scores, 2, 99)
+
+    io.print(string(scores == same_scores))
+    io.print(string(scores != changed_scores))
+
+    const labels: map<string, int> = maps.new()
+    maps.set(labels, "a", 1)
+    maps.set(labels, "b", 2)
+
+    const same_labels: map<string, int> = maps.new()
+    maps.set(same_labels, "b", 2)
+    maps.set(same_labels, "a", 1)
+
+    io.print(string(labels == same_labels))
+
+    const buckets: map<int, list<int>> = maps.new()
+    maps.set(buckets, 1, [1, 2])
+
+    const same_buckets: map<int, list<int>> = maps.new()
+    maps.set(same_buckets, 1, [1, 2])
+
+    const changed_buckets: map<int, list<int>> = maps.new()
+    maps.set(changed_buckets, 1, [1, 3])
+
+    io.print(string(buckets == same_buckets))
+    io.print(string(buckets != changed_buckets))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "set_map_structural_equality");
+    assert_eq!(
+        stdout,
+        "true\ntrue\ntrue\nfalse\ntrue\ntrue\ntrue\ntrue\ntrue\n"
+    );
+}
+
+#[test]
 fn build_c_backend_list_structural_equality() {
     let dir = TestDir::new("c_backend_list_structural_equality");
     dir.write(
@@ -2627,6 +2716,40 @@ end
         out.c_source
     );
     compile_c_source(&dir, "c_backend_list_structural_equality", &out.c_source);
+}
+
+#[test]
+fn build_c_backend_rejects_set_map_structural_equality() {
+    let dir = TestDir::new("c_backend_set_map_structural_equality");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.map as maps
+import ori.set as sets
+
+func main()
+    const left: map<int, int> = maps.new()
+    const right: map<int, int> = maps.new()
+    const same: bool = left == right
+
+    const left_set: set<int> = sets.new()
+    const right_set: set<int> = sets.new()
+    const same_set: bool = left_set == right_set
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "expected C backend feature diagnostic");
+    assert!(
+        out.diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "backend.c_unsupported"),
+        "{:?}",
+        out.diagnostics
+    );
+    assert!(out.c_source.is_empty());
 }
 
 #[test]

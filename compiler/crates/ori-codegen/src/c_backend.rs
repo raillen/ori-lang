@@ -2703,6 +2703,12 @@ impl CCodegen {
             Ty::Optional(inner) => self.optional_equality_to_c(left, right, inner),
             Ty::Result(ok, err) => self.result_equality_to_c(left, right, ok, err),
             Ty::Tuple(elements) => self.tuple_equality_to_c(left, right, elements),
+            Ty::Set(_) => self.unsupported_expr(
+                "C backend cannot lower set structural equality yet; use the native backend",
+            ),
+            Ty::Map(_, _) => self.unsupported_expr(
+                "C backend cannot lower map structural equality yet; use the native backend",
+            ),
             _ if ty.is_numeric() || matches!(ty, Ty::Bool) => format!("({} == {})", left, right),
             _ => format!("({} == {})", left, right),
         };

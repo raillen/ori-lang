@@ -1,7 +1,7 @@
 # Status das Fases — Ori Language
 
 > Última atualização: 2026-05-18
-> Baseline: 100% testes passando (245/245 multifile, 102/102 ori_spec, 38/38 concurrency)
+> Baseline: 100% testes passando (247/247 multifile, 102/102 ori_spec, 38/38 concurrency)
 
 ---
 
@@ -18,7 +18,7 @@
 
 | # | Item | Status | Notas |
 |---|------|--------|-------|
-| 1.1 | Igualdade estrutural (`==`/`!=`) | ✅ Parcial | `optional<T>`, `result<T,E>`, `tuple<...>`, `bytes`, `list<T>`. Pendente: `map`, `set`, structs |
+| 1.1 | Igualdade estrutural (`==`/`!=`) | ✅ Parcial | `optional<T>`, `result<T,E>`, `tuple<...>`, `bytes`, `list<T>`, `set<int|string>` e `map<int|string, V>` no backend nativo. Pendente: structs, chaves customizadas e paridade C para `set`/`map` |
 | 1.2 | `.or()` / `.or_return()` / `.or_wrap()` | ✅ | `.or()`: parser, checker, lowering, backend nativo e C backend completos. `.or_return()`: completo (desugar → `?`). `.or_wrap(context)`: completo para `result<T, string>`, com contexto avaliado apenas em `error(_)` |
 | 1.3 | `ori.Error` como tipo rico | ✅ | Campo `cause: string` adicionado; `optional<any<Error>>` bloqueado por tipos recursivos no C backend |
 | 1.4 | `await` dentro de if/else/match/loop | ❌ | Requer redesign da state machine para branching states |

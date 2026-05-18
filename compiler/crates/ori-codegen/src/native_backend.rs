@@ -9580,6 +9580,10 @@ impl<'a> FuncCodegen<'a> {
                     return self.emit_tuple_equality(lv, rv, elements, true);
                 } else if let Ty::List(inner) = ty {
                     return self.emit_list_equality(lv, rv, inner, true);
+                } else if let Ty::Set(inner) = ty {
+                    return self.emit_set_equality(lv, rv, inner, true);
+                } else if let Ty::Map(key, value) = ty {
+                    return self.emit_map_equality(lv, rv, key, value, true);
                 } else if let Ty::Bytes = ty {
                     return self.emit_bytes_equality(lv, rv, true);
                 } else if float {
@@ -9606,6 +9610,10 @@ impl<'a> FuncCodegen<'a> {
                     return self.emit_tuple_equality(lv, rv, elements, false);
                 } else if let Ty::List(inner) = ty {
                     return self.emit_list_equality(lv, rv, inner, false);
+                } else if let Ty::Set(inner) = ty {
+                    return self.emit_set_equality(lv, rv, inner, false);
+                } else if let Ty::Map(key, value) = ty {
+                    return self.emit_map_equality(lv, rv, key, value, false);
                 } else if let Ty::Bytes = ty {
                     return self.emit_bytes_equality(lv, rv, false);
                 } else if float {
@@ -9939,6 +9947,237 @@ impl<'a> FuncCodegen<'a> {
         self.builder
             .ins()
             .brif(elem_equal, step_block, &[], fail_block, &[]);
+
+        self.builder.seal_block(step_block);
+        self.builder.switch_to_block(step_block);
+        let index = self.builder.use_var(index_var);
+        let next = self.builder.ins().iadd(index, one_i64);
+        self.builder.def_var(index_var, next);
+        self.builder.ins().jump(header_block, &[]);
+
+        self.builder.seal_block(fail_block);
+        self.builder.switch_to_block(fail_block);
+        self.builder.def_var(equal_var, false_i8);
+        self.builder.ins().jump(exit_block, &[]);
+
+        self.builder.seal_block(header_block);
+        self.builder.seal_block(exit_block);
+        self.builder.switch_to_block(exit_block);
+        self.terminated = false;
+        let result = self.builder.use_var(equal_var);
+        Ok(self.maybe_invert_equality(result, eq))
+    }
+
+    /// Compare two `set<T>` values by length and unordered membership.
+    fn emit_set_equality(
+        &mut self,
+        lv: ir::Value,
+        rv: ir::Value,
+        elem_ty: &Ty,
+        eq: bool,
+    ) -> Result<ir::Value, String> {
+        use ir::condcodes::IntCC;
+
+        let len_ref = *self
+            .func_refs
+            .get("ori_set_len")
+            .ok_or_else(|| "missing runtime function `ori_set_len`".to_string())?;
+        let get_ref = *self
+            .func_refs
+            .get("ori_list_get")
+            .ok_or_else(|| "missing runtime function `ori_list_get`".to_string())?;
+        let contains_name = if matches!(elem_ty, Ty::String) {
+            "ori_set_contains_string"
+        } else {
+            "ori_set_contains"
+        };
+        let contains_ref = *self
+            .func_refs
+            .get(contains_name)
+            .ok_or_else(|| format!("missing runtime function `{contains_name}`"))?;
+
+        let left_len_call = self.builder.ins().call(len_ref, &[lv]);
+        let left_len = self.builder.inst_results(left_len_call)[0];
+        let right_len_call = self.builder.ins().call(len_ref, &[rv]);
+        let right_len = self.builder.inst_results(right_len_call)[0];
+        let same_len = self.builder.ins().icmp(IntCC::Equal, left_len, right_len);
+
+        let index_var = self.builder.declare_var(types::I64);
+        let len_var = self.builder.declare_var(types::I64);
+        let equal_var = self.builder.declare_var(types::I8);
+        let zero_i64 = self.builder.ins().iconst(types::I64, 0);
+        let one_i64 = self.builder.ins().iconst(types::I64, 1);
+        let false_i8 = self.builder.ins().iconst(types::I8, 0);
+        let true_i8 = self.builder.ins().iconst(types::I8, 1);
+        self.builder.def_var(index_var, zero_i64);
+        self.builder.def_var(len_var, left_len);
+        self.builder.def_var(equal_var, false_i8);
+
+        let init_block = self.builder.create_block();
+        let header_block = self.builder.create_block();
+        let body_block = self.builder.create_block();
+        let step_block = self.builder.create_block();
+        let fail_block = self.builder.create_block();
+        let exit_block = self.builder.create_block();
+
+        self.builder
+            .ins()
+            .brif(same_len, init_block, &[], exit_block, &[]);
+
+        self.builder.seal_block(init_block);
+        self.builder.switch_to_block(init_block);
+        self.builder.def_var(equal_var, true_i8);
+        self.builder.ins().jump(header_block, &[]);
+
+        self.builder.switch_to_block(header_block);
+        let index = self.builder.use_var(index_var);
+        let len = self.builder.use_var(len_var);
+        let keep_going = self.builder.ins().icmp(IntCC::SignedLessThan, index, len);
+        self.builder
+            .ins()
+            .brif(keep_going, body_block, &[], exit_block, &[]);
+
+        self.builder.seal_block(body_block);
+        self.builder.switch_to_block(body_block);
+        let index = self.builder.use_var(index_var);
+        let left_call = self.builder.ins().call(get_ref, &[lv, index]);
+        let stored_item = self.builder.inst_results(left_call)[0];
+        let contains_call = self.builder.ins().call(contains_ref, &[rv, stored_item]);
+        let contains = self.builder.inst_results(contains_call)[0];
+        self.builder
+            .ins()
+            .brif(contains, step_block, &[], fail_block, &[]);
+
+        self.builder.seal_block(step_block);
+        self.builder.switch_to_block(step_block);
+        let index = self.builder.use_var(index_var);
+        let next = self.builder.ins().iadd(index, one_i64);
+        self.builder.def_var(index_var, next);
+        self.builder.ins().jump(header_block, &[]);
+
+        self.builder.seal_block(fail_block);
+        self.builder.switch_to_block(fail_block);
+        self.builder.def_var(equal_var, false_i8);
+        self.builder.ins().jump(exit_block, &[]);
+
+        self.builder.seal_block(header_block);
+        self.builder.seal_block(exit_block);
+        self.builder.switch_to_block(exit_block);
+        self.terminated = false;
+        let result = self.builder.use_var(equal_var);
+        Ok(self.maybe_invert_equality(result, eq))
+    }
+
+    /// Compare two `map<K,V>` values by length, key membership, and value equality.
+    fn emit_map_equality(
+        &mut self,
+        lv: ir::Value,
+        rv: ir::Value,
+        key_ty: &Ty,
+        value_ty: &Ty,
+        eq: bool,
+    ) -> Result<ir::Value, String> {
+        use ir::condcodes::IntCC;
+
+        let len_ref = *self
+            .func_refs
+            .get("ori_map_len")
+            .ok_or_else(|| "missing runtime function `ori_map_len`".to_string())?;
+        let key_at_ref = *self
+            .func_refs
+            .get("ori_map_key_at")
+            .ok_or_else(|| "missing runtime function `ori_map_key_at`".to_string())?;
+        let value_at_ref = *self
+            .func_refs
+            .get("ori_map_value_at")
+            .ok_or_else(|| "missing runtime function `ori_map_value_at`".to_string())?;
+        let contains_name = if matches!(key_ty, Ty::String) {
+            "ori_map_contains_string"
+        } else {
+            "ori_map_contains"
+        };
+        let get_name = if matches!(key_ty, Ty::String) {
+            "ori_map_get_string"
+        } else {
+            "ori_map_get"
+        };
+        let contains_ref = *self
+            .func_refs
+            .get(contains_name)
+            .ok_or_else(|| format!("missing runtime function `{contains_name}`"))?;
+        let get_ref = *self
+            .func_refs
+            .get(get_name)
+            .ok_or_else(|| format!("missing runtime function `{get_name}`"))?;
+
+        let left_len_call = self.builder.ins().call(len_ref, &[lv]);
+        let left_len = self.builder.inst_results(left_len_call)[0];
+        let right_len_call = self.builder.ins().call(len_ref, &[rv]);
+        let right_len = self.builder.inst_results(right_len_call)[0];
+        let same_len = self.builder.ins().icmp(IntCC::Equal, left_len, right_len);
+
+        let index_var = self.builder.declare_var(types::I64);
+        let len_var = self.builder.declare_var(types::I64);
+        let equal_var = self.builder.declare_var(types::I8);
+        let zero_i64 = self.builder.ins().iconst(types::I64, 0);
+        let one_i64 = self.builder.ins().iconst(types::I64, 1);
+        let false_i8 = self.builder.ins().iconst(types::I8, 0);
+        let true_i8 = self.builder.ins().iconst(types::I8, 1);
+        self.builder.def_var(index_var, zero_i64);
+        self.builder.def_var(len_var, left_len);
+        self.builder.def_var(equal_var, false_i8);
+
+        let init_block = self.builder.create_block();
+        let header_block = self.builder.create_block();
+        let body_block = self.builder.create_block();
+        let compare_block = self.builder.create_block();
+        let step_block = self.builder.create_block();
+        let fail_block = self.builder.create_block();
+        let exit_block = self.builder.create_block();
+
+        self.builder
+            .ins()
+            .brif(same_len, init_block, &[], exit_block, &[]);
+
+        self.builder.seal_block(init_block);
+        self.builder.switch_to_block(init_block);
+        self.builder.def_var(equal_var, true_i8);
+        self.builder.ins().jump(header_block, &[]);
+
+        self.builder.switch_to_block(header_block);
+        let index = self.builder.use_var(index_var);
+        let len = self.builder.use_var(len_var);
+        let keep_going = self.builder.ins().icmp(IntCC::SignedLessThan, index, len);
+        self.builder
+            .ins()
+            .brif(keep_going, body_block, &[], exit_block, &[]);
+
+        self.builder.seal_block(body_block);
+        self.builder.switch_to_block(body_block);
+        let index = self.builder.use_var(index_var);
+        let key_call = self.builder.ins().call(key_at_ref, &[lv, index]);
+        let stored_key = self.builder.inst_results(key_call)[0];
+        let contains_call = self.builder.ins().call(contains_ref, &[rv, stored_key]);
+        let contains = self.builder.inst_results(contains_call)[0];
+        self.builder
+            .ins()
+            .brif(contains, compare_block, &[], fail_block, &[]);
+
+        self.builder.seal_block(compare_block);
+        self.builder.switch_to_block(compare_block);
+        let index = self.builder.use_var(index_var);
+        let key_call = self.builder.ins().call(key_at_ref, &[lv, index]);
+        let stored_key = self.builder.inst_results(key_call)[0];
+        let left_value_call = self.builder.ins().call(value_at_ref, &[lv, index]);
+        let left_stored = self.builder.inst_results(left_value_call)[0];
+        let right_value_call = self.builder.ins().call(get_ref, &[rv, stored_key]);
+        let right_stored = self.builder.inst_results(right_value_call)[0];
+        let left_value = self.from_list_storage_value(left_stored, value_ty);
+        let right_value = self.from_list_storage_value(right_stored, value_ty);
+        let values_equal = self.emit_binary(BinaryOp::Eq, left_value, right_value, value_ty)?;
+        self.builder
+            .ins()
+            .brif(values_equal, step_block, &[], fail_block, &[]);
 
         self.builder.seal_block(step_block);
         self.builder.switch_to_block(step_block);

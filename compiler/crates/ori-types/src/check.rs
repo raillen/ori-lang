@@ -2465,6 +2465,14 @@ impl<'a> Checker<'a> {
             }
             Ty::Tuple(elements) => elements.iter().all(|e| self.supports_generic_equality(e)),
             Ty::List(inner) => self.supports_generic_equality(inner),
+            Ty::Set(inner) => {
+                self.supports_runtime_collection_key_equality(inner)
+                    && self.supports_generic_equality(inner)
+            }
+            Ty::Map(key, value) => {
+                self.supports_runtime_collection_key_equality(key)
+                    && self.supports_generic_equality(value)
+            }
             Ty::Bytes => true,
             _ => false,
         }
@@ -2472,6 +2480,10 @@ impl<'a> Checker<'a> {
 
     fn supports_generic_equality(&self, ty: &Ty) -> bool {
         self.supports_builtin_equality(ty) || self.user_type_has_equatable(ty)
+    }
+
+    fn supports_runtime_collection_key_equality(&self, ty: &Ty) -> bool {
+        matches!(ty, Ty::String | Ty::Infer(_) | Ty::Never) || is_current_integer_hash_supported(ty)
     }
 
     fn supports_builtin_ordering(&self, ty: &Ty) -> bool {
