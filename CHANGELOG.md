@@ -14,6 +14,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Parser:** Token `...` (Ellipsis) para parâmetros variádicos
 - **Parser:** Validação de `parse.variadic_not_last` e `parse.default_before_required`
 - **Parser:** Validação de `parse.import_after_declaration` para imports após declarações
+- **Parser:** Validação de `parse.namespace_missing` e `parse.namespace_not_first` para posição obrigatória do namespace
 - **Binder:** Validação de `bind.duplicate_param` para parâmetros repetidos em funções, métodos e assinaturas
 - **Checker:** `check_loop_control()` — diagnostica `break`/`continue` fora de loop (`control.loop_required`)
 - **Checker:** `expect_bool()` para operadores `and`/`or`/`not` (`type.expected_bool`)

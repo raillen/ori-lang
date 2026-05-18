@@ -148,7 +148,7 @@ e eliminar dívidas técnicas da linguagem Ori.
 
 ---
 
-## Fase 5 — Diagnósticos Planejados [29 códigos; 2 emitidos]
+## Fase 5 — Diagnósticos Planejados [29 códigos; 4 emitidos]
 
 Emitir o subconjunto de códigos planejados rastreados nesta fase. O catálogo
 completo também mantém aliases reservados para compatibilidade de ferramentas.
@@ -157,6 +157,8 @@ Emitidos nesta fase:
 
 - `bind.duplicate_param`
 - `parse.import_after_declaration`
+- `parse.namespace_missing`
+- `parse.namespace_not_first`
 
 Ainda planejados:
 
@@ -167,7 +169,7 @@ Ainda planejados:
 - `generic.ambiguous_type_arg`
 - `match.duplicate_case`, `match.guard_not_exhaustive`, `match.unreachable_case`
 - `mut.field_mutation_in_func`
-- `parse.invalid_range`, `parse.missing_else_in_if_expr`, `parse.namespace_missing`, `parse.namespace_not_first`, `parse.unterminated_block`, `parse.unterminated_string`
+- `parse.invalid_range`, `parse.missing_else_in_if_expr`, `parse.unterminated_block`, `parse.unterminated_string`
 - `project.circular_import`, `project.entry_not_found`, `project.namespace_file_mismatch`, `project.no_proj_file`
 - `type.ambiguous_generic`, `type.annotation_required`, `type.equality_unsupported_field`
 - `using.non_result_init`

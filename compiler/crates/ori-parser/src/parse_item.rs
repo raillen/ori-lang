@@ -13,7 +13,17 @@ impl<'src> Parser<'src> {
     /// Entry point: parse a full source file.
     pub fn parse_source_file(&mut self) -> SourceFile {
         let start = self.current_span();
-        let namespace = self.parse_namespace().unwrap_or_else(|| NamespaceDecl {
+        let namespace = if self.at(&TokenKind::Namespace) {
+            self.parse_namespace()
+        } else {
+            self.error(
+                "parse.namespace_missing",
+                "source file must start with a namespace declaration",
+                start,
+            );
+            None
+        }
+        .unwrap_or_else(|| NamespaceDecl {
             name: ori_ast::common::QualifiedName {
                 parts: Vec::new(),
                 span: Span::DUMMY,
@@ -163,6 +173,17 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_item(&mut self) -> Option<Item> {
+        if self.at(&TokenKind::Namespace) {
+            let span = self.current_span();
+            self.error(
+                "parse.namespace_not_first",
+                "namespace must be the first declaration in a file",
+                span,
+            );
+            let _ = self.parse_namespace();
+            return None;
+        }
+
         if self.at(&TokenKind::Import)
             || (self.at(&TokenKind::Public) && self.peek_nth_kind(1) == Some(&TokenKind::Import))
         {

@@ -4589,6 +4589,40 @@ import ori.io as io
 }
 
 #[test]
+fn check_reports_missing_namespace() {
+    let dir = TestDir::new("missing_namespace");
+    dir.write(
+        "main.orl",
+        r#"func main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(diagnostic_codes(&out).contains(&"parse.namespace_missing"));
+}
+
+#[test]
+fn check_reports_namespace_not_first() {
+    let dir = TestDir::new("namespace_not_first");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+func ready()
+end
+
+namespace app.other
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(diagnostic_codes(&out).contains(&"parse.namespace_not_first"));
+}
+
+#[test]
 fn check_reports_type_error_inside_imported_top_level_const() {
     let dir = TestDir::new("imported_const_type_error");
     dir.write(

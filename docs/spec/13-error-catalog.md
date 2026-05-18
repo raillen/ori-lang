@@ -53,6 +53,8 @@ when the compiler starts producing it.
 | `parse.import_after_declaration` | error | Import appears after a top-level declaration |
 | `parse.invalid_escape` | error | String or byte literal contains an invalid escape |
 | `parse.invalid_lvalue` | error | Assignment target is not assignable |
+| `parse.namespace_missing` | error | Source file is missing the leading namespace declaration |
+| `parse.namespace_not_first` | error | Namespace declaration appears after another declaration |
 | `parse.tuple_arity` | error | Tuple type or expression has invalid arity |
 | `parse.unexpected_token` | error | Parser found a token that is not valid here |
 | `parse.variadic_not_last` | error | Variadic parameter is not the last parameter |
@@ -277,8 +279,6 @@ They are not emitted by the compiler today.
 | `mut.field_mutation_in_func` | error | planned method mutability diagnostic |
 | `parse.invalid_range` | error | planned range parse/type split diagnostic |
 | `parse.missing_else_in_if_expr` | error | planned inline if diagnostic |
-| `parse.namespace_missing` | error | planned parser recovery diagnostic |
-| `parse.namespace_not_first` | error | planned parser recovery diagnostic |
 | `parse.unterminated_block` | error | planned parser recovery diagnostic |
 | `parse.unterminated_string` | error | planned lexer/parser split diagnostic |
 | `project.circular_import` | error | planned project-level diagnostic |
