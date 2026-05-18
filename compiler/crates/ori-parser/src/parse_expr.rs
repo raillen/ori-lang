@@ -526,7 +526,15 @@ impl<'src> Parser<'src> {
                 let condition = self.parse_expr()?;
                 self.expect(&TokenKind::Then)?;
                 let then_expr = self.parse_expr()?;
-                self.expect(&TokenKind::Else)?;
+                if !self.at(&TokenKind::Else) {
+                    self.error(
+                        "parse.missing_else_in_if_expr",
+                        "inline `if` expressions require an `else` branch",
+                        self.current_span(),
+                    );
+                    return None;
+                }
+                self.advance(); // else
                 let else_expr = self.parse_expr()?;
                 let end = else_expr.span();
                 Some(Expr::IfExpr {

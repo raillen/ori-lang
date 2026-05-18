@@ -857,6 +857,31 @@ end
 }
 
 #[test]
+fn expr_rejects_inline_if_without_else() {
+    let dir = TestDir::new("expr_inline_if_missing_else");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+func main()
+    const label: string = if true then "pass"
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    let codes = diagnostic_codes(&out);
+    assert!(
+        codes.contains(&"parse.missing_else_in_if_expr"),
+        "{:?}",
+        out.diagnostics
+    );
+    assert!(
+        !codes.contains(&"parse.unexpected_token"),
+        "inline if without else should use the dedicated diagnostic: {:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
 fn expr_accepts_anonymous_struct_literal() {
     let dir = TestDir::new("expr_anon_struct");
     dir.write(
