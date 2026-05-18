@@ -6591,6 +6591,10 @@ impl<'a> FuncCodegen<'a> {
             format!("missing function reference `{next_func}` for custom Iterable")
         })?;
         let iter_value = self.emit_expr(iterable)?;
+        // Retain the iterable for the duration of the loop. The next() method
+        // releases managed parameters on return; without an extra retain the
+        // iterable would be freed after the first call.
+        self.emit_arc_retain_if_managed(&iterable.ty, iter_value)?;
         let iter_var = self.builder.declare_var(iter_cl_ty);
         self.builder.def_var(iter_var, iter_value);
         let idx_var = self.builder.declare_var(types::I64);
@@ -6658,6 +6662,9 @@ impl<'a> FuncCodegen<'a> {
         self.builder.seal_block(header);
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
+        // Release the iterable retain we added before the loop.
+        let final_iter = self.builder.use_var(iter_var);
+        self.emit_arc_release_if_managed(&iterable.ty, final_iter)?;
         self.terminated = false;
         Ok(())
     }
