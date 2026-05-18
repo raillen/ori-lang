@@ -5940,6 +5940,9 @@ pub unsafe extern "C" fn ori_heap_push_custom(
     value: i64,
     compare_fn: *const std::ffi::c_void,
 ) {
+    // Register ARC edge before pushing to prevent the element from being
+    // collected during heap_sift_up comparisons (which call retain/release).
+    ori_arc_register_edge(heap as *mut u8, value as *mut u8);
     heap_push_raw(heap, value, HEAP_ITEM_CUSTOM, compare_fn);
 }
 
