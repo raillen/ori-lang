@@ -2826,7 +2826,7 @@ end
 }
 
 #[test]
-fn build_c_backend_rejects_set_map_structural_equality() {
+fn build_c_backend_set_map_structural_equality() {
     let dir = TestDir::new("c_backend_set_map_structural_equality");
     dir.write(
         "main.orl",
@@ -2836,27 +2836,46 @@ import ori.map as maps
 import ori.set as sets
 
 func main()
-    const left: map<int, int> = maps.new()
-    const right: map<int, int> = maps.new()
-    const same: bool = left == right
+    const left_set: set<int> = set { 1, 2 }
+    const same_set: set<int> = set { 2, 1 }
+    const different_set: set<int> = set { 1, 3 }
+    const set_same: bool = left_set == same_set
+    const set_different: bool = left_set != different_set
 
-    const left_set: set<int> = sets.new()
-    const right_set: set<int> = sets.new()
-    const same_set: bool = left_set == right_set
+    const words: set<string> = set { "red", "blue" }
+    const same_words: set<string> = set { "blue", "red" }
+    sets.add(same_words, "red")
+    const words_same: bool = words == same_words
+
+    const labels: map<string, int> = { "a": 1, "b": 2 }
+    const same_labels: map<string, int> = { "b": 2, "a": 1 }
+    const labels_same: bool = labels == same_labels
+
+    const buckets: map<int, list<int>> = maps.new()
+    maps.set(buckets, 1, [1, 2])
+
+    const same_buckets: map<int, list<int>> = maps.new()
+    maps.set(same_buckets, 1, [1, 2])
+
+    const changed_buckets: map<int, list<int>> = maps.new()
+    maps.set(changed_buckets, 1, [1, 3])
+
+    const nested_same: bool = buckets == same_buckets
+    const nested_different: bool = buckets != changed_buckets
 end
 "#,
     );
 
     let out = run_build(&dir.path("main.orl")).unwrap();
-    assert!(out.has_errors, "expected C backend feature diagnostic");
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
     assert!(
-        out.diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == "backend.c_unsupported"),
-        "{:?}",
-        out.diagnostics
+        out.c_source.contains("ori_map_set_string_value")
+            && out.c_source.contains("ori_set_contains_string")
+            && out.c_source.contains("ori_map_value_at"),
+        "{}",
+        out.c_source
     );
-    assert!(out.c_source.is_empty());
+    compile_c_source(&dir, "c_backend_set_map_structural_equality", &out.c_source);
 }
 
 #[test]

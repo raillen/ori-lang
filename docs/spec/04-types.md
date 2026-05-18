@@ -343,8 +343,8 @@ Current implementation status:
   structs whose fields also support equality.
 - Function values are not comparable.
 - `any<Trait>` values are not comparable.
-- Native structural equality for `set<int|string>` and `map<int|string, V>`
-  is implemented. C/debug parity for maps and sets is planned.
+- Native and C/debug structural equality for `set<int|string>` and
+  `map<int|string, V>` is implemented.
 - Structural equality for generic structs is planned.
 
 | Type | Current `==` behavior |
@@ -354,10 +354,10 @@ Current implementation status:
 | `string` | UTF-8 text equality |
 | `bytes` | Byte equality |
 | `list<T>` | Structural equality |
-| `map<int|string, V>` | Native structural equality when values support equality |
-| `map<K, V>` | Planned for other key types and C/debug parity |
-| `set<int|string>` | Native structural equality |
-| `set<T>` | Planned for other element types and C/debug parity |
+| `map<int|string, V>` | Structural equality when values support equality |
+| `map<K, V>` | Planned for other key types |
+| `set<int|string>` | Structural equality |
+| `set<T>` | Planned for other element types |
 | `optional<T>` | Structural equality |
 | `result<T, E>` | Structural equality |
 | `tuple<...>` | Structural equality |

@@ -25,7 +25,7 @@ Legend:
 | Traits and `any<Trait>` | yes | yes | partial | Native tests cover dynamic dispatch. |
 | Generics and monomorphization | yes | yes | partial | Native tests cover generic functions and imported generic traits. |
 | Lists, maps, sets, deques, queues, stacks | yes | yes | partial | Native runtime owns ARC edges. |
-| Structural equality | yes | partial | partial | Native covers primitives, `bytes`, `optional`, `result`, tuples, lists, non-generic structs, `set<int|string>`, and `map<int|string, V>`. C/debug covers primitives, `optional`, `result`, tuples, lists, and non-generic structs. |
+| Structural equality | yes | partial | partial | Native and C/debug cover primitives, `bytes`, `optional`, `result`, tuples, lists, non-generic structs, `set<int|string>`, and `map<int|string, V>`. Generic structs and custom collection keys are still blocked. |
 | Hash tables, trees, graphs, heaps | yes | yes | partial | Native tests cover stdlib operations. |
 | `bytes` with internal NUL | yes | yes | partial | `string` still rejects internal NUL at conversion boundary. |
 | Unicode `string.len`, `slice`, `index_of` | yes | yes | partial | Indices are Unicode scalar indices, not byte offsets. |

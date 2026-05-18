@@ -108,6 +108,416 @@ static inline ori_list_t ori_list_slice(ori_list_t l, int64_t start, int64_t end
     }
     return out;
 }
+
+/* Small C/debug map and set runtime. This favors clear generated C over the
+   native runtime's optimized hash tables. */
+typedef enum {
+    ORI_KEY_UNKNOWN = 0,
+    ORI_KEY_INT = 1,
+    ORI_KEY_STRING = 2,
+} ori_key_kind_t;
+typedef struct {
+    int64_t int_value;
+    ori_string_t string_value;
+} ori_key_t;
+typedef struct {
+    ori_key_t* items;
+    size_t len;
+    size_t cap;
+    ori_key_kind_t key_kind;
+} ori_set_t;
+typedef struct {
+    ori_key_t key;
+    void* value;
+    size_t value_size;
+} ori_map_entry_t;
+typedef struct {
+    ori_map_entry_t* entries;
+    size_t len;
+    size_t cap;
+    ori_key_kind_t key_kind;
+} ori_map_t;
+static inline ori_key_t ori_key_int(int64_t value) {
+    return (ori_key_t){ .int_value = value, .string_value = ORI_STR("") };
+}
+static inline ori_key_t ori_key_string(ori_string_t value) {
+    return (ori_key_t){ .int_value = 0, .string_value = value };
+}
+static inline bool ori_key_eq(ori_key_kind_t kind, ori_key_t left, ori_key_t right) {
+    return kind == ORI_KEY_STRING
+        ? ori_string_eq(left.string_value, right.string_value)
+        : left.int_value == right.int_value;
+}
+static inline void* ori_value_box(const void* value, size_t size) {
+    size_t actual_size = size ? size : 1;
+    void* out = malloc(actual_size);
+    if (!out) abort();
+    if (size) {
+        memcpy(out, value, size);
+    } else {
+        memset(out, 0, actual_size);
+    }
+    return out;
+}
+static inline bool ori_set_prepare_kind(ori_set_t* set, ori_key_kind_t kind) {
+    if (!set) return false;
+    if (set->key_kind == ORI_KEY_UNKNOWN) {
+        set->key_kind = kind;
+        return true;
+    }
+    return set->key_kind == kind;
+}
+static inline bool ori_map_prepare_kind(ori_map_t* map, ori_key_kind_t kind) {
+    if (!map) return false;
+    if (map->key_kind == ORI_KEY_UNKNOWN) {
+        map->key_kind = kind;
+        return true;
+    }
+    return map->key_kind == kind;
+}
+static inline void ori_set_reserve(ori_set_t* set, int64_t capacity) {
+    if (!set || capacity <= (int64_t)set->cap) return;
+    size_t new_cap = (size_t)capacity;
+    set->items = (ori_key_t*)realloc(set->items, new_cap * sizeof(ori_key_t));
+    if (!set->items) abort();
+    set->cap = new_cap;
+}
+static inline void ori_map_reserve(ori_map_t* map, int64_t capacity) {
+    if (!map || capacity <= (int64_t)map->cap) return;
+    size_t new_cap = (size_t)capacity;
+    map->entries = (ori_map_entry_t*)realloc(map->entries, new_cap * sizeof(ori_map_entry_t));
+    if (!map->entries) abort();
+    map->cap = new_cap;
+}
+static inline ori_set_t* ori_set_new(void) {
+    ori_set_t* set = (ori_set_t*)calloc(1, sizeof(ori_set_t));
+    if (!set) abort();
+    set->cap = 4;
+    set->items = (ori_key_t*)calloc(set->cap, sizeof(ori_key_t));
+    if (!set->items) abort();
+    set->key_kind = ORI_KEY_UNKNOWN;
+    return set;
+}
+static inline int64_t ori_set_len(ori_set_t* set) {
+    return set ? (int64_t)set->len : 0;
+}
+static inline int64_t ori_set_capacity(ori_set_t* set) {
+    return set ? (int64_t)set->cap : 0;
+}
+static inline bool ori_set_is_empty(ori_set_t* set) {
+    return ori_set_len(set) == 0;
+}
+static inline bool ori_set_contains_key(ori_set_t* set, ori_key_kind_t kind, ori_key_t key) {
+    if (!set || (set->key_kind != ORI_KEY_UNKNOWN && set->key_kind != kind)) return false;
+    for (size_t i = 0; i < set->len; i++) {
+        if (ori_key_eq(kind, set->items[i], key)) return true;
+    }
+    return false;
+}
+static inline void ori_set_add_key(ori_set_t* set, ori_key_kind_t kind, ori_key_t key) {
+    if (!ori_set_prepare_kind(set, kind) || ori_set_contains_key(set, kind, key)) return;
+    if (set->len >= set->cap) {
+        ori_set_reserve(set, (int64_t)(set->cap ? set->cap * 2 : 4));
+    }
+    set->items[set->len++] = key;
+}
+static inline void ori_set_add(ori_set_t* set, int64_t value) {
+    ori_set_add_key(set, ORI_KEY_INT, ori_key_int(value));
+}
+static inline void ori_set_add_string(ori_set_t* set, ori_string_t value) {
+    ori_set_add_key(set, ORI_KEY_STRING, ori_key_string(value));
+}
+static inline bool ori_set_contains(ori_set_t* set, int64_t value) {
+    return ori_set_contains_key(set, ORI_KEY_INT, ori_key_int(value));
+}
+static inline bool ori_set_contains_string(ori_set_t* set, ori_string_t value) {
+    return ori_set_contains_key(set, ORI_KEY_STRING, ori_key_string(value));
+}
+static inline int64_t ori_set_value_at(ori_set_t* set, int64_t index) {
+    if (!set || index < 0 || index >= (int64_t)set->len) return 0;
+    return set->items[(size_t)index].int_value;
+}
+static inline ori_string_t ori_set_string_at(ori_set_t* set, int64_t index) {
+    if (!set || index < 0 || index >= (int64_t)set->len) return ORI_STR("");
+    return set->items[(size_t)index].string_value;
+}
+static inline void ori_set_remove_key(ori_set_t* set, ori_key_kind_t kind, ori_key_t key) {
+    if (!set || (set->key_kind != ORI_KEY_UNKNOWN && set->key_kind != kind)) return;
+    for (size_t i = 0; i < set->len; i++) {
+        if (ori_key_eq(kind, set->items[i], key)) {
+            set->items[i] = set->items[set->len - 1];
+            set->len--;
+            return;
+        }
+    }
+}
+static inline void ori_set_remove(ori_set_t* set, int64_t value) {
+    ori_set_remove_key(set, ORI_KEY_INT, ori_key_int(value));
+}
+static inline void ori_set_remove_string(ori_set_t* set, ori_string_t value) {
+    ori_set_remove_key(set, ORI_KEY_STRING, ori_key_string(value));
+}
+static inline bool ori_set_try_remove(ori_set_t* set, int64_t value) {
+    bool found = ori_set_contains(set, value);
+    if (found) ori_set_remove(set, value);
+    return found;
+}
+static inline bool ori_set_try_remove_string(ori_set_t* set, ori_string_t value) {
+    bool found = ori_set_contains_string(set, value);
+    if (found) ori_set_remove_string(set, value);
+    return found;
+}
+static inline void ori_set_clear(ori_set_t* set) {
+    if (!set) return;
+    set->len = 0;
+    set->key_kind = ORI_KEY_UNKNOWN;
+}
+static inline ori_set_t* ori_set_clone(ori_set_t* set) {
+    ori_set_t* out = ori_set_new();
+    if (!set) return out;
+    ori_set_reserve(out, (int64_t)set->len);
+    out->key_kind = set->key_kind;
+    for (size_t i = 0; i < set->len; i++) {
+        out->items[out->len++] = set->items[i];
+    }
+    return out;
+}
+static inline ori_list_t ori_set_to_list(ori_set_t* set) {
+    size_t elem_size = set && set->key_kind == ORI_KEY_STRING ? sizeof(ori_string_t) : sizeof(int64_t);
+    ori_list_t out = ori_list_new(elem_size);
+    if (!set) return out;
+    for (size_t i = 0; i < set->len; i++) {
+        if (set->key_kind == ORI_KEY_STRING) {
+            ori_list_push(&out, &set->items[i].string_value);
+        } else {
+            ori_list_push(&out, &set->items[i].int_value);
+        }
+    }
+    return out;
+}
+static inline ori_set_t* ori_set_from_list(ori_list_t list) {
+    ori_set_t* out = ori_set_new();
+    for (size_t i = 0; i < list.len; i++) {
+        int64_t item = *((int64_t*)ori_list_at(&list, (int64_t)i));
+        ori_set_add(out, item);
+    }
+    return out;
+}
+static inline void ori_set_free(ori_set_t* set) {
+    if (!set) return;
+    free(set->items);
+    free(set);
+}
+static inline ori_set_t* ori_set_union(ori_set_t* left, ori_set_t* right) {
+    ori_set_t* out = ori_set_clone(left);
+    if (!right) return out;
+    for (size_t i = 0; i < right->len; i++) {
+        ori_set_add_key(out, right->key_kind == ORI_KEY_UNKNOWN ? ORI_KEY_INT : right->key_kind, right->items[i]);
+    }
+    return out;
+}
+static inline ori_set_t* ori_set_intersection(ori_set_t* left, ori_set_t* right) {
+    ori_set_t* out = ori_set_new();
+    if (!left || !right) return out;
+    ori_key_kind_t kind = left->key_kind == ORI_KEY_UNKNOWN ? ORI_KEY_INT : left->key_kind;
+    for (size_t i = 0; i < left->len; i++) {
+        if (ori_set_contains_key(right, kind, left->items[i])) {
+            ori_set_add_key(out, kind, left->items[i]);
+        }
+    }
+    return out;
+}
+static inline ori_set_t* ori_set_difference(ori_set_t* left, ori_set_t* right) {
+    ori_set_t* out = ori_set_new();
+    if (!left) return out;
+    ori_key_kind_t kind = left->key_kind == ORI_KEY_UNKNOWN ? ORI_KEY_INT : left->key_kind;
+    for (size_t i = 0; i < left->len; i++) {
+        if (!right || !ori_set_contains_key(right, kind, left->items[i])) {
+            ori_set_add_key(out, kind, left->items[i]);
+        }
+    }
+    return out;
+}
+static inline ori_map_t* ori_map_new(void) {
+    ori_map_t* map = (ori_map_t*)calloc(1, sizeof(ori_map_t));
+    if (!map) abort();
+    map->cap = 4;
+    map->entries = (ori_map_entry_t*)calloc(map->cap, sizeof(ori_map_entry_t));
+    if (!map->entries) abort();
+    map->key_kind = ORI_KEY_UNKNOWN;
+    return map;
+}
+static inline int64_t ori_map_len(ori_map_t* map) {
+    return map ? (int64_t)map->len : 0;
+}
+static inline int64_t ori_map_capacity(ori_map_t* map) {
+    return map ? (int64_t)map->cap : 0;
+}
+static inline bool ori_map_is_empty(ori_map_t* map) {
+    return ori_map_len(map) == 0;
+}
+static inline int64_t ori_map_find(ori_map_t* map, ori_key_kind_t kind, ori_key_t key) {
+    if (!map || (map->key_kind != ORI_KEY_UNKNOWN && map->key_kind != kind)) return -1;
+    for (size_t i = 0; i < map->len; i++) {
+        if (ori_key_eq(kind, map->entries[i].key, key)) return (int64_t)i;
+    }
+    return -1;
+}
+static inline void ori_map_store_value(ori_map_entry_t* entry, const void* value, size_t value_size) {
+    free(entry->value);
+    entry->value = ori_value_box(value, value_size);
+    entry->value_size = value_size;
+}
+static inline void ori_map_set_value_for_key(ori_map_t* map, ori_key_kind_t kind, ori_key_t key, const void* value, size_t value_size) {
+    if (!ori_map_prepare_kind(map, kind)) return;
+    int64_t existing = ori_map_find(map, kind, key);
+    if (existing >= 0) {
+        ori_map_store_value(&map->entries[(size_t)existing], value, value_size);
+        return;
+    }
+    if (map->len >= map->cap) {
+        ori_map_reserve(map, (int64_t)(map->cap ? map->cap * 2 : 4));
+    }
+    ori_map_entry_t* entry = &map->entries[map->len++];
+    memset(entry, 0, sizeof(*entry));
+    entry->key = key;
+    ori_map_store_value(entry, value, value_size);
+}
+static inline void ori_map_set_value(ori_map_t* map, int64_t key, const void* value, size_t value_size) {
+    ori_map_set_value_for_key(map, ORI_KEY_INT, ori_key_int(key), value, value_size);
+}
+static inline void ori_map_set_string_value(ori_map_t* map, ori_string_t key, const void* value, size_t value_size) {
+    ori_map_set_value_for_key(map, ORI_KEY_STRING, ori_key_string(key), value, value_size);
+}
+static inline void ori_map_set(ori_map_t* map, int64_t key, int64_t value) {
+    ori_map_set_value(map, key, &value, sizeof(value));
+}
+static inline void ori_map_set_string(ori_map_t* map, ori_string_t key, int64_t value) {
+    ori_map_set_string_value(map, key, &value, sizeof(value));
+}
+static inline void* ori_map_get_value_for_key(ori_map_t* map, ori_key_kind_t kind, ori_key_t key) {
+    int64_t index = ori_map_find(map, kind, key);
+    return index >= 0 ? map->entries[(size_t)index].value : NULL;
+}
+static inline void* ori_map_get_value(ori_map_t* map, int64_t key) {
+    return ori_map_get_value_for_key(map, ORI_KEY_INT, ori_key_int(key));
+}
+static inline void* ori_map_get_string_value(ori_map_t* map, ori_string_t key) {
+    return ori_map_get_value_for_key(map, ORI_KEY_STRING, ori_key_string(key));
+}
+static inline int64_t ori_map_get(ori_map_t* map, int64_t key) {
+    void* value = ori_map_get_value(map, key);
+    return value ? *((int64_t*)value) : 0;
+}
+static inline int64_t ori_map_get_string(ori_map_t* map, ori_string_t key) {
+    void* value = ori_map_get_string_value(map, key);
+    return value ? *((int64_t*)value) : 0;
+}
+static inline bool ori_map_contains(ori_map_t* map, int64_t key) {
+    return ori_map_find(map, ORI_KEY_INT, ori_key_int(key)) >= 0;
+}
+static inline bool ori_map_contains_string(ori_map_t* map, ori_string_t key) {
+    return ori_map_find(map, ORI_KEY_STRING, ori_key_string(key)) >= 0;
+}
+static inline int64_t ori_map_key_at(ori_map_t* map, int64_t index) {
+    if (!map || index < 0 || index >= (int64_t)map->len) return 0;
+    return map->entries[(size_t)index].key.int_value;
+}
+static inline ori_string_t ori_map_key_string_at(ori_map_t* map, int64_t index) {
+    if (!map || index < 0 || index >= (int64_t)map->len) return ORI_STR("");
+    return map->entries[(size_t)index].key.string_value;
+}
+static inline void* ori_map_value_at(ori_map_t* map, int64_t index) {
+    if (!map || index < 0 || index >= (int64_t)map->len) return NULL;
+    return map->entries[(size_t)index].value;
+}
+static inline void ori_map_remove_key(ori_map_t* map, ori_key_kind_t kind, ori_key_t key) {
+    int64_t index = ori_map_find(map, kind, key);
+    if (index < 0) return;
+    size_t i = (size_t)index;
+    free(map->entries[i].value);
+    map->entries[i] = map->entries[map->len - 1];
+    map->len--;
+}
+static inline void ori_map_remove(ori_map_t* map, int64_t key) {
+    ori_map_remove_key(map, ORI_KEY_INT, ori_key_int(key));
+}
+static inline void ori_map_remove_string(ori_map_t* map, ori_string_t key) {
+    ori_map_remove_key(map, ORI_KEY_STRING, ori_key_string(key));
+}
+static inline ori_opt_i64_t ori_map_try_get(ori_map_t* map, int64_t key) {
+    void* value = ori_map_get_value(map, key);
+    return value ? (ori_opt_i64_t){ .has_value = true, .value = *((int64_t*)value) } : (ori_opt_i64_t){ .has_value = false, .value = 0 };
+}
+static inline ori_opt_i64_t ori_map_try_get_string(ori_map_t* map, ori_string_t key) {
+    void* value = ori_map_get_string_value(map, key);
+    return value ? (ori_opt_i64_t){ .has_value = true, .value = *((int64_t*)value) } : (ori_opt_i64_t){ .has_value = false, .value = 0 };
+}
+static inline ori_opt_i64_t ori_map_try_remove(ori_map_t* map, int64_t key) {
+    ori_opt_i64_t value = ori_map_try_get(map, key);
+    if (value.has_value) ori_map_remove(map, key);
+    return value;
+}
+static inline ori_opt_i64_t ori_map_try_remove_string(ori_map_t* map, ori_string_t key) {
+    ori_opt_i64_t value = ori_map_try_get_string(map, key);
+    if (value.has_value) ori_map_remove_string(map, key);
+    return value;
+}
+static inline void ori_map_clear(ori_map_t* map) {
+    if (!map) return;
+    for (size_t i = 0; i < map->len; i++) {
+        free(map->entries[i].value);
+    }
+    map->len = 0;
+    map->key_kind = ORI_KEY_UNKNOWN;
+}
+static inline ori_map_t* ori_map_clone(ori_map_t* map) {
+    ori_map_t* out = ori_map_new();
+    if (!map) return out;
+    ori_map_reserve(out, (int64_t)map->len);
+    out->key_kind = map->key_kind;
+    for (size_t i = 0; i < map->len; i++) {
+        ori_map_entry_t* src = &map->entries[i];
+        ori_map_set_value_for_key(out, map->key_kind == ORI_KEY_UNKNOWN ? ORI_KEY_INT : map->key_kind, src->key, src->value, src->value_size);
+    }
+    return out;
+}
+static inline void ori_map_free(ori_map_t* map) {
+    if (!map) return;
+    ori_map_clear(map);
+    free(map->entries);
+    free(map);
+}
+static inline ori_list_t ori_map_keys(ori_map_t* map) {
+    size_t elem_size = map && map->key_kind == ORI_KEY_STRING ? sizeof(ori_string_t) : sizeof(int64_t);
+    ori_list_t out = ori_list_new(elem_size);
+    if (!map) return out;
+    for (size_t i = 0; i < map->len; i++) {
+        if (map->key_kind == ORI_KEY_STRING) {
+            ori_list_push(&out, &map->entries[i].key.string_value);
+        } else {
+            ori_list_push(&out, &map->entries[i].key.int_value);
+        }
+    }
+    return out;
+}
+static inline ori_list_t ori_map_values(ori_map_t* map) {
+    ori_list_t out = ori_list_new(sizeof(int64_t));
+    if (!map) return out;
+    for (size_t i = 0; i < map->len; i++) {
+        int64_t value = map->entries[i].value ? *((int64_t*)map->entries[i].value) : 0;
+        ori_list_push(&out, &value);
+    }
+    return out;
+}
+static inline ori_list_t ori_map_entries(ori_map_t* map) {
+    (void)map;
+    return ori_list_new(sizeof(int64_t));
+}
+static inline ori_map_t* ori_map_from_entries(ori_list_t entries) {
+    (void)entries;
+    return ori_map_new();
+}
 static inline ori_list_t ori_list_map(ori_list_t l, void* fn_ptr, void* env) {
     ori_list_t out = ori_list_new(sizeof(int64_t));
     if (!fn_ptr) return out;
@@ -1734,8 +2144,8 @@ impl CCodegen {
                         self.pop();
                         self.line("}");
                     }
-                    _ if matches!(&iterable.ty, Ty::List(_) | Ty::Set(_)) => {
-                        // List/Set for loop
+                    _ if matches!(&iterable.ty, Ty::List(_)) => {
+                        // List for loop
                         let list_s = self.expr_to_c(iterable);
                         let list_tmp = self.fresh_tmp();
                         let idx_tmp = self.fresh_tmp();
@@ -1756,6 +2166,47 @@ impl CCodegen {
                             mangle(binding),
                             c_elem,
                             list_tmp,
+                            idx_tmp
+                        ));
+                        if let Some(ib) = index_binding {
+                            self.line(&format!("int64_t {} = {};", mangle(ib), idx_tmp));
+                        }
+                        self.loop_stack
+                            .push((self.using_stack.len(), self.managed_stack.len()));
+                        self.emit_block(&body.stmts);
+                        self.loop_stack.pop();
+                        self.pop();
+                        self.line("}");
+                        self.pop();
+                        self.line("}");
+                    }
+                    _ if matches!(&iterable.ty, Ty::Set(_)) => {
+                        // Set for loop
+                        let set_s = self.expr_to_c(iterable);
+                        let set_tmp = self.fresh_tmp();
+                        let idx_tmp = self.fresh_tmp();
+                        let len_tmp = self.fresh_tmp();
+                        let c_elem = ty_to_c(elem_ty);
+                        let value_at = if matches!(elem_ty, Ty::String) {
+                            "ori_set_string_at"
+                        } else {
+                            "ori_set_value_at"
+                        };
+                        self.line("{");
+                        self.push();
+                        self.line(&format!("ori_set_t* {} = {};", set_tmp, set_s));
+                        self.line(&format!("int64_t {} = ori_set_len({});", len_tmp, set_tmp));
+                        self.line(&format!(
+                            "for (int64_t {} = 0; {} < {}; {}++) {{",
+                            idx_tmp, idx_tmp, len_tmp, idx_tmp
+                        ));
+                        self.push();
+                        self.line(&format!(
+                            "{} {} = {}({}, {});",
+                            c_elem,
+                            mangle(binding),
+                            value_at,
+                            set_tmp,
                             idx_tmp
                         ));
                         if let Some(ib) = index_binding {
@@ -1820,6 +2271,11 @@ impl CCodegen {
                         let len_tmp = self.fresh_tmp();
                         let c_key = ty_to_c(key_ty);
                         let c_val = ty_to_c(value_ty);
+                        let key_at = if matches!(key_ty.as_ref(), Ty::String) {
+                            "ori_map_key_string_at"
+                        } else {
+                            "ori_map_key_at"
+                        };
                         self.line("{");
                         self.push();
                         self.line(&format!("ori_map_t* {} = {};", map_tmp, map_s));
@@ -1830,16 +2286,16 @@ impl CCodegen {
                         ));
                         self.push();
                         self.line(&format!(
-                            "{} {} = ({})ori_map_key_at({}, {});",
+                            "{} {} = {}({}, {});",
                             c_key,
                             mangle(binding),
-                            c_key,
+                            key_at,
                             map_tmp,
                             idx_tmp
                         ));
                         if let Some(ib) = index_binding {
                             self.line(&format!(
-                                "{} {} = ({})ori_map_value_at({}, {});",
+                                "{} {} = *(({}*)ori_map_value_at({}, {}));",
                                 c_val,
                                 mangle(ib),
                                 c_val,
@@ -2154,6 +2610,12 @@ impl CCodegen {
                     }
                     if n.as_str() == "__ori_builtin_or_wrap" && args.len() == 2 {
                         return self.emit_builtin_or_wrap(&args[0].value, &args[1].value);
+                    }
+                    if is_map_runtime_symbol(n.as_str()) {
+                        return self.emit_map_runtime_call(n.as_str(), args, &expr.ty);
+                    }
+                    if is_set_runtime_symbol(n.as_str()) {
+                        return self.emit_set_runtime_call(n.as_str(), args, &expr.ty);
                     }
                 }
                 let params = match &callee.ty {
@@ -2586,27 +3048,56 @@ impl CCodegen {
                     )),
                 }
             }
-            HirExprKind::MapLit { entries, .. } => {
+            HirExprKind::MapLit {
+                key_ty,
+                value_ty,
+                entries,
+            } => {
+                if !matches!(key_ty, Ty::Int | Ty::String) {
+                    return self.unsupported_expr(format!(
+                        "C backend cannot lower map literal with `{}` keys yet",
+                        key_ty.display()
+                    ));
+                }
                 let tmp = self.fresh_tmp();
                 let mut parts = Vec::new();
                 parts.push(format!("ori_map_t* {} = ori_map_new()", tmp));
                 for (k, v) in entries {
-                    let ks = self.expr_to_c(k);
-                    let vs = self.expr_to_c(v);
+                    let ks = self.map_key_to_c(k, key_ty);
+                    let vs = self.expr_to_c_for_expected(v, value_ty);
+                    let value_tmp = self.fresh_tmp();
+                    let value_c = ty_to_c(value_ty);
+                    let runtime_name = if matches!(key_ty, Ty::String) {
+                        "ori_map_set_string_value"
+                    } else {
+                        "ori_map_set_value"
+                    };
+                    parts.push(format!("{value_c} {value_tmp} = {vs}"));
                     parts.push(format!(
-                        "ori_map_set({}, (int64_t)({}), (int64_t)({}))",
-                        tmp, ks, vs
+                        "{runtime_name}({}, {}, &{}, sizeof({}))",
+                        tmp, ks, value_tmp, value_tmp
                     ));
                 }
                 format!("({{ {}; {}; }})", parts.join("; "), tmp)
             }
-            HirExprKind::SetLit { elements, .. } => {
+            HirExprKind::SetLit { elem_ty, elements } => {
+                if !matches!(elem_ty, Ty::Int | Ty::String) {
+                    return self.unsupported_expr(format!(
+                        "C backend cannot lower set literal with `{}` values yet",
+                        elem_ty.display()
+                    ));
+                }
                 let tmp = self.fresh_tmp();
                 let mut parts = Vec::new();
                 parts.push(format!("ori_set_t* {} = ori_set_new()", tmp));
+                let runtime_name = if matches!(elem_ty, Ty::String) {
+                    "ori_set_add_string"
+                } else {
+                    "ori_set_add"
+                };
                 for elem in elements {
-                    let es = self.expr_to_c(elem);
-                    parts.push(format!("ori_set_add({}, (int64_t)({}))", tmp, es));
+                    let es = self.set_key_to_c(elem, elem_ty);
+                    parts.push(format!("{runtime_name}({}, {})", tmp, es));
                 }
                 format!("({{ {}; {}; }})", parts.join("; "), tmp)
             }
@@ -2712,12 +3203,8 @@ impl CCodegen {
             Ty::Optional(inner) => self.optional_equality_to_c(left, right, inner),
             Ty::Result(ok, err) => self.result_equality_to_c(left, right, ok, err),
             Ty::Tuple(elements) => self.tuple_equality_to_c(left, right, elements),
-            Ty::Set(_) => self.unsupported_expr(
-                "C backend cannot lower set structural equality yet; use the native backend",
-            ),
-            Ty::Map(_, _) => self.unsupported_expr(
-                "C backend cannot lower map structural equality yet; use the native backend",
-            ),
+            Ty::Set(inner) => self.set_equality_to_c(left, right, inner),
+            Ty::Map(key, value) => self.map_equality_to_c(left, right, key, value),
             Ty::Named(def_id, args) => self.struct_equality_to_c(left, right, *def_id, args),
             _ if ty.is_numeric() || matches!(ty, Ty::Bool) => format!("({} == {})", left, right),
             _ => format!("({} == {})", left, right),
@@ -2746,6 +3233,80 @@ impl CCodegen {
         let elem_equal = self.equality_to_c(left_elem, right_elem, inner, true);
         format!(
             "({{ ori_list_t {left_tmp} = {left}; ori_list_t {right_tmp} = {right}; bool {same_tmp} = {left_tmp}.len == {right_tmp}.len; if ({same_tmp}) {{ for (size_t {index_tmp} = 0; {index_tmp} < {left_tmp}.len; {index_tmp}++) {{ if (!({elem_equal})) {{ {same_tmp} = false; break; }} }} }} {same_tmp}; }})"
+        )
+    }
+
+    fn set_equality_to_c(&mut self, left: String, right: String, inner: &Ty) -> String {
+        if !matches!(inner, Ty::Int | Ty::String) {
+            return self.unsupported_expr(format!(
+                "C backend cannot lower set structural equality for `{}` keys yet",
+                inner.display()
+            ));
+        }
+        let left_tmp = self.fresh_tmp();
+        let right_tmp = self.fresh_tmp();
+        let index_tmp = self.fresh_tmp();
+        let same_tmp = self.fresh_tmp();
+        let value_at = if matches!(inner, Ty::String) {
+            "ori_set_string_at"
+        } else {
+            "ori_set_value_at"
+        };
+        let contains = if matches!(inner, Ty::String) {
+            "ori_set_contains_string"
+        } else {
+            "ori_set_contains"
+        };
+        format!(
+            "({{ ori_set_t* {left_tmp} = {left}; ori_set_t* {right_tmp} = {right}; bool {same_tmp} = ori_set_len({left_tmp}) == ori_set_len({right_tmp}); if ({same_tmp}) {{ for (int64_t {index_tmp} = 0; {index_tmp} < ori_set_len({left_tmp}); {index_tmp}++) {{ if (!{contains}({right_tmp}, {value_at}({left_tmp}, {index_tmp}))) {{ {same_tmp} = false; break; }} }} }} {same_tmp}; }})"
+        )
+    }
+
+    fn map_equality_to_c(
+        &mut self,
+        left: String,
+        right: String,
+        key_ty: &Ty,
+        value_ty: &Ty,
+    ) -> String {
+        if !matches!(key_ty, Ty::Int | Ty::String) {
+            return self.unsupported_expr(format!(
+                "C backend cannot lower map structural equality for `{}` keys yet",
+                key_ty.display()
+            ));
+        }
+        let left_tmp = self.fresh_tmp();
+        let right_tmp = self.fresh_tmp();
+        let index_tmp = self.fresh_tmp();
+        let same_tmp = self.fresh_tmp();
+        let key_tmp = self.fresh_tmp();
+        let left_value_tmp = self.fresh_tmp();
+        let right_value_tmp = self.fresh_tmp();
+        let key_c = ty_to_c(key_ty);
+        let key_at = if matches!(key_ty, Ty::String) {
+            "ori_map_key_string_at"
+        } else {
+            "ori_map_key_at"
+        };
+        let contains = if matches!(key_ty, Ty::String) {
+            "ori_map_contains_string"
+        } else {
+            "ori_map_contains"
+        };
+        let get_value = if matches!(key_ty, Ty::String) {
+            "ori_map_get_string_value"
+        } else {
+            "ori_map_get_value"
+        };
+        let value_c = ty_to_c(value_ty);
+        let value_equal = self.equality_to_c(
+            format!("*(({value_c}*){left_value_tmp})"),
+            format!("*(({value_c}*){right_value_tmp})"),
+            value_ty,
+            true,
+        );
+        format!(
+            "({{ ori_map_t* {left_tmp} = {left}; ori_map_t* {right_tmp} = {right}; bool {same_tmp} = ori_map_len({left_tmp}) == ori_map_len({right_tmp}); if ({same_tmp}) {{ for (int64_t {index_tmp} = 0; {index_tmp} < ori_map_len({left_tmp}); {index_tmp}++) {{ {key_c} {key_tmp} = {key_at}({left_tmp}, {index_tmp}); if (!{contains}({right_tmp}, {key_tmp})) {{ {same_tmp} = false; break; }} void* {left_value_tmp} = ori_map_value_at({left_tmp}, {index_tmp}); void* {right_value_tmp} = {get_value}({right_tmp}, {key_tmp}); if (!{left_value_tmp} || !{right_value_tmp} || !({value_equal})) {{ {same_tmp} = false; break; }} }} }} {same_tmp}; }})"
         )
     }
 
@@ -2949,6 +3510,181 @@ impl CCodegen {
                 "C backend cannot lower `.or_wrap()` for `{}`",
                 other.display()
             )),
+        }
+    }
+
+    fn emit_map_runtime_call(&mut self, name: &str, args: &[HirArg], ret_ty: &Ty) -> String {
+        let Some(first_arg) = args.first() else {
+            return self
+                .unsupported_expr(format!("C backend map runtime call `{name}` has no map"));
+        };
+        let Ty::Map(key_ty, value_ty) = &first_arg.value.ty else {
+            return self.unsupported_expr(format!(
+                "C backend map runtime call `{name}` received `{}`",
+                first_arg.value.ty.display()
+            ));
+        };
+        let key_ty = key_ty.as_ref();
+        let value_ty = value_ty.as_ref();
+        if !matches!(key_ty, Ty::Int | Ty::String) {
+            return self.unsupported_expr(format!(
+                "C backend map runtime call `{name}` does not support `{}` keys yet",
+                key_ty.display()
+            ));
+        }
+        let map_s = self.expr_to_c(&first_arg.value);
+
+        match name {
+            "ori_map_set" => {
+                if args.len() != 3 {
+                    return self.unsupported_expr("C backend map.set expects map, key and value");
+                }
+                let key_s = self.map_key_to_c(&args[1].value, key_ty);
+                let value_s = self.expr_to_c_for_expected(&args[2].value, value_ty);
+                let value_tmp = self.fresh_tmp();
+                let value_c = ty_to_c(value_ty);
+                let runtime_name = if matches!(key_ty, Ty::String) {
+                    "ori_map_set_string_value"
+                } else {
+                    "ori_map_set_value"
+                };
+                format!(
+                    "({{ {value_c} {value_tmp} = {value_s}; {runtime_name}({map_s}, {key_s}, &{value_tmp}, sizeof({value_tmp})); }})"
+                )
+            }
+            "ori_map_get" => {
+                if args.len() != 2 {
+                    return self.unsupported_expr("C backend map.get expects map and key");
+                }
+                let key_s = self.map_key_to_c(&args[1].value, key_ty);
+                let value_c = ty_to_c(value_ty);
+                let value_tmp = self.fresh_tmp();
+                let runtime_name = if matches!(key_ty, Ty::String) {
+                    "ori_map_get_string_value"
+                } else {
+                    "ori_map_get_value"
+                };
+                format!(
+                    "({{ void* {value_tmp} = {runtime_name}({map_s}, {key_s}); {value_tmp} ? *(({value_c}*){value_tmp}) : {}; }})",
+                    c_default_value(value_ty)
+                )
+            }
+            "ori_map_contains" => {
+                if args.len() != 2 {
+                    return self.unsupported_expr("C backend map.contains expects map and key");
+                }
+                let key_s = self.map_key_to_c(&args[1].value, key_ty);
+                let runtime_name = if matches!(key_ty, Ty::String) {
+                    "ori_map_contains_string"
+                } else {
+                    "ori_map_contains"
+                };
+                format!("{runtime_name}({map_s}, {key_s})")
+            }
+            "ori_map_remove" | "ori_map_try_remove" | "ori_map_try_get" => {
+                if args.len() != 2 {
+                    return self.unsupported_expr(format!("C backend {name} expects map and key"));
+                }
+                let key_s = self.map_key_to_c(&args[1].value, key_ty);
+                let runtime_name = match (name, key_ty) {
+                    ("ori_map_remove", Ty::String) => "ori_map_remove_string",
+                    ("ori_map_try_remove", Ty::String) => "ori_map_try_remove_string",
+                    ("ori_map_try_get", Ty::String) => "ori_map_try_get_string",
+                    _ => name,
+                };
+                let call = format!("{runtime_name}({map_s}, {key_s})");
+                if matches!(ret_ty, Ty::Void) {
+                    format!("({{ {call}; }})")
+                } else {
+                    call
+                }
+            }
+            _ => self.unsupported_expr(format!("C backend map runtime call `{name}`")),
+        }
+    }
+
+    fn emit_set_runtime_call(&mut self, name: &str, args: &[HirArg], ret_ty: &Ty) -> String {
+        let Some(first_arg) = args.first() else {
+            return self
+                .unsupported_expr(format!("C backend set runtime call `{name}` has no set"));
+        };
+        let Ty::Set(elem_ty) = &first_arg.value.ty else {
+            return self.unsupported_expr(format!(
+                "C backend set runtime call `{name}` received `{}`",
+                first_arg.value.ty.display()
+            ));
+        };
+        let elem_ty = elem_ty.as_ref();
+        if !matches!(elem_ty, Ty::Int | Ty::String) {
+            return self.unsupported_expr(format!(
+                "C backend set runtime call `{name}` does not support `{}` values yet",
+                elem_ty.display()
+            ));
+        }
+        let set_s = self.expr_to_c(&first_arg.value);
+
+        match name {
+            "ori_set_add" => {
+                if args.len() != 2 {
+                    return self.unsupported_expr("C backend set.add expects set and value");
+                }
+                let value_s = self.set_key_to_c(&args[1].value, elem_ty);
+                let runtime_name = if matches!(elem_ty, Ty::String) {
+                    "ori_set_add_string"
+                } else {
+                    "ori_set_add"
+                };
+                format!("({{ {runtime_name}({set_s}, {value_s}); }})")
+            }
+            "ori_set_contains" => {
+                if args.len() != 2 {
+                    return self.unsupported_expr("C backend set.contains expects set and value");
+                }
+                let value_s = self.set_key_to_c(&args[1].value, elem_ty);
+                let runtime_name = if matches!(elem_ty, Ty::String) {
+                    "ori_set_contains_string"
+                } else {
+                    "ori_set_contains"
+                };
+                format!("{runtime_name}({set_s}, {value_s})")
+            }
+            "ori_set_remove" | "ori_set_try_remove" => {
+                if args.len() != 2 {
+                    return self
+                        .unsupported_expr(format!("C backend {name} expects set and value"));
+                }
+                let value_s = self.set_key_to_c(&args[1].value, elem_ty);
+                let runtime_name = match (name, elem_ty) {
+                    ("ori_set_remove", Ty::String) => "ori_set_remove_string",
+                    ("ori_set_try_remove", Ty::String) => "ori_set_try_remove_string",
+                    _ => name,
+                };
+                let call = format!("{runtime_name}({set_s}, {value_s})");
+                if matches!(ret_ty, Ty::Void) {
+                    format!("({{ {call}; }})")
+                } else {
+                    call
+                }
+            }
+            _ => self.unsupported_expr(format!("C backend set runtime call `{name}`")),
+        }
+    }
+
+    fn map_key_to_c(&mut self, expr: &HirExpr, key_ty: &Ty) -> String {
+        let key_s = self.expr_to_c_for_expected(expr, key_ty);
+        if matches!(key_ty, Ty::String) {
+            key_s
+        } else {
+            format!("(int64_t)({key_s})")
+        }
+    }
+
+    fn set_key_to_c(&mut self, expr: &HirExpr, elem_ty: &Ty) -> String {
+        let value_s = self.expr_to_c_for_expected(expr, elem_ty);
+        if matches!(elem_ty, Ty::String) {
+            value_s
+        } else {
+            format!("(int64_t)({value_s})")
         }
     }
 
@@ -3412,6 +4148,39 @@ fn c_bool(value: bool) -> String {
     }
 }
 
+fn c_default_value(ty: &Ty) -> String {
+    match ty {
+        Ty::String => "ORI_STR(\"\")".to_string(),
+        Ty::List(inner) => format!("ori_list_new(sizeof({}))", ty_to_c(inner)),
+        Ty::Bool => "false".to_string(),
+        Ty::Float | Ty::Float32 | Ty::Float64 => "0.0".to_string(),
+        Ty::Void | Ty::Never => "((void)0)".to_string(),
+        Ty::Optional(_) | Ty::Result(_, _) | Ty::Tuple(_) | Ty::Named(_, _) => {
+            format!("(({}){{0}})", ty_to_c(ty))
+        }
+        _ => "0".to_string(),
+    }
+}
+
+fn is_map_runtime_symbol(name: &str) -> bool {
+    matches!(
+        name,
+        "ori_map_set"
+            | "ori_map_get"
+            | "ori_map_try_get"
+            | "ori_map_contains"
+            | "ori_map_remove"
+            | "ori_map_try_remove"
+    )
+}
+
+fn is_set_runtime_symbol(name: &str) -> bool {
+    matches!(
+        name,
+        "ori_set_add" | "ori_set_contains" | "ori_set_remove" | "ori_set_try_remove"
+    )
+}
+
 fn ty_to_c(ty: &Ty) -> String {
     match ty {
         Ty::Bool => "bool".into(),
@@ -3433,6 +4202,8 @@ fn ty_to_c(ty: &Ty) -> String {
         Ty::Optional(t) => format!("ori_opt_{}_t", ty_tag(t)),
         Ty::Result(ok, err) => format!("ori_result_{}_{}_t", ty_tag(ok), ty_tag(err)),
         Ty::List(_) => "ori_list_t".into(),
+        Ty::Set(_) => "ori_set_t*".into(),
+        Ty::Map(_, _) => "ori_map_t*".into(),
         Ty::Tuple(elems) => format!("ori_tuple_{}_t", tuple_ty_tag(elems)),
         Ty::Named(id, _) => def_c_name(*id),
         Ty::Any(_) => "ori_any_t".into(),
