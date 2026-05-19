@@ -43,6 +43,39 @@ impl<'a> Checker<'a> {
         }
     }
 
+    pub(super) fn check_match_unreachable_cases(
+        &mut self,
+        scr_ty: &Ty,
+        cases: &[ori_ast::stmt::MatchCase],
+    ) {
+        if scr_ty.is_error() || scr_ty.contains_infer() {
+            return;
+        }
+
+        let mut catch_all_seen = false;
+        for case in cases {
+            if catch_all_seen {
+                self.sink.emit(
+                    Diagnostic::warning("match.unreachable_case", "match case is unreachable")
+                        .with_label(Label::primary(
+                            self.file_id,
+                            match_case_span(case),
+                            "this case cannot be reached",
+                        ))
+                        .with_note(
+                            "an earlier unguarded case already matches every remaining value",
+                        )
+                        .with_action("move this case before the catch-all case or remove it"),
+                );
+                continue;
+            }
+
+            if self.case_is_unguarded_catch_all(case, scr_ty) {
+                catch_all_seen = true;
+            }
+        }
+    }
+
     pub(super) fn check_match_exhaustiveness(
         &mut self,
         scr_ty: &Ty,
@@ -310,5 +343,12 @@ impl<'a> Checker<'a> {
             .with_label(Label::primary(self.file_id, span, "match checked here"))
             .with_action("add the missing cases or a `case else` arm"),
         );
+    }
+}
+
+fn match_case_span(case: &ori_ast::stmt::MatchCase) -> ori_diagnostics::Span {
+    match case {
+        ori_ast::stmt::MatchCase::Pattern { span, .. }
+        | ori_ast::stmt::MatchCase::Else { span, .. } => *span,
     }
 }

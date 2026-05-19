@@ -223,6 +223,7 @@ when the compiler starts producing it.
 |---|---|---|
 | `match.duplicate_case` | warning | Match arm repeats an earlier unguarded pattern |
 | `match.non_exhaustive` | error | `match` does not cover all possible cases |
+| `match.unreachable_case` | warning | Match arm appears after an unguarded catch-all case |
 
 ### `mut`
 
@@ -286,7 +287,6 @@ They are not emitted by the compiler today.
 | `doc.unclosed_block` | error | planned documentation/comment lexer work |
 | `generic.ambiguous_type_arg` | error | planned generic diagnostics |
 | `match.guard_not_exhaustive` | warning | planned match diagnostics |
-| `match.unreachable_case` | warning | planned match diagnostics |
 | `project.circular_import` | error | planned project-level diagnostic |
 | `project.entry_not_found` | error | planned project-level diagnostic |
 | `project.namespace_file_mismatch` | warning | planned project-level diagnostic |

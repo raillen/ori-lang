@@ -1118,6 +1118,7 @@ impl<'a> Checker<'a> {
             Stmt::Match(m) => {
                 let scr_ty = self.infer_expr(&m.scrutinee);
                 self.check_match_duplicate_cases(&scr_ty, &m.cases);
+                self.check_match_unreachable_cases(&scr_ty, &m.cases);
                 for case in &m.cases {
                     match case {
                         ori_ast::stmt::MatchCase::Pattern {
