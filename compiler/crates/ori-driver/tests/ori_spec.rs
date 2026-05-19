@@ -1319,6 +1319,36 @@ end
 }
 
 #[test]
+fn stmt_warns_duplicate_match_case() {
+    let dir = TestDir::new("stmt_duplicate_match_case");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+func describe(value: bool) -> string
+    match value
+        case true:
+            return "yes"
+        case true:
+            return "still yes"
+        case false:
+            return "no"
+    end
+    return "fallback"
+end
+func main()
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"match.duplicate_case"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
 fn stmt_accepts_match_with_case_else() {
     let dir = TestDir::new("stmt_match_else");
     dir.write(

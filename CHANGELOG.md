@@ -101,6 +101,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Checker:** `self` fora de método caía em `name.undefined` → agora emite `bind.self_outside_method`
 - **Checker:** Mutação de campo de `self` em método não-`mut` caía em erro genérico → agora emite `mut.field_mutation_in_func`
 - **Checker:** Igualdade estrutural com campo sem igualdade caía em erro genérico → agora emite `type.equality_unsupported_field`
+- **Checker:** `match` com case duplicado passava sem aviso → agora emite warning `match.duplicate_case`
 - **Codegen:** `?` no backend C sem propagação → propaga com cleanup de escopo
 - **Codegen:** Runtime bounds não seguiam spec → `ori_abort_bounds` para out-of-bounds
 - **Codegen:** `optional<T>` e `result<T,E>` com `!=` podiam comparar payload da variante errada → agora comparam payload apenas quando as variantes batem

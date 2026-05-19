@@ -221,6 +221,7 @@ when the compiler starts producing it.
 
 | Code | Severity | Description |
 |---|---|---|
+| `match.duplicate_case` | warning | Match arm repeats an earlier unguarded pattern |
 | `match.non_exhaustive` | error | `match` does not cover all possible cases |
 
 ### `mut`
@@ -284,7 +285,6 @@ They are not emitted by the compiler today.
 | `contract.param_violation` | runtime panic | runtime contract reporting |
 | `doc.unclosed_block` | error | planned documentation/comment lexer work |
 | `generic.ambiguous_type_arg` | error | planned generic diagnostics |
-| `match.duplicate_case` | warning | planned match diagnostics |
 | `match.guard_not_exhaustive` | warning | planned match diagnostics |
 | `match.unreachable_case` | warning | planned match diagnostics |
 | `project.circular_import` | error | planned project-level diagnostic |

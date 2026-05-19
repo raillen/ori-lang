@@ -1,6 +1,48 @@
 use super::*;
 
 impl<'a> Checker<'a> {
+    pub(super) fn check_match_duplicate_cases(
+        &mut self,
+        scr_ty: &Ty,
+        cases: &[ori_ast::stmt::MatchCase],
+    ) {
+        if scr_ty.is_error() || scr_ty.contains_infer() {
+            return;
+        }
+
+        let mut seen = HashSet::new();
+        for case in cases {
+            let ori_ast::stmt::MatchCase::Pattern {
+                pattern,
+                guard: None,
+                span,
+                ..
+            } = case
+            else {
+                continue;
+            };
+
+            let Some(key) = self.match_duplicate_key(pattern, false) else {
+                continue;
+            };
+
+            if !seen.insert(key) {
+                self.sink.emit(
+                    Diagnostic::warning("match.duplicate_case", "match case is duplicated")
+                        .with_label(Label::primary(
+                            self.file_id,
+                            *span,
+                            "this case repeats an earlier case",
+                        ))
+                        .with_note("an earlier unguarded case has the same pattern")
+                        .with_action(
+                            "remove the duplicated case or add a guard if it is intentional",
+                        ),
+                );
+            }
+        }
+    }
+
     pub(super) fn check_match_exhaustiveness(
         &mut self,
         scr_ty: &Ty,
@@ -199,6 +241,59 @@ impl<'a> Checker<'a> {
                 }
                 Some(name.text.clone())
             }
+            _ => None,
+        }
+    }
+
+    fn match_duplicate_key(&self, pattern: &Pattern, allow_binding: bool) -> Option<String> {
+        match pattern {
+            Pattern::Wildcard(_) => Some("_".to_string()),
+            Pattern::Binding(_) if allow_binding => Some("_".to_string()),
+            Pattern::Binding(_) => None,
+            Pattern::Literal(expr) => self.literal_duplicate_key(expr),
+            Pattern::VariantUnit { name, .. } => Some(format!("variant:{}", name.text)),
+            Pattern::VariantNamed { name, fields, .. } => {
+                let mut field_keys = Vec::new();
+                for field in fields {
+                    let key = self.match_duplicate_key(&field.pattern, true)?;
+                    field_keys.push((field.name.text.to_string(), key));
+                }
+                field_keys.sort_by(|left, right| left.0.cmp(&right.0));
+                Some(format!("variant:{}:{field_keys:?}", name.text))
+            }
+            Pattern::Some(inner, _) => self
+                .match_duplicate_key(inner, true)
+                .map(|key| format!("some({key})")),
+            Pattern::None(_) => Some("none".to_string()),
+            Pattern::Success(inner, _) => self
+                .match_duplicate_key(inner, true)
+                .map(|key| format!("success({key})")),
+            Pattern::Error(inner, _) => self
+                .match_duplicate_key(inner, true)
+                .map(|key| format!("error({key})")),
+            Pattern::Tuple(patterns, _) => {
+                let mut keys = Vec::new();
+                for pattern in patterns {
+                    keys.push(self.match_duplicate_key(pattern, true)?);
+                }
+                Some(format!("tuple({})", keys.join(",")))
+            }
+        }
+    }
+
+    fn literal_duplicate_key(&self, expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::BoolLit(value, _) => Some(format!("bool:{value}")),
+            Expr::IntLit { raw, .. } => Some(format!("int:{raw}")),
+            Expr::FloatLit { raw, .. } => Some(format!("float:{raw}")),
+            Expr::StrLit { value, .. } => Some(format!("string:{value}")),
+            Expr::Unary {
+                op: UnaryOp::Neg,
+                operand,
+                ..
+            } => self
+                .literal_duplicate_key(operand)
+                .map(|key| format!("neg:{key}")),
             _ => None,
         }
     }
