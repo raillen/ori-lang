@@ -81,6 +81,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Lexer:** BOM UTF-8 rejeitado → aceito no início do arquivo
 - **Lexer:** `--|` dentro de strings tratado como comentário → tratado como texto
 - **Lexer:** Comentário não fechado virava erro genérico → diagnóstico dedicado
+- **Lexer/Parser:** String não terminada virava erro léxico genérico → agora emite `parse.unterminated_string`
 - **Parser:** `b.value = 2` descartado silenciosamente → emite `parse.invalid_lvalue`
 - **Parser/Checker:** Range com limite não inteiro emitia `type.type_mismatch` → agora emite `parse.invalid_range`
 - **Parser:** Variadic `...` não parseava → parseia `...` e `..` (compat)

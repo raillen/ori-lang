@@ -33,12 +33,20 @@ pub fn lex(source: &str, file_id: FileId, sink: &mut DiagnosticSink) -> Vec<Toke
     } else {
         0
     };
-    let lex_end = match find_unclosed_block_comment(source, initial_offset) {
-        Some(span) => {
+    let lex_end = match first_preflight_diagnostic(source, initial_offset) {
+        Some(LexPreflightDiagnostic::UnclosedBlockComment(span)) => {
             sink.emit(
                 Diagnostic::error("lex.unclosed_block_comment", "block comment is not closed")
                     .with_label(Label::primary(file_id, span, "comment starts here"))
                     .with_action("close the block comment with `|--`"),
+            );
+            span.start as usize
+        }
+        Some(LexPreflightDiagnostic::UnterminatedString(span)) => {
+            sink.emit(
+                Diagnostic::error("parse.unterminated_string", "string literal is not closed")
+                    .with_label(Label::primary(file_id, span, "string starts here"))
+                    .with_action("close the string literal with `\"`"),
             );
             span.start as usize
         }
@@ -79,6 +87,32 @@ pub fn lex(source: &str, file_id: FileId, sink: &mut DiagnosticSink) -> Vec<Toke
     }
 
     tokens
+}
+
+#[derive(Clone, Copy)]
+enum LexPreflightDiagnostic {
+    UnclosedBlockComment(Span),
+    UnterminatedString(Span),
+}
+
+impl LexPreflightDiagnostic {
+    fn span(self) -> Span {
+        match self {
+            LexPreflightDiagnostic::UnclosedBlockComment(span)
+            | LexPreflightDiagnostic::UnterminatedString(span) => span,
+        }
+    }
+}
+
+fn first_preflight_diagnostic(source: &str, start_at: usize) -> Option<LexPreflightDiagnostic> {
+    [
+        find_unclosed_block_comment(source, start_at)
+            .map(LexPreflightDiagnostic::UnclosedBlockComment),
+        find_unterminated_string(source, start_at).map(LexPreflightDiagnostic::UnterminatedString),
+    ]
+    .into_iter()
+    .flatten()
+    .min_by_key(|diagnostic| diagnostic.span().start)
 }
 
 fn find_unclosed_block_comment(source: &str, start_at: usize) -> Option<Span> {
@@ -124,6 +158,58 @@ fn find_unclosed_block_comment(source: &str, start_at: usize) -> Option<Span> {
     None
 }
 
+fn find_unterminated_string(source: &str, start_at: usize) -> Option<Span> {
+    let bytes = source.as_bytes();
+    let mut cursor = start_at;
+    while cursor < bytes.len() {
+        if bytes[cursor..].starts_with(b"--|") {
+            let body_start = cursor + 3;
+            cursor = match source[body_start..].find("|--") {
+                Some(relative_end) => body_start + relative_end + 3,
+                None => source.len(),
+            };
+            continue;
+        }
+
+        if bytes[cursor..].starts_with(b"--") {
+            cursor = skip_line_comment(bytes, cursor + 2);
+            continue;
+        }
+
+        if bytes[cursor..].starts_with(br#"f"""#) {
+            match triple_quoted_end(source, cursor + 4) {
+                Some(end) => cursor = end,
+                None => return Some(Span::new(cursor, source.len())),
+            }
+            continue;
+        }
+        if bytes[cursor..].starts_with(br#"""""#) {
+            match triple_quoted_end(source, cursor + 3) {
+                Some(end) => cursor = end,
+                None => return Some(Span::new(cursor, source.len())),
+            }
+            continue;
+        }
+        if bytes[cursor..].starts_with(br#"f""#) || bytes[cursor..].starts_with(br#"b""#) {
+            match quoted_end(bytes, cursor + 2) {
+                Some(end) => cursor = end,
+                None => return Some(Span::new(cursor, source.len())),
+            }
+            continue;
+        }
+        if bytes[cursor] == b'"' {
+            match quoted_end(bytes, cursor + 1) {
+                Some(end) => cursor = end,
+                None => return Some(Span::new(cursor, source.len())),
+            }
+            continue;
+        }
+
+        cursor += 1;
+    }
+    None
+}
+
 fn skip_line_comment(bytes: &[u8], mut cursor: usize) -> usize {
     while cursor < bytes.len() && bytes[cursor] != b'\n' {
         cursor += 1;
@@ -131,22 +217,29 @@ fn skip_line_comment(bytes: &[u8], mut cursor: usize) -> usize {
     cursor
 }
 
-fn skip_quoted(bytes: &[u8], mut cursor: usize) -> usize {
+fn skip_quoted(bytes: &[u8], cursor: usize) -> usize {
+    quoted_end(bytes, cursor).unwrap_or(bytes.len())
+}
+
+fn quoted_end(bytes: &[u8], mut cursor: usize) -> Option<usize> {
     while cursor < bytes.len() {
         match bytes[cursor] {
             b'\\' => cursor = (cursor + 2).min(bytes.len()),
-            b'"' => return cursor + 1,
+            b'"' => return Some(cursor + 1),
             _ => cursor += 1,
         }
     }
-    cursor
+    None
 }
 
 fn skip_triple_quoted(source: &str, cursor: usize) -> usize {
-    match source[cursor..].find("\"\"\"") {
-        Some(relative_end) => cursor + relative_end + 3,
-        None => source.len(),
-    }
+    triple_quoted_end(source, cursor).unwrap_or(source.len())
+}
+
+fn triple_quoted_end(source: &str, cursor: usize) -> Option<usize> {
+    source[cursor..]
+        .find("\"\"\"")
+        .map(|relative_end| cursor + relative_end + 3)
 }
 
 #[cfg(test)]
@@ -193,6 +286,18 @@ mod tests {
             .map(|diagnostic| diagnostic.code)
             .collect();
         assert_eq!(codes, vec!["lex.unclosed_block_comment"]);
+    }
+
+    #[test]
+    fn reports_unterminated_string_without_generic_lex_error() {
+        let (_tokens, diagnostics) =
+            lex_for_test("namespace app.main\nconst name: string = \"Ori\n");
+
+        let codes: Vec<_> = diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.code)
+            .collect();
+        assert_eq!(codes, vec!["parse.unterminated_string"]);
     }
 
     #[test]

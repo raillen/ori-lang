@@ -66,7 +66,7 @@
 
 ---
 
-## Fase 5 — Diagnósticos Planejados (29 códigos; 12 emitidos)
+## Fase 5 — Diagnósticos Planejados (29 códigos; 13 emitidos)
 
 Subconjunto de códigos planejados rastreados nesta fase. O catálogo completo,
 incluindo aliases reservados, fica em `docs/spec/13-error-catalog.md`.
@@ -83,7 +83,6 @@ incluindo aliases reservados, fica em `docs/spec/13-error-catalog.md`.
 | `match.guard_not_exhaustive` | warning | Guarda não exaustiva |
 | `match.unreachable_case` | warning | Case inalcançável |
 | `parse.unterminated_block` | error | Bloco não terminado |
-| `parse.unterminated_string` | error | String não terminada |
 | `project.circular_import` | error | Import circular |
 | `project.entry_not_found` | error | Entry point não encontrado |
 | `project.namespace_file_mismatch` | warning | Namespace não bate com arquivo |
@@ -115,9 +114,9 @@ incluindo aliases reservados, fica em `docs/spec/13-error-catalog.md`.
 | 2 — Compilador | 11 | 3 | 0 | 8 |
 | 3 — Runtime/ARC | 2 | 0 | 0 | 2 |
 | 4 — LSP/Tooling | 4 | 0 | 0 | 4 |
-| 5 — Diagnósticos | 29 | 12 | 0 | 17 |
+| 5 — Diagnósticos | 29 | 13 | 0 | 16 |
 | 6 — Finalização | 5 | 1 | 2 | 2 |
-| **TOTAL** | **60** | **21** | **3** | **36** |
+| **TOTAL** | **60** | **22** | **3** | **35** |
 
 ### Itens GRANDES (redesign de subsistemas)
 1.4 await aninhado, 1.6 ori.fs.File, 1.7 Cancelamento, 2.5 Associated types, 2.6 Const generics, 2.7 HKT, 3.1 Destrutores, 3.2 Cycle collector
