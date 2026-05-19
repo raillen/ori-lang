@@ -129,8 +129,9 @@ impl<'src> Parser<'src> {
                     );
                     return None;
                 }
+                let block_start = lhs.span();
                 let updates = self.parse_braced_field_inits()?;
-                let end = self.expect(&TokenKind::End)?;
+                let end = self.expect_block_end(block_start, "struct update")?;
                 let span = lhs.span().cover(end);
                 lhs = Expr::StructUpdate {
                     base: Box::new(lhs),
@@ -1124,7 +1125,7 @@ impl<'src> Parser<'src> {
         } else {
             let block = self.parse_block()?;
             let s = block.span;
-            self.expect(&TokenKind::End)?;
+            self.expect_block_end(start, "closure")?;
             (ClosureBody::Block(block), s)
         };
         Some(Expr::Closure(Box::new(ClosureExpr {

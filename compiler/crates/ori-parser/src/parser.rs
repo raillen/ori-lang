@@ -110,6 +110,26 @@ impl<'src> Parser<'src> {
         }
     }
 
+    pub fn expect_block_end(&mut self, start: Span, block_name: &'static str) -> Option<Span> {
+        if self.peek_kind() == Some(&TokenKind::End) {
+            return Some(self.advance().unwrap().span);
+        }
+
+        if self.at_eof() {
+            let diag = Diagnostic::error(
+                "parse.unterminated_block",
+                format!("{block_name} block is not closed"),
+            )
+            .with_label(Label::primary(self.file_id, start, "block starts here"))
+            .with_why("Ori blocks must be closed with `end`")
+            .with_action(format!("add `end` to close this {block_name} block"));
+            self.sink.emit(diag);
+            return None;
+        }
+
+        self.expect(&TokenKind::End)
+    }
+
     /// Consume and return `true` if the current token matches `kind`.
     pub fn eat(&mut self, kind: &TokenKind) -> bool {
         if self.peek_kind() == Some(kind) {

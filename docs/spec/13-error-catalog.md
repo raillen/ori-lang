@@ -58,6 +58,7 @@ when the compiler starts producing it.
 | `parse.namespace_missing` | error | Source file is missing the leading namespace declaration |
 | `parse.namespace_not_first` | error | Namespace declaration appears after another declaration |
 | `parse.tuple_arity` | error | Tuple type or expression has invalid arity |
+| `parse.unterminated_block` | error | End-delimited block reaches end of file before `end` |
 | `parse.unterminated_string` | error | String literal starts but is not closed |
 | `parse.unexpected_token` | error | Parser found a token that is not valid here |
 | `parse.variadic_not_last` | error | Variadic parameter is not the last parameter |
@@ -286,7 +287,6 @@ They are not emitted by the compiler today.
 | `match.duplicate_case` | warning | planned match diagnostics |
 | `match.guard_not_exhaustive` | warning | planned match diagnostics |
 | `match.unreachable_case` | warning | planned match diagnostics |
-| `parse.unterminated_block` | error | planned parser recovery diagnostic |
 | `project.circular_import` | error | planned project-level diagnostic |
 | `project.entry_not_found` | error | planned project-level diagnostic |
 | `project.namespace_file_mismatch` | warning | planned project-level diagnostic |

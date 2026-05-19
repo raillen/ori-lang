@@ -135,6 +135,22 @@ fn lex_rejects_unterminated_string() {
 }
 
 #[test]
+fn parse_rejects_unterminated_block() {
+    let dir = TestDir::new("parse_unterminated_block");
+    dir.write(
+        "main.orl",
+        "namespace app.main\nfunc main()\n    const answer: int = 42\n",
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.unterminated_block"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
 fn doc_accepts_documentation_comment_with_param_and_returns() {
     let dir = TestDir::new("doc_comment_params");
     dir.write(

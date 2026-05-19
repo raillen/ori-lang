@@ -155,7 +155,7 @@ impl<'src> Parser<'src> {
             } else {
                 None
             };
-            let end = self.expect(&TokenKind::End)?;
+            let end = self.expect_block_end(start, "if some")?;
             return Some(Stmt::IfSome(IfSomeStmt {
                 binding,
                 value: Box::new(value),
@@ -185,7 +185,7 @@ impl<'src> Parser<'src> {
                 break;
             }
         }
-        let end = self.expect(&TokenKind::End)?;
+        let end = self.expect_block_end(start, "if")?;
         Some(Stmt::If(IfStmt {
             condition: Box::new(condition),
             then_block,
@@ -206,7 +206,7 @@ impl<'src> Parser<'src> {
             self.expect(&TokenKind::Eq)?;
             let value = self.parse_expr()?;
             let body = self.parse_block()?;
-            let end = self.expect(&TokenKind::End)?;
+            let end = self.expect_block_end(start, "while some")?;
             return Some(Stmt::WhileSome(WhileSomeStmt {
                 binding,
                 value: Box::new(value),
@@ -216,7 +216,7 @@ impl<'src> Parser<'src> {
         }
         let condition = self.parse_expr()?;
         let body = self.parse_block()?;
-        let end = self.expect(&TokenKind::End)?;
+        let end = self.expect_block_end(start, "while")?;
         Some(Stmt::While(WhileStmt {
             condition: Box::new(condition),
             body,
@@ -235,7 +235,7 @@ impl<'src> Parser<'src> {
         self.expect(&TokenKind::In)?;
         let iterable = self.parse_expr()?;
         let body = self.parse_block()?;
-        let end = self.expect(&TokenKind::End)?;
+        let end = self.expect_block_end(start, "for")?;
         Some(Stmt::For(ForStmt {
             binding,
             second_binding,
@@ -256,7 +256,7 @@ impl<'src> Parser<'src> {
             }
         }
         let body = self.parse_block()?;
-        let end = self.expect(&TokenKind::End)?;
+        let end = self.expect_block_end(start, "repeat")?;
         Some(Stmt::Repeat(RepeatStmt {
             count: Box::new(count),
             body,
@@ -267,7 +267,7 @@ impl<'src> Parser<'src> {
     fn parse_loop_stmt(&mut self) -> Option<Stmt> {
         let start = self.advance().unwrap().span; // loop
         let body = self.parse_block()?;
-        let end = self.expect(&TokenKind::End)?;
+        let end = self.expect_block_end(start, "loop")?;
         Some(Stmt::Loop(LoopStmt {
             body,
             span: start.cover(end),
@@ -307,7 +307,7 @@ impl<'src> Parser<'src> {
                 span: case_span.cover(end),
             });
         }
-        let end = self.expect(&TokenKind::End)?;
+        let end = self.expect_block_end(start, "match")?;
         Some(Stmt::Match(MatchStmt {
             scrutinee: Box::new(scrutinee),
             cases,

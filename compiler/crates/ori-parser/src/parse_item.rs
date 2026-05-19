@@ -235,7 +235,7 @@ impl<'src> Parser<'src> {
         };
         let where_clause = self.parse_where_clause_opt();
         let body = self.parse_block()?;
-        let end = self.expect(&TokenKind::End)?;
+        let end = self.expect_block_end(start, "function")?;
         Some(FuncDecl {
             visibility: vis,
             is_async,
@@ -427,7 +427,7 @@ impl<'src> Parser<'src> {
             let mvis = self.parse_visibility();
             methods.push(self.parse_func_decl(mvis)?);
         }
-        let end = self.expect(&TokenKind::End)?;
+        let end = self.expect_block_end(start, "struct")?;
         Some(StructDecl {
             visibility: vis,
             name,
@@ -477,7 +477,7 @@ impl<'src> Parser<'src> {
             }
             variants.push(variant);
         }
-        let end = self.expect(&TokenKind::End)?;
+        let end = self.expect_block_end(start, "enum")?;
         Some(EnumDecl {
             visibility: vis,
             name,
@@ -561,7 +561,7 @@ impl<'src> Parser<'src> {
             ]);
             if has_body && !is_mut {
                 let body = self.parse_block()?;
-                let end = self.expect(&TokenKind::End)?;
+                let end = self.expect_block_end(sig.span, "trait method")?;
                 let decl = FuncDecl {
                     visibility: sig.visibility,
                     is_async: sig.is_async,
@@ -579,7 +579,7 @@ impl<'src> Parser<'src> {
                 members.push(TraitMember::Required(sig));
             }
         }
-        let end = self.expect(&TokenKind::End)?;
+        let end = self.expect_block_end(start, "trait")?;
         Some(TraitDecl {
             visibility: vis,
             name,
@@ -604,7 +604,7 @@ impl<'src> Parser<'src> {
             let mvis = self.parse_visibility();
             methods.push(self.parse_func_decl(mvis)?);
         }
-        let end = self.expect(&TokenKind::End)?;
+        let end = self.expect_block_end(start, "implement")?;
         Some(ImplementDecl {
             type_params,
             trait_name,
@@ -700,7 +700,7 @@ impl<'src> Parser<'src> {
             let mvis = self.parse_visibility();
             members.push(self.parse_extern_member(mvis)?);
         }
-        let end = self.expect(&TokenKind::End)?;
+        let end = self.expect_block_end(start, "extern")?;
         Some(ExternBlock {
             abi,
             members,
