@@ -114,16 +114,11 @@ Source (.orl)
   → Binary
 ```
 
-## Current Status (2026-05-17)
+## Current Status (2026-06-03)
 
 - **Rust:** 1.95.0 (via rustup)
 - **cargo check --workspace:** PASSES cleanly
-- **cargo test --workspace:** 377/379 PASS (99.5%)
-  - ori_spec: 102/102 ✓
-  - multifile_imports: 236/238 (2 pre-existing logic bugs)
-  - concurrency_async: 38/38 ✓
-  - diagnostic_catalog: 1/1 ✓
-- **2 remaining failures:** pre-existing logic bugs in heap/iterable
+- **cargo test --workspace:** PASSES cleanly (100% of tests pass, including advanced structural equality, file handles, and cooperative task cancellation)
 
 ## Known Pitfalls
 
@@ -138,5 +133,3 @@ Source (.orl)
 5. **Ori syntax:** `end`-delimited blocks (not braces). Struct fields and enum variants are newline-separated. Enum variants with named fields use commas inside parens.
 
 6. **Lock file:** Regenerate with Rust 1.95 if build fails: `cargo update` or delete `Cargo.lock` and rebuild.
-
-7. **2 commits on master ahead of origin** — need to push to remote.
