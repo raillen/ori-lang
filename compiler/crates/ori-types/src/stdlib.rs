@@ -51,6 +51,20 @@ fn heap_ty() -> Ty {
     }
 }
 
+fn file_ty() -> Ty {
+    Ty::Opaque {
+        kind: OpaqueTy::File,
+        args: vec![],
+    }
+}
+
+fn cancel_token_ty() -> Ty {
+    Ty::Opaque {
+        kind: OpaqueTy::CancelToken,
+        args: vec![],
+    }
+}
+
 fn list_backed_collection_kind(path: &str, ops: &[&str]) -> Option<OpaqueTy> {
     let candidates = [
         ("ori.deque.", OpaqueTy::Deque),
@@ -407,6 +421,10 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.task.detach", ["task.detach"] => "ori_task_detach"),
     stdlib!("ori.task.block_on", ["task.block_on"] => "ori_task_block_on"),
     stdlib!("ori.task.sleep", ["task.sleep"] => "ori_task_sleep"),
+    stdlib!("ori.task.create_token", ["task.create_token"] => "ori_task_create_token"),
+    stdlib!("ori.task.cancel", ["task.cancel"] => "ori_task_cancel"),
+    stdlib!("ori.task.is_cancelled", ["task.is_cancelled"] => "ori_task_is_cancelled"),
+    stdlib!("ori.task.associate", ["task.associate"] => "ori_task_associate"),
     stdlib!("ori.channel.create", ["channel.create"] => "ori_channel_create"),
     stdlib!("ori.channel.send", ["channel.send"] => "ori_channel_send"),
     stdlib!("ori.channel.receive", ["channel.receive"] => "ori_channel_receive"),
@@ -556,6 +574,26 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
         "ori.fs.rename",
         ["fs.rename", "ori.files.rename", "files.rename"] => "ori_files_rename"
     ),
+    stdlib!(
+        "ori.fs.open_read",
+        ["fs.open_read", "ori.files.open_read", "files.open_read"] => "ori_files_open_read"
+    ),
+    stdlib!(
+        "ori.fs.open_write",
+        ["fs.open_write", "ori.files.open_write", "files.open_write"] => "ori_files_open_write"
+    ),
+    stdlib!(
+        "ori.fs.read",
+        ["fs.read", "ori.files.read", "files.read"] => "ori_files_read"
+    ),
+    stdlib!(
+        "ori.fs.write",
+        ["fs.write", "ori.files.write", "files.write"] => "ori_files_write"
+    ),
+    stdlib!(
+        "ori.fs.close",
+        ["fs.close", "ori.files.close", "files.close"] => "ori_files_close"
+    ),
 ];
 
 pub fn stdlib_runtime_functions() -> &'static [StdlibRuntimeFunction] {
@@ -687,6 +725,13 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.task.detach" => (vec![Ty::TaskJob(Box::new(Ty::Infer(0)))], Ty::Void),
         "ori.task.block_on" => (vec![Ty::Future(Box::new(Ty::Infer(0)))], Ty::Infer(0)),
         "ori.task.sleep" => (vec![Ty::Int], Ty::Future(Box::new(Ty::Void))),
+        "ori.task.create_token" => (vec![], cancel_token_ty()),
+        "ori.task.cancel" => (vec![cancel_token_ty()], Ty::Void),
+        "ori.task.is_cancelled" => (vec![cancel_token_ty()], Ty::Bool),
+        "ori.task.associate" => (
+            vec![cancel_token_ty(), Ty::Future(Box::new(Ty::Infer(0)))],
+            Ty::Void,
+        ),
         "ori.channel.create" => (vec![], Ty::Channel(Box::new(Ty::Infer(0)))),
         "ori.channel.send" => (
             vec![Ty::Channel(Box::new(Ty::Infer(0))), Ty::Infer(0)],
@@ -1326,6 +1371,19 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             ),
         ),
         "ori.fs.copy" | "ori.fs.rename" => (vec![Ty::String, Ty::String], Ty::Bool),
+        "ori.fs.open_read" | "ori.fs.open_write" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(file_ty()), Box::new(Ty::String)),
+        ),
+        "ori.fs.read" => (
+            vec![file_ty(), Ty::Int],
+            Ty::Result(Box::new(Ty::Bytes), Box::new(Ty::String)),
+        ),
+        "ori.fs.write" => (
+            vec![file_ty(), Ty::Bytes],
+            Ty::Result(Box::new(Ty::Int), Box::new(Ty::String)),
+        ),
+        "ori.fs.close" => (vec![file_ty()], Ty::Void),
         _ => return None,
     };
     Some(sig)
@@ -1611,6 +1669,10 @@ pub fn stdlib_native_abi(
         "ori_task_detach" => (vec![Ptr], None),
         "ori_task_block_on" => (vec![Ptr], Some(I64)),
         "ori_task_sleep" => (vec![I64], Some(Ptr)),
+        "ori_task_create_token" => (vec![], Some(Ptr)),
+        "ori_task_cancel" => (vec![Ptr], None),
+        "ori_task_is_cancelled" => (vec![Ptr], Some(I8)),
+        "ori_task_associate" => (vec![Ptr, Ptr], None),
         "ori_channel_create" => (vec![], Some(Ptr)),
         "ori_channel_send" => (vec![Ptr, I64], Some(Ptr)),
         "ori_channel_receive" => (vec![Ptr], Some(Ptr)),
@@ -1633,6 +1695,10 @@ pub fn stdlib_native_abi(
         | "ori_files_is_file"
         | "ori_files_is_dir" => (vec![Ptr], Some(I8)),
         "ori_files_copy" | "ori_files_rename" => (vec![Ptr, Ptr], Some(I8)),
+        "ori_files_open_read" | "ori_files_open_write" => (vec![Ptr], Some(Ptr)),
+        "ori_files_read" => (vec![Ptr, I64], Some(Ptr)),
+        "ori_files_write" => (vec![Ptr, Ptr], Some(Ptr)),
+        "ori_files_close" => (vec![Ptr], None),
         _ => return None,
     };
     Some(sig)

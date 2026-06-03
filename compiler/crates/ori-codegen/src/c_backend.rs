@@ -1,6 +1,6 @@
 use ori_ast::expr::{BinaryOp, UnaryOp};
 use ori_hir::hir::*;
-use ori_types::{DefId, Ty};
+use ori_types::{substitute_ty_params, DefId, Ty};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as FmtWrite;
 
@@ -3375,10 +3375,6 @@ impl CCodegen {
         def_id: DefId,
         args: &[Ty],
     ) -> String {
-        if !args.is_empty() {
-            return self
-                .unsupported_expr("C backend cannot lower generic struct structural equality yet");
-        }
         let Some(fields) = self.struct_fields.get(&def_id).cloned() else {
             return self.unsupported_expr(
                 "C backend cannot lower non-struct user-defined structural equality",
@@ -3390,11 +3386,12 @@ impl CCodegen {
         let ty_c = def_c_name(def_id);
         let mut checks = String::new();
         for (name, ty) in fields {
+            let concrete_field_ty = substitute_ty_params(&ty, args);
             let name = mangle(&name);
             let equal = self.equality_to_c(
                 format!("{left_tmp}.{name}"),
                 format!("{right_tmp}.{name}"),
-                &ty,
+                &concrete_field_ty,
                 true,
             );
             checks.push_str(&format!(" if ({same_tmp}) {{ {same_tmp} = {equal}; }}"));

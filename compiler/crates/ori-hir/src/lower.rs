@@ -3397,6 +3397,18 @@ impl<'a> Lowerer<'a> {
                                     ty,
                                     span: *span,
                                 };
+                            } else {
+                                let inner = HirExpr {
+                                    kind: HirExprKind::Unit,
+                                    ty: Ty::Void,
+                                    span: *span,
+                                };
+                                let ty = Ty::Result(Box::new(Ty::Void), Box::new(Ty::String));
+                                return HirExpr {
+                                    kind: HirExprKind::Ok_(Box::new(inner)),
+                                    ty,
+                                    span: *span,
+                                };
                             }
                         }
                         "error" | "Error" => {

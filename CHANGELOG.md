@@ -11,6 +11,10 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Adicionado
+- **Codegen/Checker:** Suporte completo a igualdade estrutural avançada para structs genéricas nos backends Cranelift nativo e C, realizando a substituição correta de parâmetros genéricos nos campos em tempo de compilação.
+- **Checker:** Habilitação de comparação estrutural para mapas (`map<K,V>`) e conjuntos (`set<T>`) cujos elementos/chaves implementam o trait `core.Equatable` (seja por implementação explícita ou por suporte implícito a igualdade estrutural).
+- **Stdlib:** Novo tipo opaco `task.CancelToken` e funções nativas `task.create_token`, `task.cancel`, `task.is_cancelled` e `task.associate` para cancelamento cooperativo de tarefas assíncronas.
+- **Runtime:** Suporte nativo para cancelamento cooperativo de futures assíncronas e cleanups automáticos associados ao ciclo de vida em `ori-runtime`.
 - **Parser:** Token `...` (Ellipsis) para parâmetros variádicos
 - **Parser:** Validação de `parse.variadic_not_last` e `parse.default_before_required`
 - **Parser:** Validação de `parse.import_after_declaration` para imports após declarações

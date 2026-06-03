@@ -290,11 +290,18 @@ struct OriAsyncSpawnJob {
     future: usize,
 }
 
+#[repr(C)]
+pub struct RuntimeCancelToken {
+    cancelled: std::sync::atomic::AtomicBool,
+    associated_futures: Mutex<Vec<*mut OriFuture>>,
+}
+
 struct OriFutureState {
     status: OriFutureStatus,
     value: i64,
     value_is_managed: bool,
     waiters: VecDeque<usize>,
+    cancel_token: *mut u8,
 }
 
 #[allow(dead_code)]
@@ -468,7 +475,7 @@ unsafe extern "C" fn ori_atomic_int_dtor(ptr: *mut u8) {
 
 unsafe extern "C" fn ori_future_dtor(ptr: *mut u8) {
     let future = ptr as *mut OriFuture;
-    let (waiters, managed_value) = match (*future).state.lock() {
+    let (waiters, managed_value, token) = match (*future).state.lock() {
         Ok(mut guard) => {
             let managed_value = if guard.status == OriFutureStatus::Ready && guard.value_is_managed
             {
@@ -477,8 +484,10 @@ unsafe extern "C" fn ori_future_dtor(ptr: *mut u8) {
                 None
             };
             let waiters = guard.waiters.drain(..).collect::<Vec<_>>();
+            let token = guard.cancel_token;
+            guard.cancel_token = std::ptr::null_mut();
             guard.value_is_managed = false;
-            (waiters, managed_value)
+            (waiters, managed_value, token)
         }
         Err(poisoned) => {
             let mut guard = poisoned.into_inner();
@@ -489,10 +498,15 @@ unsafe extern "C" fn ori_future_dtor(ptr: *mut u8) {
                 None
             };
             let waiters = guard.waiters.drain(..).collect::<Vec<_>>();
+            let token = guard.cancel_token;
+            guard.cancel_token = std::ptr::null_mut();
             guard.value_is_managed = false;
-            (waiters, managed_value)
+            (waiters, managed_value, token)
         }
     };
+    if !token.is_null() {
+        deregister_future_from_token(future, token);
+    }
     for waiter in waiters {
         ori_arc_release(waiter as *mut u8);
     }
@@ -566,6 +580,7 @@ unsafe fn alloc_ready_future(value: i64) -> *mut OriFuture {
             value,
             value_is_managed: false,
             waiters: VecDeque::new(),
+            cancel_token: std::ptr::null_mut(),
         }),
         ready: Condvar::new(),
     })
@@ -579,6 +594,7 @@ unsafe fn alloc_ready_future_ptr(value: *mut u8) -> *mut OriFuture {
             value: value as i64,
             value_is_managed,
             waiters: VecDeque::new(),
+            cancel_token: std::ptr::null_mut(),
         }),
         ready: Condvar::new(),
     })
@@ -591,6 +607,7 @@ unsafe fn alloc_pending_future() -> *mut OriFuture {
             value: 0,
             value_is_managed: false,
             waiters: VecDeque::new(),
+            cancel_token: std::ptr::null_mut(),
         }),
         ready: Condvar::new(),
     })
@@ -657,7 +674,14 @@ unsafe fn set_future_status(
     guard.status = status;
     guard.value = value;
     guard.value_is_managed = status == OriFutureStatus::Ready && value_is_managed;
+    let token = guard.cancel_token;
+    guard.cancel_token = std::ptr::null_mut();
     (*future).ready.notify_all();
+    drop(guard);
+
+    if !token.is_null() {
+        deregister_future_from_token(future, token);
+    }
     waiters
 }
 
@@ -1075,6 +1099,106 @@ pub unsafe extern "C" fn ori_future_fail(future: *mut OriFuture) {
 pub unsafe extern "C" fn ori_future_cancel(future: *mut OriFuture) {
     let waiters = set_future_status(future, OriFutureStatus::Cancelled, 0, false);
     schedule_future_waiters(waiters);
+}
+
+unsafe fn deregister_future_from_token(future: *mut OriFuture, cancel_token: *mut u8) {
+    if cancel_token.is_null() {
+        return;
+    }
+    let token = cancel_token as *mut RuntimeCancelToken;
+    let mut t_guard = match (*token).associated_futures.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    if let Some(pos) = t_guard.iter().position(|&x| x == future) {
+        t_guard.remove(pos);
+        ori_arc_release(future as *mut u8);
+    }
+    drop(t_guard);
+    ori_arc_release(cancel_token);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_task_create_token() -> *mut u8 {
+    let token = ori_alloc(
+        std::mem::size_of::<RuntimeCancelToken>(),
+        Some(ori_task_cancel_token_dtor),
+    ) as *mut RuntimeCancelToken;
+    if !token.is_null() {
+        std::ptr::write(
+            token,
+            RuntimeCancelToken {
+                cancelled: std::sync::atomic::AtomicBool::new(false),
+                associated_futures: Mutex::new(Vec::new()),
+            },
+        );
+    }
+    token as *mut u8
+}
+
+unsafe extern "C" fn ori_task_cancel_token_dtor(ptr: *mut u8) {
+    let token = ptr as *mut RuntimeCancelToken;
+    std::ptr::drop_in_place(token);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_task_cancel(token_ptr: *mut u8) {
+    if token_ptr.is_null() {
+        return;
+    }
+    let token = token_ptr as *mut RuntimeCancelToken;
+    (*token).cancelled.store(true, Ordering::SeqCst);
+    let futures = {
+        let mut guard = match (*token).associated_futures.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        std::mem::take(&mut *guard)
+    };
+    for future in futures {
+        ori_future_cancel(future);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_task_is_cancelled(token_ptr: *mut u8) -> i8 {
+    if token_ptr.is_null() {
+        return 0;
+    }
+    let token = token_ptr as *mut RuntimeCancelToken;
+    if (*token).cancelled.load(Ordering::SeqCst) {
+        1
+    } else {
+        0
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_task_associate(token_ptr: *mut u8, future_ptr: *mut u8) {
+    if token_ptr.is_null() || future_ptr.is_null() {
+        return;
+    }
+    let token = token_ptr as *mut RuntimeCancelToken;
+    let future = future_ptr as *mut OriFuture;
+    if (*token).cancelled.load(Ordering::SeqCst) {
+        ori_future_cancel(future);
+        return;
+    }
+    let mut f_guard = match (*future).state.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    if f_guard.status != OriFutureStatus::Pending || !f_guard.cancel_token.is_null() {
+        return;
+    }
+    f_guard.cancel_token = token_ptr;
+    ori_arc_retain(token_ptr);
+    let mut t_guard = match (*token).associated_futures.lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    t_guard.push(future);
+    ori_arc_retain(future as *mut u8);
 }
 
 #[no_mangle]
@@ -6994,6 +7118,99 @@ pub unsafe extern "C" fn ori_files_copy(src: *const u8, dst: *const u8) -> c_uch
 #[no_mangle]
 pub unsafe extern "C" fn ori_files_rename(src: *const u8, dst: *const u8) -> c_uchar {
     u8::from(std::fs::rename(cstr_str(src), cstr_str(dst)).is_ok()) as c_uchar
+}
+
+struct RuntimeFile {
+    file: Option<std::fs::File>,
+}
+
+unsafe extern "C" fn ori_files_destructor(ptr: *mut u8) {
+    if !ptr.is_null() {
+        std::ptr::drop_in_place(ptr as *mut RuntimeFile);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_open_read(path: *const u8) -> *mut u8 {
+    let path_str = cstr_str(path);
+    match std::fs::File::open(path_str) {
+        Ok(file) => {
+            let layout_size = std::mem::size_of::<RuntimeFile>();
+            let payload = ori_alloc(layout_size, Some(ori_files_destructor)) as *mut RuntimeFile;
+            if payload.is_null() {
+                return std::ptr::null_mut();
+            }
+            std::ptr::write(payload, RuntimeFile { file: Some(file) });
+            new_result(true, payload as *mut u8)
+        }
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_open_write(path: *const u8) -> *mut u8 {
+    let path_str = cstr_str(path);
+    match std::fs::File::create(path_str) {
+        Ok(file) => {
+            let layout_size = std::mem::size_of::<RuntimeFile>();
+            let payload = ori_alloc(layout_size, Some(ori_files_destructor)) as *mut RuntimeFile;
+            if payload.is_null() {
+                return std::ptr::null_mut();
+            }
+            std::ptr::write(payload, RuntimeFile { file: Some(file) });
+            new_result(true, payload as *mut u8)
+        }
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_read(file_ptr: *mut u8, bytes_count: i64) -> *mut u8 {
+    if file_ptr.is_null() {
+        return new_result(false, cstring_from_str("Invalid file handle"));
+    }
+    if bytes_count < 0 {
+        return new_result(false, cstring_from_str("Invalid byte count"));
+    }
+    let runtime_file = &mut *(file_ptr as *mut RuntimeFile);
+    let Some(ref mut file) = runtime_file.file else {
+        return new_result(false, cstring_from_str("File is closed"));
+    };
+    let mut buf = vec![0u8; bytes_count as usize];
+    use std::io::Read;
+    match file.read(&mut buf) {
+        Ok(n) => {
+            buf.truncate(n);
+            new_result(true, cstring_from_bytes(buf))
+        }
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_write(file_ptr: *mut u8, data: *const u8) -> *mut u8 {
+    if file_ptr.is_null() {
+        return new_result(false, cstring_from_str("Invalid file handle"));
+    }
+    let runtime_file = &mut *(file_ptr as *mut RuntimeFile);
+    let Some(ref mut file) = runtime_file.file else {
+        return new_result(false, cstring_from_str("File is closed"));
+    };
+    let bytes = bytes_payload(data);
+    use std::io::Write;
+    match file.write(bytes) {
+        Ok(n) => new_result_i64_ok(n as i64),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_close(file_ptr: *mut u8) {
+    if file_ptr.is_null() {
+        return;
+    }
+    let runtime_file = &mut *(file_ptr as *mut RuntimeFile);
+    runtime_file.file = None;
 }
 
 // ── ori.bytes ─────────────────────────────────────────────────────────────────

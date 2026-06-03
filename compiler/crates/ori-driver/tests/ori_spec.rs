@@ -2753,3 +2753,204 @@ fn check_accepts_enum_with_unique_variants() {
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(!out.has_errors, "{:?}", out.diagnostics);
 }
+
+#[test]
+fn fs_file_handle_native() {
+    let dir = TestDir::new("fs_file_handle_native");
+    let test_file = dir.path("test_file.txt").to_string_lossy().replace('\\', "/");
+    dir.write(
+        "main.orl",
+        &format!(
+            r#"namespace app.main
+
+import ori.fs as fs
+import ori.io as io
+import ori.bytes as bytes_mod
+
+func write_helper(path: string) -> result<void, string>
+    using file: fs.File = fs.open_write(path)?
+    const n: int = fs.write(file, b"hello using file")?
+    io.println(f"written: {{n}}")
+    return success()
+end
+
+func read_helper(path: string) -> result<string, string>
+    using file: fs.File = fs.open_read(path)?
+    const data: bytes = fs.read(file, 20)?
+    const s: string = bytes_mod.decode_utf8(data)?
+    return success(s)
+end
+
+func main()
+    const path: string = "{test_file}"
+    match write_helper(path)
+        case success(_):
+            match read_helper(path)
+                case success(s):
+                    io.println(s)
+                case error(err):
+                    io.println(f"read error: {{err}}")
+            end
+        case error(err):
+            io.println(f"write error: {{err}}")
+    end
+end
+"#
+        ),
+    );
+
+    let exe = exe_path(&dir, "fs_file_handle_native");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let lines = stdout.lines().collect::<Vec<_>>();
+    assert_eq!(lines, ["written: 16", "hello using file"]);
+}
+
+#[test]
+fn task_cancellation_native() {
+    let dir = TestDir::new("task_cancellation_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.task as task
+import ori.io as io
+
+async func worker(token: task.CancelToken)
+    io.println("worker started")
+    const fut: future<void> = task.sleep(5000)
+    task.associate(token, fut)
+    await fut
+    io.println("worker finished")
+end
+
+func main()
+    const token: task.CancelToken = task.create_token()
+    const job: task.Job<void> = task.spawn(do() -> void
+        task.block_on(worker(token))
+    end)
+
+    task.block_on(task.sleep(50))
+    io.println("cancelling worker")
+    task.cancel(token)
+
+    match task.join(job)
+        case success(_):
+            io.println("job joined successfully")
+        case error(_):
+            io.println("join error")
+    end
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "task_cancellation_native");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let lines = stdout.lines().collect::<Vec<_>>();
+    assert_eq!(lines, ["worker started", "cancelling worker", "job joined successfully"]);
+}
+
+#[test]
+fn compile_runs_structural_equality_advanced_native() {
+    let dir = TestDir::new("structural_equality_advanced_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.map as maps
+import ori.core as core
+
+struct Pair<A, B>
+    first: A
+    second: B
+end
+
+func check_generic_eq<T>(left: T, right: T) -> bool where T is core.Equatable
+    return left == right
+end
+
+func main()
+    const p1: Pair<string, int> = .{ first: "hello", second: 42 }
+    const p2: Pair<string, int> = .{ first: "hello", second: 42 }
+    const p3: Pair<string, int> = .{ first: "world", second: 42 }
+    const p4: Pair<string, int> = .{ first: "hello", second: 43 }
+
+    io.println(string(p1 == p2))
+    io.println(string(p1 != p3))
+    io.println(string(p1 != p4))
+
+    const map1: map<string, Pair<string, int>> = maps.new()
+    const item1: Pair<string, int> = .{ first: "hello", second: 1 }
+    const item2: Pair<string, int> = .{ first: "world", second: 2 }
+    maps.set(map1, "key1", item1)
+    maps.set(map1, "key2", item2)
+
+    const map2: map<string, Pair<string, int>> = maps.new()
+    maps.set(map2, "key2", item2)
+    maps.set(map2, "key1", item1)
+
+    const map3: map<string, Pair<string, int>> = maps.new()
+    const item3: Pair<string, int> = .{ first: "world", second: 3 }
+    maps.set(map3, "key1", item1)
+    maps.set(map3, "key2", item3)
+
+    io.println(string(map1 == map2))
+    io.println(string(map1 != map3))
+
+    io.println(string(check_generic_eq(p1, p2)))
+    io.println(string(check_generic_eq(p1, p3)))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "structural_equality_advanced_native");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let lines = stdout.lines().collect::<Vec<_>>();
+    assert_eq!(lines, ["true", "true", "true", "true", "true", "true", "false"]);
+}
+
+#[test]
+fn build_c_backend_structural_equality_advanced() {
+    let dir = TestDir::new("c_backend_structural_equality_advanced");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.core as core
+
+struct Pair<A, B>
+    first: A
+    second: B
+end
+
+func main()
+    const p1: Pair<string, int> = .{ first: "hello", second: 42 }
+    const p2: Pair<string, int> = .{ first: "hello", second: 42 }
+    const is_equal: bool = p1 == p2
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        out.c_source.contains("ori_string_eq"),
+        "{}",
+        out.c_source
+    );
+}

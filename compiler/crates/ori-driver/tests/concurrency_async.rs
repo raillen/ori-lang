@@ -1269,8 +1269,8 @@ end
 }
 
 #[test]
-fn native_backend_rejects_async_await_shape_outside_state_machine_subset() {
-    let dir = TestDir::new("native_async_unsupported_nested_await");
+fn native_backend_accepts_async_await_shape_nested_await() {
+    let dir = TestDir::new("native_async_nested_await");
     dir.write(
         "main.orl",
         r#"namespace app.main
@@ -1290,16 +1290,14 @@ end
 "#,
     );
 
-    let exe = exe_path(&dir, "native_async_unsupported_nested_await");
-    let text = match run_compile(&dir.path("main.orl"), Path::new(&exe)) {
-        Ok(_) => panic!("unsupported async shape should fail native codegen"),
-        Err(err) => err,
-    };
-    assert!(text.contains("backend.native_unsupported"), "{text}");
-    assert!(
-        text.contains("not yet covered by the native state machine"),
-        "{text}"
-    );
+    let exe = exe_path(&dir, "native_async_nested_await");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), "1");
 }
 
 #[test]
@@ -1362,3 +1360,179 @@ end
         "{text}"
     );
 }
+
+#[test]
+fn compile_runs_async_await_in_loop_and_branch_native() {
+    let dir = TestDir::new("compile_async_await_in_loop_and_branch_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.task as task
+
+async func compute(x: int) -> int
+    await task.sleep(1)
+    return x + 10
+end
+
+async func test_branching_await(flag: bool) -> int
+    if flag
+        const a: int = await compute(5)
+        return a
+    else
+        const b: int = await compute(15)
+        return b
+    end
+end
+
+async func test_loop_await() -> int
+    var sum: int = 0
+    var i: int = 0
+    while i < 3
+        const val: int = await compute(i)
+        sum = sum + val
+        i = i + 1
+    end
+    return sum
+end
+
+func main()
+    const r1: int = task.block_on(test_branching_await(true))
+    const r2: int = task.block_on(test_branching_await(false))
+    const r3: int = task.block_on(test_loop_await())
+    io.print(string(r1) + " " + string(r2) + " " + string(r3))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "async_await_loop_branch");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), "15 25 33"); // 5+10=15, 15+10=25, sum over i=0,1,2 of (i+10) = 10+11+12 = 33
+}
+
+#[test]
+fn compile_runs_async_await_with_managed_variables_in_branch_native() {
+    let dir = TestDir::new("compile_async_await_managed_in_branch_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.task as task
+
+async func get_prefix(flag: bool) -> string
+    await task.sleep(1)
+    if flag
+        return "yes"
+    else
+        return "no"
+    end
+end
+
+async func format_msg(flag: bool) -> string
+    const prefix: string = await get_prefix(flag)
+    if flag
+        const msg: string = prefix + "-ok"
+        await task.sleep(1)
+        return msg
+    else
+        const msg2: string = prefix + "-fail"
+        await task.sleep(1)
+        return msg2
+    end
+end
+
+func main()
+    const r1: string = task.block_on(format_msg(true))
+    const r2: string = task.block_on(format_msg(false))
+    io.print(r1 + " " + r2)
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "async_await_managed_branch");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    println!("STATUS: {:?}", output.status);
+    println!("STDOUT: {}", String::from_utf8_lossy(&output.stdout));
+    println!("STDERR: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), "yes-ok no-fail");
+}
+
+#[test]
+fn compile_runs_async_using_dispose_native() {
+    let dir = TestDir::new("compile_async_using_dispose_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.task as task
+
+trait Disposable
+    mut func dispose(self)
+end
+
+var dispose_count: int = 0
+
+struct Resource
+    id: int
+end
+
+implement Disposable for Resource
+    mut func dispose(self)
+        dispose_count = dispose_count + self.id
+    end
+end
+
+async func get_resource(id: int) -> Resource
+    await task.sleep(1)
+    return Resource(id: id)
+end
+
+async func test_using()
+    using r1: Resource = await get_resource(10)
+    await task.sleep(1)
+    if true
+        using r2: Resource = await get_resource(20)
+        await task.sleep(1)
+    end
+end
+
+async func test_using_early_return(flag: bool)
+    using r1: Resource = await get_resource(100)
+    if flag
+        using r2: Resource = await get_resource(200)
+        return
+    end
+    using r3: Resource = await get_resource(400)
+end
+
+func main()
+    task.block_on(test_using())
+    task.block_on(test_using_early_return(true))
+    io.print("disposed: " + string(dispose_count))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "async_using_dispose");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), "disposed: 330");
+}
+

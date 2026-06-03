@@ -53,6 +53,11 @@ impl<'a> Checker<'a> {
     }
 
     fn type_satisfies_trait(&self, ty: &Ty, trait_def_id: DefId) -> bool {
+        if let Some(equatable_def_id) = self.def_map.lookup("ori.core.Equatable") {
+            if trait_def_id == equatable_def_id && self.supports_generic_equality(ty) {
+                return true;
+            }
+        }
         match ty {
             Ty::Named(type_def_id, _) => {
                 self.named_type_implements_trait(*type_def_id, trait_def_id)

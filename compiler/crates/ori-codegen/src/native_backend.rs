@@ -13,7 +13,7 @@ use ori_diagnostics::Span;
 use ori_hir::hir::*;
 use ori_types::{
     stdlib::{stdlib_func_sig, stdlib_native_abi, stdlib_runtime_functions, StdlibNativeAbiTy},
-    OpaqueTy, Ty,
+    OpaqueTy, Ty, substitute_ty_params,
 };
 
 #[cfg(test)]
@@ -960,6 +960,7 @@ struct SimpleAsyncStateMachinePlan {
     return_expr: Option<HirExpr>,
     tail_expr: Option<HirExpr>,
     inner_ty: Ty,
+    is_general: bool,
 }
 
 const ASYNC_FRAME_STATE_OFFSET: i32 = 0;
@@ -2152,6 +2153,372 @@ fn simple_async_state_machine_plan(f: &HirFunc) -> Option<SimpleAsyncStateMachin
         return_expr,
         tail_expr,
         inner_ty,
+        is_general: false,
+    })
+}
+
+fn collect_pattern_bindings(pat: &HirPattern, bindings: &mut Vec<(SmolStr, Ty)>) {
+    match pat {
+        HirPattern::Binding(name, ty) => {
+            bindings.push((name.clone(), ty.clone()));
+        }
+        HirPattern::Some_(p) | HirPattern::Ok_(p) | HirPattern::Err_(p) => {
+            collect_pattern_bindings(p, bindings);
+        }
+        HirPattern::Variant { fields, .. } => {
+            for (_, p) in fields {
+                collect_pattern_bindings(p, bindings);
+            }
+        }
+        HirPattern::Tuple(patterns) => {
+            for p in patterns {
+                collect_pattern_bindings(p, bindings);
+            }
+        }
+        _ => {}
+    }
+}
+
+struct GeneralAsyncCollector {
+    locals: Vec<SimpleAsyncLocal>,
+    awaits: Vec<SimpleAsyncAwaitStep>,
+}
+
+impl GeneralAsyncCollector {
+    fn collect_stmt(&mut self, stmt: &HirStmt, loop_counter: &mut usize) {
+        match stmt {
+            HirStmt::Let { name, ty, value, .. } | HirStmt::Using { name, ty, value, .. } => {
+                self.locals.push(SimpleAsyncLocal {
+                    name: name.clone(),
+                    ty: ty.clone(),
+                    value: value.clone(),
+                });
+                self.collect_expr(value);
+            }
+            HirStmt::Assign { lvalue, value, .. } => {
+                self.collect_lvalue(lvalue);
+                self.collect_expr(value);
+            }
+            HirStmt::Return(expr, _) => {
+                if let Some(e) = expr {
+                    self.collect_expr(e);
+                }
+            }
+            HirStmt::Expr(expr) => {
+                self.collect_expr(expr);
+            }
+            HirStmt::If { cond, then, else_ifs, else_, .. } => {
+                self.collect_expr(cond);
+                self.collect_block(then, loop_counter);
+                for (e_cond, e_block) in else_ifs {
+                    self.collect_expr(e_cond);
+                    self.collect_block(e_block, loop_counter);
+                }
+                if let Some(e_block) = else_ {
+                    self.collect_block(e_block, loop_counter);
+                }
+            }
+            HirStmt::While { cond, body, .. } => {
+                self.collect_expr(cond);
+                self.collect_block(body, loop_counter);
+            }
+            HirStmt::For { iterable, body, index_binding, elem_ty, binding, span } => {
+                let has_await = stmt_contains_await(stmt);
+                if has_await {
+                    let loop_id = *loop_counter;
+                    *loop_counter += 1;
+                    let dummy = HirExpr {
+                        kind: HirExprKind::Unit,
+                        ty: Ty::Void,
+                        span: *span,
+                    };
+                    self.locals.push(SimpleAsyncLocal {
+                        name: binding.clone(),
+                        ty: elem_ty.clone(),
+                        value: dummy.clone(),
+                    });
+                    if let Some(ib) = index_binding {
+                        self.locals.push(SimpleAsyncLocal {
+                            name: ib.clone(),
+                            ty: Ty::Int,
+                            value: dummy.clone(),
+                        });
+                    }
+                    match &iterable.ty {
+                        Ty::Range(..) => {
+                            self.locals.push(SimpleAsyncLocal {
+                                name: SmolStr::new(format!(".__loop_idx_{}", loop_id)),
+                                ty: Ty::Int,
+                                value: dummy.clone(),
+                            });
+                            self.locals.push(SimpleAsyncLocal {
+                                name: SmolStr::new(format!(".__loop_end_{}", loop_id)),
+                                ty: Ty::Int,
+                                value: dummy.clone(),
+                            });
+                            self.locals.push(SimpleAsyncLocal {
+                                name: SmolStr::new(format!(".__loop_asc_{}", loop_id)),
+                                ty: Ty::Bool,
+                                value: dummy.clone(),
+                            });
+                            if index_binding.is_some() {
+                                self.locals.push(SimpleAsyncLocal {
+                                    name: SmolStr::new(format!(".__loop_iter_{}", loop_id)),
+                                    ty: Ty::Int,
+                                    value: dummy,
+                                });
+                            }
+                        }
+                        _ => {
+                            self.locals.push(SimpleAsyncLocal {
+                                name: SmolStr::new(format!(".__loop_idx_{}", loop_id)),
+                                ty: Ty::Int,
+                                value: dummy.clone(),
+                            });
+                            self.locals.push(SimpleAsyncLocal {
+                                name: SmolStr::new(format!(".__loop_len_{}", loop_id)),
+                                ty: Ty::Int,
+                                value: dummy.clone(),
+                            });
+                            self.locals.push(SimpleAsyncLocal {
+                                name: SmolStr::new(format!(".__loop_list_{}", loop_id)),
+                                ty: iterable.ty.clone(),
+                                value: dummy,
+                            });
+                        }
+                    }
+                }
+                self.collect_expr(iterable);
+                self.collect_block(body, loop_counter);
+            }
+            HirStmt::Loop { body, .. } => {
+                self.collect_block(body, loop_counter);
+            }
+            HirStmt::Repeat { count, body, span } => {
+                let has_await = stmt_contains_await(stmt);
+                if has_await {
+                    let loop_id = *loop_counter;
+                    *loop_counter += 1;
+                    let dummy = HirExpr {
+                        kind: HirExprKind::Unit,
+                        ty: Ty::Void,
+                        span: *span,
+                    };
+                    self.locals.push(SimpleAsyncLocal {
+                        name: SmolStr::new(format!(".__loop_idx_{}", loop_id)),
+                        ty: Ty::Int,
+                        value: dummy.clone(),
+                    });
+                    self.locals.push(SimpleAsyncLocal {
+                        name: SmolStr::new(format!(".__loop_limit_{}", loop_id)),
+                        ty: Ty::Int,
+                        value: dummy,
+                    });
+                }
+                self.collect_expr(count);
+                self.collect_block(body, loop_counter);
+            }
+            HirStmt::Match { scrutinee, arms, .. } => {
+                self.collect_expr(scrutinee);
+                let has_await = stmt_contains_await(stmt);
+                for arm in arms {
+                    if has_await {
+                        let mut bindings = Vec::new();
+                        collect_pattern_bindings(&arm.pattern, &mut bindings);
+                        let dummy = HirExpr {
+                            kind: HirExprKind::Unit,
+                            ty: Ty::Void,
+                            span: arm.span,
+                        };
+                        for (name, ty) in bindings {
+                            self.locals.push(SimpleAsyncLocal {
+                                name,
+                                ty,
+                                value: dummy.clone(),
+                            });
+                        }
+                    }
+                    for arm_stmt in &arm.body {
+                        self.collect_stmt(arm_stmt, loop_counter);
+                    }
+                }
+            }
+            HirStmt::IfSome { binding, inner_ty, value, then, else_, span } => {
+                let has_await = stmt_contains_await(stmt);
+                if has_await {
+                    let dummy = HirExpr {
+                        kind: HirExprKind::Unit,
+                        ty: Ty::Void,
+                        span: *span,
+                    };
+                    self.locals.push(SimpleAsyncLocal {
+                        name: binding.clone(),
+                        ty: inner_ty.clone(),
+                        value: dummy,
+                    });
+                }
+                self.collect_expr(value);
+                self.collect_block(then, loop_counter);
+                if let Some(e_block) = else_ {
+                    self.collect_block(e_block, loop_counter);
+                }
+            }
+            HirStmt::WhileSome { binding, inner_ty, value, body, span } => {
+                let has_await = stmt_contains_await(stmt);
+                if has_await {
+                    let dummy = HirExpr {
+                        kind: HirExprKind::Unit,
+                        ty: Ty::Void,
+                        span: *span,
+                    };
+                    self.locals.push(SimpleAsyncLocal {
+                        name: binding.clone(),
+                        ty: inner_ty.clone(),
+                        value: dummy,
+                    });
+                }
+                self.collect_expr(value);
+                self.collect_block(body, loop_counter);
+            }
+            HirStmt::Check { condition, .. } => {
+                self.collect_expr(condition);
+            }
+            HirStmt::Break(_) | HirStmt::Continue(_) => {}
+        }
+    }
+
+    fn collect_block(&mut self, block: &HirBlock, loop_counter: &mut usize) {
+        for stmt in &block.stmts {
+            self.collect_stmt(stmt, loop_counter);
+        }
+    }
+
+    fn collect_lvalue(&mut self, lvalue: &HirLValue) {
+        match lvalue {
+            HirLValue::Var(_) => {}
+            HirLValue::Field { base, .. } => {
+                self.collect_lvalue(base);
+            }
+            HirLValue::Index { base, index } => {
+                self.collect_lvalue(base);
+                self.collect_expr(index);
+            }
+        }
+    }
+
+    fn collect_expr(&mut self, expr: &HirExpr) {
+        match &expr.kind {
+            HirExprKind::Await(inner) => {
+                self.collect_expr(inner);
+                self.awaits.push(SimpleAsyncAwaitStep {
+                    await_future: inner.as_ref().clone(),
+                    binding: None,
+                    propagate_result_ty: None,
+                });
+            }
+            HirExprKind::Unary { operand, .. } => {
+                self.collect_expr(operand);
+            }
+            HirExprKind::Binary { lhs, rhs, .. } => {
+                self.collect_expr(lhs);
+                self.collect_expr(rhs);
+            }
+            HirExprKind::Call { callee, args } => {
+                self.collect_expr(callee);
+                for arg in args {
+                    self.collect_expr(&arg.value);
+                }
+            }
+            HirExprKind::MethodCall { receiver, args, .. } => {
+                self.collect_expr(receiver);
+                for arg in args {
+                    self.collect_expr(arg);
+                }
+            }
+            HirExprKind::Field { object, .. } | HirExprKind::TupleIndex { object, .. } => {
+                self.collect_expr(object);
+            }
+            HirExprKind::Index { object, index } => {
+                self.collect_expr(object);
+                self.collect_expr(index);
+            }
+            HirExprKind::ListLit { elements, .. }
+            | HirExprKind::TupleLit(elements)
+            | HirExprKind::SetLit { elements, .. } => {
+                for elem in elements {
+                    self.collect_expr(elem);
+                }
+            }
+            HirExprKind::ListSpreadLit { elements, .. } => {
+                for elem in elements {
+                    self.collect_expr(&elem.value);
+                }
+            }
+            HirExprKind::MapLit { entries, .. } => {
+                for (key, value) in entries {
+                    self.collect_expr(key);
+                    self.collect_expr(value);
+                }
+            }
+            HirExprKind::StructLit { fields, .. } | HirExprKind::EnumVariant { fields, .. } => {
+                for (_, value) in fields {
+                    self.collect_expr(value);
+                }
+            }
+            HirExprKind::Some_(inner) | HirExprKind::Ok_(inner) | HirExprKind::Err_(inner) | HirExprKind::Propagate(inner) => {
+                self.collect_expr(inner);
+            }
+            HirExprKind::IfExpr { cond, then, else_ } => {
+                self.collect_expr(cond);
+                self.collect_expr(then);
+                self.collect_expr(else_);
+            }
+            HirExprKind::Range { start, end } => {
+                self.collect_expr(start);
+                self.collect_expr(end);
+            }
+            HirExprKind::StructUpdate { base, updates, .. } => {
+                self.collect_expr(base);
+                for (_, value) in updates {
+                    self.collect_expr(value);
+                }
+            }
+            HirExprKind::IsCheck { value, .. } => {
+                self.collect_expr(value);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn collect_general_async_plan(f: &HirFunc) -> Option<SimpleAsyncStateMachinePlan> {
+    let mut params = Vec::with_capacity(f.params.len());
+    for param in &f.params {
+        cl_type(&param.ty, types::I64)?;
+        params.push(SimpleAsyncParam {
+            name: param.name.clone(),
+            ty: param.ty.clone(),
+        });
+    }
+    let inner_ty = async_inner_return_ty(f)?;
+    let mut collector = GeneralAsyncCollector {
+        locals: Vec::new(),
+        awaits: Vec::new(),
+    };
+    let mut loop_counter = 0;
+    collector.collect_block(&f.body, &mut loop_counter);
+    if collector.awaits.is_empty() {
+        return None;
+    }
+    Some(SimpleAsyncStateMachinePlan {
+        params,
+        locals: collector.locals,
+        awaits: collector.awaits,
+        tail_stmts: Vec::new(),
+        return_expr: None,
+        tail_expr: None,
+        inner_ty,
+        is_general: true,
     })
 }
 
@@ -3496,7 +3863,8 @@ impl NativeBackend {
             self.func_ids.insert(f.name.clone(), id);
         }
         for f in &hir.funcs {
-            if f.is_async && simple_async_state_machine_plan(f).is_some() {
+            let has_plan = f.is_async && (simple_async_state_machine_plan(f).is_some() || collect_general_async_plan(f).is_some());
+            if has_plan {
                 let step_name = async_step_name(f);
                 let sig = self.make_async_step_sig();
                 let id = self
@@ -3602,6 +3970,12 @@ impl NativeBackend {
                     managed_stack: Vec::new(),
                     current_return_ty: f.return_ty.clone(),
                     terminated: false,
+                    async_frame: None,
+                    async_plan: None,
+                    async_await_index: 0,
+                    async_loop_index: 0,
+                    async_poll_blocks: Vec::new(),
+                    func_name: f.name.clone(),
                 }
                 .emit_user_func(f)?;
             }
@@ -3615,7 +3989,9 @@ impl NativeBackend {
         }
 
         for f in &hir.funcs {
-            let Some(plan) = simple_async_state_machine_plan(f) else {
+            let plan_opt = simple_async_state_machine_plan(f)
+                .or_else(|| collect_general_async_plan(f));
+            let Some(plan) = plan_opt else {
                 continue;
             };
             self.define_simple_async_step(f, &plan, &const_exprs)?;
@@ -3766,7 +4142,7 @@ impl NativeBackend {
         let mut bctx = FunctionBuilderContext::new();
         {
             let builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
-            FuncCodegen {
+            let mut codegen = FuncCodegen {
                 builder,
                 func_refs: &func_refs,
                 string_gvs: &string_gvs,
@@ -3786,8 +4162,21 @@ impl NativeBackend {
                 managed_stack: Vec::new(),
                 current_return_ty: plan.inner_ty.clone(),
                 terminated: false,
+                async_frame: None,
+                async_plan: None,
+                async_await_index: 0,
+                async_loop_index: 0,
+                async_poll_blocks: Vec::new(),
+                func_name: f.name.clone(),
+            };
+            if plan.is_general {
+                codegen.emit_general_async_step(f, plan)?;
+            } else {
+                codegen.emit_simple_async_step(f, plan)?;
             }
-            .emit_simple_async_step(f, plan)?;
+        }
+        if std::env::var("ORI_DUMP_CLIF").is_ok() {
+            eprintln!("--- CLIF for async step `{}` ---\n{}", step_name, ctx.func.display());
         }
         self.module
             .define_function(func_id, &mut ctx)
@@ -3854,6 +4243,12 @@ impl NativeBackend {
                 managed_stack: Vec::new(),
                 current_return_ty: Ty::Void,
                 terminated: false,
+                async_frame: None,
+                async_plan: None,
+                async_await_index: 0,
+                async_loop_index: 0,
+                async_poll_blocks: Vec::new(),
+                func_name: SmolStr::new(""),
             };
             let block = codegen.builder.create_block();
             codegen.builder.switch_to_block(block);
@@ -3907,9 +4302,35 @@ struct FuncCodegen<'a> {
     managed_stack: Vec<ManagedCleanup>,
     current_return_ty: Ty,
     terminated: bool,
+    async_frame: Option<ir::Value>,
+    async_plan: Option<&'a SimpleAsyncStateMachinePlan>,
+    async_await_index: usize,
+    async_loop_index: usize,
+    async_poll_blocks: Vec<ir::Block>,
+    func_name: SmolStr,
 }
 
 impl<'a> FuncCodegen<'a> {
+    fn store_async_local_if_any(&mut self, name: &str, val: ir::Value) -> Result<(), String> {
+        if let Some(frame) = self.async_frame {
+            let plan = self.async_plan.expect("must have async plan if frame is set");
+            if let Some(local_index) = plan.locals.iter().position(|l| l.name == name) {
+                let offset = simple_async_frame_local_offset(plan, local_index, self.ptr_ty)
+                    .expect("async frame local offset");
+                self.builder.ins().store(MemFlags::new(), val, frame, offset as i32);
+            } else if let Some(await_index) = plan.awaits.iter().position(|a| a.binding.as_ref().is_some_and(|b| b.name == name)) {
+                let offset = simple_async_frame_binding_offset(plan, await_index, self.ptr_ty)
+                    .expect("async frame binding offset");
+                self.builder.ins().store(MemFlags::new(), val, frame, offset as i32);
+            } else if let Some(param_index) = plan.params.iter().position(|p| p.name == name) {
+                let offset = simple_async_frame_param_offset(plan, param_index, self.ptr_ty)
+                    .expect("async frame param offset");
+                self.builder.ins().store(MemFlags::new(), val, frame, offset as i32);
+            }
+        }
+        Ok(())
+    }
+
     fn emit_user_func(self, f: &HirFunc) -> Result<(), String> {
         if f.is_async {
             self.emit_async_wrapper(f)
@@ -3920,6 +4341,9 @@ impl<'a> FuncCodegen<'a> {
 
     fn emit_async_wrapper(self, f: &HirFunc) -> Result<(), String> {
         if let Some(plan) = simple_async_state_machine_plan(f) {
+            return self.emit_simple_async_state_machine_wrapper(f, &plan);
+        }
+        if let Some(plan) = collect_general_async_plan(f) {
             return self.emit_simple_async_state_machine_wrapper(f, &plan);
         }
         if !block_contains_await(&f.body) {
@@ -5069,6 +5493,10 @@ impl<'a> FuncCodegen<'a> {
                     .get(def_id)
                     .map(|name| SmolStr::new(format!("{name}.dispose")))
             }
+            Ty::Opaque {
+                kind: OpaqueTy::File,
+                ..
+            } => Some(SmolStr::new("ori_files_close")),
             _ => None,
         }
     }
@@ -5212,6 +5640,37 @@ impl<'a> FuncCodegen<'a> {
     }
 
     fn emit_return(&mut self, val: Option<&HirExpr>) -> Result<(), String> {
+        if let Some(frame) = self.async_frame {
+            let plan = self.async_plan.expect("must have async plan if frame is set");
+            let inner_ty = plan.inner_ty.clone();
+            let value = match val {
+                Some(expr) if inner_ty == Ty::Void => {
+                    self.emit_expr(expr)?;
+                    None
+                }
+                Some(expr) => Some(self.emit_expr_for_expected(expr, &inner_ty)?),
+                None => None,
+            };
+            let result_future = self.builder.ins().load(
+                self.ptr_ty,
+                MemFlags::new(),
+                frame,
+                ASYNC_FRAME_RESULT_OFFSET,
+            );
+            if let Some(v) = value {
+                self.emit_arc_retain_if_managed(&inner_ty, v)?;
+                self.emit_future_complete(result_future, &inner_ty, Some(v))?;
+                self.emit_arc_release_if_managed(&inner_ty, v)?;
+            } else {
+                self.emit_future_complete(result_future, &inner_ty, None)?;
+            }
+            self.emit_scope_cleanup_calls_from(0, 0)?;
+            self.emit_simple_async_frame_cleanup(plan, frame, plan.awaits.len(), true)?;
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.ins().return_(&[zero]);
+            self.terminated = true;
+            return Ok(());
+        }
         let return_ty = self.current_return_ty.clone();
         if let Ty::Future(inner) = return_ty {
             let inner_ty = inner.as_ref().clone();
@@ -5912,10 +6371,324 @@ impl<'a> FuncCodegen<'a> {
         Ok(())
     }
 
-    fn emit_await(&mut self, _future: &HirExpr, _result_ty: &Ty) -> Result<ir::Value, String> {
-        Err(native_codegen_unsupported(
-            "`await` must be lowered by the native async state machine; use `task.block_on(...)` only as an explicit synchronous bridge outside async lowering",
-        ))
+    fn emit_await(&mut self, future_expr: &HirExpr, result_ty: &Ty) -> Result<ir::Value, String> {
+        let frame = self.async_frame.ok_or_else(|| {
+            "`await` can only be used inside async functions".to_string()
+        })?;
+        let plan = self.async_plan.expect("must have async plan if frame is set");
+
+        let index = self.async_await_index;
+        self.async_await_index += 1;
+
+        let awaited_offset = simple_async_frame_awaited_offset(index, self.ptr_ty);
+        let awaited = self.emit_expr(future_expr)?;
+        
+        self.builder
+            .ins()
+            .store(MemFlags::new(), awaited, frame, awaited_offset);
+        self.emit_arc_register_edge(frame, awaited)?;
+        self.emit_arc_release_if_managed(&future_expr.ty, awaited)?;
+
+        let poll_block = self.async_poll_blocks[index];
+        self.builder.ins().jump(poll_block, &[]);
+
+        // Switch to poll block
+        self.builder.switch_to_block(poll_block);
+        
+        let awaited = self
+            .builder
+            .ins()
+            .load(self.ptr_ty, MemFlags::new(), frame, awaited_offset);
+            
+        let poll_ref = *self
+            .func_refs
+            .get("ori_future_poll")
+            .ok_or_else(|| "missing runtime function `ori_future_poll`".to_string())?;
+        let poll_call = self.builder.ins().call(poll_ref, &[awaited]);
+        let status = self.builder.inst_results(poll_call)[0];
+        
+        let ready_block = self.builder.create_block();
+        let status_block = self.builder.create_block();
+        
+        let ready = self
+            .builder
+            .ins()
+            .icmp_imm(ir::condcodes::IntCC::Equal, status, 1);
+        self.builder
+            .ins()
+            .brif(ready, ready_block, &[], status_block, &[]);
+
+        // Status block: check pending vs non-pending (failed/cancelled)
+        self.builder.switch_to_block(status_block);
+        self.builder.seal_block(status_block);
+        
+        let pending_block = self.builder.create_block();
+        let non_pending_status_block = self.builder.create_block();
+        
+        let pending = self
+            .builder
+            .ins()
+            .icmp_imm(ir::condcodes::IntCC::Equal, status, 0);
+        self.builder.ins().brif(
+            pending,
+            pending_block,
+            &[],
+            non_pending_status_block,
+            &[],
+        );
+
+        // Pending path: register continuation and return 0
+        self.builder.switch_to_block(pending_block);
+        self.builder.seal_block(pending_block);
+        
+        let next_state = self.builder.ins().iconst(types::I64, (index + 1) as i64);
+        self.builder
+            .ins()
+            .store(MemFlags::new(), next_state, frame, ASYNC_FRAME_STATE_OFFSET);
+            
+        let step_name = SmolStr::new(format!("{}.__async_step", self.func_name));
+        let step_ref = *self
+            .func_refs
+            .get(step_name.as_str())
+            .ok_or_else(|| format!("missing async step function `{step_name}`"))?;
+        let continuation = self.emit_closure_object(step_ref, Some(frame))?;
+        
+        let on_ready_ref = *self
+            .func_refs
+            .get("ori_future_on_ready")
+            .ok_or_else(|| "missing runtime function `ori_future_on_ready`".to_string())?;
+        self.builder
+            .ins()
+            .call(on_ready_ref, &[awaited, continuation]);
+            
+        let zero = self.builder.ins().iconst(types::I64, 0);
+        self.builder.ins().return_(&[zero]);
+        self.terminated = true;
+
+        // Non-pending status path
+        self.builder.switch_to_block(non_pending_status_block);
+        self.builder.seal_block(non_pending_status_block);
+        
+        let failed_block = self.builder.create_block();
+        let cancelled_block = self.builder.create_block();
+        
+        let failed = self
+            .builder
+            .ins()
+            .icmp_imm(ir::condcodes::IntCC::Equal, status, 2);
+        self.builder.ins().brif(
+            failed,
+            failed_block,
+            &[],
+            cancelled_block,
+            &[],
+        );
+
+        // Failed path
+        self.builder.switch_to_block(failed_block);
+        self.builder.seal_block(failed_block);
+        let result_future = self.builder.ins().load(
+            self.ptr_ty,
+            MemFlags::new(),
+            frame,
+            ASYNC_FRAME_RESULT_OFFSET,
+        );
+        let fail_ref = *self
+            .func_refs
+            .get("ori_future_fail")
+            .ok_or_else(|| "missing runtime function `ori_future_fail`".to_string())?;
+        self.emit_arc_unregister_edge(frame, awaited)?;
+        self.builder.ins().call(fail_ref, &[result_future]);
+        self.emit_scope_cleanup_calls_from(0, 0)?;
+        self.emit_simple_async_frame_cleanup(plan, frame, plan.awaits.len(), true)?;
+        let zero = self.builder.ins().iconst(types::I64, 0);
+        self.builder.ins().return_(&[zero]);
+        self.terminated = true;
+
+        // Cancelled path
+        self.builder.switch_to_block(cancelled_block);
+        self.builder.seal_block(cancelled_block);
+        let result_future = self.builder.ins().load(
+            self.ptr_ty,
+            MemFlags::new(),
+            frame,
+            ASYNC_FRAME_RESULT_OFFSET,
+        );
+        let cancel_ref = *self
+            .func_refs
+            .get("ori_future_cancel")
+            .ok_or_else(|| "missing runtime function `ori_future_cancel`".to_string())?;
+        self.emit_arc_unregister_edge(frame, awaited)?;
+        self.builder.ins().call(cancel_ref, &[result_future]);
+        self.emit_scope_cleanup_calls_from(0, 0)?;
+        self.emit_simple_async_frame_cleanup(plan, frame, plan.awaits.len(), true)?;
+        let zero = self.builder.ins().iconst(types::I64, 0);
+        self.builder.ins().return_(&[zero]);
+        self.terminated = true;
+
+        // Ready block path: load/read value, unregister and continue
+        self.builder.switch_to_block(ready_block);
+        self.builder.seal_block(ready_block);
+        
+        let value = self.emit_future_value_read(awaited, result_ty)?;
+        self.emit_arc_unregister_edge(frame, awaited)?;
+        
+        let cont_block = self.builder.create_block();
+        self.builder.ins().jump(cont_block, &[]);
+        
+        self.builder.switch_to_block(cont_block);
+        self.builder.seal_block(cont_block);
+        self.terminated = false;
+        
+        Ok(value)
+    }
+
+    fn emit_general_async_step(
+        mut self,
+        f: &HirFunc,
+        plan: &'a SimpleAsyncStateMachinePlan,
+    ) -> Result<(), String> {
+        let entry = self.builder.create_block();
+        self.builder.append_block_params_for_function_params(entry);
+        self.builder.switch_to_block(entry);
+        self.builder.seal_block(entry);
+        let frame = self.builder.block_params(entry)[0];
+
+        self.async_frame = Some(frame);
+        self.async_plan = Some(plan);
+
+        let state =
+            self.builder
+                .ins()
+                .load(types::I64, MemFlags::new(), frame, ASYNC_FRAME_STATE_OFFSET);
+
+        // Preload params, locals, and awaits bindings into self.vars
+        for (index, param) in plan.params.iter().enumerate() {
+            let cl_ty = cl_type(&param.ty, self.ptr_ty)
+                .ok_or_else(|| format!("async param `{}` has no native value", param.name))?;
+            let offset = simple_async_frame_param_offset(plan, index, self.ptr_ty)
+                .expect("async frame param offset");
+            let value = self
+                .builder
+                .ins()
+                .load(cl_ty, MemFlags::new(), frame, offset as i32);
+            let var = self.builder.declare_var(cl_ty);
+            self.builder.def_var(var, value);
+            self.vars
+                .insert(param.name.clone(), (var, param.ty.clone()));
+        }
+        for (index, local) in plan.locals.iter().enumerate() {
+            let cl_ty = cl_type(&local.ty, self.ptr_ty)
+                .ok_or_else(|| format!("async local `{}` has no native value", local.name))?;
+            let offset = simple_async_frame_local_offset(plan, index, self.ptr_ty)
+                .expect("async frame local offset");
+            let value = self
+                .builder
+                .ins()
+                .load(cl_ty, MemFlags::new(), frame, offset as i32);
+            let var = self.builder.declare_var(cl_ty);
+            self.builder.def_var(var, value);
+            self.vars
+                .insert(local.name.clone(), (var, local.ty.clone()));
+        }
+        for (index, step) in plan.awaits.iter().enumerate() {
+            if let Some(binding) = &step.binding {
+                let cl_ty = cl_type(&binding.ty, self.ptr_ty)
+                    .ok_or_else(|| format!("async binding `{}` has no native value", binding.name))?;
+                let offset = simple_async_frame_binding_offset(plan, index, self.ptr_ty)
+                    .expect("async frame binding offset");
+                let value = self
+                    .builder
+                    .ins()
+                    .load(cl_ty, MemFlags::new(), frame, offset as i32);
+                let var = self.builder.declare_var(cl_ty);
+                self.builder.def_var(var, value);
+                self.vars
+                    .insert(binding.name.clone(), (var, binding.ty.clone()));
+            }
+        }
+
+        let await_count = plan.awaits.len();
+        self.async_poll_blocks = (0..await_count)
+            .map(|_| self.builder.create_block())
+            .collect();
+
+        let body_start_block = self.builder.create_block();
+        let invalid_state_block = self.builder.create_block();
+
+        let dispatch_blocks: Vec<_> = (0..=await_count)
+            .map(|_| self.builder.create_block())
+            .collect();
+            
+        self.builder.ins().jump(dispatch_blocks[0], &[]);
+        for state_index in 0..=await_count {
+            self.builder.switch_to_block(dispatch_blocks[state_index]);
+            let is_state =
+                self.builder
+                    .ins()
+                    .icmp_imm(ir::condcodes::IntCC::Equal, state, state_index as i64);
+            let target = if state_index == 0 {
+                body_start_block
+            } else {
+                self.async_poll_blocks[state_index - 1]
+            };
+            let next = if state_index < await_count {
+                dispatch_blocks[state_index + 1]
+            } else {
+                invalid_state_block
+            };
+            self.builder.ins().brif(is_state, target, &[], next, &[]);
+        }
+
+        self.builder.switch_to_block(body_start_block);
+        self.builder.seal_block(body_start_block);
+
+        self.emit_block(&f.body)?;
+
+        if !self.terminated {
+            let result_future = self.builder.ins().load(
+                self.ptr_ty,
+                MemFlags::new(),
+                frame,
+                ASYNC_FRAME_RESULT_OFFSET,
+            );
+            if let Ty::Future(inner) = &f.return_ty {
+                let zero = self.zero_val(inner);
+                self.emit_future_complete(result_future, inner, Some(zero))?;
+            } else {
+                self.emit_future_complete(result_future, &plan.inner_ty, None)?;
+            }
+            self.emit_scope_cleanup_calls_from(0, 0)?;
+            self.emit_simple_async_frame_cleanup(plan, frame, await_count, true)?;
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.ins().return_(&[zero]);
+            self.terminated = true;
+        }
+
+        self.builder.switch_to_block(invalid_state_block);
+        self.builder.seal_block(invalid_state_block);
+        let result_future = self.builder.ins().load(
+            self.ptr_ty,
+            MemFlags::new(),
+            frame,
+            ASYNC_FRAME_RESULT_OFFSET,
+        );
+        let cancel_ref = *self
+            .func_refs
+            .get("ori_future_cancel")
+            .ok_or_else(|| "missing runtime function `ori_future_cancel`".to_string())?;
+        self.builder.ins().call(cancel_ref, &[result_future]);
+        self.emit_simple_async_frame_cleanup(plan, frame, await_count, true)?;
+        let zero = self.builder.ins().iconst(types::I64, 0);
+        self.builder.ins().return_(&[zero]);
+
+        for block in &self.async_poll_blocks {
+            self.builder.seal_block(*block);
+        }
+
+        self.builder.seal_all_blocks();
+        self.builder.finalize();
+        Ok(())
     }
 
     fn emit_never_call_stmt(&mut self, expr: &HirExpr) -> Result<bool, String> {
@@ -5956,9 +6729,12 @@ impl<'a> FuncCodegen<'a> {
             } => {
                 let val = self.emit_expr_for_expected(value, ty)?;
                 if let Some(cl_ty) = cl_type(ty, self.ptr_ty) {
-                    let var = self.builder.declare_var(cl_ty);
+                    let var = self.vars.get(name).map(|(v, _)| *v).unwrap_or_else(|| {
+                        let v = self.builder.declare_var(cl_ty);
+                        self.vars.insert(name.clone(), (v, ty.clone()));
+                        v
+                    });
                     self.builder.def_var(var, val);
-                    self.vars.insert(name.clone(), (var, ty.clone()));
                     if is_managed_ty(ty) {
                         self.emit_arc_retain_if_managed(ty, val)?;
                         self.managed_stack.push(ManagedCleanup {
@@ -5966,6 +6742,7 @@ impl<'a> FuncCodegen<'a> {
                             ty: ty.clone(),
                         });
                     }
+                    self.store_async_local_if_any(name, val)?;
                 }
             }
             HirStmt::Assign { lvalue, value, .. } => {
@@ -5976,6 +6753,7 @@ impl<'a> FuncCodegen<'a> {
                         self.emit_arc_retain_if_managed(&ty, val)?;
                         self.emit_arc_release_if_managed(&ty, old)?;
                         self.builder.def_var(var, val);
+                        self.store_async_local_if_any(name, val)?;
                     } else {
                         let val = if let Some(info) = self.global_data.get(name).cloned() {
                             let val = self.emit_expr_for_expected(value, &info.ty)?;
@@ -6071,7 +6849,8 @@ impl<'a> FuncCodegen<'a> {
                 body,
                 ..
             } => {
-                self.emit_for(binding, index_binding.as_ref(), elem_ty, iterable, body)?;
+                let has_await = self.async_frame.is_some() && stmt_contains_await(stmt);
+                self.emit_for(binding, index_binding.as_ref(), elem_ty, iterable, body, has_await)?;
             }
             HirStmt::Match {
                 scrutinee, arms, ..
@@ -6100,9 +6879,12 @@ impl<'a> FuncCodegen<'a> {
             } => {
                 let val = self.emit_expr_for_expected(value, ty)?;
                 if let Some(cl_ty) = cl_type(ty, self.ptr_ty) {
-                    let var = self.builder.declare_var(cl_ty);
+                    let var = self.vars.get(name).map(|(v, _)| *v).unwrap_or_else(|| {
+                        let v = self.builder.declare_var(cl_ty);
+                        self.vars.insert(name.clone(), (v, ty.clone()));
+                        v
+                    });
                     self.builder.def_var(var, val);
-                    self.vars.insert(name.clone(), (var, ty.clone()));
                     if is_managed_ty(ty) {
                         self.emit_arc_retain_if_managed(ty, val)?;
                         self.managed_stack.push(ManagedCleanup {
@@ -6114,6 +6896,7 @@ impl<'a> FuncCodegen<'a> {
                         var,
                         ty: ty.clone(),
                     });
+                    self.store_async_local_if_any(name, val)?;
                 }
             }
             HirStmt::Check { condition, .. } => {
@@ -6123,7 +6906,7 @@ impl<'a> FuncCodegen<'a> {
                 self.emit_trap_unless(cv, trap, true)?;
             }
             HirStmt::Repeat { count, body, .. } => {
-                // Desugar: for (int64_t _i = 0; _i < count; _i++) { body }
+                let has_await = self.async_frame.is_some() && stmt_contains_await(stmt);
                 let count_v = self.emit_expr(count)?;
                 let zero = self.builder.ins().iconst(types::I64, 0);
                 let non_negative = self.builder.ins().icmp(
@@ -6135,9 +6918,25 @@ impl<'a> FuncCodegen<'a> {
                     .ok_or_else(|| "invalid repeat-count trap code `4`".to_string())?;
                 self.emit_trap_unless(non_negative, trap, true)?;
 
-                let idx_var = self.builder.declare_var(types::I64);
-                let loop_zero = self.builder.ins().iconst(types::I64, 0);
-                self.builder.def_var(idx_var, loop_zero);
+                let (idx_var, limit_val) = if has_await {
+                    let loop_id = self.async_loop_index;
+                    self.async_loop_index += 1;
+                    let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+                    let limit_name = SmolStr::new(format!(".__loop_limit_{}", loop_id));
+                    let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
+                    let (limit_var, _) = self.vars.get(&limit_name).cloned().unwrap();
+                    let loop_zero = self.builder.ins().iconst(types::I64, 0);
+                    self.builder.def_var(idx_var, loop_zero);
+                    self.builder.def_var(limit_var, count_v);
+                    self.store_async_local_if_any(&idx_name, loop_zero)?;
+                    self.store_async_local_if_any(&limit_name, count_v)?;
+                    (idx_var, self.builder.use_var(limit_var))
+                } else {
+                    let idx_var = self.builder.declare_var(types::I64);
+                    let loop_zero = self.builder.ins().iconst(types::I64, 0);
+                    self.builder.def_var(idx_var, loop_zero);
+                    (idx_var, count_v)
+                };
 
                 let header = self.builder.create_block();
                 let body_b = self.builder.create_block();
@@ -6150,7 +6949,7 @@ impl<'a> FuncCodegen<'a> {
                 let cond =
                     self.builder
                         .ins()
-                        .icmp(ir::condcodes::IntCC::SignedLessThan, cur, count_v);
+                        .icmp(ir::condcodes::IntCC::SignedLessThan, cur, limit_val);
                 self.builder.ins().brif(cond, body_b, &[], exit, &[]);
 
                 self.builder.seal_block(body_b);
@@ -6164,6 +6963,11 @@ impl<'a> FuncCodegen<'a> {
                     let one = self.builder.ins().iconst(types::I64, 1);
                     let next = self.builder.ins().iadd(cur2, one);
                     self.builder.def_var(idx_var, next);
+                    if has_await {
+                        let loop_id = self.async_loop_index - 1;
+                        let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+                        self.store_async_local_if_any(&idx_name, next)?;
+                    }
                     self.builder.ins().jump(header, &[]);
                 }
                 self.terminated = false;
@@ -6320,9 +7124,12 @@ impl<'a> FuncCodegen<'a> {
                 self.builder
                     .ins()
                     .load(cl_ty, MemFlags::new(), opt_ptr, val_off as i32);
-            let var = self.builder.declare_var(cl_ty);
+            let var = self.vars.get(binding).map(|(v, _)| *v).unwrap_or_else(|| {
+                let v = self.builder.declare_var(cl_ty);
+                self.vars.insert(binding.clone(), (v, inner_ty.clone()));
+                v
+            });
             self.builder.def_var(var, inner_val);
-            self.vars.insert(binding.clone(), (var, inner_ty.clone()));
         }
         self.emit_block(then)?;
         if !self.terminated {
@@ -6407,29 +7214,30 @@ impl<'a> FuncCodegen<'a> {
         elem_ty: &Ty,
         iterable: &HirExpr,
         body: &HirBlock,
+        has_await: bool,
     ) -> Result<(), String> {
         match &iterable.kind {
             HirExprKind::Range { start, end } => {
-                self.emit_for_range(binding, index_binding, elem_ty, start, end, body)
+                self.emit_for_range(binding, index_binding, elem_ty, start, end, body, has_await)
             }
             _ if matches!(&iterable.ty, Ty::List(_)) => {
-                self.emit_for_list(binding, index_binding, elem_ty, iterable, body)
+                self.emit_for_list(binding, index_binding, elem_ty, iterable, body, has_await)
             }
             _ if matches!(&iterable.ty, Ty::Set(_)) => {
                 // Set is backed by OriList internally — same get/len interface
-                self.emit_for_list(binding, index_binding, elem_ty, iterable, body)
+                self.emit_for_list(binding, index_binding, elem_ty, iterable, body, has_await)
             }
             _ if matches!(&iterable.ty, Ty::Map(_, _)) => {
                 let Ty::Map(key_ty, value_ty) = &iterable.ty else {
                     unreachable!();
                 };
-                self.emit_for_map(binding, index_binding, key_ty, value_ty, iterable, body)
+                self.emit_for_map(binding, index_binding, key_ty, value_ty, iterable, body, has_await)
             }
             _ if matches!(&iterable.ty, Ty::String) => {
-                self.emit_for_string(binding, index_binding, iterable, body)
+                self.emit_for_string(binding, index_binding, iterable, body, has_await)
             }
             _ if matches!(&iterable.ty, Ty::Bytes) => {
-                self.emit_for_bytes(binding, index_binding, iterable, body)
+                self.emit_for_bytes(binding, index_binding, iterable, body, has_await)
             }
             _ if matches!(&iterable.ty, Ty::Opaque { kind, .. } if kind.is_list_backed_collection()) =>
             {
@@ -6452,7 +7260,7 @@ impl<'a> FuncCodegen<'a> {
                 let call = self.builder.ins().call(fref, &[handle]);
                 let snapshot = self.builder.inst_results(call)[0];
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)?;
+                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body, has_await)?;
                 let free_ref = *self
                     .func_refs
                     .get("ori_list_free")
@@ -6479,7 +7287,7 @@ impl<'a> FuncCodegen<'a> {
                 let call = self.builder.ins().call(fref, &[handle]);
                 let snapshot = self.builder.inst_results(call)[0];
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)?;
+                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body, has_await)?;
                 let free_ref = *self
                     .func_refs
                     .get("ori_list_free")
@@ -6506,7 +7314,7 @@ impl<'a> FuncCodegen<'a> {
                 let call = self.builder.ins().call(fref, &[handle]);
                 let snapshot = self.builder.inst_results(call)[0];
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)?;
+                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body, has_await)?;
                 let free_ref = *self
                     .func_refs
                     .get("ori_list_free")
@@ -6533,7 +7341,7 @@ impl<'a> FuncCodegen<'a> {
                 let call = self.builder.ins().call(fref, &[handle]);
                 let snapshot = self.builder.inst_results(call)[0];
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body)?;
+                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body, has_await)?;
                 let free_ref = *self
                     .func_refs
                     .get("ori_list_free")
@@ -6550,6 +7358,7 @@ impl<'a> FuncCodegen<'a> {
                         iterable,
                         body,
                         &next_func,
+                        has_await,
                     )
                 } else {
                     Err(native_codegen_unsupported(format!(
@@ -6569,6 +7378,7 @@ impl<'a> FuncCodegen<'a> {
         iterable: &HirExpr,
         body: &HirBlock,
         next_func: &SmolStr,
+        has_await: bool,
     ) -> Result<(), String> {
         let Some(iter_cl_ty) = cl_type(&iterable.ty, self.ptr_ty) else {
             return Err(native_codegen_unsupported(format!(
@@ -6586,18 +7396,43 @@ impl<'a> FuncCodegen<'a> {
             format!("missing function reference `{next_func}` for custom Iterable")
         })?;
         let iter_value = self.emit_expr(iterable)?;
-        // Retain the iterable for the duration of the loop. The next() method
-        // releases managed parameters on return; without an extra retain the
-        // iterable would be freed after the first call.
         self.emit_arc_retain_if_managed(&iterable.ty, iter_value)?;
-        let iter_var = self.builder.declare_var(iter_cl_ty);
-        self.builder.def_var(iter_var, iter_value);
-        let idx_var = self.builder.declare_var(types::I64);
-        let zero = self.builder.ins().iconst(types::I64, 0);
-        self.builder.def_var(idx_var, zero);
-        let binding_var = self.builder.declare_var(elem_cl_ty);
-        self.vars
-            .insert(binding.clone(), (binding_var, elem_ty.clone()));
+
+        let (idx_var, iter_var, iter_val) = if has_await {
+            let loop_id = self.async_loop_index;
+            self.async_loop_index += 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
+            let (iter_var, _) = self.vars.get(&list_name).cloned().unwrap();
+
+            self.builder.def_var(iter_var, iter_value);
+            self.store_async_local_if_any(&list_name, iter_value)?;
+            self.emit_arc_register_edge_if_managed(&iterable.ty, self.async_frame.unwrap(), iter_value)?;
+
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.def_var(idx_var, zero);
+            self.store_async_local_if_any(&idx_name, zero)?;
+
+            (idx_var, iter_var, self.builder.use_var(iter_var))
+        } else {
+            let iter_var = self.builder.declare_var(iter_cl_ty);
+            self.builder.def_var(iter_var, iter_value);
+            let idx_var = self.builder.declare_var(types::I64);
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.def_var(idx_var, zero);
+            (idx_var, iter_var, iter_value)
+        };
+
+        let binding_var = if has_await {
+            let (binding_var, _) = self.vars.get(binding).cloned().unwrap();
+            binding_var
+        } else {
+            let binding_var = self.builder.declare_var(elem_cl_ty);
+            self.vars
+                .insert(binding.clone(), (binding_var, elem_ty.clone()));
+            binding_var
+        };
 
         let header = self.builder.create_block();
         let body_b = self.builder.create_block();
@@ -6606,8 +7441,6 @@ impl<'a> FuncCodegen<'a> {
         self.builder.ins().jump(header, &[]);
         self.builder.switch_to_block(header);
         let iter_current = self.builder.use_var(iter_var);
-        // Retain the iterable before each next() call to balance the
-        // managed parameter release inside next() which drops the refcount.
         self.emit_arc_retain_if_managed(&iterable.ty, iter_current)?;
         let call = self.builder.ins().call(next_ref, &[iter_current]);
         let opt_ptr = self.builder.inst_results(call)[0];
@@ -6636,11 +7469,23 @@ impl<'a> FuncCodegen<'a> {
             .ins()
             .load(elem_cl_ty, MemFlags::new(), opt_ptr, val_off as i32);
         self.builder.def_var(binding_var, item);
+        if has_await {
+            self.store_async_local_if_any(binding, item)?;
+            self.emit_arc_register_edge_if_managed(elem_ty, self.async_frame.unwrap(), item)?;
+        }
         if let Some(ib_name) = index_binding {
             let cur = self.builder.use_var(idx_var);
-            let ib_var = self.builder.declare_var(types::I64);
-            self.builder.def_var(ib_var, cur);
-            self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+            let ib_var = if has_await {
+                let (ib_var, _) = self.vars.get(ib_name).cloned().unwrap();
+                self.builder.def_var(ib_var, cur);
+                self.store_async_local_if_any(ib_name, cur)?;
+                ib_var
+            } else {
+                let ib_var = self.builder.declare_var(types::I64);
+                self.builder.def_var(ib_var, cur);
+                self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+                ib_var
+            };
         }
         self.terminated = false;
         self.push_loop(step, exit);
@@ -6656,13 +7501,24 @@ impl<'a> FuncCodegen<'a> {
         let one = self.builder.ins().iconst(types::I64, 1);
         let next = self.builder.ins().iadd(cur, one);
         self.builder.def_var(idx_var, next);
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            self.store_async_local_if_any(&idx_name, next)?;
+        }
         self.builder.ins().jump(header, &[]);
         self.builder.seal_block(header);
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
-        // Release the iterable retain we added before the loop.
         let final_iter = self.builder.use_var(iter_var);
         self.emit_arc_release_if_managed(&iterable.ty, final_iter)?;
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let zero = self.builder.ins().iconst(self.ptr_ty, 0);
+            self.emit_arc_unregister_edge(self.async_frame.unwrap(), final_iter)?;
+            self.store_async_local_if_any(&list_name, zero)?;
+        }
         self.terminated = false;
         Ok(())
     }
@@ -6675,32 +7531,70 @@ impl<'a> FuncCodegen<'a> {
         start: &HirExpr,
         end: &HirExpr,
         body: &HirBlock,
+        has_await: bool,
     ) -> Result<(), String> {
         let start_v = self.emit_expr(start)?;
         let end_v = self.emit_expr(end)?;
-        let idx_var = self.builder.declare_var(types::I64);
-        self.builder.def_var(idx_var, start_v);
-        let end_var = self.builder.declare_var(types::I64);
-        self.builder.def_var(end_var, end_v);
-        let asc_var = self.builder.declare_var(types::I8);
         let asc =
             self.builder
                 .ins()
                 .icmp(ir::condcodes::IntCC::SignedLessThanOrEqual, start_v, end_v);
-        self.builder.def_var(asc_var, asc);
-        if let Some(cl_ty) = cl_type(elem_ty, self.ptr_ty) {
-            let bvar = self.builder.declare_var(cl_ty);
-            self.vars.insert(binding.clone(), (bvar, elem_ty.clone()));
-        }
-        // Declare index counter for second binding (iteration count, not range value)
-        let iter_count_var = if index_binding.is_some() {
-            let v = self.builder.declare_var(types::I64);
-            let zero = self.builder.ins().iconst(types::I64, 0);
-            self.builder.def_var(v, zero);
-            Some(v)
+
+        let (idx_var, end_var, asc_var, iter_count_var) = if has_await {
+            let loop_id = self.async_loop_index;
+            self.async_loop_index += 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            let end_name = SmolStr::new(format!(".__loop_end_{}", loop_id));
+            let asc_name = SmolStr::new(format!(".__loop_asc_{}", loop_id));
+            let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
+            let (end_var, _) = self.vars.get(&end_name).cloned().unwrap();
+            let (asc_var, _) = self.vars.get(&asc_name).cloned().unwrap();
+
+            let iter_count_var = if index_binding.is_some() {
+                let iter_name = SmolStr::new(format!(".__loop_iter_{}", loop_id));
+                let (v, _) = self.vars.get(&iter_name).cloned().unwrap();
+                let zero = self.builder.ins().iconst(types::I64, 0);
+                self.builder.def_var(v, zero);
+                self.store_async_local_if_any(&iter_name, zero)?;
+                Some(v)
+            } else {
+                None
+            };
+
+            self.builder.def_var(idx_var, start_v);
+            self.builder.def_var(end_var, end_v);
+            self.builder.def_var(asc_var, asc);
+            self.store_async_local_if_any(&idx_name, start_v)?;
+            self.store_async_local_if_any(&end_name, end_v)?;
+            self.store_async_local_if_any(&asc_name, asc)?;
+
+            (idx_var, end_var, asc_var, iter_count_var)
         } else {
-            None
+            let idx_var = self.builder.declare_var(types::I64);
+            self.builder.def_var(idx_var, start_v);
+            let end_var = self.builder.declare_var(types::I64);
+            self.builder.def_var(end_var, end_v);
+            let asc_var = self.builder.declare_var(types::I8);
+            self.builder.def_var(asc_var, asc);
+
+            let iter_count_var = if index_binding.is_some() {
+                let v = self.builder.declare_var(types::I64);
+                let zero = self.builder.ins().iconst(types::I64, 0);
+                self.builder.def_var(v, zero);
+                Some(v)
+            } else {
+                None
+            };
+            (idx_var, end_var, asc_var, iter_count_var)
         };
+
+        if !has_await {
+            if let Some(cl_ty) = cl_type(elem_ty, self.ptr_ty) {
+                let bvar = self.builder.declare_var(cl_ty);
+                self.vars.insert(binding.clone(), (bvar, elem_ty.clone()));
+            }
+        }
+
         let header = self.builder.create_block();
         let body_b = self.builder.create_block();
         let step = self.builder.create_block();
@@ -6722,19 +7616,33 @@ impl<'a> FuncCodegen<'a> {
         self.builder.ins().brif(cond, body_b, &[], exit, &[]);
         self.builder.seal_block(body_b);
         self.builder.switch_to_block(body_b);
-        // Update binding variable
+
         if let Some((bvar, _)) = self.vars.get(binding) {
             let bvar = *bvar;
             let cur2 = self.builder.use_var(idx_var);
             self.builder.def_var(bvar, cur2);
+            if has_await {
+                self.store_async_local_if_any(binding, cur2)?;
+            }
         }
-        // Update index binding
-        if let (Some(ib_name), Some(ic_var)) = (index_binding, iter_count_var) {
-            let ic = self.builder.use_var(ic_var);
-            let ib_var = self.builder.declare_var(types::I64);
-            self.builder.def_var(ib_var, ic);
-            self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+
+        if let Some(ib_name) = index_binding {
+            if let Some(ic_var) = iter_count_var {
+                let ic = self.builder.use_var(ic_var);
+                let ib_var = if has_await {
+                    let (ib_var, _) = self.vars.get(ib_name).cloned().unwrap();
+                    self.builder.def_var(ib_var, ic);
+                    self.store_async_local_if_any(ib_name, ic)?;
+                    ib_var
+                } else {
+                    let ib_var = self.builder.declare_var(types::I64);
+                    self.builder.def_var(ib_var, ic);
+                    self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+                    ib_var
+                };
+            }
         }
+
         self.terminated = false;
         self.push_loop(step, exit);
         self.emit_block(body)?;
@@ -6752,12 +7660,22 @@ impl<'a> FuncCodegen<'a> {
         let inc = self.builder.ins().select(asc_flag, one, neg_one);
         let next = self.builder.ins().iadd(cur2, inc);
         self.builder.def_var(idx_var, next);
-        // Increment iteration counter for index binding
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            self.store_async_local_if_any(&idx_name, next)?;
+        }
+
         if let Some(ic_var) = iter_count_var {
             let ic = self.builder.use_var(ic_var);
             let one_ic = self.builder.ins().iconst(types::I64, 1);
             let next_ic = self.builder.ins().iadd(ic, one_ic);
             self.builder.def_var(ic_var, next_ic);
+            if has_await {
+                let loop_id = self.async_loop_index - 1;
+                let iter_name = SmolStr::new(format!(".__loop_iter_{}", loop_id));
+                self.store_async_local_if_any(&iter_name, next_ic)?;
+            }
         }
         self.builder.ins().jump(header, &[]);
         self.builder.seal_block(header);
@@ -6774,9 +7692,10 @@ impl<'a> FuncCodegen<'a> {
         elem_ty: &Ty,
         iterable: &HirExpr,
         body: &HirBlock,
+        has_await: bool,
     ) -> Result<(), String> {
         let list_v = self.emit_expr(iterable)?;
-        self.emit_for_list_value(binding, index_binding, elem_ty, list_v, body)
+        self.emit_for_list_value(binding, index_binding, elem_ty, list_v, body, has_await)
     }
 
     fn emit_for_list_value(
@@ -6786,6 +7705,7 @@ impl<'a> FuncCodegen<'a> {
         elem_ty: &Ty,
         list_v: ir::Value,
         body: &HirBlock,
+        has_await: bool,
     ) -> Result<(), String> {
         let len_ref = *self
             .func_refs
@@ -6795,17 +7715,49 @@ impl<'a> FuncCodegen<'a> {
             .func_refs
             .get("ori_list_get")
             .ok_or_else(|| "missing runtime function `ori_list_get`".to_string())?;
-        let len_call = self.builder.ins().call(len_ref, &[list_v]);
-        let len_v = self.builder.inst_results(len_call)[0];
-        let idx_var = self.builder.declare_var(types::I64);
-        let zero = self.builder.ins().iconst(types::I64, 0);
-        self.builder.def_var(idx_var, zero);
-        let len_var = self.builder.declare_var(types::I64);
-        self.builder.def_var(len_var, len_v);
-        if let Some(cl_ty) = cl_type(elem_ty, self.ptr_ty) {
-            let bvar = self.builder.declare_var(cl_ty);
-            self.vars.insert(binding.clone(), (bvar, elem_ty.clone()));
+
+        let (idx_var, len_var, list_val) = if has_await {
+            let loop_id = self.async_loop_index;
+            self.async_loop_index += 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            let len_name = SmolStr::new(format!(".__loop_len_{}", loop_id));
+            let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
+            let (len_var, _) = self.vars.get(&len_name).cloned().unwrap();
+            let (list_var, _) = self.vars.get(&list_name).cloned().unwrap();
+
+            self.builder.def_var(list_var, list_v);
+            self.store_async_local_if_any(&list_name, list_v)?;
+            self.emit_arc_register_edge_if_managed(&Ty::List(Box::new(elem_ty.clone())), self.async_frame.unwrap(), list_v)?;
+
+            let len_call = self.builder.ins().call(len_ref, &[list_v]);
+            let len_v = self.builder.inst_results(len_call)[0];
+            self.builder.def_var(len_var, len_v);
+            self.store_async_local_if_any(&len_name, len_v)?;
+
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.def_var(idx_var, zero);
+            self.store_async_local_if_any(&idx_name, zero)?;
+
+            (idx_var, len_var, self.builder.use_var(list_var))
+        } else {
+            let len_call = self.builder.ins().call(len_ref, &[list_v]);
+            let len_v = self.builder.inst_results(len_call)[0];
+            let idx_var = self.builder.declare_var(types::I64);
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.def_var(idx_var, zero);
+            let len_var = self.builder.declare_var(types::I64);
+            self.builder.def_var(len_var, len_v);
+            (idx_var, len_var, list_v)
+        };
+
+        if !has_await {
+            if let Some(cl_ty) = cl_type(elem_ty, self.ptr_ty) {
+                let bvar = self.builder.declare_var(cl_ty);
+                self.vars.insert(binding.clone(), (bvar, elem_ty.clone()));
+            }
         }
+
         let header = self.builder.create_block();
         let body_b = self.builder.create_block();
         let step = self.builder.create_block();
@@ -6821,20 +7773,35 @@ impl<'a> FuncCodegen<'a> {
         self.builder.ins().brif(cond, body_b, &[], exit, &[]);
         self.builder.seal_block(body_b);
         self.builder.switch_to_block(body_b);
+
         if let Some((bvar, _)) = self.vars.get(binding) {
             let bvar = *bvar;
             let cur2 = self.builder.use_var(idx_var);
-            let call = self.builder.ins().call(get_ref, &[list_v, cur2]);
+            let call = self.builder.ins().call(get_ref, &[list_val, cur2]);
             let elem = self.builder.inst_results(call)[0];
             let elem = self.from_list_storage_value(elem, elem_ty);
             self.builder.def_var(bvar, elem);
+            if has_await {
+                self.store_async_local_if_any(binding, elem)?;
+                self.emit_arc_register_edge_if_managed(elem_ty, self.async_frame.unwrap(), elem)?;
+            }
         }
+
         if let Some(ib_name) = index_binding {
             let cur2 = self.builder.use_var(idx_var);
-            let ib_var = self.builder.declare_var(types::I64);
-            self.builder.def_var(ib_var, cur2);
-            self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+            let ib_var = if has_await {
+                let (ib_var, _) = self.vars.get(ib_name).cloned().unwrap();
+                self.builder.def_var(ib_var, cur2);
+                self.store_async_local_if_any(ib_name, cur2)?;
+                ib_var
+            } else {
+                let ib_var = self.builder.declare_var(types::I64);
+                self.builder.def_var(ib_var, cur2);
+                self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+                ib_var
+            };
         }
+
         self.terminated = false;
         self.push_loop(step, exit);
         self.emit_block(body)?;
@@ -6849,10 +7816,23 @@ impl<'a> FuncCodegen<'a> {
         let one = self.builder.ins().iconst(types::I64, 1);
         let next = self.builder.ins().iadd(cur2, one);
         self.builder.def_var(idx_var, next);
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            self.store_async_local_if_any(&idx_name, next)?;
+        }
         self.builder.ins().jump(header, &[]);
         self.builder.seal_block(header);
+
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let zero = self.builder.ins().iconst(self.ptr_ty, 0);
+            self.emit_arc_unregister_edge(self.async_frame.unwrap(), list_val)?;
+            self.store_async_local_if_any(&list_name, zero)?;
+        }
         self.terminated = false;
         Ok(())
     }
@@ -6865,6 +7845,7 @@ impl<'a> FuncCodegen<'a> {
         value_ty: &Ty,
         iterable: &HirExpr,
         body: &HirBlock,
+        has_await: bool,
     ) -> Result<(), String> {
         let map_v = self.emit_expr(iterable)?;
         let len_ref = *self
@@ -6879,23 +7860,53 @@ impl<'a> FuncCodegen<'a> {
             .func_refs
             .get("ori_map_value_at")
             .ok_or_else(|| "missing runtime function `ori_map_value_at`".to_string())?;
-        let len_call = self.builder.ins().call(len_ref, &[map_v]);
-        let len_v = self.builder.inst_results(len_call)[0];
-        let idx_var = self.builder.declare_var(types::I64);
-        let zero = self.builder.ins().iconst(types::I64, 0);
-        self.builder.def_var(idx_var, zero);
-        let len_var = self.builder.declare_var(types::I64);
-        self.builder.def_var(len_var, len_v);
 
-        if let Some(cl_ty) = cl_type(key_ty, self.ptr_ty) {
-            let key_var = self.builder.declare_var(cl_ty);
-            self.vars.insert(binding.clone(), (key_var, key_ty.clone()));
-        }
-        if let Some(value_name) = value_binding {
-            if let Some(cl_ty) = cl_type(value_ty, self.ptr_ty) {
-                let value_var = self.builder.declare_var(cl_ty);
-                self.vars
-                    .insert(value_name.clone(), (value_var, value_ty.clone()));
+        let (idx_var, len_var, map_val) = if has_await {
+            let loop_id = self.async_loop_index;
+            self.async_loop_index += 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            let len_name = SmolStr::new(format!(".__loop_len_{}", loop_id));
+            let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
+            let (len_var, _) = self.vars.get(&len_name).cloned().unwrap();
+            let (list_var, _) = self.vars.get(&list_name).cloned().unwrap();
+
+            self.builder.def_var(list_var, map_v);
+            self.store_async_local_if_any(&list_name, map_v)?;
+            self.emit_arc_register_edge_if_managed(&iterable.ty, self.async_frame.unwrap(), map_v)?;
+
+            let len_call = self.builder.ins().call(len_ref, &[map_v]);
+            let len_v = self.builder.inst_results(len_call)[0];
+            self.builder.def_var(len_var, len_v);
+            self.store_async_local_if_any(&len_name, len_v)?;
+
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.def_var(idx_var, zero);
+            self.store_async_local_if_any(&idx_name, zero)?;
+
+            (idx_var, len_var, self.builder.use_var(list_var))
+        } else {
+            let len_call = self.builder.ins().call(len_ref, &[map_v]);
+            let len_v = self.builder.inst_results(len_call)[0];
+            let idx_var = self.builder.declare_var(types::I64);
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.def_var(idx_var, zero);
+            let len_var = self.builder.declare_var(types::I64);
+            self.builder.def_var(len_var, len_v);
+            (idx_var, len_var, map_v)
+        };
+
+        if !has_await {
+            if let Some(cl_ty) = cl_type(key_ty, self.ptr_ty) {
+                let key_var = self.builder.declare_var(cl_ty);
+                self.vars.insert(binding.clone(), (key_var, key_ty.clone()));
+            }
+            if let Some(value_name) = value_binding {
+                if let Some(cl_ty) = cl_type(value_ty, self.ptr_ty) {
+                    let value_var = self.builder.declare_var(cl_ty);
+                    self.vars
+                        .insert(value_name.clone(), (value_var, value_ty.clone()));
+                }
             }
         }
 
@@ -6918,18 +7929,26 @@ impl<'a> FuncCodegen<'a> {
         let cur2 = self.builder.use_var(idx_var);
         if let Some((key_var, _)) = self.vars.get(binding) {
             let key_var = *key_var;
-            let key_call = self.builder.ins().call(key_at_ref, &[map_v, cur2]);
+            let key_call = self.builder.ins().call(key_at_ref, &[map_val, cur2]);
             let key = self.builder.inst_results(key_call)[0];
             let key = self.from_list_storage_value(key, key_ty);
             self.builder.def_var(key_var, key);
+            if has_await {
+                self.store_async_local_if_any(binding, key)?;
+                self.emit_arc_register_edge_if_managed(key_ty, self.async_frame.unwrap(), key)?;
+            }
         }
         if let Some(value_name) = value_binding {
             if let Some((value_var, _)) = self.vars.get(value_name) {
                 let value_var = *value_var;
-                let value_call = self.builder.ins().call(value_at_ref, &[map_v, cur2]);
+                let value_call = self.builder.ins().call(value_at_ref, &[map_val, cur2]);
                 let value = self.builder.inst_results(value_call)[0];
                 let value = self.from_list_storage_value(value, value_ty);
                 self.builder.def_var(value_var, value);
+                if has_await {
+                    self.store_async_local_if_any(value_name, value)?;
+                    self.emit_arc_register_edge_if_managed(value_ty, self.async_frame.unwrap(), value)?;
+                }
             }
         }
 
@@ -6947,10 +7966,22 @@ impl<'a> FuncCodegen<'a> {
         let one = self.builder.ins().iconst(types::I64, 1);
         let next = self.builder.ins().iadd(cur3, one);
         self.builder.def_var(idx_var, next);
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            self.store_async_local_if_any(&idx_name, next)?;
+        }
         self.builder.ins().jump(header, &[]);
         self.builder.seal_block(header);
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let zero = self.builder.ins().iconst(self.ptr_ty, 0);
+            self.emit_arc_unregister_edge(self.async_frame.unwrap(), map_val)?;
+            self.store_async_local_if_any(&list_name, zero)?;
+        }
         self.terminated = false;
         Ok(())
     }
@@ -6961,6 +7992,7 @@ impl<'a> FuncCodegen<'a> {
         index_binding: Option<&SmolStr>,
         iterable: &HirExpr,
         body: &HirBlock,
+        has_await: bool,
     ) -> Result<(), String> {
         let bytes_v = self.emit_expr(iterable)?;
         let len_ref = *self
@@ -6972,17 +8004,49 @@ impl<'a> FuncCodegen<'a> {
             .get("ori_bytes_get")
             .ok_or_else(|| "missing runtime function `ori_bytes_get`".to_string())?;
 
-        let len_call = self.builder.ins().call(len_ref, &[bytes_v]);
-        let len_v = self.builder.inst_results(len_call)[0];
-        let idx_var = self.builder.declare_var(types::I64);
-        let zero = self.builder.ins().iconst(types::I64, 0);
-        self.builder.def_var(idx_var, zero);
-        let len_var = self.builder.declare_var(types::I64);
-        self.builder.def_var(len_var, len_v);
+        let (idx_var, len_var, bytes_val) = if has_await {
+            let loop_id = self.async_loop_index;
+            self.async_loop_index += 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            let len_name = SmolStr::new(format!(".__loop_len_{}", loop_id));
+            let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
+            let (len_var, _) = self.vars.get(&len_name).cloned().unwrap();
+            let (list_var, _) = self.vars.get(&list_name).cloned().unwrap();
 
-        // Bind as U8 (i8 in cranelift)
-        let bvar = self.builder.declare_var(types::I8);
-        self.vars.insert(binding.clone(), (bvar, Ty::U8));
+            self.builder.def_var(list_var, bytes_v);
+            self.store_async_local_if_any(&list_name, bytes_v)?;
+            self.emit_arc_register_edge_if_managed(&iterable.ty, self.async_frame.unwrap(), bytes_v)?;
+
+            let len_call = self.builder.ins().call(len_ref, &[bytes_v]);
+            let len_v = self.builder.inst_results(len_call)[0];
+            self.builder.def_var(len_var, len_v);
+            self.store_async_local_if_any(&len_name, len_v)?;
+
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.def_var(idx_var, zero);
+            self.store_async_local_if_any(&idx_name, zero)?;
+
+            (idx_var, len_var, self.builder.use_var(list_var))
+        } else {
+            let len_call = self.builder.ins().call(len_ref, &[bytes_v]);
+            let len_v = self.builder.inst_results(len_call)[0];
+            let idx_var = self.builder.declare_var(types::I64);
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.def_var(idx_var, zero);
+            let len_var = self.builder.declare_var(types::I64);
+            self.builder.def_var(len_var, len_v);
+            (idx_var, len_var, bytes_v)
+        };
+
+        let bvar = if has_await {
+            let (bvar, _) = self.vars.get(binding).cloned().unwrap();
+            bvar
+        } else {
+            let bvar = self.builder.declare_var(types::I8);
+            self.vars.insert(binding.clone(), (bvar, Ty::U8));
+            bvar
+        };
 
         let header = self.builder.create_block();
         let body_b = self.builder.create_block();
@@ -7001,15 +8065,26 @@ impl<'a> FuncCodegen<'a> {
         self.builder.switch_to_block(body_b);
 
         let cur2 = self.builder.use_var(idx_var);
-        let call = self.builder.ins().call(get_ref, &[bytes_v, cur2]);
+        let call = self.builder.ins().call(get_ref, &[bytes_val, cur2]);
         let elem = self.builder.inst_results(call)[0];
         self.builder.def_var(bvar, elem);
+        if has_await {
+            self.store_async_local_if_any(binding, elem)?;
+        }
 
         if let Some(ib_name) = index_binding {
             let cur3 = self.builder.use_var(idx_var);
-            let ib_var = self.builder.declare_var(types::I64);
-            self.builder.def_var(ib_var, cur3);
-            self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+            let ib_var = if has_await {
+                let (ib_var, _) = self.vars.get(ib_name).cloned().unwrap();
+                self.builder.def_var(ib_var, cur3);
+                self.store_async_local_if_any(ib_name, cur3)?;
+                ib_var
+            } else {
+                let ib_var = self.builder.declare_var(types::I64);
+                self.builder.def_var(ib_var, cur3);
+                self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+                ib_var
+            };
         }
 
         self.terminated = false;
@@ -7026,10 +8101,22 @@ impl<'a> FuncCodegen<'a> {
         let one = self.builder.ins().iconst(types::I64, 1);
         let next = self.builder.ins().iadd(cur3, one);
         self.builder.def_var(idx_var, next);
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            self.store_async_local_if_any(&idx_name, next)?;
+        }
         self.builder.ins().jump(header, &[]);
         self.builder.seal_block(header);
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let zero = self.builder.ins().iconst(self.ptr_ty, 0);
+            self.emit_arc_unregister_edge(self.async_frame.unwrap(), bytes_val)?;
+            self.store_async_local_if_any(&list_name, zero)?;
+        }
         self.terminated = false;
         Ok(())
     }
@@ -7040,8 +8127,8 @@ impl<'a> FuncCodegen<'a> {
         index_binding: Option<&SmolStr>,
         iterable: &HirExpr,
         body: &HirBlock,
+        has_await: bool,
     ) -> Result<(), String> {
-        // Convert string to list of characters via ori_string_chars, then iterate
         let str_v = self.emit_expr(iterable)?;
         let chars_ref = *self
             .func_refs
@@ -7058,16 +8145,50 @@ impl<'a> FuncCodegen<'a> {
             .func_refs
             .get("ori_list_get")
             .ok_or_else(|| "missing runtime function `ori_list_get`".to_string())?;
-        let len_call = self.builder.ins().call(len_ref, &[list_v]);
-        let len_v = self.builder.inst_results(len_call)[0];
-        let idx_var = self.builder.declare_var(types::I64);
-        let zero = self.builder.ins().iconst(types::I64, 0);
-        self.builder.def_var(idx_var, zero);
-        let len_var = self.builder.declare_var(types::I64);
-        self.builder.def_var(len_var, len_v);
-        // Bind as string (ptr type)
-        let bvar = self.builder.declare_var(self.ptr_ty);
-        self.vars.insert(binding.clone(), (bvar, Ty::String));
+
+        let (idx_var, len_var, list_val) = if has_await {
+            let loop_id = self.async_loop_index;
+            self.async_loop_index += 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            let len_name = SmolStr::new(format!(".__loop_len_{}", loop_id));
+            let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
+            let (len_var, _) = self.vars.get(&len_name).cloned().unwrap();
+            let (list_var, _) = self.vars.get(&list_name).cloned().unwrap();
+
+            self.builder.def_var(list_var, list_v);
+            self.store_async_local_if_any(&list_name, list_v)?;
+            self.emit_arc_register_edge_if_managed(&Ty::List(Box::new(Ty::String)), self.async_frame.unwrap(), list_v)?;
+
+            let len_call = self.builder.ins().call(len_ref, &[list_v]);
+            let len_v = self.builder.inst_results(len_call)[0];
+            self.builder.def_var(len_var, len_v);
+            self.store_async_local_if_any(&len_name, len_v)?;
+
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.def_var(idx_var, zero);
+            self.store_async_local_if_any(&idx_name, zero)?;
+
+            (idx_var, len_var, self.builder.use_var(list_var))
+        } else {
+            let len_call = self.builder.ins().call(len_ref, &[list_v]);
+            let len_v = self.builder.inst_results(len_call)[0];
+            let idx_var = self.builder.declare_var(types::I64);
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.def_var(idx_var, zero);
+            let len_var = self.builder.declare_var(types::I64);
+            self.builder.def_var(len_var, len_v);
+            (idx_var, len_var, list_v)
+        };
+
+        let bvar = if has_await {
+            let (bvar, _) = self.vars.get(binding).cloned().unwrap();
+            bvar
+        } else {
+            let bvar = self.builder.declare_var(self.ptr_ty);
+            self.vars.insert(binding.clone(), (bvar, Ty::String));
+            bvar
+        };
 
         let header = self.builder.create_block();
         let body_b = self.builder.create_block();
@@ -7084,17 +8205,27 @@ impl<'a> FuncCodegen<'a> {
         self.builder.ins().brif(cond, body_b, &[], exit, &[]);
         self.builder.seal_block(body_b);
         self.builder.switch_to_block(body_b);
-        // Each element from ori_string_chars is a ptr (string)
         let cur2 = self.builder.use_var(idx_var);
-        let call = self.builder.ins().call(get_ref, &[list_v, cur2]);
+        let call = self.builder.ins().call(get_ref, &[list_val, cur2]);
         let elem = self.builder.inst_results(call)[0];
         self.builder.def_var(bvar, elem);
-        // Bind the index variable (0-based counter)
+        if has_await {
+            self.store_async_local_if_any(binding, elem)?;
+            self.emit_arc_register_edge_if_managed(&Ty::String, self.async_frame.unwrap(), elem)?;
+        }
         if let Some(ib_name) = index_binding {
             let cur3 = self.builder.use_var(idx_var);
-            let ib_var = self.builder.declare_var(types::I64);
-            self.builder.def_var(ib_var, cur3);
-            self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+            let ib_var = if has_await {
+                let (ib_var, _) = self.vars.get(ib_name).cloned().unwrap();
+                self.builder.def_var(ib_var, cur3);
+                self.store_async_local_if_any(ib_name, cur3)?;
+                ib_var
+            } else {
+                let ib_var = self.builder.declare_var(types::I64);
+                self.builder.def_var(ib_var, cur3);
+                self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+                ib_var
+            };
         }
         self.terminated = false;
         self.push_loop(step, exit);
@@ -7110,10 +8241,25 @@ impl<'a> FuncCodegen<'a> {
         let one = self.builder.ins().iconst(types::I64, 1);
         let next = self.builder.ins().iadd(cur3, one);
         self.builder.def_var(idx_var, next);
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            self.store_async_local_if_any(&idx_name, next)?;
+        }
         self.builder.ins().jump(header, &[]);
         self.builder.seal_block(header);
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            self.emit_arc_release_if_managed(&Ty::List(Box::new(Ty::String)), list_val)?;
+            let zero = self.builder.ins().iconst(self.ptr_ty, 0);
+            self.emit_arc_unregister_edge(self.async_frame.unwrap(), list_val)?;
+            self.store_async_local_if_any(&list_name, zero)?;
+        } else {
+            self.emit_arc_release_if_managed(&Ty::List(Box::new(Ty::String)), list_v)?;
+        }
         self.terminated = false;
         Ok(())
     }
@@ -7306,9 +8452,12 @@ impl<'a> FuncCodegen<'a> {
                     bind_ty
                 };
                 if let Some(cl_ty) = cl_type(bty, self.ptr_ty) {
-                    let var = self.builder.declare_var(cl_ty);
+                    let var = self.vars.get(name).map(|(v, _)| *v).unwrap_or_else(|| {
+                        let v = self.builder.declare_var(cl_ty);
+                        self.vars.insert(name.clone(), (v, bty.clone()));
+                        v
+                    });
                     self.builder.def_var(var, val);
-                    self.vars.insert(name.clone(), (var, bty.clone()));
                 }
             }
             HirPattern::Variant {
@@ -8058,9 +9207,26 @@ impl<'a> FuncCodegen<'a> {
                 self.builder.seal_block(err_blk);
                 self.builder.switch_to_block(err_blk);
                 self.terminated = false;
-                self.emit_arc_retain_if_managed(&self.current_return_ty.clone(), ptr)?;
-                self.emit_scope_cleanup_calls_from(0, 0)?;
-                self.builder.ins().return_(&[ptr]);
+                if let Some(frame) = self.async_frame {
+                    let plan = self.async_plan.expect("must have async plan");
+                    let result_future = self.builder.ins().load(
+                        self.ptr_ty,
+                        MemFlags::new(),
+                        frame,
+                        ASYNC_FRAME_RESULT_OFFSET,
+                    );
+                    self.emit_arc_retain_if_managed(&plan.inner_ty, ptr)?;
+                    self.emit_future_complete(result_future, &plan.inner_ty, Some(ptr))?;
+                    self.emit_arc_release_if_managed(&plan.inner_ty, ptr)?;
+                    self.emit_scope_cleanup_calls_from(0, 0)?;
+                    self.emit_simple_async_frame_cleanup(plan, frame, plan.awaits.len(), true)?;
+                    let zero = self.builder.ins().iconst(types::I64, 0);
+                    self.builder.ins().return_(&[zero]);
+                } else {
+                    self.emit_arc_retain_if_managed(&self.current_return_ty.clone(), ptr)?;
+                    self.emit_scope_cleanup_calls_from(0, 0)?;
+                    self.builder.ins().return_(&[ptr]);
+                }
                 self.terminated = true;
                 // Ok path: continue with unwrapped value
                 self.builder.seal_block(ok_blk);
@@ -9853,11 +11019,6 @@ impl<'a> FuncCodegen<'a> {
         args: &[Ty],
         eq: bool,
     ) -> Result<ir::Value, String> {
-        if !args.is_empty() {
-            return Err(native_codegen_unsupported(
-                "generic struct structural equality requires monomorphized layouts",
-            ));
-        }
         let layout = self
             .struct_layouts
             .get(&def_id)
@@ -9866,7 +11027,8 @@ impl<'a> FuncCodegen<'a> {
 
         let mut result = self.builder.ins().iconst(types::I8, if eq { 1 } else { 0 });
         for (_, field) in layout.fields {
-            let cl_ty = cl_type(&field.ty, self.ptr_ty)
+            let concrete_field_ty = substitute_ty_params(&field.ty, args);
+            let cl_ty = cl_type(&concrete_field_ty, self.ptr_ty)
                 .ok_or_else(|| "struct field has no native layout".to_string())?;
             let left = self
                 .builder
@@ -9880,7 +11042,7 @@ impl<'a> FuncCodegen<'a> {
                 if eq { BinaryOp::Eq } else { BinaryOp::Ne },
                 left,
                 right,
-                &field.ty,
+                &concrete_field_ty,
             )?;
             if eq {
                 result = self.builder.ins().band(result, field_equal);

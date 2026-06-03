@@ -2462,7 +2462,7 @@ impl<'a> Checker<'a> {
             self.emit_comparison_type_mismatch(lt, rt, span);
             return Ty::Bool;
         }
-        if !self.supports_builtin_equality(lt)
+        if !self.supports_generic_equality(lt)
             && self
                 .operator_trait_method_sig(lt, "Equatable", "equals")
                 .is_none()
@@ -2542,11 +2542,23 @@ impl<'a> Checker<'a> {
     }
 
     fn supports_generic_equality(&self, ty: &Ty) -> bool {
-        self.supports_builtin_equality(ty) || self.user_type_has_equatable(ty)
+        if self.supports_builtin_equality(ty) || self.user_type_has_equatable(ty) {
+            return true;
+        }
+        if let Ty::Param { index, .. } = ty {
+            return self.param_implements_core_trait(*index, "Equatable");
+        }
+        false
     }
 
     fn supports_generic_equality_inner(&self, ty: &Ty, visiting_named: &mut Vec<DefId>) -> bool {
-        self.supports_builtin_equality_inner(ty, visiting_named) || self.user_type_has_equatable(ty)
+        if self.supports_builtin_equality_inner(ty, visiting_named) || self.user_type_has_equatable(ty) {
+            return true;
+        }
+        if let Ty::Param { index, .. } = ty {
+            return self.param_implements_core_trait(*index, "Equatable");
+        }
+        false
     }
 
     fn supports_structural_struct_equality(
@@ -2555,7 +2567,7 @@ impl<'a> Checker<'a> {
         args: &[Ty],
         visiting_named: &mut Vec<DefId>,
     ) -> bool {
-        if !args.is_empty() || visiting_named.contains(&def_id) {
+        if visiting_named.contains(&def_id) {
             return false;
         }
         let Some(def) = self.def_map.all_defs().get(def_id.0 as usize) else {
@@ -2571,7 +2583,10 @@ impl<'a> Checker<'a> {
         let supported = sig
             .fields
             .iter()
-            .all(|(_, ty)| self.supports_generic_equality_inner(ty, visiting_named));
+            .all(|(_, ty)| {
+                let substituted = substitute_ty_params(ty, args);
+                self.supports_generic_equality_inner(&substituted, visiting_named)
+            });
         visiting_named.pop();
         supported
     }
@@ -2588,7 +2603,7 @@ impl<'a> Checker<'a> {
         let Ty::Named(def_id, args) = ty else {
             return None;
         };
-        if !args.is_empty() || visiting_named.contains(def_id) {
+        if visiting_named.contains(def_id) {
             return None;
         }
         let Some(def) = self.def_map.all_defs().get(def_id.0 as usize) else {
@@ -2604,8 +2619,11 @@ impl<'a> Checker<'a> {
         let unsupported = sig
             .fields
             .iter()
-            .find(|(_, field_ty)| !self.supports_generic_equality_inner(field_ty, visiting_named))
-            .map(|(name, field_ty)| (name.clone(), field_ty.clone()));
+            .find(|(_, field_ty)| {
+                let substituted = substitute_ty_params(field_ty, args);
+                !self.supports_generic_equality_inner(&substituted, visiting_named)
+            })
+            .map(|(name, field_ty)| (name.clone(), substitute_ty_params(field_ty, args)));
         visiting_named.pop();
         unsupported
     }
@@ -2638,7 +2656,9 @@ impl<'a> Checker<'a> {
     }
 
     fn supports_runtime_collection_key_equality(&self, ty: &Ty) -> bool {
-        matches!(ty, Ty::String | Ty::Infer(_) | Ty::Never) || is_current_integer_hash_supported(ty)
+        matches!(ty, Ty::String | Ty::Infer(_) | Ty::Never)
+            || is_current_integer_hash_supported(ty)
+            || self.supports_generic_equality(ty)
     }
 
     fn supports_builtin_ordering(&self, ty: &Ty) -> bool {
@@ -5166,6 +5186,15 @@ impl<'a> Checker<'a> {
         self.user_type_implements_core_trait_id(*type_def_id, "Equatable")
     }
 
+    fn param_implements_core_trait(&self, index: u32, trait_name: &str) -> bool {
+        let Some(trait_def_id) = self.def_map.lookup(&format!("ori.core.{trait_name}")) else {
+            return false;
+        };
+        self.current_where_constraints
+            .iter()
+            .any(|c| c.param_index == index && c.trait_def_id == trait_def_id && !c.negative)
+    }
+
     fn user_type_implements_core_trait(&self, ty: &Ty, trait_name: &str) -> bool {
         let Ty::Named(type_def_id, _) = ty else {
             return false;
@@ -5661,6 +5690,10 @@ impl<'a> Checker<'a> {
             return;
         }
         match ty {
+            Ty::Opaque {
+                kind: OpaqueTy::File,
+                ..
+            } => {}
             Ty::Named(type_def_id, _)
                 if disposable_trait_ids
                     .iter()

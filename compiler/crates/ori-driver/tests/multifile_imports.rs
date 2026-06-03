@@ -2656,35 +2656,6 @@ end
 }
 
 #[test]
-fn check_blocks_generic_struct_equality_until_layout_support() {
-    let dir = TestDir::new("generic_structural_equality_blocked");
-    dir.write(
-        "main.orl",
-        r#"namespace app.main
-
-struct Pair<A, B>
-    first: A
-    second: B
-end
-
-func main()
-    const a: Pair<int, string> = Pair(first: 1, second: "one")
-    const b: Pair<int, string> = Pair(first: 1, second: "one")
-    const same: bool = a == b
-end
-"#,
-    );
-
-    let out = run_check(&dir.path("main.orl")).unwrap();
-    assert!(out.has_errors);
-    assert!(
-        diagnostic_codes(&out).contains(&"type.comparison_not_supported"),
-        "{:?}",
-        out.diagnostics
-    );
-}
-
-#[test]
 fn compile_runs_struct_structural_equality_native() {
     let dir = TestDir::new("struct_structural_equality_native");
     dir.write(

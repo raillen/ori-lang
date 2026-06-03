@@ -29,17 +29,8 @@ docs/
 │   └── 16-runtime-ffi-safety.md              # Segurança FFI do runtime
 ├── planning/                                 # Planos de implementação
 │   ├── README.md                             # Este índice
-│   ├── IMPLEMENTATION_CHECKLIST.md           # Checklist principal (600 itens)
-│   ├── IMPLEMENTATION_CHECKLIST_2.md         # Backlog rota nativa 100% (637 itens)
-│   ├── native-route.md                       # Contrato native route vs C backend
-│   ├── native-abi.md                         # ABI nativa e ownership
-│   ├── native-hir-coverage.md                # Cobertura HIR no backend nativo
-│   ├── native-runtime-route-correction-plan.md # Plano de correção da rota nativa
-│   ├── native-async-state-machine-design.md  # Design da state machine async
-│   ├── async-implementation-plan.md          # Plano de implementação async
-│   ├── ARC_IMPLEMENTATION_PLAN.md            # Plano de implementação ARC
-│   ├── walkthrough-correcoes.md              # Walkthrough das correções feitas
-│   └── ori-test-prompt.md                    # Prompt de teste
+│   ├── IMPLEMENTADOS.md                      # Recursos implementados e resolvidos
+│   └── PENDENTES.md                          # Recursos pendentes e plano de correções com checkboxes
 └── _reversa_sdd/                             # Arquivo histórico de auditorias
     ├── auditoria-profunda-implementacao-2026-05-17.md  # Auditoria mais recente
     ├── auditoria-profunda-implementacao-linguagem-2026-05-13.md
@@ -57,10 +48,9 @@ Status: 16 chapters, covering the complete language contract.
 
 ## Planning Status
 
-The `planning/` directory tracks implementation progress and technical decisions.
-Two checklists track completion:
-- `IMPLEMENTATION_CHECKLIST.md` — main feature checklist (~600 items, mostly ✅)
-- `IMPLEMENTATION_CHECKLIST_2.md` — native route 100% backlog (637 items, all ✅)
+The `planning/` directory tracks implementation progress and technical decisions:
+- `IMPLEMENTADOS.md` — tracks what has been built, tested, and resolved (Cranelift compiler, stdlib, collections v1, concurrency and basic async).
+- `PENDENTES.md` — tracks remaining features, bugs, and advanced compiler/runtime enhancements structured as a sequential phase plan.
 
 The `_reversa_sdd/` directory contains historical audit reports. The most recent
 is `auditoria-profunda-implementacao-2026-05-17.md`.
@@ -69,14 +59,13 @@ is `auditoria-profunda-implementacao-2026-05-17.md`.
 
 | Document | Purpose | Status |
 |---|---|---|
-| `docs/plano-correcao-bugs-2026-05-17.md` | Bug fixes P0/P1 | To do |
+| `docs/planning/PENDENTES.md` | Sequential phase-based backlog & bug fixes | In progress |
 | `docs/plano-implementacao-lsp-avancado.md` | LSP advanced features | Planned |
 
 ## Key Documents for Contributors
 
 1. **Spec:** `docs/spec/01-overview.md` — start here for language design
 2. **Architecture:** `docs/spec/14-backend-support.md` — backend architecture
-3. **Implementation:** `docs/planning/IMPLEMENTATION_CHECKLIST.md` — what's built
-4. **Bugs:** `docs/plano-correcao-bugs-2026-05-17.md` — current bugs to fix
-5. **LSP:** `docs/plano-implementacao-lsp-avancado.md` — LSP roadmap
-6. **Changelog:** `CHANGELOG.md` — project history
+3. **Implementation:** `docs/planning/IMPLEMENTADOS.md` — what's built
+4. **Bugs & Backlog:** `docs/planning/PENDENTES.md` — current pending checklist
+5. **Changelog:** `CHANGELOG.md` — project history

@@ -13,6 +13,8 @@ pub enum OpaqueTy {
     HashTable,
     Graph,
     Heap,
+    File,
+    CancelToken,
 }
 
 impl OpaqueTy {
@@ -28,6 +30,8 @@ impl OpaqueTy {
             OpaqueTy::HashTable => "hash_table.HashTable",
             OpaqueTy::Graph => "graph.Graph",
             OpaqueTy::Heap => "heap.Heap",
+            OpaqueTy::File => "fs.File",
+            OpaqueTy::CancelToken => "task.CancelToken",
         }
     }
 
@@ -202,7 +206,9 @@ impl Ty {
                         | OpaqueTy::Tree
                         | OpaqueTy::HashTable
                         | OpaqueTy::Graph
-                        | OpaqueTy::Heap,
+                        | OpaqueTy::Heap
+                        | OpaqueTy::File
+                        | OpaqueTy::CancelToken,
                     ..
                 }
         )

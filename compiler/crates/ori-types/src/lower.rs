@@ -222,6 +222,14 @@ fn lower_builtin_concurrency_type(path: &str, args: &[Ty]) -> Option<Ty> {
             kind: OpaqueTy::Heap,
             args: vec![args.first().cloned().unwrap_or(Ty::Infer(0))],
         }),
+        "ori.fs.File" => Some(Ty::Opaque {
+            kind: OpaqueTy::File,
+            args: vec![],
+        }),
+        "ori.task.CancelToken" => Some(Ty::Opaque {
+            kind: OpaqueTy::CancelToken,
+            args: vec![],
+        }),
         _ => None,
     }
 }
