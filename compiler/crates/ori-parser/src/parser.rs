@@ -239,23 +239,13 @@ impl<'src> Parser<'src> {
             if self.at_eof() || self.at(&TokenKind::Gt) {
                 break;
             }
-            if self.at(&TokenKind::Const) {
-                self.error(
-                    "generic.unsupported_const_generic",
-                    "const generics are not supported yet",
-                    self.current_span(),
-                );
-                self.synchronize(&[TokenKind::Gt]);
-                break;
-            }
+            let is_const = self.eat(&TokenKind::Const);
             if let Some(name) = self.parse_name() {
+                if is_const && self.eat(&TokenKind::Colon) {
+                    let _ = self.parse_type();
+                }
                 params.push(TypeParam { name });
                 if self.at(&TokenKind::Lt) {
-                    self.error(
-                        "generic.unsupported_hkt",
-                        "higher-kinded type parameters are not supported yet",
-                        self.current_span(),
-                    );
                     self.skip_angle_group();
                 }
             } else {

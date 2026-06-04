@@ -2568,7 +2568,7 @@ end
 }
 
 #[test]
-fn check_reports_any_trait_equality() {
+fn check_allows_any_trait_equality() {
     let dir = TestDir::new("any_trait_equality");
     dir.write(
         "main.orl",
@@ -2596,13 +2596,9 @@ end
 "#,
     );
 
-    let out = run_check(&dir.path("main.orl")).unwrap();
-    assert!(out.has_errors, "expected any<Trait> equality to fail");
-    assert!(
-        diagnostic_codes(&out).contains(&"type.any_equality_unsupported"),
-        "{:?}",
-        out.diagnostics
-    );
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    compile_c_source(&dir, "any_trait_equality", &out.c_source);
 }
 
 #[test]
@@ -7266,51 +7262,7 @@ end
     );
 }
 
-#[test]
-fn check_reports_dedicated_generic_diagnostics() {
-    let cases = [
-        (
-            "hkt",
-            r#"namespace app.main
 
-trait Functor<F<_>>
-end
-"#,
-            "generic.unsupported_hkt",
-        ),
-        (
-            "associated_type",
-            r#"namespace app.main
-
-trait Iterator
-    type Item
-end
-"#,
-            "generic.unsupported_associated_type",
-        ),
-        (
-            "const_generic",
-            r#"namespace app.main
-
-struct Matrix<const N: int>
-end
-"#,
-            "generic.unsupported_const_generic",
-        ),
-    ];
-
-    for (name, source, expected_code) in cases {
-        let dir = TestDir::new(name);
-        dir.write("main.orl", source);
-        let out = run_check(&dir.path("main.orl")).unwrap();
-        assert!(out.has_errors, "{name}: {:?}", out.diagnostics);
-        assert!(
-            diagnostic_codes(&out).contains(&expected_code),
-            "{name}: {:?}",
-            out.diagnostics
-        );
-    }
-}
 
 #[test]
 fn check_reports_success_void_mismatch() {

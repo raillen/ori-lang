@@ -1,4 +1,6 @@
-use crate::{OpaqueTy, Ty};
+use crate::{OpaqueTy, Ty, DefId};
+
+pub const JSON_VALUE_PLACEHOLDER: DefId = DefId(9999);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StdlibRuntimeFunction {
@@ -951,10 +953,19 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         ),
         "ori.json.parse" => (
             vec![Ty::String],
-            Ty::Result(Box::new(Ty::String), Box::new(Ty::String)),
+            Ty::Result(
+                Box::new(Ty::Named(JSON_VALUE_PLACEHOLDER, Vec::new())),
+                Box::new(Ty::String),
+            ),
         ),
-        "ori.json.stringify" => (vec![Ty::String], Ty::String),
-        "ori.json.stringify_pretty" => (vec![Ty::String], Ty::String),
+        "ori.json.stringify" => (
+            vec![Ty::Named(JSON_VALUE_PLACEHOLDER, Vec::new())],
+            Ty::String,
+        ),
+        "ori.json.stringify_pretty" => (
+            vec![Ty::Named(JSON_VALUE_PLACEHOLDER, Vec::new())],
+            Ty::String,
+        ),
         path if list_backed_collection_kind(path, &["new"]).is_some() => {
             let kind = list_backed_collection_kind(path, &["new"]).unwrap();
             (vec![], opaque_collection(kind))

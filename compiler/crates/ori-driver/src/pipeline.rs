@@ -1765,6 +1765,7 @@ fn validate_doc_tags(source: &LoadedSource, sink: &mut DiagnosticSink) {
                             func.return_ty.as_ref(),
                             sink,
                         ),
+                        TraitMember::Type(_) => {}
                     }
                 }
             }
@@ -2577,6 +2578,7 @@ fn render_source_documentation(source: &LoadedSource, out: &mut String) -> usize
                                 entry_count += 1;
                             }
                         }
+                        TraitMember::Type(_) => {}
                     }
                 }
             }
@@ -2960,6 +2962,40 @@ fn lower_loaded_sources(
         merged.funcs.append(&mut hir.funcs);
         merged.consts.append(&mut hir.consts);
     }
+
+    // Automatically append stdlib enums (e.g. ori.json.Value) to the HirModule
+    // so they are correctly registered in layout computations in code generation backends.
+    let json_val_def_id = resolved.def_map.lookup("ori.json.Value");
+    if let Some(concrete_id) = json_val_def_id {
+        if !merged.enums.iter().any(|e| e.def_id == concrete_id) {
+            if let Some(sig) = resolved.enum_sigs.iter().find(|s| s.def_id == concrete_id) {
+                let variants = sig.variants.iter().map(|v| {
+                    let fields = v.fields.iter().map(|(fname, fty)| {
+                        ori_hir::hir::HirField {
+                            name: fname.clone(),
+                            ty: fty.clone(),
+                            contract: None,
+                            span: ori_diagnostics::Span::DUMMY,
+                        }
+                    }).collect();
+                    ori_hir::hir::HirVariant {
+                        name: v.name.clone(),
+                        fields,
+                        span: ori_diagnostics::Span::DUMMY,
+                    }
+                }).collect();
+                let hir_enum = ori_hir::hir::HirEnum {
+                    def_id: concrete_id,
+                    name: smol_str::SmolStr::new("ori.json.Value"),
+                    variants,
+                    is_public: true,
+                    span: ori_diagnostics::Span::DUMMY,
+                };
+                merged.enums.push(hir_enum);
+            }
+        }
+    }
+
     ori_hir::insert_default_arguments(&mut merged);
     ori_hir::monomorphize_generics(&mut merged);
     merged

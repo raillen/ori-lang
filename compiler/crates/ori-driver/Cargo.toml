@@ -22,3 +22,4 @@ ori-hir         = { workspace = true }
 ori-codegen     = { workspace = true }
 ori-runtime     = { workspace = true }
 clap            = { workspace = true }
+smol_str        = { workspace = true }

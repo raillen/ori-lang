@@ -1767,11 +1767,12 @@ end
 }
 
 #[test]
-fn trait_rejects_equality_on_any() {
+fn trait_object_equality_works() {
     let dir = TestDir::new("trait_any_equality");
     dir.write(
         "main.orl",
         r#"namespace app.main
+import ori.io as io
 trait Drawable
     func draw(self) -> string
 end
@@ -1785,18 +1786,22 @@ implement Drawable for Circle
 end
 func main()
     const a: any<Drawable> = Circle(radius: 1.0)
-    const b: any<Drawable> = Circle(radius: 2.0)
-    const eq: bool = a == b
+    const b: any<Drawable> = Circle(radius: 1.0)
+    const c: any<Drawable> = Circle(radius: 2.0)
+    io.println(string(a == b))
+    io.println(string(a != c))
 end
 "#,
     );
-    let out = run_check(&dir.path("main.orl")).unwrap();
-    assert!(out.has_errors);
-    assert!(
-        diagnostic_codes(&out).contains(&"type.any_equality_unsupported"),
-        "{:?}",
-        out.diagnostics
-    );
+    let exe = exe_path(&dir, "trait_any_equality");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let lines = stdout.lines().collect::<Vec<_>>();
+    assert_eq!(lines, ["true", "true"]);
 }
 
 #[test]
@@ -2311,65 +2316,55 @@ end
 }
 
 #[test]
-fn generic_rejects_unsupported_hkt() {
+fn generic_accepts_hkt() {
     let dir = TestDir::new("generic_hkt");
     dir.write(
         "main.orl",
         r#"namespace app.main
-trait Functor<F<_>> end
+trait Functor<F<_>>
+    func fmap<A, B>(fa: F<A>, f: func(A) -> B) -> F<B>
+end
 func main()
 end
 "#,
     );
     let out = run_check(&dir.path("main.orl")).unwrap();
-    assert!(out.has_errors);
-    assert!(
-        diagnostic_codes(&out).contains(&"generic.unsupported_hkt"),
-        "{:?}",
-        out.diagnostics
-    );
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
 }
 
 #[test]
-fn generic_rejects_associated_type_in_trait() {
+fn generic_accepts_associated_type_in_trait() {
     let dir = TestDir::new("generic_assoc_type");
     dir.write(
         "main.orl",
         r#"namespace app.main
 trait Container
     type Item
+    func get(self) -> Item
 end
 func main()
 end
 "#,
     );
     let out = run_check(&dir.path("main.orl")).unwrap();
-    assert!(out.has_errors);
-    assert!(
-        diagnostic_codes(&out).contains(&"generic.unsupported_associated_type"),
-        "{:?}",
-        out.diagnostics
-    );
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
 }
 
 #[test]
-fn generic_rejects_const_generic_param() {
+fn generic_accepts_const_generic_param() {
     let dir = TestDir::new("generic_const_generic");
     dir.write(
         "main.orl",
         r#"namespace app.main
-struct Matrix<const N: int> end
+struct Matrix<const N: int>
+    value: int
+end
 func main()
 end
 "#,
     );
     let out = run_check(&dir.path("main.orl")).unwrap();
-    assert!(out.has_errors);
-    assert!(
-        diagnostic_codes(&out).contains(&"generic.unsupported_const_generic"),
-        "{:?}",
-        out.diagnostics
-    );
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
 }
 
 // ─── Part 10 — Cross-Cutting Scenarios ────────────────────────────────────────

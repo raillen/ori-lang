@@ -138,7 +138,7 @@ pub fn resolve_many<S: Into<SmolStr>>(
     let mut implemented_pairs = HashMap::new();
     let core_traits = register_core_traits(&mut def_map);
     let stdlib_error_def_id = register_stdlib_error_type(&mut def_map);
-    let stdlib_json_value_def_id = register_stdlib_json_value_alias(&mut def_map);
+    let stdlib_json_value_def_id = register_stdlib_json_value_enum(&mut def_map);
 
     // ── Phase 1: register definitions ────────────────────────────────────────
     for (file, file_id) in files {
@@ -161,12 +161,10 @@ pub fn resolve_many<S: Into<SmolStr>>(
     let mut func_sigs = Vec::new();
     let mut value_sigs = Vec::new();
     let mut struct_sigs = vec![builtin_stdlib_error_struct_sig(stdlib_error_def_id)];
-    let mut enum_sigs = Vec::new();
+    let mut enum_sigs = vec![builtin_stdlib_json_value_enum_sig(stdlib_json_value_def_id)];
     let mut trait_sigs = builtin_core_trait_sigs(&core_traits);
     let mut impl_sigs = Vec::new();
-    let mut type_alias_sigs = vec![builtin_stdlib_json_value_alias_sig(
-        stdlib_json_value_def_id,
-    )];
+    let mut type_alias_sigs = Vec::new();
     let deprecated_sigs = collect_deprecated_sigs(files, &def_map);
     for (file, file_id) in files {
         let namespace = SmolStr::new(file.namespace.name.to_string());
@@ -433,8 +431,13 @@ pub fn resolve_many<S: Into<SmolStr>>(
                 Item::Trait(t) => {
                     let path = format!("{}.{}", namespace, t.name.text);
                     let trait_def_id = def_map.lookup(&path);
-                    let tp: Vec<SmolStr> =
+                    let mut tp: Vec<SmolStr> =
                         t.type_params.iter().map(|p| p.name.text.clone()).collect();
+                    for m in &t.members {
+                        if let ori_ast::item::TraitMember::Type(name) = m {
+                            tp.push(name.text.clone());
+                        }
+                    }
                     let mut methods = Vec::new();
                     for m in &t.members {
                         match m {
@@ -568,6 +571,7 @@ pub fn resolve_many<S: Into<SmolStr>>(
                                     });
                                 }
                             }
+                            ori_ast::item::TraitMember::Type(_) => {}
                         }
                     }
                     let _ = where_constraints(
@@ -1006,9 +1010,9 @@ fn register_stdlib_error_type(def_map: &mut DefMap) -> DefId {
     )
 }
 
-fn register_stdlib_json_value_alias(def_map: &mut DefMap) -> DefId {
+fn register_stdlib_json_value_enum(def_map: &mut DefMap) -> DefId {
     def_map.register(
-        DefKind::TypeAlias,
+        DefKind::Enum,
         SmolStr::new("Value"),
         SmolStr::new("ori.json.Value"),
         true,
@@ -1031,11 +1035,41 @@ fn builtin_stdlib_error_struct_sig(def_id: DefId) -> StructSig {
     }
 }
 
-fn builtin_stdlib_json_value_alias_sig(def_id: DefId) -> TypeAliasSig {
-    TypeAliasSig {
+fn builtin_stdlib_json_value_enum_sig(def_id: DefId) -> EnumSig {
+    EnumSig {
         def_id,
-        type_params: Vec::new(),
-        ty: Ty::String,
+        variants: vec![
+            EnumVariantSig {
+                name: SmolStr::new("Null"),
+                fields: Vec::new(),
+            },
+            EnumVariantSig {
+                name: SmolStr::new("Bool"),
+                fields: vec![(SmolStr::new("value"), Ty::Bool)],
+            },
+            EnumVariantSig {
+                name: SmolStr::new("Number"),
+                fields: vec![(SmolStr::new("value"), Ty::Float)],
+            },
+            EnumVariantSig {
+                name: SmolStr::new("String"),
+                fields: vec![(SmolStr::new("value"), Ty::String)],
+            },
+            EnumVariantSig {
+                name: SmolStr::new("Array"),
+                fields: vec![(
+                    SmolStr::new("items"),
+                    Ty::List(Box::new(Ty::Named(def_id, Vec::new()))),
+                )],
+            },
+            EnumVariantSig {
+                name: SmolStr::new("Object"),
+                fields: vec![(
+                    SmolStr::new("fields"),
+                    Ty::Map(Box::new(Ty::String), Box::new(Ty::Named(def_id, Vec::new()))),
+                )],
+            },
+        ],
     }
 }
 
@@ -1182,6 +1216,7 @@ fn register_item(
                             func.span,
                         );
                     }
+                    ori_ast::item::TraitMember::Type(_) => {}
                 }
             }
         }

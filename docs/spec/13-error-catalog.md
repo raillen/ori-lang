@@ -68,7 +68,6 @@ when the compiler starts producing it.
 | Code | Severity | Description |
 |---|---|---|
 | `type.ambiguous_method` | error | Method call matches more than one trait method for the receiver type |
-| `type.any_equality_unsupported` | error | Equality comparison (`==` or `!=`) on trait objects (`any<Trait>`) is not supported |
 | `type.anon_struct_field_mismatch` | error | Anonymous struct literal fields do not match the expected struct type |
 | `type.anon_struct_type_unknown` | error | Anonymous struct literal is used without an expected struct type |
 | `type.arg_count_mismatch` | error | Function call has the wrong number of arguments |
@@ -243,9 +242,6 @@ when the compiler starts producing it.
 | `generic.constraint_not_trait` | error | Generic constraint target is not a trait |
 | `generic.circular_instantiation` | error | Generic function recursively instantiates itself without a concrete type |
 | `generic.negative_constraint_violated` | error | Type violates a negative generic constraint |
-| `generic.unsupported_associated_type` | error | Trait associated types are not supported yet |
-| `generic.unsupported_const_generic` | error | Const generic parameters are not supported yet |
-| `generic.unsupported_hkt` | error | Higher-kinded type parameters are not supported yet |
 | `generic.unknown_type_param` | error | Generic constraint references an unknown type parameter |
 
 ### `impl`

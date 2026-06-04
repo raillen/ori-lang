@@ -6,7 +6,7 @@ use ori_ast::stmt::{Block, MatchCase, Stmt};
 use ori_diagnostics::{DiagnosticSink, FileId, Span};
 use ori_types::literal::{parse_float_literal, parse_int_literal};
 use ori_types::{
-    expand_ty_aliases, lower_type_with_aliases, DefId, DefKind, DefMap, EnumSig, FuncSig, ImplSig,
+    expand_ty_aliases, DefId, DefKind, DefMap, EnumSig, FuncSig, ImplSig,
     OpaqueTy, ReExport, StructSig, TraitSig, Ty, TypeAliasSig, ValueSig,
 };
 use smol_str::SmolStr;
@@ -242,7 +242,68 @@ fn ori_mem_align_of_ty(ty: &Ty) -> i64 {
     }
 }
 
-fn stdlib_c_func_ty(c_name: &str) -> Ty {
+fn expr_to_qualified_path(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Ident(ident) => Some(ident.text.to_string()),
+        Expr::QualifiedIdent(q) => Some(q.to_string()),
+        Expr::Field { object, field, .. } => {
+            let prefix = expr_to_qualified_path(object)?;
+            Some(format!("{}.{}", prefix, field.text))
+        }
+        _ => None,
+    }
+}
+
+fn replace_json_placeholder_in_ty(ty: Ty, def_map: &DefMap) -> Ty {
+    let json_val_def_id = def_map.lookup("ori.json.Value");
+    fn recurse(t: Ty, json_val_def_id: Option<DefId>) -> Ty {
+        match t {
+            Ty::Named(id, _) if id == ori_types::stdlib::JSON_VALUE_PLACEHOLDER => {
+                if let Some(concrete_id) = json_val_def_id {
+                    Ty::Named(concrete_id, vec![])
+                } else {
+                    Ty::Named(id, vec![])
+                }
+            }
+            Ty::Named(id, args) => {
+                let new_args = args.into_iter().map(|arg| recurse(arg, json_val_def_id)).collect();
+                Ty::Named(id, new_args)
+            }
+            Ty::Optional(inner) => Ty::Optional(Box::new(recurse(*inner, json_val_def_id))),
+            Ty::Result(ok, err) => Ty::Result(
+                Box::new(recurse(*ok, json_val_def_id)),
+                Box::new(recurse(*err, json_val_def_id)),
+            ),
+            Ty::List(inner) => Ty::List(Box::new(recurse(*inner, json_val_def_id))),
+            Ty::Map(k, v) => Ty::Map(
+                Box::new(recurse(*k, json_val_def_id)),
+                Box::new(recurse(*v, json_val_def_id)),
+            ),
+            Ty::Set(inner) => Ty::Set(Box::new(recurse(*inner, json_val_def_id))),
+            Ty::Range(inner) => Ty::Range(Box::new(recurse(*inner, json_val_def_id))),
+            Ty::Tuple(elems) => Ty::Tuple(
+                elems.into_iter().map(|e| recurse(e, json_val_def_id)).collect()
+            ),
+            Ty::Func { params, ret } => Ty::Func {
+                params: params.into_iter().map(|p| recurse(p, json_val_def_id)).collect(),
+                ret: Box::new(recurse(*ret, json_val_def_id)),
+            },
+            _ => t,
+        }
+    }
+    recurse(ty, json_val_def_id)
+}
+
+fn stdlib_c_func_ty(c_name: &str, def_map: Option<&DefMap>) -> Ty {
+    let raw = stdlib_c_func_ty_raw(c_name);
+    if let Some(def_map) = def_map {
+        replace_json_placeholder_in_ty(raw, def_map)
+    } else {
+        raw
+    }
+}
+
+fn stdlib_c_func_ty_raw(c_name: &str) -> Ty {
     if let Some(entry) = ori_types::stdlib::stdlib_runtime_functions()
         .iter()
         .find(|entry| entry.runtime_symbol == c_name)
@@ -970,6 +1031,7 @@ struct Lowerer<'a> {
     generated_funcs: Vec<HirFunc>,
     /// `DefId` → `(arity, underlying_ty)` for each `type alias` declaration.
     type_alias_map: HashMap<DefId, (usize, Ty)>,
+    local_type_aliases: HashMap<SmolStr, ori_ast::ty::Type>,
 }
 
 impl<'a> Lowerer<'a> {
@@ -1008,6 +1070,7 @@ impl<'a> Lowerer<'a> {
             closure_counter: 0,
             generated_funcs: Vec::new(),
             type_alias_map,
+            local_type_aliases: HashMap::new(),
         }
     }
 
@@ -1062,7 +1125,7 @@ impl<'a> Lowerer<'a> {
             ("ori.math.max", false) => "ori_math_max",
             _ => "ori_math_abs",
         };
-        let sig_ty = stdlib_c_func_ty(symbol);
+        let sig_ty = stdlib_c_func_ty(symbol, Some(self.def_map));
         let ret_ty = match &sig_ty {
             Ty::Func { ret, .. } => *ret.clone(),
             _ => Ty::Infer(0),
@@ -1487,7 +1550,7 @@ impl<'a> Lowerer<'a> {
         }
     }
     fn lower_ast_ty(&mut self, t: &ori_ast::ty::Type, tp: &[SmolStr]) -> Ty {
-        let raw = lower_type_with_aliases(
+        let raw = ori_types::lower_type_with_local_aliases(
             t,
             self.namespace,
             tp,
@@ -1495,6 +1558,7 @@ impl<'a> Lowerer<'a> {
             self.file_id,
             self.sink,
             &self.aliases,
+            &self.local_type_aliases,
         );
         expand_ty_aliases(raw, self.def_map, &self.type_alias_map)
     }
@@ -1884,6 +1948,7 @@ pub fn lower(
                     .map(|def_id| Ty::Named(def_id, Vec::new()))
                     .unwrap_or(Ty::Infer(0));
                 let tp: Vec<SmolStr> = i.type_params.iter().map(|p| p.name.text.clone()).collect();
+                l.local_type_aliases = i.associated_types.iter().map(|(name, ty)| (name.text.clone(), ty.clone())).collect();
                 for m in &i.methods {
                     let mut all_tp = tp.clone();
                     all_tp.extend(m.type_params.iter().map(|p| p.name.text.clone()));
@@ -1926,6 +1991,7 @@ pub fn lower(
                         span: m.span,
                     });
                 }
+                l.local_type_aliases.clear();
             }
             Item::Trait(t) => {
                 let trait_path = format!("{}.{}", namespace, t.name.text);
@@ -1933,7 +1999,12 @@ pub fn lower(
                     .lookup(&trait_path)
                     .map(|def_id| Ty::Named(def_id, Vec::new()))
                     .unwrap_or(Ty::Infer(0));
-                let tp: Vec<SmolStr> = t.type_params.iter().map(|p| p.name.text.clone()).collect();
+                let mut tp: Vec<SmolStr> = t.type_params.iter().map(|p| p.name.text.clone()).collect();
+                for m in &t.members {
+                    if let ori_ast::item::TraitMember::Type(name) = m {
+                        tp.push(name.text.clone());
+                    }
+                }
                 for m in &t.members {
                     if let ori_ast::item::TraitMember::Default(func) = m {
                         let mut all_tp = tp.clone();
@@ -2754,7 +2825,8 @@ impl<'a> Lowerer<'a> {
                 span,
                 ..
             } => {
-                let pat = lower_pattern(pattern, scr_ty, self.enum_sigs);
+                let resolved_scr_ty = replace_json_placeholder_in_ty(scr_ty.clone(), self.def_map);
+                let pat = lower_pattern(pattern, &resolved_scr_ty, self.enum_sigs);
                 self.push();
                 bind_hir_pattern_scope(self, &pat);
                 let stmts = body.iter().filter_map(|s| self.lower_stmt(s, tp)).collect();
@@ -2913,7 +2985,7 @@ impl<'a> Lowerer<'a> {
                 if let Some(c_name) = self.resolve_stdlib(&path) {
                     return HirExpr {
                         kind: HirExprKind::Var(SmolStr::new(c_name)),
-                        ty: stdlib_c_func_ty(c_name),
+                        ty: stdlib_c_func_ty(c_name, Some(self.def_map)),
                         span,
                     };
                 }
@@ -2997,6 +3069,18 @@ impl<'a> Lowerer<'a> {
                 }
             }
             Expr::Field { object, field, .. } => {
+                if let Some(path) = expr_to_qualified_path(expr) {
+                    let first_part = path.split('.').next().unwrap_or(&path);
+                    if self.lookup_var(first_part).is_none() {
+                        if let Some(c_name) = self.resolve_stdlib(&path) {
+                            return HirExpr {
+                                kind: HirExprKind::Var(SmolStr::new(c_name)),
+                                ty: stdlib_c_func_ty(c_name, Some(self.def_map)),
+                                span,
+                            };
+                        }
+                    }
+                }
                 let obj = self.lower_expr(object, tp);
                 let ty = if let Ty::Named(def_id, _) = &obj.ty {
                     self.struct_field_ty(*def_id, field.as_str())
@@ -3113,6 +3197,70 @@ impl<'a> Lowerer<'a> {
                     }
                 }
 
+                // Intercept stdlib calls that might be written as field accesses like `json.parse`
+                if let Some(path) = expr_to_qualified_path(callee) {
+                    let first_part = path.split('.').next().unwrap_or(&path);
+                    if self.lookup_var(first_part).is_none() {
+                        if let Some(math_path) = self.resolve_math_overload(&path) {
+                            return self.lower_math_overload_call(math_path, args, tp, *span);
+                        }
+                        if path == "string" {
+                            let args_h = self.lower_call_args(args, tp);
+                            if let Some(first) = args_h.first() {
+                                if matches!(first.value.ty, Ty::String) {
+                                    let mut value = first.value.clone();
+                                    value.span = *span;
+                                    return value;
+                                }
+                                if let Some(c_name) = string_conversion_c_name(&first.value.ty) {
+                                    let sig_ty = stdlib_c_func_ty(c_name, Some(self.def_map));
+                                    return HirExpr {
+                                        kind: HirExprKind::Call {
+                                            callee: Box::new(HirExpr {
+                                                kind: HirExprKind::Var(SmolStr::new(c_name)),
+                                                ty: sig_ty,
+                                                span: callee.span(),
+                                            }),
+                                            args: args_h,
+                                        },
+                                        ty: Ty::String,
+                                        span: *span,
+                                    };
+                                }
+                                if let Some(display_call) = self.displayable_conversion_expr(
+                                    first.value.clone(),
+                                    callee.span(),
+                                    *span,
+                                ) {
+                                    return display_call;
+                                }
+                            }
+                        }
+                        if let Some(c_name) = self.resolve_stdlib(&path) {
+                            let sig_ty = stdlib_c_func_ty(c_name, Some(self.def_map));
+                            let args_h = self.lower_call_args(args, tp);
+                            let fallback_ret_ty = if let Ty::Func { ret, .. } = &sig_ty {
+                                *ret.clone()
+                            } else {
+                                Ty::Infer(0)
+                            };
+                            let ret_ty = specialized_stdlib_call_ret_ty(c_name, &args_h, fallback_ret_ty);
+                            return HirExpr {
+                                kind: HirExprKind::Call {
+                                    callee: Box::new(HirExpr {
+                                        kind: HirExprKind::Var(SmolStr::new(c_name)),
+                                        ty: sig_ty,
+                                        span: callee.span(),
+                                    }),
+                                    args: args_h,
+                                },
+                                ty: ret_ty,
+                                span: *span,
+                            };
+                        }
+                    }
+                }
+
                 // Intercept builtin wrapper functions before generic lowering
                 if let Expr::QualifiedIdent(q) = callee.as_ref() {
                     let name = q.to_string();
@@ -3128,7 +3276,7 @@ impl<'a> Lowerer<'a> {
                                 return value;
                             }
                             if let Some(c_name) = string_conversion_c_name(&first.value.ty) {
-                                let sig_ty = stdlib_c_func_ty(c_name);
+                                let sig_ty = stdlib_c_func_ty(c_name, Some(self.def_map));
                                 return HirExpr {
                                     kind: HirExprKind::Call {
                                         callee: Box::new(HirExpr {
@@ -3157,7 +3305,7 @@ impl<'a> Lowerer<'a> {
                             kind: HirExprKind::Call {
                                 callee: Box::new(HirExpr {
                                     kind: HirExprKind::Var(SmolStr::new("ori_panic")),
-                                    ty: stdlib_c_func_ty("ori_panic"),
+                                    ty: stdlib_c_func_ty("ori_panic", Some(self.def_map)),
                                     span: callee.span(),
                                 }),
                                 args: args_h,
@@ -3326,7 +3474,7 @@ impl<'a> Lowerer<'a> {
                             let namespaces = ["ori.string", "ori.bytes"];
                             for ns in namespaces {
                                 if let Some(c_name) = stdlib_c_name(&format!("{ns}.{m_name}")) {
-                                    let sig_ty = stdlib_c_func_ty(c_name);
+                                    let sig_ty = stdlib_c_func_ty(c_name, Some(self.def_map));
                                     if let Ty::Func { params, .. } = &sig_ty {
                                         if let Some(first_param) = params.first() {
                                             if receiver_ty.is_assignable_to(first_param) {
@@ -3531,7 +3679,7 @@ impl<'a> Lowerer<'a> {
                     let namespaces = ["ori.string", "ori.bytes"];
                     for ns in namespaces {
                         if let Some(c_name) = stdlib_c_name(&format!("{ns}.{m_name}")) {
-                            let sig_ty = stdlib_c_func_ty(c_name);
+                            let sig_ty = stdlib_c_func_ty(c_name, Some(self.def_map));
                             if let Ty::Func { params, .. } = &sig_ty {
                                 if let Some(first_param) = params.first() {
                                     if obj_h.ty.is_assignable_to(first_param) {
@@ -4264,7 +4412,26 @@ fn lower_pattern(
     use ori_ast::pattern::Pattern;
     match pat {
         Pattern::Wildcard(_) => HirPattern::Wildcard,
-        Pattern::Binding(n) => HirPattern::Binding(n.text.clone(), scr_ty.clone()),
+        Pattern::Binding(n) => {
+            let mut resolved_def_id = None;
+            if let Ty::Named(def_id, _) = scr_ty {
+                resolved_def_id = Some(*def_id);
+            }
+            if let Some(def_id) = resolved_def_id {
+                if let Some(sig) = enum_sigs.iter().find(|sig| sig.def_id == def_id) {
+                    if let Some(variant_sig) = sig.variants.iter().find(|v| v.name == n.text) {
+                        if variant_sig.fields.is_empty() {
+                            return HirPattern::Variant {
+                                def_id,
+                                variant: n.text.clone(),
+                                fields: Vec::new(),
+                            };
+                        }
+                    }
+                }
+            }
+            HirPattern::Binding(n.text.clone(), scr_ty.clone())
+        }
         Pattern::None(_) => HirPattern::None_,
         Pattern::Some(p, _) => {
             let inner_ty = if let Ty::Optional(inner) = scr_ty {
@@ -4310,9 +4477,20 @@ fn lower_pattern(
             )
         }
         Pattern::VariantUnit { name, .. } => {
+            let mut resolved_def_id = None;
             if let Ty::Named(def_id, _) = scr_ty {
+                resolved_def_id = Some(*def_id);
+            } else if let Ty::Infer(_) = scr_ty {
+                if let Some(sig) = enum_sigs.iter().find(|sig| {
+                    sig.variants.iter().any(|variant| variant.name == name.text)
+                }) {
+                    resolved_def_id = Some(sig.def_id);
+                }
+            }
+
+            if let Some(def_id) = resolved_def_id {
                 HirPattern::Variant {
-                    def_id: *def_id,
+                    def_id,
                     variant: name.text.clone(),
                     fields: Vec::new(),
                 }
@@ -4321,18 +4499,29 @@ fn lower_pattern(
             }
         }
         Pattern::VariantNamed { name, fields, .. } => {
+            let mut resolved_def_id = None;
             if let Ty::Named(def_id, _) = scr_ty {
+                resolved_def_id = Some(*def_id);
+            } else if let Ty::Infer(_) = scr_ty {
+                if let Some(sig) = enum_sigs.iter().find(|sig| {
+                    sig.variants.iter().any(|variant| variant.name == name.text)
+                }) {
+                    resolved_def_id = Some(sig.def_id);
+                }
+            }
+
+            if let Some(def_id) = resolved_def_id {
                 let variant_sig =
                     enum_sigs
                         .iter()
-                        .find(|sig| sig.def_id == *def_id)
+                        .find(|sig| sig.def_id == def_id)
                         .and_then(|sig| {
                             sig.variants
                                 .iter()
                                 .find(|variant| variant.name == name.text)
                         });
                 HirPattern::Variant {
-                    def_id: *def_id,
+                    def_id,
                     variant: name.text.clone(),
                     fields: fields
                         .iter()
@@ -4684,7 +4873,7 @@ mod tests {
                 assert_eq!(stdlib_c_name(alias), Some(entry.runtime_symbol), "{alias}");
             }
             assert!(
-                matches!(stdlib_c_func_ty(entry.runtime_symbol), Ty::Func { .. }),
+                matches!(stdlib_c_func_ty(entry.runtime_symbol, None), Ty::Func { .. }),
                 "{} -> {} has no HIR stdlib function type",
                 entry.canonical_path,
                 entry.runtime_symbol

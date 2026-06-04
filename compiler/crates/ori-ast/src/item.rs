@@ -185,6 +185,8 @@ pub enum TraitMember {
     Required(FuncSignature),
     /// A default method — has both signature and body.
     Default(FuncDecl),
+    /// An associated type declaration.
+    Type(Name),
 }
 
 // ── Implement ─────────────────────────────────────────────────────────────────
@@ -197,6 +199,7 @@ pub struct ImplementDecl {
     pub for_type: QualifiedName,
     pub where_clause: Option<WhereClause>,
     pub methods: Vec<FuncDecl>,
+    pub associated_types: Vec<(Name, Type)>,
     pub span: Span,
 }
 

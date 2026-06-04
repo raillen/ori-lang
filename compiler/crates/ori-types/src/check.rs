@@ -473,8 +473,13 @@ impl<'a> Checker<'a> {
                     restore_alias(&mut self.aliases, "Self", previous_self);
                 }
                 Item::Trait(t) => {
-                    let tp: Vec<SmolStr> =
+                    let mut tp: Vec<SmolStr> =
                         t.type_params.iter().map(|p| p.name.text.clone()).collect();
+                    for m in &t.members {
+                        if let ori_ast::item::TraitMember::Type(name) = m {
+                            tp.push(name.text.clone());
+                        }
+                    }
                     let previous_self = self
                         .aliases
                         .insert(SmolStr::new("Self"), t.name.text.clone());
@@ -2443,21 +2448,6 @@ impl<'a> Checker<'a> {
         if lt.is_error() || rt.is_error() {
             return Ty::Bool;
         }
-        if matches!(lt, Ty::Any(_)) || matches!(rt, Ty::Any(_)) {
-            self.sink.emit(
-                Diagnostic::error(
-                    "type.any_equality_unsupported",
-                    "equality comparison (`==` or `!=`) on trait objects (`any<Trait>`) is not supported",
-                )
-                .with_label(Label::primary(
-                    self.file_id,
-                    span,
-                    "invalid equality comparison here",
-                ))
-                .with_action("compare specific fields or use a method instead"),
-            );
-            return Ty::Error;
-        }
         if !self.same_comparison_type(lt, rt) {
             self.emit_comparison_type_mismatch(lt, rt, span);
             return Ty::Bool;
@@ -2511,7 +2501,7 @@ impl<'a> Checker<'a> {
     }
 
     fn supports_builtin_equality_inner(&self, ty: &Ty, visiting_named: &mut Vec<DefId>) -> bool {
-        if ty.is_numeric() || matches!(ty, Ty::Bool | Ty::String | Ty::Infer(_) | Ty::Never) {
+        if ty.is_numeric() || matches!(ty, Ty::Bool | Ty::String | Ty::Infer(_) | Ty::Never | Ty::Any(_)) {
             return true;
         }
         // Structural equality for compound types whose elements support equality.
@@ -2536,6 +2526,13 @@ impl<'a> Checker<'a> {
             Ty::Bytes => true,
             Ty::Named(def_id, args) => {
                 self.supports_structural_struct_equality(*def_id, args, visiting_named)
+            }
+            Ty::Opaque { kind, args } if kind.is_list_backed_collection() => {
+                if let Some(elem_ty) = args.first() {
+                    self.supports_generic_equality_inner(elem_ty, visiting_named)
+                } else {
+                    false
+                }
             }
             _ => false,
         }
@@ -3197,6 +3194,8 @@ impl<'a> Checker<'a> {
             return Some(ret);
         }
         let (params, ret) = stdlib_func_sig(path)?;
+        let params: Vec<Ty> = params.into_iter().map(|p| self.replace_json_placeholder(p)).collect();
+        let ret = self.replace_json_placeholder(ret);
         // Warn if this stdlib function lacks native runtime support.
         if !crate::stdlib::stdlib_native_runtime_available(path) {
             self.sink.emit(
@@ -3618,6 +3617,54 @@ impl<'a> Checker<'a> {
             _ => {}
         }
         Some(ret)
+    }
+
+    fn replace_json_placeholder(&self, ty: Ty) -> Ty {
+        let json_val_def_id = self.def_map.lookup("ori.json.Value");
+        fn recurse(t: Ty, json_val_def_id: Option<DefId>) -> Ty {
+            match t {
+                Ty::Named(id, _) if id == crate::stdlib::JSON_VALUE_PLACEHOLDER => {
+                    if let Some(concrete_id) = json_val_def_id {
+                        Ty::Named(concrete_id, vec![])
+                    } else {
+                        Ty::Named(id, vec![])
+                    }
+                }
+                Ty::Named(id, args) => {
+                    let new_args = args.into_iter().map(|arg| recurse(arg, json_val_def_id)).collect();
+                    Ty::Named(id, new_args)
+                }
+                Ty::Optional(inner) => Ty::Optional(Box::new(recurse(*inner, json_val_def_id))),
+                Ty::Result(ok, err) => Ty::Result(
+                    Box::new(recurse(*ok, json_val_def_id)),
+                    Box::new(recurse(*err, json_val_def_id)),
+                ),
+                Ty::List(inner) => Ty::List(Box::new(recurse(*inner, json_val_def_id))),
+                Ty::Map(k, v) => Ty::Map(
+                    Box::new(recurse(*k, json_val_def_id)),
+                    Box::new(recurse(*v, json_val_def_id)),
+                ),
+                Ty::Set(inner) => Ty::Set(Box::new(recurse(*inner, json_val_def_id))),
+                Ty::Range(inner) => Ty::Range(Box::new(recurse(*inner, json_val_def_id))),
+                Ty::Tuple(elems) => Ty::Tuple(
+                    elems.into_iter().map(|e| recurse(e, json_val_def_id)).collect()
+                ),
+                Ty::Lazy(inner) => Ty::Lazy(Box::new(recurse(*inner, json_val_def_id))),
+                Ty::Future(inner) => Ty::Future(Box::new(recurse(*inner, json_val_def_id))),
+                Ty::TaskJob(inner) => Ty::TaskJob(Box::new(recurse(*inner, json_val_def_id))),
+                Ty::Channel(inner) => Ty::Channel(Box::new(recurse(*inner, json_val_def_id))),
+                Ty::Func { params, ret } => Ty::Func {
+                    params: params.into_iter().map(|p| recurse(p, json_val_def_id)).collect(),
+                    ret: Box::new(recurse(*ret, json_val_def_id)),
+                },
+                Ty::Opaque { kind, args } => Ty::Opaque {
+                    kind,
+                    args: args.into_iter().map(|a| recurse(a, json_val_def_id)).collect(),
+                },
+                other => other,
+            }
+        }
+        recurse(ty, json_val_def_id)
     }
 
     fn infer_task_spawn_call(
@@ -5346,7 +5393,51 @@ impl<'a> Checker<'a> {
 
     /// Check that a pattern is consistent with the scrutinee type.
     /// Also binds variables introduced by the pattern into the current scope.
+    fn resolve_infer(&self, ty: &Ty) -> Ty {
+        match ty {
+            Ty::Infer(id) => {
+                if let Some(bound) = self.infer.get(id) {
+                    self.resolve_infer(bound)
+                } else {
+                    ty.clone()
+                }
+            }
+            Ty::Optional(t) => Ty::Optional(Box::new(self.resolve_infer(t))),
+            Ty::Result(ok, err) => Ty::Result(
+                Box::new(self.resolve_infer(ok)),
+                Box::new(self.resolve_infer(err)),
+            ),
+            Ty::List(t) => Ty::List(Box::new(self.resolve_infer(t))),
+            Ty::Map(k, v) => Ty::Map(
+                Box::new(self.resolve_infer(k)),
+                Box::new(self.resolve_infer(v)),
+            ),
+            Ty::Set(t) => Ty::Set(Box::new(self.resolve_infer(t))),
+            Ty::Range(t) => Ty::Range(Box::new(self.resolve_infer(t))),
+            Ty::Lazy(t) => Ty::Lazy(Box::new(self.resolve_infer(t))),
+            Ty::Future(t) => Ty::Future(Box::new(self.resolve_infer(t))),
+            Ty::TaskJob(t) => Ty::TaskJob(Box::new(self.resolve_infer(t))),
+            Ty::Channel(t) => Ty::Channel(Box::new(self.resolve_infer(t))),
+            Ty::Opaque { kind, args } => Ty::Opaque {
+                kind: *kind,
+                args: args.iter().map(|arg| self.resolve_infer(arg)).collect(),
+            },
+            Ty::Tuple(ts) => Ty::Tuple(ts.iter().map(|t| self.resolve_infer(t)).collect()),
+            Ty::Func { params, ret } => Ty::Func {
+                params: params.iter().map(|p| self.resolve_infer(p)).collect(),
+                ret: Box::new(self.resolve_infer(ret)),
+            },
+            Ty::Named(def_id, args) => Ty::Named(
+                *def_id,
+                args.iter().map(|arg| self.resolve_infer(arg)).collect(),
+            ),
+            _ => ty.clone(),
+        }
+    }
+
     fn check_pattern_type(&mut self, pat: &Pattern, scr_ty: &Ty) {
+        let resolved = self.resolve_infer(scr_ty);
+        let scr_ty = &resolved;
         match pat {
             Pattern::Wildcard(_) => {}
             Pattern::Binding(n) => {
@@ -5473,6 +5564,8 @@ impl<'a> Checker<'a> {
         scr_ty: &Ty,
         name: &Name,
     ) -> Option<crate::resolve::EnumVariantSig> {
+        let resolved = self.resolve_infer(scr_ty);
+        let scr_ty = &resolved;
         if let Ty::Named(def_id, _) = scr_ty {
             if self.def_map.get(*def_id).kind != DefKind::Enum {
                 return None;
@@ -5520,6 +5613,8 @@ impl<'a> Checker<'a> {
         scr_ty: &Ty,
         name: &Name,
     ) -> Option<crate::resolve::EnumVariantSig> {
+        let resolved = self.resolve_infer(scr_ty);
+        let scr_ty = &resolved;
         let Ty::Named(def_id, _) = scr_ty else {
             return None;
         };
@@ -5543,6 +5638,8 @@ impl<'a> Checker<'a> {
         if actual == expected {
             return;
         }
+        let resolved = self.resolve_infer(scr_ty);
+        let scr_ty = &resolved;
         if scr_ty.is_error() || scr_ty.contains_infer() {
             return;
         }
@@ -6037,6 +6134,7 @@ fn substitute_trait_self(ty: &Ty, trait_def_id: DefId, self_ty: &Ty) -> Ty {
 fn contains_generic_param(ty: &Ty) -> bool {
     match ty {
         Ty::Param { .. } => true,
+        Ty::Named(def_id, _) if (def_id.0 & 0x4000_0000) != 0 => true,
         Ty::Optional(inner)
         | Ty::List(inner)
         | Ty::Set(inner)
@@ -6135,6 +6233,14 @@ fn infer_generic_substitution(template: &Ty, actual: &Ty, subst: &mut HashMap<u3
             }
             subst.entry(*index).or_insert_with(|| actual.clone());
         }
+        (Ty::Named(def_id, args_t), actual) if (def_id.0 & 0x4000_0000) != 0 => {
+            let index = def_id.0 & 0x3FFF_FFFF;
+            let (ctor, args_a) = strip_type_constructor_args(actual);
+            subst.insert(index, ctor);
+            for (arg_t, arg_a) in args_t.iter().zip(args_a) {
+                infer_generic_substitution(arg_t, &arg_a, subst);
+            }
+        }
         (Ty::Optional(t), Ty::Optional(a))
         | (Ty::List(t), Ty::List(a))
         | (Ty::Set(t), Ty::Set(a))
@@ -6232,6 +6338,17 @@ fn substitute_generic_params(ty: &Ty, subst: &HashMap<u32, Ty>) -> Ty {
                 .collect(),
             ret: Box::new(substitute_generic_params(ret, subst)),
         },
+        Ty::Named(def_id, args) if (def_id.0 & 0x4000_0000) != 0 => {
+            let index = def_id.0 & 0x3FFF_FFFF;
+            let substituted_args: Vec<Ty> = args.iter()
+                .map(|arg| substitute_generic_params(arg, subst))
+                .collect();
+            if let Some(ctor) = subst.get(&index) {
+                apply_type_constructor(ctor, substituted_args)
+            } else {
+                Ty::Named(*def_id, substituted_args)
+            }
+        }
         Ty::Named(def_id, args) => Ty::Named(
             *def_id,
             args.iter()
@@ -6239,6 +6356,42 @@ fn substitute_generic_params(ty: &Ty, subst: &HashMap<u32, Ty>) -> Ty {
                 .collect(),
         ),
         _ => ty.clone(),
+    }
+}
+
+fn apply_type_constructor(ctor: &Ty, args: Vec<Ty>) -> Ty {
+    match ctor {
+        Ty::Named(def_id, _) => Ty::Named(*def_id, args),
+        Ty::Opaque { kind, .. } => Ty::Opaque { kind: *kind, args },
+        Ty::Optional(_) if !args.is_empty() => Ty::Optional(Box::new(args[0].clone())),
+        Ty::List(_) if !args.is_empty() => Ty::List(Box::new(args[0].clone())),
+        Ty::Set(_) if !args.is_empty() => Ty::Set(Box::new(args[0].clone())),
+        Ty::Range(_) if !args.is_empty() => Ty::Range(Box::new(args[0].clone())),
+        Ty::Lazy(_) if !args.is_empty() => Ty::Lazy(Box::new(args[0].clone())),
+        Ty::Future(_) if !args.is_empty() => Ty::Future(Box::new(args[0].clone())),
+        Ty::TaskJob(_) if !args.is_empty() => Ty::TaskJob(Box::new(args[0].clone())),
+        Ty::Channel(_) if !args.is_empty() => Ty::Channel(Box::new(args[0].clone())),
+        Ty::Result(_, _) if args.len() >= 2 => Ty::Result(Box::new(args[0].clone()), Box::new(args[1].clone())),
+        Ty::Map(_, _) if args.len() >= 2 => Ty::Map(Box::new(args[0].clone()), Box::new(args[1].clone())),
+        _ => ctor.clone(),
+    }
+}
+
+fn strip_type_constructor_args(ty: &Ty) -> (Ty, Vec<Ty>) {
+    match ty {
+        Ty::Named(id, args) => (Ty::Named(*id, Vec::new()), args.clone()),
+        Ty::Opaque { kind, args } => (Ty::Opaque { kind: *kind, args: Vec::new() }, args.clone()),
+        Ty::Optional(inner) => (Ty::Optional(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
+        Ty::List(inner) => (Ty::List(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
+        Ty::Set(inner) => (Ty::Set(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
+        Ty::Range(inner) => (Ty::Range(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
+        Ty::Lazy(inner) => (Ty::Lazy(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
+        Ty::Future(inner) => (Ty::Future(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
+        Ty::TaskJob(inner) => (Ty::TaskJob(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
+        Ty::Channel(inner) => (Ty::Channel(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
+        Ty::Result(ok, err) => (Ty::Result(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0))), vec![*ok.clone(), *err.clone()]),
+        Ty::Map(key, val) => (Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0))), vec![*key.clone(), *val.clone()]),
+        _ => (ty.clone(), Vec::new()),
     }
 }
 

@@ -11,6 +11,10 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Adicionado
+- **Codegen/Cranelift:** Suporte completo a escopo lexical no backend Cranelift nativo para evitar colisão/reutilização de variáveis com o mesmo nome e tipos diferentes em blocos/match arms sequenciais.
+- **Codegen/Cranelift:** Interceptação robusta de chamadas sobrecarregadas de matemática (como `math.abs`, `math.min`, `math.max`) escritas como acessos a campos qualificados para selecionar a função FFI correspondente em float/int.
+- **Codegen/Cranelift:** Interceptação robusta da função builtin `string(...)` para mapear corretamente para as funções FFI especializadas (`ori_to_string`, `ori_float_to_string`, `ori_bool_to_string`) com base no tipo do argumento em tempo de compilação.
+- **C Backend:** Suporte a conversão correta de thunk no `emit_lazy_force` garantindo que o tipo de retorno FFI do closure coincida com o tipo de dado lazy.
 - **Codegen/Checker:** Suporte completo a igualdade estrutural avançada para structs genéricas nos backends Cranelift nativo e C, realizando a substituição correta de parâmetros genéricos nos campos em tempo de compilação.
 - **Checker:** Habilitação de comparação estrutural para mapas (`map<K,V>`) e conjuntos (`set<T>`) cujos elementos/chaves implementam o trait `core.Equatable` (seja por implementação explícita ou por suporte implícito a igualdade estrutural).
 - **Stdlib:** Novo tipo opaco `task.CancelToken` e funções nativas `task.create_token`, `task.cancel`, `task.is_cancelled` e `task.associate` para cancelamento cooperativo de tarefas assíncronas.

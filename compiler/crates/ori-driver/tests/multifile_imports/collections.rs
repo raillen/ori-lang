@@ -1740,3 +1740,223 @@ end
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(stdout.replace("\r\n", "\n"), "42\nyes\n0\n");
 }
+
+#[test]
+fn compile_runs_concurrent_modification_list_runtime_error() {
+    let dir = TestDir::new("list_concurrent_modification");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.list as lists
+
+func main()
+    const values: list<int> = [1, 2, 3]
+    for x in values
+        lists.push(values, 4)
+    end
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "list_concurrent_modification.exe"
+    } else {
+        "list_concurrent_modification"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(!output.status.success(), "{:?}", output);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("concurrent modification during iteration"),
+        "stderr was: {stderr}"
+    );
+}
+
+#[test]
+fn compile_runs_concurrent_modification_map_runtime_error() {
+    let dir = TestDir::new("map_concurrent_modification");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.map as maps
+
+func main()
+    const scores: map<int, int> = maps.new()
+    maps.set(scores, 1, 10)
+    maps.set(scores, 2, 20)
+    for k, v in scores
+        maps.set(scores, 3, 30)
+    end
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "map_concurrent_modification.exe"
+    } else {
+        "map_concurrent_modification"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(!output.status.success(), "{:?}", output);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("concurrent modification during iteration"),
+        "stderr was: {stderr}"
+    );
+}
+
+#[test]
+fn compile_runs_concurrent_modification_deque_runtime_error() {
+    let dir = TestDir::new("deque_concurrent_modification");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.deque as deque
+import ori.io as io
+
+func main()
+    const d: deque.Deque<int> = deque.new()
+    deque.push_back(d, 1)
+    deque.push_back(d, 2)
+    for x in d
+        deque.push_back(d, 3)
+    end
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "deque_concurrent_modification.exe"
+    } else {
+        "deque_concurrent_modification"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(!output.status.success(), "{:?}", output);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("concurrent modification during iteration"),
+        "stderr was: {stderr}"
+    );
+}
+
+#[test]
+fn compile_runs_structured_json_api_native() {
+    let dir = TestDir::new("structured_json_api_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.json as json
+import ori.list as lists
+import ori.map as maps
+import ori.math as math
+
+func main()
+    const input: string = """{
+        "name": "Ada",
+        "age": 42.0,
+        "active": true,
+        "scores": [10.0, 20.0],
+        "meta": null
+    }"""
+    match json.parse(input)
+    case success(val):
+        match val
+        case Object(fields):
+            match maps.get(fields, "name")
+            case String(value):
+                io.println(value)
+            case else:
+                io.println("no name")
+            end
+
+            match maps.get(fields, "age")
+            case Number(value):
+                io.println(string(math.round(value)))
+            case else:
+                io.println("no age")
+            end
+
+            match maps.get(fields, "active")
+            case Bool(value):
+                io.println(if value then "true" else "false")
+            case else:
+                io.println("no active")
+            end
+
+            match maps.get(fields, "scores")
+            case Array(items):
+                io.println(string(lists.len(items)))
+                match items[0]
+                case Number(value):
+                    io.println(string(math.round(value)))
+                case else:
+                    io.println("no first score")
+                end
+            case else:
+                io.println("no scores")
+            end
+
+            match maps.get(fields, "meta")
+            case Null:
+                io.println("null ok")
+            case else:
+                io.println("no null")
+            end
+
+            -- test stringification
+            const output: string = json.stringify(val)
+            io.println(output)
+        case else:
+            io.println("not object")
+        end
+    case error(err):
+        io.println(err)
+    end
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "structured_json_api.exe"
+    } else {
+        "structured_json_api"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap().replace("\r\n", "\n");
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert!(lines.len() >= 7);
+    assert_eq!(lines[0], "Ada");
+    assert_eq!(lines[1], "42");
+    assert_eq!(lines[2], "true");
+    assert_eq!(lines[3], "2");
+    assert_eq!(lines[4], "10");
+    assert_eq!(lines[5], "null ok");
+    
+    // The stringified JSON should contain key fields
+    let stringified = lines[6];
+    assert!(stringified.contains("\"name\""));
+    assert!(stringified.contains("\"Ada\""));
+    assert!(stringified.contains("\"age\""));
+    assert!(stringified.contains("42"));
+}
+

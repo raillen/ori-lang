@@ -533,18 +533,9 @@ impl<'src> Parser<'src> {
                 .peek()
                 .is_some_and(|tok| tok.kind == TokenKind::Ident && self.slice(tok.span) == "type");
             if associated_type {
-                self.error(
-                    "generic.unsupported_associated_type",
-                    "associated types are not supported yet; use a trait type parameter instead",
-                    self.current_span(),
-                );
-                self.advance();
-                self.synchronize(&[
-                    TokenKind::Func,
-                    TokenKind::Public,
-                    TokenKind::Mut,
-                    TokenKind::End,
-                ]);
+                self.advance(); // consume "type"
+                let name = self.parse_name()?;
+                members.push(TraitMember::Type(name));
                 continue;
             }
             let mvis = self.parse_visibility();
@@ -600,7 +591,19 @@ impl<'src> Parser<'src> {
         let for_type = self.parse_qualified_name()?;
         let where_clause = self.parse_where_clause_opt();
         let mut methods = Vec::new();
+        let mut associated_types = Vec::new();
         while !self.at(&TokenKind::End) && !self.at_eof() {
+            let is_assoc = self
+                .peek()
+                .is_some_and(|tok| tok.kind == TokenKind::Ident && self.slice(tok.span) == "type");
+            if is_assoc {
+                self.advance(); // type
+                let name = self.parse_name()?;
+                self.expect(&TokenKind::Eq)?;
+                let ty = self.parse_type()?;
+                associated_types.push((name, ty));
+                continue;
+            }
             let mvis = self.parse_visibility();
             methods.push(self.parse_func_decl(mvis)?);
         }
@@ -611,6 +614,7 @@ impl<'src> Parser<'src> {
             for_type,
             where_clause,
             methods,
+            associated_types,
             span: start.cover(end),
         })
     }

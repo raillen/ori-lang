@@ -229,7 +229,11 @@ fn json_stringify_pretty_formats_valid_json() {
     arc_state().lock().unwrap().edges.clear();
 
     unsafe {
-        let value = cstring_from_str("{\"name\":\"ori\",\"ok\":true}");
+        let text = cstring_from_str("{\"name\":\"ori\",\"ok\":true}");
+        let parse_res = ori_json_parse(text);
+        assert_eq!(*parse_res, 1); // is_ok
+
+        let value = *(parse_res.add(std::mem::size_of::<*mut u8>()) as *mut *mut u8);
         let compact = ori_json_stringify(value);
         let pretty = ori_json_stringify_pretty(value);
 
@@ -239,9 +243,10 @@ fn json_stringify_pretty_formats_valid_json() {
             "{\n  \"name\": \"ori\",\n  \"ok\": true\n}"
         );
 
-        ori_arc_release(value);
+        ori_arc_release(text);
         ori_arc_release(compact);
         ori_arc_release(pretty);
+        release_result_payload_and_free(parse_res);
     }
 }
 
@@ -252,24 +257,27 @@ fn list_map_and_set_layouts_keep_native_backend_offsets() {
     assert_eq!(std::mem::offset_of!(OriList, data), 0);
     assert_eq!(std::mem::offset_of!(OriList, len), ptr_size);
     assert_eq!(std::mem::offset_of!(OriList, cap), ptr_size + 8);
+    assert_eq!(std::mem::offset_of!(OriList, version), ptr_size + 16);
 
     assert_eq!(std::mem::offset_of!(OriSet, items), 0);
     assert_eq!(std::mem::offset_of!(OriSet, len), ptr_size);
     assert_eq!(std::mem::offset_of!(OriSet, cap), ptr_size + 8);
-    assert_eq!(std::mem::offset_of!(OriSet, ht), ptr_size + 16);
+    assert_eq!(std::mem::offset_of!(OriSet, version), ptr_size + 16);
+    assert_eq!(std::mem::offset_of!(OriSet, ht), ptr_size + 24);
     assert_eq!(
         std::mem::offset_of!(OriSet, ht_cap),
-        ptr_size + 16 + ptr_size
+        ptr_size + 24 + ptr_size
     );
 
     assert_eq!(std::mem::offset_of!(OriMap, keys), 0);
     assert_eq!(std::mem::offset_of!(OriMap, values), ptr_size);
     assert_eq!(std::mem::offset_of!(OriMap, len), ptr_size * 2);
     assert_eq!(std::mem::offset_of!(OriMap, cap), ptr_size * 2 + 8);
-    assert_eq!(std::mem::offset_of!(OriMap, ht), ptr_size * 2 + 16);
+    assert_eq!(std::mem::offset_of!(OriMap, version), ptr_size * 2 + 16);
+    assert_eq!(std::mem::offset_of!(OriMap, ht), ptr_size * 2 + 24);
     assert_eq!(
         std::mem::offset_of!(OriMap, ht_cap),
-        ptr_size * 2 + 16 + ptr_size
+        ptr_size * 2 + 24 + ptr_size
     );
 }
 

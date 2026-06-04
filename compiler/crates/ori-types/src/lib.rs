@@ -10,7 +10,7 @@ pub mod ty;
 
 pub use check::Checker;
 pub use def::{Def, DefId, DefKind, DefMap};
-pub use lower::{lower_type, lower_type_with_aliases};
+pub use lower::{lower_type, lower_type_with_aliases, lower_type_with_local_aliases};
 pub use resolve::{
     resolve, EnumSig, EnumVariantSig, FuncSig, ImplMethodSig, ImplSig, ReExport, ResolvedModule,
     StructSig, TraitMethodSig, TraitSig, TypeAliasSig, ValueSig, WhereConstraintSig,

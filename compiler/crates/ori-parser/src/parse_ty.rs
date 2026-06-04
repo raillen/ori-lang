@@ -123,6 +123,16 @@ impl<'src> Parser<'src> {
                 }
             }
 
+            TokenKind::IntLit | TokenKind::True | TokenKind::False => {
+                let tok = self.advance().unwrap();
+                let text = smol_str::SmolStr::new(self.slice(tok.span));
+                let name = ori_ast::common::Name::new(text, tok.span);
+                Some(Type::Named(ori_ast::common::QualifiedName {
+                    parts: vec![name],
+                    span: tok.span,
+                }))
+            }
+
             _ => {
                 let span = self.current_span();
                 self.error("parse.expected_type", "expected a type", span);

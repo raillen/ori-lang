@@ -18,6 +18,7 @@ use ori_types::{
 
 #[cfg(test)]
 const INTERNAL_NATIVE_RUNTIME_IMPORTS: &[&str] = &[
+    "ori_abort_concurrent_modification",
     "ori_arc_collect_cycles",
     "ori_arc_register_edge",
     "ori_arc_release",
@@ -26,6 +27,20 @@ const INTERNAL_NATIVE_RUNTIME_IMPORTS: &[&str] = &[
     "ori_arc_update_edge",
     "ori_alloc",
     "ori_bool_to_string_parts",
+    "ori_deque_iterator_new",
+    "ori_deque_iterator_next",
+    "ori_queue_iterator_new",
+    "ori_queue_iterator_next",
+    "ori_stack_iterator_new",
+    "ori_stack_iterator_next",
+    "ori_linked_list_iterator_new",
+    "ori_linked_list_iterator_next",
+    "ori_doubly_linked_list_iterator_new",
+    "ori_doubly_linked_list_iterator_next",
+    "ori_heap_iterator_new",
+    "ori_heap_iterator_next",
+    "ori_graph_iterator_new",
+    "ori_graph_iterator_next",
     "ori_executor_drain",
     "ori_executor_run_one",
     "ori_executor_schedule",
@@ -2283,6 +2298,11 @@ impl GeneralAsyncCollector {
                             self.locals.push(SimpleAsyncLocal {
                                 name: SmolStr::new(format!(".__loop_list_{}", loop_id)),
                                 ty: iterable.ty.clone(),
+                                value: dummy.clone(),
+                            });
+                            self.locals.push(SimpleAsyncLocal {
+                                name: SmolStr::new(format!(".__loop_version_{}", loop_id)),
+                                ty: Ty::Int,
                                 value: dummy,
                             });
                         }
@@ -3811,6 +3831,45 @@ impl NativeBackend {
         self.stdlib_ids.insert(SmolStr::new("free"), id);
         let id = decl("ori_alloc", &[types::I64, pt], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_alloc"), id);
+
+        let id = decl("ori_abort_concurrent_modification", &[], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_abort_concurrent_modification"), id);
+
+        let id = decl("ori_deque_iterator_new", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_deque_iterator_new"), id);
+        let id = decl("ori_deque_iterator_next", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_deque_iterator_next"), id);
+
+        let id = decl("ori_queue_iterator_new", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_queue_iterator_new"), id);
+        let id = decl("ori_queue_iterator_next", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_queue_iterator_next"), id);
+
+        let id = decl("ori_stack_iterator_new", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_stack_iterator_new"), id);
+        let id = decl("ori_stack_iterator_next", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_stack_iterator_next"), id);
+
+        let id = decl("ori_linked_list_iterator_new", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_linked_list_iterator_new"), id);
+        let id = decl("ori_linked_list_iterator_next", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_linked_list_iterator_next"), id);
+
+        let id = decl("ori_doubly_linked_list_iterator_new", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_doubly_linked_list_iterator_new"), id);
+        let id = decl("ori_doubly_linked_list_iterator_next", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_doubly_linked_list_iterator_next"), id);
+
+        let id = decl("ori_heap_iterator_new", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_heap_iterator_new"), id);
+        let id = decl("ori_heap_iterator_next", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_heap_iterator_next"), id);
+
+        let id = decl("ori_graph_iterator_new", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_graph_iterator_new"), id);
+        let id = decl("ori_graph_iterator_next", &[pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_graph_iterator_next"), id);
+
         Ok(())
     }
 
@@ -3848,7 +3907,29 @@ impl NativeBackend {
         sig
     }
 
+    fn make_struct_eq_sig(&self) -> ir::Signature {
+        let mut sig = self.module.make_signature();
+        sig.params.push(AbiParam::new(self.ptr_ty));
+        sig.params.push(AbiParam::new(self.ptr_ty));
+        sig.returns.push(AbiParam::new(types::I8));
+        sig
+    }
+
     fn declare_all(&mut self, hir: &HirModule) -> Result<(), String> {
+        // Declare equality helper functions for all structs
+        let mut declared_structs = std::collections::HashSet::new();
+        for s in &hir.structs {
+            if !declared_structs.insert(s.def_id) {
+                continue;
+            }
+            let sig = self.make_struct_eq_sig();
+            let name = format!("__eq_helper_struct_{}", s.def_id.0);
+            let id = self
+                .module
+                .declare_function(&name, Linkage::Local, &sig)
+                .map_err(|e| format!("declare struct eq helper '{name}': {e}"))?;
+            self.func_ids.insert(SmolStr::new(name), id);
+        }
         for f in &hir.funcs {
             let sig = self.make_sig(f);
             let link = if f.is_public {
@@ -3963,7 +4044,7 @@ impl NativeBackend {
                     trait_layouts: &self.trait_layouts,
                     trait_impls: &self.trait_impls,
                     func_param_tys: &self.func_param_tys,
-                    vars: HashMap::new(),
+                    vars: vec![HashMap::new()],
                     ptr_ty: self.ptr_ty,
                     loop_stack: Vec::new(),
                     using_stack: Vec::new(),
@@ -4100,6 +4181,91 @@ impl NativeBackend {
                 .define_function(main_id, &mut ctx)
                 .map_err(|e| format!("define main wrapper: {e}"))?;
         }
+        self.define_struct_eq_helpers(hir)?;
+        Ok(())
+    }
+
+    fn define_struct_eq_helpers(&mut self, hir: &HirModule) -> Result<(), String> {
+        let const_exprs: HashMap<SmolStr, HirExpr> = hir
+            .consts
+            .iter()
+            .map(|c| (c.name.clone(), c.value.clone()))
+            .collect();
+        let mut defined_structs = std::collections::HashSet::new();
+        for s in &hir.structs {
+            if !defined_structs.insert(s.def_id) {
+                continue;
+            }
+            let name = format!("__eq_helper_struct_{}", s.def_id.0);
+            let func_id = self.func_ids[name.as_str()];
+            let mut ctx = self.module.make_context();
+            ctx.func.signature = self.make_struct_eq_sig();
+
+            let mut func_refs: HashMap<SmolStr, ir::FuncRef> = HashMap::new();
+            for (name, &id) in self.func_ids.iter().chain(self.stdlib_ids.iter()) {
+                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+                func_refs.insert(name.clone(), fref);
+            }
+            for (name, &id) in &self.func_wrapper_ids {
+                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+                func_refs.insert(SmolStr::new(format!("{name}.__fnptr_wrapper")), fref);
+            }
+
+            let mut bctx = FunctionBuilderContext::new();
+            {
+                let mut builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
+                let block = builder.create_block();
+                builder.append_block_params_for_function_params(block);
+                builder.switch_to_block(block);
+                builder.seal_block(block);
+
+                let params = builder.block_params(block);
+                let left_ptr = params[0];
+                let right_ptr = params[1];
+
+                let mut codegen = FuncCodegen {
+                    builder,
+                    func_refs: &func_refs,
+                    string_gvs: &HashMap::new(),
+                    global_gvs: &HashMap::new(),
+                    global_data: &self.global_data,
+                    const_exprs: &const_exprs,
+                    struct_layouts: &self.struct_layouts,
+                    enum_layouts: &self.enum_layouts,
+                    type_names: &self.type_names,
+                    trait_layouts: &self.trait_layouts,
+                    trait_impls: &self.trait_impls,
+                    func_param_tys: &self.func_param_tys,
+                    vars: vec![HashMap::new()],
+                    ptr_ty: self.ptr_ty,
+                    loop_stack: Vec::new(),
+                    using_stack: Vec::new(),
+                    managed_stack: Vec::new(),
+                    current_return_ty: Ty::Bool,
+                    terminated: false,
+                    async_frame: None,
+                    async_plan: None,
+                    async_await_index: 0,
+                    async_loop_index: 0,
+                    async_poll_blocks: Vec::new(),
+                    func_name: SmolStr::new(name.as_str()),
+                };
+
+                let res = if codegen.struct_supports_equality(s.def_id) {
+                    codegen.emit_struct_equality(left_ptr, right_ptr, s.def_id, &[], true)?
+                } else {
+                    codegen.builder.ins().iconst(types::I8, 0)
+                };
+
+                codegen.builder.ins().return_(&[res]);
+                codegen.builder.seal_all_blocks();
+                codegen.builder.finalize();
+            }
+
+            self.module
+                .define_function(func_id, &mut ctx)
+                .map_err(|e| format!("define struct eq helper '{}': {e}", name))?;
+        }
         Ok(())
     }
 
@@ -4155,7 +4321,7 @@ impl NativeBackend {
                 trait_layouts: &self.trait_layouts,
                 trait_impls: &self.trait_impls,
                 func_param_tys: &self.func_param_tys,
-                vars: HashMap::new(),
+                vars: vec![HashMap::new()],
                 ptr_ty: self.ptr_ty,
                 loop_stack: Vec::new(),
                 using_stack: Vec::new(),
@@ -4236,7 +4402,7 @@ impl NativeBackend {
                 trait_layouts: &self.trait_layouts,
                 trait_impls: &self.trait_impls,
                 func_param_tys: &self.func_param_tys,
-                vars: HashMap::new(),
+                vars: vec![HashMap::new()],
                 ptr_ty: self.ptr_ty,
                 loop_stack: Vec::new(),
                 using_stack: Vec::new(),
@@ -4295,7 +4461,7 @@ struct FuncCodegen<'a> {
     trait_layouts: &'a HashMap<ori_types::DefId, HirTrait>,
     trait_impls: &'a HashMap<(ori_types::DefId, ori_types::DefId), HirTraitImpl>,
     func_param_tys: &'a HashMap<SmolStr, Vec<Ty>>,
-    vars: HashMap<SmolStr, (Variable, Ty)>,
+    vars: Vec<HashMap<SmolStr, (Variable, Ty)>>,
     ptr_ty: types::Type,
     loop_stack: Vec<LoopContext>,
     using_stack: Vec<UsingCleanup>,
@@ -4311,6 +4477,115 @@ struct FuncCodegen<'a> {
 }
 
 impl<'a> FuncCodegen<'a> {
+    fn push_scope(&mut self) {
+        self.vars.push(HashMap::new());
+    }
+
+    fn pop_scope(&mut self) {
+        self.vars.pop();
+        if self.vars.is_empty() {
+            self.vars.push(HashMap::new());
+        }
+    }
+
+    fn lookup_var(&self, name: &str) -> Option<(Variable, Ty)> {
+        for scope in self.vars.iter().rev() {
+            if let Some(entry) = scope.get(name) {
+                return Some(entry.clone());
+            }
+        }
+        None
+    }
+
+    fn insert_var(&mut self, name: SmolStr, entry: (Variable, Ty)) {
+        if let Some(scope) = self.vars.last_mut() {
+            scope.insert(name, entry);
+        }
+    }
+
+    fn struct_supports_equality(&self, def_id: ori_types::DefId) -> bool {
+        self.type_supports_equality(&Ty::Named(def_id, Vec::new()), &mut Vec::new())
+    }
+
+    fn type_supports_equality(&self, ty: &Ty, visiting: &mut Vec<ori_types::DefId>) -> bool {
+        match ty {
+            Ty::Void | Ty::Never | Ty::Bool | Ty::Int | Ty::Float | Ty::Float32 | Ty::Float64 | Ty::U8 | Ty::U16 | Ty::U32 | Ty::U64 | Ty::Int8 | Ty::Int16 | Ty::Int32 | Ty::Int64 | Ty::String | Ty::Bytes | Ty::Any(_) => true,
+            Ty::Optional(inner) => self.type_supports_equality(inner, visiting),
+            Ty::Result(ok, err) => self.type_supports_equality(ok, visiting) && self.type_supports_equality(err, visiting),
+            Ty::Tuple(elements) => elements.iter().all(|e| self.type_supports_equality(e, visiting)),
+            Ty::List(inner) | Ty::Set(inner) => self.type_supports_equality(inner, visiting),
+            Ty::Map(k, v) => self.type_supports_equality(k, visiting) && self.type_supports_equality(v, visiting),
+            Ty::Named(def_id, args) => {
+                if visiting.contains(def_id) {
+                    return true;
+                }
+                visiting.push(*def_id);
+                let ok = if let Some(layout) = self.struct_layouts.get(def_id) {
+                    layout.fields.iter().all(|(_, field)| {
+                        let concrete = substitute_ty_params(&field.ty, args);
+                        self.type_supports_equality(&concrete, visiting)
+                    })
+                } else if let Some(layout) = self.enum_layouts.get(def_id) {
+                    layout.variants.values().all(|variant| {
+                        variant.fields.fields.iter().all(|(_, field)| {
+                            let concrete = substitute_ty_params(&field.ty, args);
+                            self.type_supports_equality(&concrete, visiting)
+                        })
+                    })
+                } else {
+                    false
+                };
+                visiting.pop();
+                ok
+            }
+            Ty::Opaque { kind, args } if kind.is_list_backed_collection() => {
+                if let Some(elem_ty) = args.first() {
+                    self.type_supports_equality(elem_ty, visiting)
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
+    }
+
+    fn emit_opaque_collection_equality(
+        &mut self,
+        lv: ir::Value,
+        rv: ir::Value,
+        kind: OpaqueTy,
+        elem_ty: &Ty,
+        eq: bool,
+    ) -> Result<ir::Value, String> {
+        let to_list_fn_name = match kind {
+            OpaqueTy::Deque => "ori_deque_to_list",
+            OpaqueTy::Queue => "ori_queue_to_list",
+            OpaqueTy::Stack => "ori_stack_to_list",
+            OpaqueTy::LinkedList => "ori_linked_list_to_list",
+            OpaqueTy::DoublyLinkedList => "ori_doubly_linked_list_to_list",
+            _ => return Err(format!("unsupported opaque collection for equality: {:?}", kind)),
+        };
+        let to_list_ref = *self.func_refs.get(to_list_fn_name).ok_or_else(|| {
+            format!("missing runtime function `{}`", to_list_fn_name)
+        })?;
+
+        // Convert both collections to lists
+        let left_list_call = self.builder.ins().call(to_list_ref, &[lv]);
+        let left_list = self.builder.inst_results(left_list_call)[0];
+        let right_list_call = self.builder.ins().call(to_list_ref, &[rv]);
+        let right_list = self.builder.inst_results(right_list_call)[0];
+
+        // Compare the lists using emit_list_equality
+        let result = self.emit_list_equality(left_list, right_list, elem_ty, eq)?;
+
+        // Release the temporary lists
+        let list_ty = Ty::List(Box::new(elem_ty.clone()));
+        self.emit_arc_release_if_managed(&list_ty, left_list)?;
+        self.emit_arc_release_if_managed(&list_ty, right_list)?;
+
+        Ok(result)
+    }
+
     fn store_async_local_if_any(&mut self, name: &str, val: ir::Value) -> Result<(), String> {
         if let Some(frame) = self.async_frame {
             let plan = self.async_plan.expect("must have async plan if frame is set");
@@ -4449,7 +4724,7 @@ impl<'a> FuncCodegen<'a> {
             if let Some(cl_ty) = cl_type(&ty, self.ptr_ty) {
                 let var = self.builder.declare_var(cl_ty);
                 self.builder.def_var(var, val);
-                self.vars.insert(name.clone(), (var, ty.clone()));
+                self.insert_var(name.clone(), (var, ty.clone()));
                 if name.as_str() != "__env" && is_managed_ty(&ty) {
                     self.managed_stack.push(ManagedCleanup { var, ty });
                 }
@@ -4483,7 +4758,7 @@ impl<'a> FuncCodegen<'a> {
             let Some(contract) = &param.contract else {
                 continue;
             };
-            let Some((var, ty)) = self.vars.get(&param.name).cloned() else {
+            let Some((var, ty)) = self.lookup_var(&param.name) else {
                 continue;
             };
             let value = self.builder.use_var(var);
@@ -4496,7 +4771,7 @@ impl<'a> FuncCodegen<'a> {
         if f.closure_captures.is_empty() {
             return Ok(());
         }
-        let Some((env_var, _)) = self.vars.get("__env").cloned() else {
+        let Some((env_var, _)) = self.lookup_var("__env") else {
             return Err(format!(
                 "closure `{}` has captures but no environment parameter",
                 f.name
@@ -4514,8 +4789,7 @@ impl<'a> FuncCodegen<'a> {
                 .load(cl_ty, MemFlags::new(), env, offset as i32);
             let var = self.builder.declare_var(cl_ty);
             self.builder.def_var(var, value);
-            self.vars
-                .insert(capture.name.clone(), (var, capture.ty.clone()));
+            self.insert_var(capture.name.clone(), (var, capture.ty.clone()));
             if is_managed_ty(&capture.ty) {
                 self.emit_arc_retain_if_managed(&capture.ty, value)?;
                 self.managed_stack.push(ManagedCleanup {
@@ -4541,13 +4815,10 @@ impl<'a> FuncCodegen<'a> {
         let it_var = self.builder.declare_var(cl_ty);
         self.builder.def_var(it_var, value);
         let it_name = SmolStr::new("it");
-        let previous = self.vars.insert(it_name.clone(), (it_var, ty.clone()));
+        self.push_scope();
+        self.insert_var(it_name, (it_var, ty.clone()));
         let condition = self.emit_expr(contract);
-        if let Some(previous) = previous {
-            self.vars.insert(it_name, previous);
-        } else {
-            self.vars.remove("it");
-        }
+        self.pop_scope();
         let condition = condition?;
         let trap = ir::TrapCode::user(trap_code)
             .ok_or_else(|| format!("invalid runtime contract trap code `{trap_code}`"))?;
@@ -4584,7 +4855,7 @@ impl<'a> FuncCodegen<'a> {
     ) -> Result<ir::Value, String> {
         if matches!(expected, Ty::Func { .. }) {
             if let HirExprKind::Var(name) = &expr.kind {
-                if self.vars.get(name).is_none()
+                if self.lookup_var(name).is_none()
                     && self.global_data.get(name).is_none()
                     && self.const_exprs.get(name).is_none()
                     && self
@@ -4686,13 +4957,24 @@ impl<'a> FuncCodegen<'a> {
             .clone();
 
         let ptr_size = self.ptr_ty.bytes() as i64;
-        let vtable_size = (trait_layout.methods.len() as i64 + 1) * ptr_size;
+        let vtable_size = (trait_layout.methods.len() as i64 + 2) * ptr_size;
         let vtable = self.malloc_bytes(vtable_size as u32)?;
 
         let type_id_val = self.builder.ins().iconst(self.ptr_ty, type_def_id.0 as i64);
         self.builder
             .ins()
             .store(MemFlags::new(), type_id_val, vtable, 0);
+
+        let eq_helper_name = format!("__eq_helper_struct_{}", type_def_id.0);
+        let eq_fn_val = if let Some(&fref) = self.func_refs.get(eq_helper_name.as_str()) {
+            self.builder.ins().func_addr(self.ptr_ty, fref)
+        } else {
+            self.builder.ins().iconst(self.ptr_ty, 0)
+        };
+        self.builder
+            .ins()
+            .store(MemFlags::new(), eq_fn_val, vtable, ptr_size as i32);
+
         for (index, method) in trait_layout.methods.iter().enumerate() {
             let func_name = impl_sig
                 .methods
@@ -4712,7 +4994,7 @@ impl<'a> FuncCodegen<'a> {
                 MemFlags::new(),
                 fn_ptr,
                 vtable,
-                ((index as i64 + 1) * ptr_size) as i32,
+                ((index as i64 + 2) * ptr_size) as i32,
             );
         }
 
@@ -4770,7 +5052,7 @@ impl<'a> FuncCodegen<'a> {
             self.ptr_ty,
             MemFlags::new(),
             vtable,
-            ((method_index as i64 + 1) * ptr_size) as i32,
+            ((method_index as i64 + 2) * ptr_size) as i32,
         );
 
         let mut sig = ir::Signature::new(self.builder.func.signature.call_conv);
@@ -4821,7 +5103,7 @@ impl<'a> FuncCodegen<'a> {
             let (offsets, total) = closure_env_layout(captures, self.ptr_ty);
             let env = self.malloc_bytes(total)?;
             for (capture, offset) in captures.iter().zip(offsets) {
-                let value = if let Some((var, _)) = self.vars.get(&capture.name).cloned() {
+                let value = if let Some((var, _)) = self.lookup_var(&capture.name) {
                     self.builder.use_var(var)
                 } else if let Some(value) = self.load_global(&capture.name) {
                     value
@@ -5147,7 +5429,7 @@ impl<'a> FuncCodegen<'a> {
     fn emit_lvalue_value(&mut self, lvalue: &HirLValue) -> Result<(ir::Value, Ty), String> {
         match lvalue {
             HirLValue::Var(name) => {
-                if let Some((var, ty)) = self.vars.get(name).cloned() {
+                if let Some((var, ty)) = self.lookup_var(name) {
                     Ok((self.builder.use_var(var), ty))
                 } else if let Some(info) = self.global_data.get(name).cloned() {
                     let value = self.load_global(name).ok_or_else(|| {
@@ -5399,6 +5681,7 @@ impl<'a> FuncCodegen<'a> {
     }
 
     fn emit_scoped_stmts(&mut self, stmts: &[HirStmt]) -> Result<(), String> {
+        self.push_scope();
         let cleanup_start = self.using_stack.len();
         let managed_cleanup_start = self.managed_stack.len();
         for s in stmts {
@@ -5412,6 +5695,7 @@ impl<'a> FuncCodegen<'a> {
         }
         self.using_stack.truncate(cleanup_start);
         self.managed_stack.truncate(managed_cleanup_start);
+        self.pop_scope();
         Ok(())
     }
 
@@ -5909,8 +6193,7 @@ impl<'a> FuncCodegen<'a> {
                 .load(cl_ty, MemFlags::new(), frame, offset as i32);
             let var = self.builder.declare_var(cl_ty);
             self.builder.def_var(var, value);
-            self.vars
-                .insert(param.name.clone(), (var, param.ty.clone()));
+            self.insert_var(param.name.clone(), (var, param.ty.clone()));
         }
         for (index, local) in plan.locals.iter().enumerate() {
             let cl_ty = cl_type(&local.ty, self.ptr_ty)
@@ -5923,8 +6206,7 @@ impl<'a> FuncCodegen<'a> {
                 .load(cl_ty, MemFlags::new(), frame, offset as i32);
             let var = self.builder.declare_var(cl_ty);
             self.builder.def_var(var, value);
-            self.vars
-                .insert(local.name.clone(), (var, local.ty.clone()));
+            self.insert_var(local.name.clone(), (var, local.ty.clone()));
         }
         let await_count = plan.awaits.len();
         let eval_blocks: Vec<_> = (0..await_count)
@@ -5990,7 +6272,7 @@ impl<'a> FuncCodegen<'a> {
                         .ins()
                         .store(MemFlags::new(), value, frame, offset as i32);
                     self.emit_arc_register_edge_if_managed(&local.ty, frame, value)?;
-                    if let Some((var, _)) = self.vars.get(&local.name).cloned() {
+                    if let Some((var, _)) = self.lookup_var(&local.name) {
                         self.builder.def_var(var, value);
                     }
                 }
@@ -6213,8 +6495,7 @@ impl<'a> FuncCodegen<'a> {
                     .load(cl_ty, MemFlags::new(), frame, offset as i32);
                 let var = self.builder.declare_var(cl_ty);
                 self.builder.def_var(var, value);
-                self.vars
-                    .insert(binding.name.clone(), (var, binding.ty.clone()));
+                self.insert_var(binding.name.clone(), (var, binding.ty.clone()));
             }
         }
         for stmt in &plan.tail_stmts {
@@ -6574,8 +6855,7 @@ impl<'a> FuncCodegen<'a> {
                 .load(cl_ty, MemFlags::new(), frame, offset as i32);
             let var = self.builder.declare_var(cl_ty);
             self.builder.def_var(var, value);
-            self.vars
-                .insert(param.name.clone(), (var, param.ty.clone()));
+            self.insert_var(param.name.clone(), (var, param.ty.clone()));
         }
         for (index, local) in plan.locals.iter().enumerate() {
             let cl_ty = cl_type(&local.ty, self.ptr_ty)
@@ -6588,8 +6868,7 @@ impl<'a> FuncCodegen<'a> {
                 .load(cl_ty, MemFlags::new(), frame, offset as i32);
             let var = self.builder.declare_var(cl_ty);
             self.builder.def_var(var, value);
-            self.vars
-                .insert(local.name.clone(), (var, local.ty.clone()));
+            self.insert_var(local.name.clone(), (var, local.ty.clone()));
         }
         for (index, step) in plan.awaits.iter().enumerate() {
             if let Some(binding) = &step.binding {
@@ -6603,8 +6882,7 @@ impl<'a> FuncCodegen<'a> {
                     .load(cl_ty, MemFlags::new(), frame, offset as i32);
                 let var = self.builder.declare_var(cl_ty);
                 self.builder.def_var(var, value);
-                self.vars
-                    .insert(binding.name.clone(), (var, binding.ty.clone()));
+                self.insert_var(binding.name.clone(), (var, binding.ty.clone()));
             }
         }
 
@@ -6729,11 +7007,12 @@ impl<'a> FuncCodegen<'a> {
             } => {
                 let val = self.emit_expr_for_expected(value, ty)?;
                 if let Some(cl_ty) = cl_type(ty, self.ptr_ty) {
-                    let var = self.vars.get(name).map(|(v, _)| *v).unwrap_or_else(|| {
+                    let var = self.lookup_var(name).map(|(v, _)| v).unwrap_or_else(|| {
                         let v = self.builder.declare_var(cl_ty);
-                        self.vars.insert(name.clone(), (v, ty.clone()));
+                        self.insert_var(name.clone(), (v, ty.clone()));
                         v
                     });
+                    let val_ty = self.builder.func.dfg.value_type(val);
                     self.builder.def_var(var, val);
                     if is_managed_ty(ty) {
                         self.emit_arc_retain_if_managed(ty, val)?;
@@ -6747,7 +7026,7 @@ impl<'a> FuncCodegen<'a> {
             }
             HirStmt::Assign { lvalue, value, .. } => {
                 if let HirLValue::Var(name) = lvalue {
-                    if let Some((var, ty)) = self.vars.get(name).cloned() {
+                    if let Some((var, ty)) = self.lookup_var(name) {
                         let val = self.emit_expr_for_expected(value, &ty)?;
                         let old = self.builder.use_var(var);
                         self.emit_arc_retain_if_managed(&ty, val)?;
@@ -6879,9 +7158,9 @@ impl<'a> FuncCodegen<'a> {
             } => {
                 let val = self.emit_expr_for_expected(value, ty)?;
                 if let Some(cl_ty) = cl_type(ty, self.ptr_ty) {
-                    let var = self.vars.get(name).map(|(v, _)| *v).unwrap_or_else(|| {
+                    let var = self.lookup_var(name).map(|(v, _)| v).unwrap_or_else(|| {
                         let v = self.builder.declare_var(cl_ty);
-                        self.vars.insert(name.clone(), (v, ty.clone()));
+                        self.insert_var(name.clone(), (v, ty.clone()));
                         v
                     });
                     self.builder.def_var(var, val);
@@ -6923,8 +7202,8 @@ impl<'a> FuncCodegen<'a> {
                     self.async_loop_index += 1;
                     let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
                     let limit_name = SmolStr::new(format!(".__loop_limit_{}", loop_id));
-                    let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
-                    let (limit_var, _) = self.vars.get(&limit_name).cloned().unwrap();
+                    let (idx_var, _) = self.lookup_var(&idx_name).unwrap();
+                    let (limit_var, _) = self.lookup_var(&limit_name).unwrap();
                     let loop_zero = self.builder.ins().iconst(types::I64, 0);
                     self.builder.def_var(idx_var, loop_zero);
                     self.builder.def_var(limit_var, count_v);
@@ -7118,20 +7397,22 @@ impl<'a> FuncCodegen<'a> {
         self.builder.seal_block(then_blk);
         self.builder.switch_to_block(then_blk);
         self.terminated = false;
+        self.push_scope();
         if let Some(cl_ty) = cl_type(inner_ty, self.ptr_ty) {
             let (val_off, _) = optional_layout(inner_ty, self.ptr_ty);
             let inner_val =
                 self.builder
                     .ins()
                     .load(cl_ty, MemFlags::new(), opt_ptr, val_off as i32);
-            let var = self.vars.get(binding).map(|(v, _)| *v).unwrap_or_else(|| {
+            let var = self.lookup_var(binding).map(|(v, _)| v).unwrap_or_else(|| {
                 let v = self.builder.declare_var(cl_ty);
-                self.vars.insert(binding.clone(), (v, inner_ty.clone()));
+                self.insert_var(binding.clone(), (v, inner_ty.clone()));
                 v
             });
             self.builder.def_var(var, inner_val);
         }
         self.emit_block(then)?;
+        self.pop_scope();
         if !self.terminated {
             self.builder.ins().jump(merge_blk, &[]);
         }
@@ -7158,6 +7439,7 @@ impl<'a> FuncCodegen<'a> {
         value: &HirExpr,
         body: &HirBlock,
     ) -> Result<(), String> {
+        self.push_scope();
         let header_blk = self.builder.create_block();
         let body_blk = self.builder.create_block();
         let exit_blk = self.builder.create_block();
@@ -7185,9 +7467,9 @@ impl<'a> FuncCodegen<'a> {
                 self.builder
                     .ins()
                     .load(cl_ty, MemFlags::new(), opt_ptr, val_off as i32);
-            let var = self.vars.get(binding).map(|(v, _)| *v).unwrap_or_else(|| {
+            let var = self.lookup_var(binding).map(|(v, _)| v).unwrap_or_else(|| {
                 let v = self.builder.declare_var(cl_ty);
-                self.vars.insert(binding.clone(), (v, inner_ty.clone()));
+                self.insert_var(binding.clone(), (v, inner_ty.clone()));
                 v
             });
             self.builder.def_var(var, inner_val);
@@ -7204,6 +7486,7 @@ impl<'a> FuncCodegen<'a> {
         self.builder.seal_block(exit_blk);
         self.builder.switch_to_block(exit_blk);
         self.terminated = false;
+        self.pop_scope();
         Ok(())
     }
 
@@ -7216,7 +7499,8 @@ impl<'a> FuncCodegen<'a> {
         body: &HirBlock,
         has_await: bool,
     ) -> Result<(), String> {
-        match &iterable.kind {
+        self.push_scope();
+        let res = match &iterable.kind {
             HirExprKind::Range { start, end } => {
                 self.emit_for_range(binding, index_binding, elem_ty, start, end, body, has_await)
             }
@@ -7244,29 +7528,8 @@ impl<'a> FuncCodegen<'a> {
                 let Ty::Opaque { kind, args } = &iterable.ty else {
                     unreachable!();
                 };
-                let runtime_name = match kind {
-                    OpaqueTy::Deque => "ori_deque_to_list",
-                    OpaqueTy::Queue => "ori_queue_to_list",
-                    OpaqueTy::Stack => "ori_stack_to_list",
-                    OpaqueTy::LinkedList => "ori_linked_list_to_list",
-                    OpaqueTy::DoublyLinkedList => "ori_doubly_linked_list_to_list",
-                    _ => unreachable!(),
-                };
-                let fref = *self
-                    .func_refs
-                    .get(runtime_name)
-                    .ok_or_else(|| format!("missing runtime function `{runtime_name}`"))?;
-                let handle = self.emit_expr(iterable)?;
-                let call = self.builder.ins().call(fref, &[handle]);
-                let snapshot = self.builder.inst_results(call)[0];
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body, has_await)?;
-                let free_ref = *self
-                    .func_refs
-                    .get("ori_list_free")
-                    .ok_or_else(|| "missing runtime function `ori_list_free`".to_string())?;
-                self.builder.ins().call(free_ref, &[snapshot]);
-                Ok(())
+                self.emit_for_opaque(binding, index_binding, &elem, iterable, *kind, has_await, body)
             }
             _ if matches!(
                 &iterable.ty,
@@ -7279,21 +7542,8 @@ impl<'a> FuncCodegen<'a> {
                 let Ty::Opaque { args, .. } = &iterable.ty else {
                     unreachable!();
                 };
-                let fref = *self
-                    .func_refs
-                    .get("ori_heap_to_list")
-                    .ok_or_else(|| "missing runtime function `ori_heap_to_list`".to_string())?;
-                let handle = self.emit_expr(iterable)?;
-                let call = self.builder.ins().call(fref, &[handle]);
-                let snapshot = self.builder.inst_results(call)[0];
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body, has_await)?;
-                let free_ref = *self
-                    .func_refs
-                    .get("ori_list_free")
-                    .ok_or_else(|| "missing runtime function `ori_list_free`".to_string())?;
-                self.builder.ins().call(free_ref, &[snapshot]);
-                Ok(())
+                self.emit_for_opaque(binding, index_binding, &elem, iterable, OpaqueTy::Heap, has_await, body)
             }
             _ if matches!(
                 &iterable.ty,
@@ -7306,21 +7556,8 @@ impl<'a> FuncCodegen<'a> {
                 let Ty::Opaque { args, .. } = &iterable.ty else {
                     unreachable!();
                 };
-                let fref = *self
-                    .func_refs
-                    .get("ori_graph_nodes")
-                    .ok_or_else(|| "missing runtime function `ori_graph_nodes`".to_string())?;
-                let handle = self.emit_expr(iterable)?;
-                let call = self.builder.ins().call(fref, &[handle]);
-                let snapshot = self.builder.inst_results(call)[0];
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_list_value(binding, index_binding, &elem, snapshot, body, has_await)?;
-                let free_ref = *self
-                    .func_refs
-                    .get("ori_list_free")
-                    .ok_or_else(|| "missing runtime function `ori_list_free`".to_string())?;
-                self.builder.ins().call(free_ref, &[snapshot]);
-                Ok(())
+                self.emit_for_opaque(binding, index_binding, &elem, iterable, OpaqueTy::Graph, has_await, body)
             }
             _ if matches!(
                 &iterable.ty,
@@ -7367,7 +7604,168 @@ impl<'a> FuncCodegen<'a> {
                     )))
                 }
             }
+        };
+        self.pop_scope();
+        res
+    }
+
+    fn emit_for_opaque(
+        &mut self,
+        binding: &SmolStr,
+        index_binding: Option<&SmolStr>,
+        elem_ty: &Ty,
+        iterable: &HirExpr,
+        kind: OpaqueTy,
+        has_await: bool,
+        body: &HirBlock,
+    ) -> Result<(), String> {
+        let prefix = match kind {
+            OpaqueTy::Deque => "ori_deque_iterator",
+            OpaqueTy::Queue => "ori_queue_iterator",
+            OpaqueTy::Stack => "ori_stack_iterator",
+            OpaqueTy::LinkedList => "ori_linked_list_iterator",
+            OpaqueTy::DoublyLinkedList => "ori_doubly_linked_list_iterator",
+            OpaqueTy::Heap => "ori_heap_iterator",
+            OpaqueTy::Graph => "ori_graph_iterator",
+            _ => unreachable!(),
+        };
+        let new_func = format!("{}_new", prefix);
+        let next_func = format!("{}_next", prefix);
+
+        let new_ref = *self.func_refs.get(new_func.as_str()).ok_or_else(|| {
+            format!("missing runtime function `{new_func}`")
+        })?;
+        let next_ref = *self.func_refs.get(next_func.as_str()).ok_or_else(|| {
+            format!("missing runtime function `{next_func}`")
+        })?;
+
+        let elem_cl_ty = cl_type(elem_ty, self.ptr_ty).ok_or_else(|| {
+            format!("missing Cranelift type for element type `{}`", elem_ty.display())
+        })?;
+
+        let handle = self.emit_expr(iterable)?;
+        let call = self.builder.ins().call(new_ref, &[handle]);
+        let iter_value = self.builder.inst_results(call)[0];
+
+        let (idx_var, iter_var, iter_val) = if has_await {
+            let loop_id = self.async_loop_index;
+            self.async_loop_index += 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let (idx_var, _) = self.lookup_var(&idx_name).unwrap();
+            let (iter_var, _) = self.lookup_var(&list_name).unwrap();
+
+            self.builder.def_var(iter_var, iter_value);
+            self.store_async_local_if_any(&list_name, iter_value)?;
+            self.emit_arc_register_edge_if_managed(&iterable.ty, self.async_frame.unwrap(), iter_value)?;
+
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.def_var(idx_var, zero);
+            self.store_async_local_if_any(&idx_name, zero)?;
+
+            (idx_var, iter_var, self.builder.use_var(iter_var))
+        } else {
+            let iter_var = self.builder.declare_var(self.ptr_ty);
+            self.builder.def_var(iter_var, iter_value);
+            let idx_var = self.builder.declare_var(types::I64);
+            let zero = self.builder.ins().iconst(types::I64, 0);
+            self.builder.def_var(idx_var, zero);
+            (idx_var, iter_var, iter_value)
+        };
+
+        let binding_var = if has_await {
+            let (binding_var, _) = self.lookup_var(binding).unwrap();
+            binding_var
+        } else {
+            let binding_var = self.builder.declare_var(elem_cl_ty);
+            self.insert_var(binding.clone(), (binding_var, elem_ty.clone()));
+            binding_var
+        };
+
+        let iter_cleanup_idx = self.managed_stack.len();
+        self.managed_stack.push(ManagedCleanup {
+            var: iter_var,
+            ty: iterable.ty.clone(),
+        });
+
+        let header = self.builder.create_block();
+        let body_b = self.builder.create_block();
+        let step = self.builder.create_block();
+        let exit = self.builder.create_block();
+
+        self.builder.ins().jump(header, &[]);
+        self.builder.switch_to_block(header);
+
+        let iter_current = self.builder.use_var(iter_var);
+        let call = self.builder.ins().call(next_ref, &[iter_current]);
+        let val_ptr = self.builder.inst_results(call)[0];
+        let has_val = self.builder.ins().icmp_imm(ir::condcodes::IntCC::NotEqual, val_ptr, 0);
+        self.builder.ins().brif(has_val, body_b, &[], exit, &[]);
+
+        self.builder.seal_block(body_b);
+        self.builder.switch_to_block(body_b);
+
+        let item_storage = self.builder.ins().load(elem_cl_ty, MemFlags::new(), val_ptr, 0);
+        let item = self.from_list_storage_value(item_storage, elem_ty);
+        self.builder.def_var(binding_var, item);
+        if has_await {
+            self.store_async_local_if_any(binding, item)?;
+            self.emit_arc_register_edge_if_managed(elem_ty, self.async_frame.unwrap(), item)?;
         }
+
+        if let Some(ib_name) = index_binding {
+            let cur = self.builder.use_var(idx_var);
+            let ib_var = if has_await {
+                let (ib_var, _) = self.lookup_var(ib_name).unwrap();
+                self.builder.def_var(ib_var, cur);
+                self.store_async_local_if_any(ib_name, cur)?;
+                ib_var
+            } else {
+                let ib_var = self.builder.declare_var(types::I64);
+                self.builder.def_var(ib_var, cur);
+                self.insert_var(ib_name.clone(), (ib_var, Ty::Int));
+                ib_var
+            };
+        }
+
+        self.terminated = false;
+        self.push_loop(step, exit);
+        self.emit_block(body)?;
+        self.pop_loop();
+        if !self.terminated {
+            self.builder.ins().jump(step, &[]);
+        }
+        self.terminated = false;
+
+        self.builder.seal_block(step);
+        self.builder.switch_to_block(step);
+        let cur = self.builder.use_var(idx_var);
+        let one = self.builder.ins().iconst(types::I64, 1);
+        let next = self.builder.ins().iadd(cur, one);
+        self.builder.def_var(idx_var, next);
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
+            self.store_async_local_if_any(&idx_name, next)?;
+        }
+        self.builder.ins().jump(header, &[]);
+        self.builder.seal_block(header);
+
+        self.builder.seal_block(exit);
+        self.builder.switch_to_block(exit);
+        let final_iter = self.builder.use_var(iter_var);
+        self.emit_arc_release_if_managed(&iterable.ty, final_iter)?;
+        if has_await {
+            let loop_id = self.async_loop_index - 1;
+            let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let zero = self.builder.ins().iconst(self.ptr_ty, 0);
+            self.emit_arc_unregister_edge(self.async_frame.unwrap(), final_iter)?;
+            self.store_async_local_if_any(&list_name, zero)?;
+        }
+        self.managed_stack.truncate(iter_cleanup_idx);
+        self.terminated = false;
+
+        Ok(())
     }
 
     fn emit_for_custom_iterable(
@@ -7403,8 +7801,8 @@ impl<'a> FuncCodegen<'a> {
             self.async_loop_index += 1;
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
-            let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
-            let (iter_var, _) = self.vars.get(&list_name).cloned().unwrap();
+            let (idx_var, _) = self.lookup_var(&idx_name).unwrap();
+            let (iter_var, _) = self.lookup_var(&list_name).unwrap();
 
             self.builder.def_var(iter_var, iter_value);
             self.store_async_local_if_any(&list_name, iter_value)?;
@@ -7425,12 +7823,11 @@ impl<'a> FuncCodegen<'a> {
         };
 
         let binding_var = if has_await {
-            let (binding_var, _) = self.vars.get(binding).cloned().unwrap();
+            let (binding_var, _) = self.lookup_var(binding).unwrap();
             binding_var
         } else {
             let binding_var = self.builder.declare_var(elem_cl_ty);
-            self.vars
-                .insert(binding.clone(), (binding_var, elem_ty.clone()));
+            self.insert_var(binding.clone(), (binding_var, elem_ty.clone()));
             binding_var
         };
 
@@ -7476,14 +7873,14 @@ impl<'a> FuncCodegen<'a> {
         if let Some(ib_name) = index_binding {
             let cur = self.builder.use_var(idx_var);
             let ib_var = if has_await {
-                let (ib_var, _) = self.vars.get(ib_name).cloned().unwrap();
+                let (ib_var, _) = self.lookup_var(ib_name).unwrap();
                 self.builder.def_var(ib_var, cur);
                 self.store_async_local_if_any(ib_name, cur)?;
                 ib_var
             } else {
                 let ib_var = self.builder.declare_var(types::I64);
                 self.builder.def_var(ib_var, cur);
-                self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+                self.insert_var(ib_name.clone(), (ib_var, Ty::Int));
                 ib_var
             };
         }
@@ -7546,13 +7943,13 @@ impl<'a> FuncCodegen<'a> {
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             let end_name = SmolStr::new(format!(".__loop_end_{}", loop_id));
             let asc_name = SmolStr::new(format!(".__loop_asc_{}", loop_id));
-            let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
-            let (end_var, _) = self.vars.get(&end_name).cloned().unwrap();
-            let (asc_var, _) = self.vars.get(&asc_name).cloned().unwrap();
+            let (idx_var, _) = self.lookup_var(&idx_name).unwrap();
+            let (end_var, _) = self.lookup_var(&end_name).unwrap();
+            let (asc_var, _) = self.lookup_var(&asc_name).unwrap();
 
             let iter_count_var = if index_binding.is_some() {
                 let iter_name = SmolStr::new(format!(".__loop_iter_{}", loop_id));
-                let (v, _) = self.vars.get(&iter_name).cloned().unwrap();
+                let (v, _) = self.lookup_var(&iter_name).unwrap();
                 let zero = self.builder.ins().iconst(types::I64, 0);
                 self.builder.def_var(v, zero);
                 self.store_async_local_if_any(&iter_name, zero)?;
@@ -7591,7 +7988,7 @@ impl<'a> FuncCodegen<'a> {
         if !has_await {
             if let Some(cl_ty) = cl_type(elem_ty, self.ptr_ty) {
                 let bvar = self.builder.declare_var(cl_ty);
-                self.vars.insert(binding.clone(), (bvar, elem_ty.clone()));
+                self.insert_var(binding.clone(), (bvar, elem_ty.clone()));
             }
         }
 
@@ -7617,9 +8014,8 @@ impl<'a> FuncCodegen<'a> {
         self.builder.seal_block(body_b);
         self.builder.switch_to_block(body_b);
 
-        if let Some((bvar, _)) = self.vars.get(binding) {
-            let bvar = *bvar;
-            let cur2 = self.builder.use_var(idx_var);
+        if let Some((bvar, _)) = self.lookup_var(binding) {
+                        let cur2 = self.builder.use_var(idx_var);
             self.builder.def_var(bvar, cur2);
             if has_await {
                 self.store_async_local_if_any(binding, cur2)?;
@@ -7630,14 +8026,14 @@ impl<'a> FuncCodegen<'a> {
             if let Some(ic_var) = iter_count_var {
                 let ic = self.builder.use_var(ic_var);
                 let ib_var = if has_await {
-                    let (ib_var, _) = self.vars.get(ib_name).cloned().unwrap();
+                    let (ib_var, _) = self.lookup_var(ib_name).unwrap();
                     self.builder.def_var(ib_var, ic);
                     self.store_async_local_if_any(ib_name, ic)?;
                     ib_var
                 } else {
                     let ib_var = self.builder.declare_var(types::I64);
                     self.builder.def_var(ib_var, ic);
-                    self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+                    self.insert_var(ib_name.clone(), (ib_var, Ty::Int));
                     ib_var
                 };
             }
@@ -7716,15 +8112,20 @@ impl<'a> FuncCodegen<'a> {
             .get("ori_list_get")
             .ok_or_else(|| "missing runtime function `ori_list_get`".to_string())?;
 
-        let (idx_var, len_var, list_val) = if has_await {
+        let version_offset = (self.ptr_ty.bytes() + 16) as i32;
+        let expected_version = self.builder.ins().load(types::I64, MemFlags::new(), list_v, version_offset);
+
+        let (idx_var, len_var, expected_ver_var, list_val, loop_id) = if has_await {
             let loop_id = self.async_loop_index;
             self.async_loop_index += 1;
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             let len_name = SmolStr::new(format!(".__loop_len_{}", loop_id));
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
-            let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
-            let (len_var, _) = self.vars.get(&len_name).cloned().unwrap();
-            let (list_var, _) = self.vars.get(&list_name).cloned().unwrap();
+            let ver_name = SmolStr::new(format!(".__loop_version_{}", loop_id));
+            let (idx_var, _) = self.lookup_var(&idx_name).unwrap();
+            let (len_var, _) = self.lookup_var(&len_name).unwrap();
+            let (list_var, _) = self.lookup_var(&list_name).unwrap();
+            let (expected_ver_var, _) = self.lookup_var(&ver_name).unwrap();
 
             self.builder.def_var(list_var, list_v);
             self.store_async_local_if_any(&list_name, list_v)?;
@@ -7735,11 +8136,14 @@ impl<'a> FuncCodegen<'a> {
             self.builder.def_var(len_var, len_v);
             self.store_async_local_if_any(&len_name, len_v)?;
 
+            self.builder.def_var(expected_ver_var, expected_version);
+            self.store_async_local_if_any(&ver_name, expected_version)?;
+
             let zero = self.builder.ins().iconst(types::I64, 0);
             self.builder.def_var(idx_var, zero);
             self.store_async_local_if_any(&idx_name, zero)?;
 
-            (idx_var, len_var, self.builder.use_var(list_var))
+            (idx_var, len_var, expected_ver_var, self.builder.use_var(list_var), Some(loop_id))
         } else {
             let len_call = self.builder.ins().call(len_ref, &[list_v]);
             let len_v = self.builder.inst_results(len_call)[0];
@@ -7748,13 +8152,15 @@ impl<'a> FuncCodegen<'a> {
             self.builder.def_var(idx_var, zero);
             let len_var = self.builder.declare_var(types::I64);
             self.builder.def_var(len_var, len_v);
-            (idx_var, len_var, list_v)
+            let expected_ver_var = self.builder.declare_var(types::I64);
+            self.builder.def_var(expected_ver_var, expected_version);
+            (idx_var, len_var, expected_ver_var, list_v, None)
         };
 
         if !has_await {
             if let Some(cl_ty) = cl_type(elem_ty, self.ptr_ty) {
                 let bvar = self.builder.declare_var(cl_ty);
-                self.vars.insert(binding.clone(), (bvar, elem_ty.clone()));
+                self.insert_var(binding.clone(), (bvar, elem_ty.clone()));
             }
         }
 
@@ -7774,9 +8180,29 @@ impl<'a> FuncCodegen<'a> {
         self.builder.seal_block(body_b);
         self.builder.switch_to_block(body_b);
 
-        if let Some((bvar, _)) = self.vars.get(binding) {
-            let bvar = *bvar;
-            let cur2 = self.builder.use_var(idx_var);
+        // Concurrent modification check
+        let current_version = self.builder.ins().load(types::I64, MemFlags::new(), list_val, version_offset);
+        let expected_ver_val = self.builder.use_var(expected_ver_var);
+        let version_eq = self.builder.ins().icmp(ir::condcodes::IntCC::Equal, current_version, expected_ver_val);
+        
+        let abort_b = self.builder.create_block();
+        let check_b = self.builder.create_block();
+        self.builder.ins().brif(version_eq, check_b, &[], abort_b, &[]);
+
+        self.builder.seal_block(abort_b);
+        self.builder.switch_to_block(abort_b);
+        let abort_ref = *self
+            .func_refs
+            .get("ori_abort_concurrent_modification")
+            .ok_or_else(|| "missing runtime function `ori_abort_concurrent_modification`".to_string())?;
+        self.builder.ins().call(abort_ref, &[]);
+        self.builder.ins().trap(ir::TrapCode::user(2).unwrap());
+
+        self.builder.seal_block(check_b);
+        self.builder.switch_to_block(check_b);
+
+        if let Some((bvar, _)) = self.lookup_var(binding) {
+                        let cur2 = self.builder.use_var(idx_var);
             let call = self.builder.ins().call(get_ref, &[list_val, cur2]);
             let elem = self.builder.inst_results(call)[0];
             let elem = self.from_list_storage_value(elem, elem_ty);
@@ -7790,14 +8216,14 @@ impl<'a> FuncCodegen<'a> {
         if let Some(ib_name) = index_binding {
             let cur2 = self.builder.use_var(idx_var);
             let ib_var = if has_await {
-                let (ib_var, _) = self.vars.get(ib_name).cloned().unwrap();
+                let (ib_var, _) = self.lookup_var(ib_name).unwrap();
                 self.builder.def_var(ib_var, cur2);
                 self.store_async_local_if_any(ib_name, cur2)?;
                 ib_var
             } else {
                 let ib_var = self.builder.declare_var(types::I64);
                 self.builder.def_var(ib_var, cur2);
-                self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+                self.insert_var(ib_name.clone(), (ib_var, Ty::Int));
                 ib_var
             };
         }
@@ -7816,8 +8242,7 @@ impl<'a> FuncCodegen<'a> {
         let one = self.builder.ins().iconst(types::I64, 1);
         let next = self.builder.ins().iadd(cur2, one);
         self.builder.def_var(idx_var, next);
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             self.store_async_local_if_any(&idx_name, next)?;
         }
@@ -7826,12 +8251,14 @@ impl<'a> FuncCodegen<'a> {
 
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let ver_name = SmolStr::new(format!(".__loop_version_{}", loop_id));
             let zero = self.builder.ins().iconst(self.ptr_ty, 0);
+            let zero_i64 = self.builder.ins().iconst(types::I64, 0);
             self.emit_arc_unregister_edge(self.async_frame.unwrap(), list_val)?;
             self.store_async_local_if_any(&list_name, zero)?;
+            self.store_async_local_if_any(&ver_name, zero_i64)?;
         }
         self.terminated = false;
         Ok(())
@@ -7861,15 +8288,20 @@ impl<'a> FuncCodegen<'a> {
             .get("ori_map_value_at")
             .ok_or_else(|| "missing runtime function `ori_map_value_at`".to_string())?;
 
-        let (idx_var, len_var, map_val) = if has_await {
+        let version_offset = (self.ptr_ty.bytes() * 2 + 16) as i32;
+        let expected_version = self.builder.ins().load(types::I64, MemFlags::new(), map_v, version_offset);
+
+        let (idx_var, len_var, expected_ver_var, map_val, loop_id) = if has_await {
             let loop_id = self.async_loop_index;
             self.async_loop_index += 1;
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             let len_name = SmolStr::new(format!(".__loop_len_{}", loop_id));
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
-            let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
-            let (len_var, _) = self.vars.get(&len_name).cloned().unwrap();
-            let (list_var, _) = self.vars.get(&list_name).cloned().unwrap();
+            let ver_name = SmolStr::new(format!(".__loop_version_{}", loop_id));
+            let (idx_var, _) = self.lookup_var(&idx_name).unwrap();
+            let (len_var, _) = self.lookup_var(&len_name).unwrap();
+            let (list_var, _) = self.lookup_var(&list_name).unwrap();
+            let (expected_ver_var, _) = self.lookup_var(&ver_name).unwrap();
 
             self.builder.def_var(list_var, map_v);
             self.store_async_local_if_any(&list_name, map_v)?;
@@ -7880,11 +8312,14 @@ impl<'a> FuncCodegen<'a> {
             self.builder.def_var(len_var, len_v);
             self.store_async_local_if_any(&len_name, len_v)?;
 
+            self.builder.def_var(expected_ver_var, expected_version);
+            self.store_async_local_if_any(&ver_name, expected_version)?;
+
             let zero = self.builder.ins().iconst(types::I64, 0);
             self.builder.def_var(idx_var, zero);
             self.store_async_local_if_any(&idx_name, zero)?;
 
-            (idx_var, len_var, self.builder.use_var(list_var))
+            (idx_var, len_var, expected_ver_var, self.builder.use_var(list_var), Some(loop_id))
         } else {
             let len_call = self.builder.ins().call(len_ref, &[map_v]);
             let len_v = self.builder.inst_results(len_call)[0];
@@ -7893,19 +8328,20 @@ impl<'a> FuncCodegen<'a> {
             self.builder.def_var(idx_var, zero);
             let len_var = self.builder.declare_var(types::I64);
             self.builder.def_var(len_var, len_v);
-            (idx_var, len_var, map_v)
+            let expected_ver_var = self.builder.declare_var(types::I64);
+            self.builder.def_var(expected_ver_var, expected_version);
+            (idx_var, len_var, expected_ver_var, map_v, None)
         };
 
         if !has_await {
             if let Some(cl_ty) = cl_type(key_ty, self.ptr_ty) {
                 let key_var = self.builder.declare_var(cl_ty);
-                self.vars.insert(binding.clone(), (key_var, key_ty.clone()));
+                self.insert_var(binding.clone(), (key_var, key_ty.clone()));
             }
             if let Some(value_name) = value_binding {
                 if let Some(cl_ty) = cl_type(value_ty, self.ptr_ty) {
                     let value_var = self.builder.declare_var(cl_ty);
-                    self.vars
-                        .insert(value_name.clone(), (value_var, value_ty.clone()));
+                    self.insert_var(value_name.clone(), (value_var, value_ty.clone()));
                 }
             }
         }
@@ -7926,10 +8362,30 @@ impl<'a> FuncCodegen<'a> {
         self.builder.seal_block(body_b);
         self.builder.switch_to_block(body_b);
 
+        // Concurrent modification check
+        let current_version = self.builder.ins().load(types::I64, MemFlags::new(), map_val, version_offset);
+        let expected_ver_val = self.builder.use_var(expected_ver_var);
+        let version_eq = self.builder.ins().icmp(ir::condcodes::IntCC::Equal, current_version, expected_ver_val);
+        
+        let abort_b = self.builder.create_block();
+        let check_b = self.builder.create_block();
+        self.builder.ins().brif(version_eq, check_b, &[], abort_b, &[]);
+
+        self.builder.seal_block(abort_b);
+        self.builder.switch_to_block(abort_b);
+        let abort_ref = *self
+            .func_refs
+            .get("ori_abort_concurrent_modification")
+            .ok_or_else(|| "missing runtime function `ori_abort_concurrent_modification`".to_string())?;
+        self.builder.ins().call(abort_ref, &[]);
+        self.builder.ins().trap(ir::TrapCode::user(2).unwrap());
+
+        self.builder.seal_block(check_b);
+        self.builder.switch_to_block(check_b);
+
         let cur2 = self.builder.use_var(idx_var);
-        if let Some((key_var, _)) = self.vars.get(binding) {
-            let key_var = *key_var;
-            let key_call = self.builder.ins().call(key_at_ref, &[map_val, cur2]);
+        if let Some((key_var, _)) = self.lookup_var(binding) {
+                        let key_call = self.builder.ins().call(key_at_ref, &[map_val, cur2]);
             let key = self.builder.inst_results(key_call)[0];
             let key = self.from_list_storage_value(key, key_ty);
             self.builder.def_var(key_var, key);
@@ -7939,9 +8395,8 @@ impl<'a> FuncCodegen<'a> {
             }
         }
         if let Some(value_name) = value_binding {
-            if let Some((value_var, _)) = self.vars.get(value_name) {
-                let value_var = *value_var;
-                let value_call = self.builder.ins().call(value_at_ref, &[map_val, cur2]);
+            if let Some((value_var, _)) = self.lookup_var(value_name) {
+                                let value_call = self.builder.ins().call(value_at_ref, &[map_val, cur2]);
                 let value = self.builder.inst_results(value_call)[0];
                 let value = self.from_list_storage_value(value, value_ty);
                 self.builder.def_var(value_var, value);
@@ -7966,8 +8421,7 @@ impl<'a> FuncCodegen<'a> {
         let one = self.builder.ins().iconst(types::I64, 1);
         let next = self.builder.ins().iadd(cur3, one);
         self.builder.def_var(idx_var, next);
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             self.store_async_local_if_any(&idx_name, next)?;
         }
@@ -7975,12 +8429,14 @@ impl<'a> FuncCodegen<'a> {
         self.builder.seal_block(header);
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
+            let ver_name = SmolStr::new(format!(".__loop_version_{}", loop_id));
             let zero = self.builder.ins().iconst(self.ptr_ty, 0);
+            let zero_i64 = self.builder.ins().iconst(types::I64, 0);
             self.emit_arc_unregister_edge(self.async_frame.unwrap(), map_val)?;
             self.store_async_local_if_any(&list_name, zero)?;
+            self.store_async_local_if_any(&ver_name, zero_i64)?;
         }
         self.terminated = false;
         Ok(())
@@ -8010,9 +8466,9 @@ impl<'a> FuncCodegen<'a> {
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             let len_name = SmolStr::new(format!(".__loop_len_{}", loop_id));
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
-            let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
-            let (len_var, _) = self.vars.get(&len_name).cloned().unwrap();
-            let (list_var, _) = self.vars.get(&list_name).cloned().unwrap();
+            let (idx_var, _) = self.lookup_var(&idx_name).unwrap();
+            let (len_var, _) = self.lookup_var(&len_name).unwrap();
+            let (list_var, _) = self.lookup_var(&list_name).unwrap();
 
             self.builder.def_var(list_var, bytes_v);
             self.store_async_local_if_any(&list_name, bytes_v)?;
@@ -8040,11 +8496,11 @@ impl<'a> FuncCodegen<'a> {
         };
 
         let bvar = if has_await {
-            let (bvar, _) = self.vars.get(binding).cloned().unwrap();
+            let (bvar, _) = self.lookup_var(binding).unwrap();
             bvar
         } else {
             let bvar = self.builder.declare_var(types::I8);
-            self.vars.insert(binding.clone(), (bvar, Ty::U8));
+            self.insert_var(binding.clone(), (bvar, Ty::U8));
             bvar
         };
 
@@ -8075,14 +8531,14 @@ impl<'a> FuncCodegen<'a> {
         if let Some(ib_name) = index_binding {
             let cur3 = self.builder.use_var(idx_var);
             let ib_var = if has_await {
-                let (ib_var, _) = self.vars.get(ib_name).cloned().unwrap();
+                let (ib_var, _) = self.lookup_var(ib_name).unwrap();
                 self.builder.def_var(ib_var, cur3);
                 self.store_async_local_if_any(ib_name, cur3)?;
                 ib_var
             } else {
                 let ib_var = self.builder.declare_var(types::I64);
                 self.builder.def_var(ib_var, cur3);
-                self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+                self.insert_var(ib_name.clone(), (ib_var, Ty::Int));
                 ib_var
             };
         }
@@ -8152,9 +8608,9 @@ impl<'a> FuncCodegen<'a> {
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             let len_name = SmolStr::new(format!(".__loop_len_{}", loop_id));
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
-            let (idx_var, _) = self.vars.get(&idx_name).cloned().unwrap();
-            let (len_var, _) = self.vars.get(&len_name).cloned().unwrap();
-            let (list_var, _) = self.vars.get(&list_name).cloned().unwrap();
+            let (idx_var, _) = self.lookup_var(&idx_name).unwrap();
+            let (len_var, _) = self.lookup_var(&len_name).unwrap();
+            let (list_var, _) = self.lookup_var(&list_name).unwrap();
 
             self.builder.def_var(list_var, list_v);
             self.store_async_local_if_any(&list_name, list_v)?;
@@ -8182,11 +8638,11 @@ impl<'a> FuncCodegen<'a> {
         };
 
         let bvar = if has_await {
-            let (bvar, _) = self.vars.get(binding).cloned().unwrap();
+            let (bvar, _) = self.lookup_var(binding).unwrap();
             bvar
         } else {
             let bvar = self.builder.declare_var(self.ptr_ty);
-            self.vars.insert(binding.clone(), (bvar, Ty::String));
+            self.insert_var(binding.clone(), (bvar, Ty::String));
             bvar
         };
 
@@ -8216,14 +8672,14 @@ impl<'a> FuncCodegen<'a> {
         if let Some(ib_name) = index_binding {
             let cur3 = self.builder.use_var(idx_var);
             let ib_var = if has_await {
-                let (ib_var, _) = self.vars.get(ib_name).cloned().unwrap();
+                let (ib_var, _) = self.lookup_var(ib_name).unwrap();
                 self.builder.def_var(ib_var, cur3);
                 self.store_async_local_if_any(ib_name, cur3)?;
                 ib_var
             } else {
                 let ib_var = self.builder.declare_var(types::I64);
                 self.builder.def_var(ib_var, cur3);
-                self.vars.insert(ib_name.clone(), (ib_var, Ty::Int));
+                self.insert_var(ib_name.clone(), (ib_var, Ty::Int));
                 ib_var
             };
         }
@@ -8275,8 +8731,10 @@ impl<'a> FuncCodegen<'a> {
             self.builder.seal_block(arm_blk);
             self.builder.switch_to_block(arm_blk);
             self.terminated = false;
+            self.push_scope();
             self.bind_pattern(&arm.pattern, scr, &scrutinee.ty);
             self.emit_scoped_stmts(&arm.body)?;
+            self.pop_scope();
             if !self.terminated {
                 self.builder.ins().jump(exit, &[]);
             }
@@ -8452,9 +8910,9 @@ impl<'a> FuncCodegen<'a> {
                     bind_ty
                 };
                 if let Some(cl_ty) = cl_type(bty, self.ptr_ty) {
-                    let var = self.vars.get(name).map(|(v, _)| *v).unwrap_or_else(|| {
+                    let var = self.lookup_var(name).map(|(v, _)| v).unwrap_or_else(|| {
                         let v = self.builder.declare_var(cl_ty);
-                        self.vars.insert(name.clone(), (v, bty.clone()));
+                        self.insert_var(name.clone(), (v, bty.clone()));
                         v
                     });
                     self.builder.def_var(var, val);
@@ -8833,9 +9291,8 @@ impl<'a> FuncCodegen<'a> {
             HirExprKind::BytesLit(bytes) => self.bytes_ptr(bytes)?,
             HirExprKind::InterpolatedStr(parts) => self.emit_interpolated_string(parts)?,
             HirExprKind::Var(name) => {
-                if let Some((var, _)) = self.vars.get(name) {
-                    let var = *var;
-                    self.builder.use_var(var)
+                if let Some((var, _)) = self.lookup_var(name) {
+                                        self.builder.use_var(var)
                 } else if let Some(value) = self.load_global(name) {
                     value
                 } else if let Some(expr) = self.const_exprs.get(name).cloned() {
@@ -10704,6 +11161,13 @@ impl<'a> FuncCodegen<'a> {
                     let cmp = self.builder.inst_results(call)[0];
                     let zero = self.builder.ins().iconst(types::I32, 0);
                     self.builder.ins().icmp(IntCC::Equal, cmp, zero)
+                } else if let Ty::Any(_) = ty {
+                    return self.emit_any_equality(lv, rv, true);
+                } else if let Ty::Opaque { kind, args } = ty {
+                    if kind.is_list_backed_collection() {
+                        return self.emit_opaque_collection_equality(lv, rv, *kind, &args[0], true);
+                    }
+                    self.builder.ins().icmp(IntCC::Equal, lv, rv)
                 } else if let Ty::Optional(inner) = ty {
                     return self.emit_optional_equality(lv, rv, inner, true);
                 } else if let Ty::Result(ok, err) = ty {
@@ -10736,6 +11200,13 @@ impl<'a> FuncCodegen<'a> {
                     let cmp = self.builder.inst_results(call)[0];
                     let zero = self.builder.ins().iconst(types::I32, 0);
                     self.builder.ins().icmp(IntCC::NotEqual, cmp, zero)
+                } else if let Ty::Any(_) = ty {
+                    return self.emit_any_equality(lv, rv, false);
+                } else if let Ty::Opaque { kind, args } = ty {
+                    if kind.is_list_backed_collection() {
+                        return self.emit_opaque_collection_equality(lv, rv, *kind, &args[0], false);
+                    }
+                    self.builder.ins().icmp(IntCC::NotEqual, lv, rv)
                 } else if let Ty::Optional(inner) = ty {
                     return self.emit_optional_equality(lv, rv, inner, false);
                 } else if let Ty::Result(ok, err) = ty {
@@ -11008,6 +11479,78 @@ impl<'a> FuncCodegen<'a> {
             let zero = self.builder.ins().iconst(types::I8, 0);
             Ok(self.builder.ins().icmp(IntCC::Equal, cmp, zero))
         }
+    }
+
+    fn emit_any_equality(
+        &mut self,
+        lv: ir::Value,
+        rv: ir::Value,
+        eq: bool,
+    ) -> Result<ir::Value, String> {
+        let ptr_size = self.ptr_ty.bytes() as i64;
+        let vtable_l = self.builder.ins().load(self.ptr_ty, MemFlags::new(), lv, ptr_size as i32);
+        let vtable_r = self.builder.ins().load(self.ptr_ty, MemFlags::new(), rv, ptr_size as i32);
+        let type_id_l = self.builder.ins().load(self.ptr_ty, MemFlags::new(), vtable_l, 0);
+        let type_id_r = self.builder.ins().load(self.ptr_ty, MemFlags::new(), vtable_r, 0);
+        let types_eq = self.builder.ins().icmp(ir::condcodes::IntCC::Equal, type_id_l, type_id_r);
+
+        let types_eq_block = self.builder.create_block();
+        let types_ne_block = self.builder.create_block();
+        let merge_block = self.builder.create_block();
+        self.builder.append_block_param(merge_block, types::I8);
+
+        self.builder.ins().brif(types_eq, types_eq_block, &[], types_ne_block, &[]);
+
+        // --- types_ne_block ---
+        self.builder.switch_to_block(types_ne_block);
+        self.builder.seal_block(types_ne_block);
+        let false_val = self.builder.ins().iconst(types::I8, if eq { 0 } else { 1 });
+        self.builder.ins().jump(merge_block, &[BlockArg::Value(false_val)]);
+
+        // --- types_eq_block ---
+        self.builder.switch_to_block(types_eq_block);
+        self.builder.seal_block(types_eq_block);
+        let eq_fn = self.builder.ins().load(self.ptr_ty, MemFlags::new(), vtable_l, ptr_size as i32);
+        let zero_ptr = self.builder.ins().iconst(self.ptr_ty, 0);
+        let has_eq_fn = self.builder.ins().icmp(ir::condcodes::IntCC::NotEqual, eq_fn, zero_ptr);
+
+        let call_block = self.builder.create_block();
+        let no_call_block = self.builder.create_block();
+        self.builder.ins().brif(has_eq_fn, call_block, &[], no_call_block, &[]);
+
+        // --- no_call_block ---
+        self.builder.switch_to_block(no_call_block);
+        self.builder.seal_block(no_call_block);
+        let false_val2 = self.builder.ins().iconst(types::I8, if eq { 0 } else { 1 });
+        self.builder.ins().jump(merge_block, &[BlockArg::Value(false_val2)]);
+
+        // --- call_block ---
+        self.builder.switch_to_block(call_block);
+        self.builder.seal_block(call_block);
+        let data_l = self.builder.ins().load(self.ptr_ty, MemFlags::new(), lv, 0);
+        let data_r = self.builder.ins().load(self.ptr_ty, MemFlags::new(), rv, 0);
+
+        let mut sig = ir::Signature::new(self.builder.func.signature.call_conv);
+        sig.params.push(AbiParam::new(self.ptr_ty));
+        sig.params.push(AbiParam::new(self.ptr_ty));
+        sig.returns.push(AbiParam::new(types::I8));
+        let sig_ref = self.builder.func.import_signature(sig);
+        let call = self.builder.ins().call_indirect(sig_ref, eq_fn, &[data_l, data_r]);
+        let eq_res = self.builder.inst_results(call)[0];
+        
+        let final_res = if eq {
+            eq_res
+        } else {
+            let zero8 = self.builder.ins().iconst(types::I8, 0);
+            self.builder.ins().icmp(ir::condcodes::IntCC::Equal, eq_res, zero8)
+        };
+        self.builder.ins().jump(merge_block, &[BlockArg::Value(final_res)]);
+
+        // --- merge_block ---
+        self.builder.switch_to_block(merge_block);
+        self.builder.seal_block(merge_block);
+        let result = self.builder.block_params(merge_block)[0];
+        Ok(result)
     }
 
     /// Compare two non-generic struct values field-by-field.

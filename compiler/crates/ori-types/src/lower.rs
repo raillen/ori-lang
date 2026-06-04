@@ -39,9 +39,31 @@ pub fn lower_type_with_aliases(
     sink: &mut DiagnosticSink,
     aliases: &HashMap<SmolStr, SmolStr>,
 ) -> Ty {
+    lower_type_with_local_aliases(
+        ast_ty,
+        module_path,
+        type_params,
+        def_map,
+        file_id,
+        sink,
+        aliases,
+        &HashMap::new(),
+    )
+}
+
+pub fn lower_type_with_local_aliases(
+    ast_ty: &AstType,
+    module_path: &str,
+    type_params: &[SmolStr],
+    def_map: &DefMap,
+    file_id: FileId,
+    sink: &mut DiagnosticSink,
+    aliases: &HashMap<SmolStr, SmolStr>,
+    local_aliases: &HashMap<SmolStr, AstType>,
+) -> Ty {
     macro_rules! rec {
         ($t:expr) => {
-            lower_type_with_aliases(
+            lower_type_with_local_aliases(
                 $t,
                 module_path,
                 type_params,
@@ -49,10 +71,21 @@ pub fn lower_type_with_aliases(
                 file_id,
                 sink,
                 aliases,
+                local_aliases,
             )
         };
     }
     match ast_ty {
+        // Check local type aliases (e.g. associated types in implement blocks)
+        AstType::Named(name) if name.is_single() && local_aliases.contains_key(name.last().as_str()) => {
+            let target_ast_ty = &local_aliases[name.last().as_str()];
+            rec!(target_ast_ty)
+        }
+        AstType::Generic { name, .. } if name.is_single() && local_aliases.contains_key(name.last().as_str()) => {
+            let target_ast_ty = &local_aliases[name.last().as_str()];
+            rec!(target_ast_ty)
+        }
+
         // ── Primitives ────────────────────────────────────────────────────────
         AstType::Bool(_) => Ty::Bool,
         AstType::Int(_) => Ty::Int,
@@ -147,10 +180,14 @@ fn lower_named(
     if name.is_single() {
         let n = name.last().as_str();
         if let Some(idx) = type_params.iter().position(|p| p == n) {
-            return Ty::Param {
-                index: idx as u32,
-                name: SmolStr::new(n),
-            };
+            if args.is_empty() {
+                return Ty::Param {
+                    index: idx as u32,
+                    name: SmolStr::new(n),
+                };
+            } else {
+                return Ty::Named(crate::def::DefId(0x4000_0000 | (idx as u32)), args.to_vec());
+            }
         }
     }
     let expanded = expand_alias(&name.to_string(), aliases);
@@ -253,6 +290,22 @@ fn resolve_name(
     let local = format!("{}.{}", module_path, expanded);
     if let Some(id) = def_map.lookup(&local) {
         return Some(id);
+    }
+    // Return a dummy DefId for numeric and boolean constants so they resolve without error
+    if name.is_single() {
+        let text = name.last().as_str();
+        if text.chars().next().map_or(false, |c| c.is_ascii_digit() || c == '-')
+            || text == "true"
+            || text == "false"
+        {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            text.hash(&mut hasher);
+            let hash = hasher.finish() as u32;
+            let dummy_id = 0x2000_0000 | (hash & 0x1FFF_FFFF);
+            return Some(crate::def::DefId(dummy_id));
+        }
     }
     sink.emit(
         Diagnostic::error(

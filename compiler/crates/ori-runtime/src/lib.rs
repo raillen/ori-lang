@@ -1959,6 +1959,7 @@ pub struct OriList {
     pub data: *mut i64,
     pub len: i64,
     pub cap: i64,
+    pub version: i64,
 }
 
 unsafe extern "C" fn ori_list_dtor(ptr: *mut u8) {
@@ -1978,6 +1979,7 @@ pub unsafe extern "C" fn ori_list_new() -> *mut OriList {
         (*list).data = data;
         (*list).len = 0;
         (*list).cap = cap;
+        (*list).version = 0;
     }
     list
 }
@@ -1995,6 +1997,7 @@ pub unsafe extern "C" fn ori_list_push(list: *mut OriList, value: i64) {
     }
     *(*list).data.add((*list).len as usize) = value;
     (*list).len += 1;
+    (*list).version += 1;
 }
 
 #[no_mangle]
@@ -2011,6 +2014,7 @@ pub unsafe extern "C" fn ori_list_set(list: *mut OriList, index: i64, value: i64
         return;
     }
     *(*list).data.add(index as usize) = value;
+    (*list).version += 1;
 }
 
 #[no_mangle]
@@ -2034,6 +2038,7 @@ pub unsafe extern "C" fn ori_list_pop(list: *mut OriList) -> i64 {
     }
     (*list).len -= 1;
     let value = *(*list).data.add((*list).len as usize);
+    (*list).version += 1;
     transfer_collection_edge_to_return_value(list as *mut u8, value)
 }
 
@@ -2058,6 +2063,7 @@ pub unsafe extern "C" fn ori_list_remove(list: *mut OriList, index: i64) {
         *(*list).data.add(i as usize) = next;
     }
     (*list).len -= 1;
+    (*list).version += 1;
 }
 
 #[no_mangle]
@@ -2087,6 +2093,7 @@ pub unsafe extern "C" fn ori_list_insert(list: *mut OriList, index: i64, value: 
     }
     *(*list).data.add(index) = value;
     (*list).len += 1;
+    (*list).version += 1;
 }
 
 #[no_mangle]
@@ -2114,6 +2121,7 @@ pub unsafe extern "C" fn ori_list_sort(list: *mut OriList) {
     }
     let data = std::slice::from_raw_parts_mut((*list).data, (*list).len as usize);
     data.sort_unstable();
+    (*list).version += 1;
 }
 
 #[no_mangle]
@@ -2123,6 +2131,7 @@ pub unsafe extern "C" fn ori_list_reverse(list: *mut OriList) {
     }
     let data = std::slice::from_raw_parts_mut((*list).data, (*list).len as usize);
     data.reverse();
+    (*list).version += 1;
 }
 
 #[no_mangle]
@@ -2162,6 +2171,7 @@ unsafe fn list_clear(list: *mut OriList) {
             unregister_collection_edge(list as *mut u8, value);
         }
         (*list).len = 0;
+        (*list).version += 1;
     }
 }
 
@@ -2195,6 +2205,7 @@ pub unsafe extern "C" fn ori_list_from_list(list: *mut OriList) -> *mut OriList 
 #[repr(C)]
 pub struct OriDeque {
     values: VecDeque<i64>,
+    pub version: i64,
 }
 
 unsafe extern "C" fn ori_deque_dtor(ptr: *mut u8) {
@@ -2211,6 +2222,7 @@ unsafe fn deque_alloc() -> *mut OriDeque {
             deque,
             OriDeque {
                 values: VecDeque::new(),
+                version: 0,
             },
         );
     }
@@ -2226,6 +2238,7 @@ unsafe fn deque_push_borrowed_maybe_managed(deque: *mut OriDeque, value: i64, fr
     } else {
         (*deque).values.push_back(value);
     }
+    (*deque).version += 1;
     ori_arc_register_edge(deque as *mut u8, value as *mut u8);
 }
 
@@ -2286,6 +2299,7 @@ unsafe fn deque_insert_after(deque: *mut OriDeque, cursor: i64, value: i64) -> c
         return 0;
     }
     (*deque).values.insert(cursor as usize + 1, value);
+    (*deque).version += 1;
     ori_arc_register_edge(deque as *mut u8, value as *mut u8);
     1
 }
@@ -2295,19 +2309,18 @@ unsafe fn deque_insert_before(deque: *mut OriDeque, cursor: i64, value: i64) -> 
         return 0;
     }
     (*deque).values.insert(cursor as usize, value);
+    (*deque).version += 1;
     ori_arc_register_edge(deque as *mut u8, value as *mut u8);
     1
 }
 
 unsafe fn deque_remove_at(deque: *mut OriDeque, cursor: i64) -> *mut u8 {
-    deque_optional_removed_value(
-        deque,
-        if deque.is_null() || cursor < 0 {
-            None
-        } else {
-            (*deque).values.remove(cursor as usize)
-        },
-    )
+    if deque.is_null() || cursor < 0 || cursor as usize >= (*deque).values.len() {
+        return alloc_optional_int(0, 0) as *mut u8;
+    }
+    let removed = (*deque).values.remove(cursor as usize);
+    (*deque).version += 1;
+    deque_optional_removed_value(deque, removed)
 }
 
 unsafe fn deque_find_raw(deque: *mut OriDeque, value: i64, value_kind: u8) -> *mut u8 {
@@ -2344,26 +2357,22 @@ pub unsafe extern "C" fn ori_deque_push_back(deque: *mut OriDeque, value: i64) {
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_deque_pop_front(deque: *mut OriDeque) -> *mut u8 {
-    deque_optional_removed_value(
-        deque,
-        if deque.is_null() {
-            None
-        } else {
-            (*deque).values.pop_front()
-        },
-    )
+    if deque.is_null() || (*deque).values.is_empty() {
+        return alloc_optional_int(0, 0) as *mut u8;
+    }
+    let val = (*deque).values.pop_front();
+    (*deque).version += 1;
+    deque_optional_removed_value(deque, val)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_deque_pop_back(deque: *mut OriDeque) -> *mut u8 {
-    deque_optional_removed_value(
-        deque,
-        if deque.is_null() {
-            None
-        } else {
-            (*deque).values.pop_back()
-        },
-    )
+    if deque.is_null() || (*deque).values.is_empty() {
+        return alloc_optional_int(0, 0) as *mut u8;
+    }
+    let val = (*deque).values.pop_back();
+    (*deque).version += 1;
+    deque_optional_removed_value(deque, val)
 }
 
 #[no_mangle]
@@ -2405,6 +2414,7 @@ pub unsafe extern "C" fn ori_deque_clear(deque: *mut OriDeque) {
             unregister_collection_edge(deque as *mut u8, value);
         }
         (*deque).values.clear();
+        (*deque).version += 1;
     }
 }
 
@@ -3741,6 +3751,7 @@ pub struct OriSet {
     pub items: *mut i64, // dense elements [0..len); same offset as OriList.data
     pub len: i64,        // element count;           same offset as OriList.len
     pub cap: i64,        // dense array capacity;    same offset as OriList.cap
+    pub version: i64,    // version;                 same offset as OriList.version
     pub ht: *mut i64,    // hash table slots (HT_EMPTY / HT_TOMB / dense_index)
     pub ht_cap: i64,     // hash table capacity (power of 2)
     pub item_kind: u8,
@@ -3836,6 +3847,7 @@ unsafe fn set_alloc() -> *mut OriSet {
         (*set).items = items;
         (*set).len = 0;
         (*set).cap = 8;
+        (*set).version = 0;
         (*set).ht = ht;
         (*set).ht_cap = INITIAL_SET_HT_CAP as i64;
         (*set).item_kind = SET_ITEM_UNKNOWN;
@@ -3935,6 +3947,7 @@ unsafe fn ori_set_add_raw(set: *mut OriSet, value: i64, item_kind: u8) {
     let ht_cap = (*set).ht_cap as usize;
     let slot = ht_find_insert_slot_set((*set).ht, ht_cap, item_kind, value);
     *(*set).ht.add(slot) = dense_idx as i64;
+    (*set).version += 1;
 }
 
 #[no_mangle]
@@ -4021,6 +4034,7 @@ unsafe fn ori_set_remove_raw(set: *mut OriSet, value: i64, item_kind: u8) {
         }
     }
     (*set).len -= 1;
+    (*set).version += 1;
 }
 
 #[no_mangle]
@@ -4062,6 +4076,7 @@ pub unsafe extern "C" fn ori_set_clear(set: *mut OriSet) {
         0xFF,
         (*set).ht_cap as usize * std::mem::size_of::<i64>(),
     );
+    (*set).version += 1;
 }
 
 #[no_mangle]
@@ -4188,6 +4203,7 @@ pub struct OriMap {
     pub values: *mut i64,
     pub len: i64,
     pub cap: i64,
+    pub version: i64,
     pub ht: *mut i64, // hash table slots (HT_EMPTY / HT_TOMB / dense_index)
     pub ht_cap: i64,  // hash table capacity (power of 2)
     pub key_kind: u8,
@@ -4288,6 +4304,7 @@ unsafe fn map_alloc() -> *mut OriMap {
         (*map).values = libc::malloc(bytes) as *mut i64;
         (*map).len = 0;
         (*map).cap = cap;
+        (*map).version = 0;
         (*map).ht = ht;
         (*map).ht_cap = INITIAL_MAP_HT_CAP as i64;
         (*map).key_kind = MAP_KEY_UNKNOWN;
@@ -4365,6 +4382,7 @@ unsafe fn ori_map_set_raw(map: *mut OriMap, key: i64, value: i64, key_kind: u8) 
         let old_value = *(*map).values.add(dense_idx);
         ori_arc_update_edge(map as *mut u8, old_value as *mut u8, value as *mut u8);
         *(*map).values.add(dense_idx) = value;
+        (*map).version += 1;
         return;
     }
     // Grow dense arrays if needed
@@ -4386,6 +4404,7 @@ unsafe fn ori_map_set_raw(map: *mut OriMap, key: i64, value: i64, key_kind: u8) 
     let ht_cap = (*map).ht_cap as usize;
     let slot = ht_find_insert_slot_map((*map).ht, ht_cap, key_kind, key);
     *(*map).ht.add(slot) = dense_idx as i64;
+    (*map).version += 1;
 }
 
 #[no_mangle]
@@ -4502,6 +4521,7 @@ unsafe fn ori_map_remove_raw(map: *mut OriMap, key: i64, key_kind: u8) {
         }
     }
     (*map).len -= 1;
+    (*map).version += 1;
 }
 
 #[no_mangle]
@@ -4642,6 +4662,7 @@ pub unsafe extern "C" fn ori_map_clear(map: *mut OriMap) {
         0xFF,
         (*map).ht_cap as usize * std::mem::size_of::<i64>(),
     );
+    (*map).version += 1;
 }
 
 #[no_mangle]
@@ -4832,6 +4853,7 @@ pub struct OriGraph {
     nodes: *mut i64,
     len: i64,
     cap: i64,
+    pub version: i64,
     edge_from: *mut i64,
     edge_to: *mut i64,
     edge_weight: *mut i64,
@@ -4997,6 +5019,7 @@ unsafe fn graph_add_node_raw(graph: *mut OriGraph, node: i64, node_kind: u8) {
     graph_reserve_nodes(graph, (*graph).len + 1);
     *(*graph).nodes.add((*graph).len as usize) = node;
     (*graph).len += 1;
+    (*graph).version += 1;
     ori_arc_register_edge(graph as *mut u8, node as *mut u8);
 }
 
@@ -5018,7 +5041,12 @@ unsafe fn graph_add_weighted_edge_raw(
     graph_add_node_raw(graph, to, node_kind);
     let existing = graph_edge_index(graph, from, to, node_kind);
     if existing >= 0 {
-        *(*graph).edge_weight.add(existing as usize) = weight.max(0);
+        let old_weight = *(*graph).edge_weight.add(existing as usize);
+        let new_weight = weight.max(0);
+        if old_weight != new_weight {
+            *(*graph).edge_weight.add(existing as usize) = new_weight;
+            (*graph).version += 1;
+        }
         return;
     }
     graph_reserve_edges(graph, (*graph).edge_len + 1);
@@ -5026,6 +5054,7 @@ unsafe fn graph_add_weighted_edge_raw(
     *(*graph).edge_to.add((*graph).edge_len as usize) = to;
     *(*graph).edge_weight.add((*graph).edge_len as usize) = weight.max(0);
     (*graph).edge_len += 1;
+    (*graph).version += 1;
 }
 
 unsafe fn graph_remove_edge_at(graph: *mut OriGraph, index: i64) {
@@ -5039,6 +5068,7 @@ unsafe fn graph_remove_edge_at(graph: *mut OriGraph, index: i64) {
         *(*graph).edge_weight.add(i as usize) = *(*graph).edge_weight.add(next);
     }
     (*graph).edge_len -= 1;
+    (*graph).version += 1;
 }
 
 unsafe fn graph_remove_edge_raw(graph: *mut OriGraph, from: i64, to: i64, node_kind: u8) {
@@ -5074,6 +5104,7 @@ unsafe fn graph_remove_node_raw(graph: *mut OriGraph, node: i64, node_kind: u8) 
         *(*graph).nodes.add(i as usize) = *(*graph).nodes.add((i + 1) as usize);
     }
     (*graph).len -= 1;
+    (*graph).version += 1;
     let mut edge = 0;
     let kind = (*graph).node_kind;
     while edge < (*graph).edge_len {
@@ -5094,6 +5125,7 @@ pub unsafe extern "C" fn ori_graph_new(directed: c_uchar) -> *mut OriGraph {
         (*graph).nodes = graph_alloc_array(8);
         (*graph).len = 0;
         (*graph).cap = 8;
+        (*graph).version = 0;
         (*graph).edge_from = graph_alloc_array(8);
         (*graph).edge_to = graph_alloc_array(8);
         (*graph).edge_weight = graph_alloc_array(8);
@@ -5879,6 +5911,7 @@ pub struct OriHeap {
     data: *mut i64,
     len: i64,
     cap: i64,
+    pub version: i64,
     item_kind: u8,
     compare_fn: *const std::ffi::c_void,
 }
@@ -5909,6 +5942,7 @@ unsafe fn heap_new_with(kind: u8, compare_fn: *const std::ffi::c_void) -> *mut O
     (*heap).data = libc::calloc(cap as usize, std::mem::size_of::<i64>()) as *mut i64;
     (*heap).len = 0;
     (*heap).cap = cap;
+    (*heap).version = 0;
     (*heap).item_kind = kind;
     (*heap).compare_fn = compare_fn;
     heap
@@ -6045,6 +6079,7 @@ unsafe fn heap_push_raw(
     heap_reserve(heap, (*heap).len + 1);
     *(*heap).data.add((*heap).len as usize) = value;
     (*heap).len += 1;
+    (*heap).version += 1;
     heap_sift_up(heap, (*heap).len - 1);
 }
 
@@ -6077,6 +6112,7 @@ pub unsafe extern "C" fn ori_heap_pop(heap: *mut OriHeap) -> *mut OriOptionalInt
     }
     let root = *(*heap).data;
     (*heap).len -= 1;
+    (*heap).version += 1;
     if (*heap).len > 0 {
         *(*heap).data = *(*heap).data.add((*heap).len as usize);
         heap_sift_down(heap, 0);
@@ -6147,6 +6183,7 @@ pub unsafe extern "C" fn ori_heap_clear(heap: *mut OriHeap) {
         ori_arc_unregister_edge(heap as *mut u8, *(*heap).data.add(i as usize) as *mut u8);
     }
     (*heap).len = 0;
+    (*heap).version += 1;
 }
 
 #[no_mangle]
@@ -6634,36 +6671,146 @@ pub unsafe extern "C" fn ori_random_shuffle(items: *mut OriList) -> *mut OriList
     out
 }
 
+unsafe fn to_ori_json_value(val: serde_json::Value) -> *mut u8 {
+    let ptr = ori_alloc(16, None);
+    if ptr.is_null() {
+        return ptr;
+    }
+    match val {
+        serde_json::Value::Null => {
+            *(ptr as *mut i32) = 0;
+            *(ptr.add(8) as *mut u64) = 0;
+        }
+        serde_json::Value::Bool(b) => {
+            *(ptr as *mut i32) = 1;
+            *(ptr.add(8) as *mut u8) = if b { 1 } else { 0 };
+        }
+        serde_json::Value::Number(num) => {
+            *(ptr as *mut i32) = 2;
+            let f = num.as_f64().unwrap_or(0.0);
+            *(ptr.add(8) as *mut f64) = f;
+        }
+        serde_json::Value::String(s) => {
+            *(ptr as *mut i32) = 3;
+            let s_ptr = cstring_from_str(&s);
+            *(ptr.add(8) as *mut *mut u8) = s_ptr;
+            ori_arc_register_edge(ptr, s_ptr);
+            ori_arc_release(s_ptr);
+        }
+        serde_json::Value::Array(arr) => {
+            *(ptr as *mut i32) = 4;
+            let list_ptr = ori_list_new() as *mut u8;
+            for item in arr {
+                let item_ptr = to_ori_json_value(item);
+                ori_list_push_borrowed_maybe_managed(list_ptr as *mut OriList, item_ptr as i64);
+                ori_arc_release(item_ptr);
+            }
+            *(ptr.add(8) as *mut *mut u8) = list_ptr;
+            ori_arc_register_edge(ptr, list_ptr);
+            ori_arc_release(list_ptr);
+        }
+        serde_json::Value::Object(obj) => {
+            *(ptr as *mut i32) = 5;
+            let map_ptr = ori_map_new() as *mut u8;
+            for (k, v) in obj {
+                let key_ptr = cstring_from_str(&k);
+                let val_ptr = to_ori_json_value(v);
+                ori_map_set_string(map_ptr as *mut OriMap, key_ptr, val_ptr as i64);
+                ori_arc_register_edge(map_ptr, key_ptr);
+                ori_arc_register_edge(map_ptr, val_ptr);
+                ori_arc_release(key_ptr);
+                ori_arc_release(val_ptr);
+            }
+            *(ptr.add(8) as *mut *mut u8) = map_ptr;
+            ori_arc_register_edge(ptr, map_ptr);
+            ori_arc_release(map_ptr);
+        }
+    }
+    ptr
+}
+
+unsafe fn from_ori_json_value(ptr: *const u8) -> serde_json::Value {
+    if ptr.is_null() {
+        return serde_json::Value::Null;
+    }
+    let tag = *(ptr as *const i32);
+    match tag {
+        0 => serde_json::Value::Null,
+        1 => {
+            let b = *(ptr.add(8) as *const u8);
+            serde_json::Value::Bool(b != 0)
+        }
+        2 => {
+            let f = *(ptr.add(8) as *const f64);
+            serde_json::Number::from_f64(f)
+                .map(serde_json::Value::Number)
+                .unwrap_or(serde_json::Value::Null)
+        }
+        3 => {
+            let s_ptr = *(ptr.add(8) as *const *const u8);
+            let s = cstr_str(s_ptr);
+            serde_json::Value::String(s.to_string())
+        }
+        4 => {
+            let list_ptr = *(ptr.add(8) as *const *mut OriList);
+            if list_ptr.is_null() {
+                serde_json::Value::Array(Vec::new())
+            } else {
+                let len = (*list_ptr).len as usize;
+                let mut arr = Vec::with_capacity(len);
+                for i in 0..len {
+                    let item_ptr = *(*list_ptr).data.add(i) as *const u8;
+                    arr.push(from_ori_json_value(item_ptr));
+                }
+                serde_json::Value::Array(arr)
+            }
+        }
+        5 => {
+            let map_ptr = *(ptr.add(8) as *const *mut OriMap);
+            if map_ptr.is_null() {
+                serde_json::Value::Object(serde_json::Map::new())
+            } else {
+                let len = (*map_ptr).len as usize;
+                let mut obj = serde_json::Map::with_capacity(len);
+                for i in 0..len {
+                    let key_ptr = *(*map_ptr).keys.add(i) as *const u8;
+                    let val_ptr = *(*map_ptr).values.add(i) as *const u8;
+                    let key_str = cstr_str(key_ptr).to_string();
+                    obj.insert(key_str, from_ori_json_value(val_ptr));
+                }
+                serde_json::Value::Object(obj)
+            }
+        }
+        _ => serde_json::Value::Null,
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn ori_json_parse(text: *const u8) -> *mut u8 {
     match serde_json::from_str::<serde_json::Value>(cstr_str(text)) {
-        Ok(value) => new_result(true, cstring_from_str(&value.to_string())),
-        Err(error) => new_result(false, cstring_from_str(&error.to_string())),
+        Ok(value) => {
+            let val_ptr = to_ori_json_value(value);
+            new_result(true, val_ptr)
+        }
+        Err(error) => {
+            let err_ptr = cstring_from_str(&error.to_string());
+            new_result(false, err_ptr)
+        }
     }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_json_stringify(value: *const u8) -> *mut u8 {
-    match serde_json::from_str::<serde_json::Value>(cstr_str(value)) {
-        Ok(value) => cstring_from_str(&value.to_string()),
-        Err(_) => match serde_json::to_string(cstr_str(value)) {
-            Ok(quoted) => cstring_from_str(&quoted),
-            Err(_) => cstring_from_str("null"),
-        },
-    }
+    let val = from_ori_json_value(value);
+    cstring_from_str(&val.to_string())
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_json_stringify_pretty(value: *const u8) -> *mut u8 {
-    match serde_json::from_str::<serde_json::Value>(cstr_str(value)) {
-        Ok(value) => match serde_json::to_string_pretty(&value) {
-            Ok(text) => cstring_from_str(&text),
-            Err(_) => cstring_from_str("null"),
-        },
-        Err(_) => match serde_json::to_string_pretty(cstr_str(value)) {
-            Ok(quoted) => cstring_from_str(&quoted),
-            Err(_) => cstring_from_str("null"),
-        },
+    let val = from_ori_json_value(value);
+    match serde_json::to_string_pretty(&val) {
+        Ok(text) => cstring_from_str(&text),
+        Err(_) => cstring_from_str("null"),
     }
 }
 
@@ -7330,6 +7477,198 @@ pub unsafe extern "C" fn ori_string_from_bytes(ptr: *const u8) -> *mut u8 {
         Ok(s) => new_result(true, cstring_from_str(s)),
         Err(e) => new_result(false, cstring_from_str(&e.to_string())),
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_abort_concurrent_modification() -> ! {
+    abort_bounds("concurrent modification during iteration");
+}
+
+#[repr(C)]
+pub struct OriDequeIterator {
+    pub deque: *mut OriDeque,
+    pub expected_version: i64,
+    pub index: i64,
+    pub last_value: i64,
+}
+
+unsafe extern "C" fn ori_deque_iterator_dtor(ptr: *mut u8) {
+    let iter = ptr as *mut OriDequeIterator;
+    if !iter.is_null() {
+        ori_arc_release((*iter).deque as *mut u8);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_iterator_new(deque: *mut OriDeque) -> *mut OriDequeIterator {
+    if deque.is_null() {
+        return std::ptr::null_mut();
+    }
+    let iter = ori_alloc(std::mem::size_of::<OriDequeIterator>(), Some(ori_deque_iterator_dtor)) as *mut OriDequeIterator;
+    if !iter.is_null() {
+        ori_arc_retain(deque as *mut u8);
+        (*iter).deque = deque;
+        (*iter).expected_version = (*deque).version;
+        (*iter).index = 0;
+        (*iter).last_value = 0;
+    }
+    iter
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_deque_iterator_next(iter: *mut OriDequeIterator) -> *mut i64 {
+    if iter.is_null() || (*iter).deque.is_null() {
+        return std::ptr::null_mut();
+    }
+    let deque = (*iter).deque;
+    if (*deque).version != (*iter).expected_version {
+        ori_abort_concurrent_modification();
+    }
+    if (*iter).index >= (*deque).values.len() as i64 {
+        return std::ptr::null_mut();
+    }
+    let val = (*deque).values.get((*iter).index as usize).copied().unwrap_or(0);
+    (*iter).last_value = val;
+    (*iter).index += 1;
+    &mut (*iter).last_value
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_queue_iterator_new(queue: *mut OriDeque) -> *mut OriDequeIterator {
+    ori_deque_iterator_new(queue)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_queue_iterator_next(iter: *mut OriDequeIterator) -> *mut i64 {
+    ori_deque_iterator_next(iter)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_stack_iterator_new(stack: *mut OriDeque) -> *mut OriDequeIterator {
+    ori_deque_iterator_new(stack)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_stack_iterator_next(iter: *mut OriDequeIterator) -> *mut i64 {
+    ori_deque_iterator_next(iter)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_linked_list_iterator_new(list: *mut OriDeque) -> *mut OriDequeIterator {
+    ori_deque_iterator_new(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_linked_list_iterator_next(iter: *mut OriDequeIterator) -> *mut i64 {
+    ori_deque_iterator_next(iter)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_iterator_new(list: *mut OriDeque) -> *mut OriDequeIterator {
+    ori_deque_iterator_new(list)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_doubly_linked_list_iterator_next(iter: *mut OriDequeIterator) -> *mut i64 {
+    ori_deque_iterator_next(iter)
+}
+
+#[repr(C)]
+pub struct OriHeapIterator {
+    pub heap: *mut OriHeap,
+    pub expected_version: i64,
+    pub index: i64,
+    pub last_value: i64,
+}
+
+unsafe extern "C" fn ori_heap_iterator_dtor(ptr: *mut u8) {
+    let iter = ptr as *mut OriHeapIterator;
+    if !iter.is_null() {
+        ori_arc_release((*iter).heap as *mut u8);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_heap_iterator_new(heap: *mut OriHeap) -> *mut OriHeapIterator {
+    if heap.is_null() {
+        return std::ptr::null_mut();
+    }
+    let iter = ori_alloc(std::mem::size_of::<OriHeapIterator>(), Some(ori_heap_iterator_dtor)) as *mut OriHeapIterator;
+    if !iter.is_null() {
+        ori_arc_retain(heap as *mut u8);
+        (*iter).heap = heap;
+        (*iter).expected_version = (*heap).version;
+        (*iter).index = 0;
+        (*iter).last_value = 0;
+    }
+    iter
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_heap_iterator_next(iter: *mut OriHeapIterator) -> *mut i64 {
+    if iter.is_null() || (*iter).heap.is_null() {
+        return std::ptr::null_mut();
+    }
+    let heap = (*iter).heap;
+    if (*heap).version != (*iter).expected_version {
+        ori_abort_concurrent_modification();
+    }
+    if (*iter).index >= (*heap).len {
+        return std::ptr::null_mut();
+    }
+    let val = *(*heap).data.add((*iter).index as usize);
+    (*iter).last_value = val;
+    (*iter).index += 1;
+    &mut (*iter).last_value
+}
+
+#[repr(C)]
+pub struct OriGraphIterator {
+    pub graph: *mut OriGraph,
+    pub expected_version: i64,
+    pub index: i64,
+    pub last_value: i64,
+}
+
+unsafe extern "C" fn ori_graph_iterator_dtor(ptr: *mut u8) {
+    let iter = ptr as *mut OriGraphIterator;
+    if !iter.is_null() {
+        ori_arc_release((*iter).graph as *mut u8);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_iterator_new(graph: *mut OriGraph) -> *mut OriGraphIterator {
+    if graph.is_null() {
+        return std::ptr::null_mut();
+    }
+    let iter = ori_alloc(std::mem::size_of::<OriGraphIterator>(), Some(ori_graph_iterator_dtor)) as *mut OriGraphIterator;
+    if !iter.is_null() {
+        ori_arc_retain(graph as *mut u8);
+        (*iter).graph = graph;
+        (*iter).expected_version = (*graph).version;
+        (*iter).index = 0;
+        (*iter).last_value = 0;
+    }
+    iter
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_graph_iterator_next(iter: *mut OriGraphIterator) -> *mut i64 {
+    if iter.is_null() || (*iter).graph.is_null() {
+        return std::ptr::null_mut();
+    }
+    let graph = (*iter).graph;
+    if (*graph).version != (*iter).expected_version {
+        ori_abort_concurrent_modification();
+    }
+    if (*iter).index >= (*graph).len {
+        return std::ptr::null_mut();
+    }
+    let val = *(*graph).nodes.add((*iter).index as usize);
+    (*iter).last_value = val;
+    (*iter).index += 1;
+    &mut (*iter).last_value
 }
 
 #[cfg(test)]

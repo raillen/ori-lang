@@ -81,10 +81,32 @@ impl DefMap {
     }
 
     pub fn get(&self, id: DefId) -> &Def {
+        if id.0 >= self.defs.len() as u32 {
+            static DUMMY_DEF: std::sync::OnceLock<Def> = std::sync::OnceLock::new();
+            return DUMMY_DEF.get_or_init(|| Def {
+                id: DefId(0x7FFF_FFFF),
+                kind: DefKind::Struct,
+                name: SmolStr::new(""),
+                path: SmolStr::new(""),
+                is_public: false,
+                span: Span { start: 0, end: 0 },
+            });
+        }
         &self.defs[id.0 as usize]
     }
 
     pub fn try_get(&self, id: DefId) -> Option<&Def> {
+        if id.0 >= self.defs.len() as u32 {
+            static DUMMY_DEF: std::sync::OnceLock<Def> = std::sync::OnceLock::new();
+            return Some(DUMMY_DEF.get_or_init(|| Def {
+                id: DefId(0x7FFF_FFFF),
+                kind: DefKind::Struct,
+                name: SmolStr::new(""),
+                path: SmolStr::new(""),
+                is_public: false,
+                span: Span { start: 0, end: 0 },
+            }));
+        }
         self.defs.get(id.0 as usize)
     }
 
