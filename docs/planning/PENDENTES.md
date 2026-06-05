@@ -49,29 +49,29 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 *Esta etapa estende as capacidades semânticas e expressividade do compilador e do type-checker.*
 
 ### 1. Igualdade Dinâmica para Traits
-- [ ] Implementar a igualdade estrutural para objetos dinâmicos `any<Trait>`.
-- [ ] Desenhar o mecanismo de lookup via vtable no runtime nativo para invocar as funções de igualdade do tipo concreto correspondente.
+- [x] Implementar a igualdade estrutural para objetos dinâmicos `any<Trait>`.
+- [x] Desenhar o mecanismo de lookup via vtable no runtime nativo para invocar as funções de igualdade do tipo concreto correspondente.
 
 ### 2. Associated Types em Traits
-- [ ] Modificar o parser para aceitar declarações de tipos associados em traits (ex: `type Item`).
-- [ ] Atualizar o type-checker para validar e unificar tipos associados em assinaturas de funções genéricas.
-- [ ] Adaptar a monomorfização no backend para resolver os tipos associados em tempo de compilação.
+- [x] Modificar o parser para aceitar declarações de tipos associados em traits (ex: `type Item`).
+- [x] Atualizar o type-checker para validar e unificar tipos associados em assinaturas de funções genéricas.
+- [x] Adaptar a monomorfização no backend para resolver os tipos associados em tempo de compilação.
 
 ### 3. Const Generics e Higher-Kinded Types (HKT)
-- [ ] Remover as restrições temporárias `generic.unsupported_const_generic` e `generic.unsupported_hkt`.
-- [ ] Implementar a sintaxe e a semântica de checagem para parâmetros genéricos de constantes (ex. tamanhos fixos de arrays/bytes).
-- [ ] Implementar tipos genéricos parametrizados por outros tipos genéricos (HKT) com suporte a constraints avançadas.
+- [x] Remover as restrições temporárias `generic.unsupported_const_generic` e `generic.unsupported_hkt`.
+- [x] Implementar a sintaxe e a semântica de checagem para parâmetros genéricos de constantes (ex. tamanhos fixos de arrays/bytes).
+- [x] Implementar tipos genéricos parametrizados por outros tipos genéricos (HKT) com suporte a constraints avançadas.
 
 ### 4. Igualdade e Propagação de Traits para Coleções
-- [ ] Habilitar comparação direta `==` para tipos opacos de coleções (`Deque`, `Stack`, `Queue`, `LinkedList`, etc.).
-- [ ] Implementar a propagação estática de traits (ex. permitir `list<T> is Equatable` somente se `T is Equatable`).
+- [x] Habilitar comparação direta `==` para tipos opacos de coleções (`Deque`, `Stack`, `Queue`, `LinkedList`, etc.).
+- [x] Implementar a propagação estática de traits (ex. permitir `list<T> is Equatable` somente se `T is Equatable`).
 
 ### 5. Iteradores Lazy Gerais
-- [ ] Definir e implementar a interface lazy para estruturas opacas, evitando a necessidade de cópias completas/snapshots (`to_list()`).
-- [ ] Adicionar suporte a iteradores "vivos" com políticas claras de invalidação caso a coleção subjacente seja modificada.
+- [x] Definir e implementar a interface lazy para estruturas opacas, evitando a necessidade de cópias completas/snapshots (`to_list()`).
+- [x] Adicionar suporte a iteradores "vivos" com políticas claras de invalidação caso a coleção subjacente seja modificada.
 
 ### 6. API de JSON Estruturado
-- [ ] Substituir o mapeamento atual de `json.Value = string` por um tipo de dado real e recursivo na stdlib:
+- [x] Substituir o mapeamento atual de `json.Value = string` por um tipo de dado real e recursivo na stdlib:
   ```ori
   enum Value
       Null
@@ -82,11 +82,11 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
       Object(fields: map<string, Value>)
   end
   ```
-- [ ] Implementar parser e serializador nativos em Rust no runtime para esse tipo, mantendo o suporte a *pretty print*.
+- [x] Implementar parser e serializador nativos em Rust no runtime para esse tipo, mantendo o suporte a *pretty print*.
 
 ### **Critérios de Passagem para a Etapa 3:**
-- [ ] Traits avançados, const generics e HKT compilando e passando por testes semânticos dedicados.
-- [ ] API recursiva de JSON validada com testes de parse/stringificação.
+- [x] Traits avançados, const generics e HKT compilando e passando por testes semânticos dedicados.
+- [x] API recursiva de JSON validada com testes de parse/stringificação.
 
 ---
 
