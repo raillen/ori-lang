@@ -12601,9 +12601,10 @@ enum NativeLinkerStrategy {
     /// Opt-in via `ORI_USE_BUNDLED_RUST_LLD=1`. Bypasses `rustc` entirely,
     /// so the user does not need a Rust toolchain installed to link Ori
     /// programs. Supported on `x86_64-pc-windows-msvc` (Rust removal Phase 1,
-    /// Windows MSVC) and `x86_64-unknown-linux-gnu` (Rust removal Phase 1,
-    /// Linux GNU); macOS deferred to a future milestone. Other triples fall
-    /// back to `RustcDriver` with a diagnostic.
+    /// Windows MSVC), `x86_64-unknown-linux-gnu` (Rust removal Phase 1,
+    /// Linux GNU), and `x86_64-apple-darwin` / `aarch64-apple-darwin`
+    /// (Rust removal Phase 1, macOS). Other triples fall back to
+    /// `RustcDriver` with a diagnostic.
     BundledRustLld {
         lld: PathBuf,
         flavor: String,
@@ -12881,11 +12882,25 @@ fn discover_bundled_rust_lld() -> Result<NativeLinkerStrategy, String> {
             extra_args: vec!["-no-pie".to_string()],
         })
     } else if cfg!(target_os = "macos") {
-        // macOS CRT discovery is deferred — uses `xcrun --show-sdk-path` +
-        // `-platform_version` flag, which is a different flavor (`darwin`).
-        Err("bundled rust-lld strategy is not yet implemented for macOS; \
-             unset ORI_USE_BUNDLED_RUST_LLD to use the rustc driver"
-            .to_string())
+        let crt = discover_macos_crt()?;
+        Ok(NativeLinkerStrategy::BundledRustLld {
+            lld,
+            flavor: "darwin".to_string(),
+            lib_dirs: Vec::new(),
+            crt_pre: Vec::new(),
+            crt_post: Vec::new(),
+            dynamic_linker: None,
+            extra_args: vec![
+                "-arch".to_string(),
+                crt.arch,
+                "-platform_version".to_string(),
+                "macos".to_string(),
+                crt.deployment_target,
+                crt.sdk_version,
+                "-syslibroot".to_string(),
+                crt.sdk_path.display().to_string(),
+            ],
+        })
     } else {
         Err(format!(
             "bundled rust-lld strategy is not implemented for target os `{}`",
@@ -13101,6 +13116,13 @@ struct LinuxGnuCrt {
     dynamic_linker: PathBuf,
 }
 
+struct MacOsCrt {
+    sdk_path: PathBuf,
+    sdk_version: String,
+    deployment_target: String,
+    arch: String,
+}
+
 /// Discover Linux GNU CRT components using `cc -print-file-name` and
 /// `cc -print-search-dirs`. Does not require a Rust toolchain.
 ///
@@ -13249,6 +13271,96 @@ fn cc_print_search_dirs_libpaths(cc: &str) -> Result<Vec<PathBuf>, String> {
     Ok(dirs)
 }
 
+/// Discover macOS CRT/SDK components using `xcrun`. Does not require a Rust
+/// toolchain — only the Xcode Command Line Tools (which provide `xcrun` and
+/// the macOS SDK).
+///
+/// `xcrun` is used only as a discovery tool — the actual link is performed by
+/// `rust-lld -flavor darwin` directly. If Xcode Command Line Tools are not
+/// installed, this strategy cannot engage and the caller should fall back to
+/// `RustcDriver`.
+fn discover_macos_crt() -> Result<MacOsCrt, String> {
+    let sdk_path = xcrun_show_sdk_path()?;
+    let sdk_version = xcrun_show_sdk_version()?;
+    let arch = macos_arch().to_string();
+    let deployment_target = std::env::var("MACOSX_DEPLOYMENT_TARGET")
+        .unwrap_or_else(|_| {
+            if arch == "arm64" {
+                "11.0".to_string()
+            } else {
+                "10.12".to_string()
+            }
+        });
+    Ok(MacOsCrt {
+        sdk_path,
+        sdk_version,
+        deployment_target,
+        arch,
+    })
+}
+
+fn macos_arch() -> &'static str {
+    if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else if cfg!(target_arch = "x86_64") {
+        "x86_64"
+    } else {
+        "x86_64"
+    }
+}
+
+fn xcrun_show_sdk_path() -> Result<PathBuf, String> {
+    let output = std::process::Command::new("xcrun")
+        .args(["--show-sdk-path"])
+        .output()
+        .map_err(|e| {
+            format!(
+                "could not invoke `xcrun --show-sdk-path` (is Xcode Command Line Tools \
+                 installed?): {e}"
+            )
+        })?;
+    if !output.status.success() {
+        return Err(format!(
+            "`xcrun --show-sdk-path` exited with status {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let path = String::from_utf8_lossy(&output.stdout);
+    let path = path.trim();
+    if path.is_empty() {
+        return Err("`xcrun --show-sdk-path` returned an empty path".to_string());
+    }
+    let candidate = PathBuf::from(path);
+    if !candidate.is_dir() {
+        return Err(format!(
+            "`xcrun --show-sdk-path` returned `{}` which is not a directory",
+            candidate.display()
+        ));
+    }
+    Ok(candidate)
+}
+
+fn xcrun_show_sdk_version() -> Result<String, String> {
+    let output = std::process::Command::new("xcrun")
+        .args(["--show-sdk-version"])
+        .output()
+        .map_err(|e| format!("could not invoke `xcrun --show-sdk-version`: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "`xcrun --show-sdk-version` exited with status {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let version = String::from_utf8_lossy(&output.stdout);
+    let version = version.trim();
+    if version.is_empty() {
+        return Err("`xcrun --show-sdk-version` returned an empty version".to_string());
+    }
+    Ok(version.to_string())
+}
+
 /// Invoke `rust-lld` directly with the discovered CRT lib directories.
 ///
 /// On Windows MSVC, `rust-lld -flavor link` accepts `link.exe`-style args.
@@ -13260,6 +13372,12 @@ fn cc_print_search_dirs_libpaths(cc: &str) -> Result<Vec<PathBuf>, String> {
 /// On Linux GNU, `rust-lld -flavor gnu` accepts `ld`-style args. We pass
 /// the CRT objects (`crt1.o`, `crti.o`) before the user object + libs and
 /// `crtn.o` after them, plus the dynamic linker path and `-no-pie`.
+///
+/// On macOS, `rust-lld -flavor darwin` accepts `ld64`-style args. The SDK
+/// is provided via `-syslibroot` (in `extra_args`), the deployment target
+/// via `-platform_version`, and the arch via `-arch`. CRT objects are
+/// handled implicitly by the darwin flavor (no `crt1.o`/`crti.o`/`crtn.o`
+/// passed explicitly). `-lc` is added by the non-Windows branch below.
 fn link_with_bundled_rust_lld(
     lld: &Path,
     flavor: &str,

@@ -40,10 +40,11 @@ when `-SkipBundleLld`/`--skip-bundle-lld` is not set) lets users opt into the
 `ori compile` invokes `rust-lld` directly and performs CRT discovery itself,
 bypassing `rustc` entirely — so the end user does not need a Rust toolchain
 installed just to link Ori programs. Supported on `x86_64-pc-windows-msvc`
-(Rust removal Phase 1, Windows MSVC, via `vswhere.exe` + Windows SDK layout)
-and `x86_64-unknown-linux-gnu` (Rust removal Phase 1, Linux GNU, via
-`cc -print-file-name`); macOS support is deferred to a future milestone
-(requires `-flavor darwin` + `xcrun`).
+(Rust removal Phase 1, Windows MSVC, via `vswhere.exe` + Windows SDK layout),
+`x86_64-unknown-linux-gnu` (Rust removal Phase 1, Linux GNU, via
+`cc -print-file-name`), and `x86_64-apple-darwin` / `aarch64-apple-darwin`
+(Rust removal Phase 1, macOS, via `xcrun --show-sdk-path` + `-platform_version`).
+Phase 1 is now complete for all three desktop OSes.
 
 `ori-runtime` is the source of truth for native runtime semantics. The C backend
 is a debug/transpile route and must not be used as the semantic reference for

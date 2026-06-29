@@ -1222,9 +1222,9 @@ fn msvc_crt_lib_dirs_resolve_to_existing_directories() {
 
 #[test]
 fn bundled_rust_lld_strategy_falls_back_on_non_windows() {
-    // On Windows MSVC and Linux GNU, the bundled strategy should engage (or
-    // return an actionable error if the toolchain is missing). On macOS and
-    // other platforms, it must return a "not yet implemented" error so
+    // On Windows MSVC, Linux GNU, and macOS, the bundled strategy should
+    // engage (or return an actionable error if the toolchain is missing).
+    // On other platforms, it must return a "not implemented" error so
     // callers fall back to the default RustcDriver.
     match discover_bundled_rust_lld() {
         Ok(strategy) => {
@@ -1233,6 +1233,7 @@ fn bundled_rust_lld_strategy_falls_back_on_non_windows() {
                     flavor,
                     lib_dirs,
                     dynamic_linker,
+                    extra_args,
                     ..
                 } => {
                     if cfg!(windows) {
@@ -1243,18 +1244,30 @@ fn bundled_rust_lld_strategy_falls_back_on_non_windows() {
                         assert_eq!(flavor, "gnu", "Linux GNU should use gnu flavor");
                         assert!(!lib_dirs.is_empty(), "lib_dirs must be populated");
                         assert!(dynamic_linker.is_some(), "Linux must have a dynamic linker");
+                    } else if cfg!(target_os = "macos") {
+                        assert_eq!(flavor, "darwin", "macOS should use darwin flavor");
+                        assert!(
+                            extra_args.iter().any(|a| a == "-arch"),
+                            "macOS extra_args must include -arch"
+                        );
+                        assert!(
+                            extra_args
+                                .iter()
+                                .any(|a| a == "-platform_version"),
+                            "macOS extra_args must include -platform_version"
+                        );
+                        assert!(
+                            extra_args.iter().any(|a| a == "-syslibroot"),
+                            "macOS extra_args must include -syslibroot"
+                        );
+                        assert!(dynamic_linker.is_none(), "macOS has no explicit dynamic linker");
                     }
                 }
                 _ => panic!("discover_bundled_rust_lld returned wrong strategy variant"),
             }
         }
         Err(reason) => {
-            if cfg!(target_os = "macos") {
-                assert!(
-                    reason.contains("not yet implemented"),
-                    "macOS error should mention not-yet-implemented: {reason}"
-                );
-            } else if cfg!(windows) {
+            if cfg!(windows) {
                 // On Windows, the error must be actionable (VS/SDK missing).
                 assert!(
                     reason.contains("vswhere")
@@ -1273,12 +1286,59 @@ fn bundled_rust_lld_strategy_falls_back_on_non_windows() {
                         || reason.contains("dynamic linker"),
                     "Linux error should be actionable: {reason}"
                 );
+            } else if cfg!(target_os = "macos") {
+                // On macOS, the error must mention xcrun or SDK or rust-lld.
+                assert!(
+                    reason.contains("xcrun")
+                        || reason.contains("SDK")
+                        || reason.contains("rust-lld")
+                        || reason.contains("Command Line Tools"),
+                    "macOS error should be actionable: {reason}"
+                );
             } else {
                 assert!(
                     reason.contains("not implemented"),
                     "unsupported OS error should mention not-implemented: {reason}"
                 );
             }
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_crt_discovery_resolves_existing_sdk() {
+    // On a macOS machine with Xcode Command Line Tools installed (the CI
+    // baseline), CRT/SDK discovery must succeed and return an existing SDK
+    // directory plus a non-empty SDK version. On minimal containers without
+    // `xcrun`, this test records the missing toolchain — it does not fail
+    // the suite.
+    match discover_macos_crt() {
+        Ok(crt) => {
+            assert!(
+                crt.sdk_path.is_dir(),
+                "macOS SDK path must exist: {}",
+                crt.sdk_path.display()
+            );
+            assert!(
+                !crt.sdk_version.is_empty(),
+                "macOS SDK version must be non-empty"
+            );
+            assert!(
+                crt.arch == "x86_64" || crt.arch == "arm64",
+                "macOS arch must be x86_64 or arm64, got: {}",
+                crt.arch
+            );
+            assert!(
+                !crt.deployment_target.is_empty(),
+                "macOS deployment target must be non-empty"
+            );
+        }
+        Err(reason) => {
+            assert!(
+                reason.contains("xcrun") || reason.contains("SDK") || reason.contains("Command Line Tools"),
+                "macOS CRT discovery error should be actionable: {reason}"
+            );
         }
     }
 }
