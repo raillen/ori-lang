@@ -23,7 +23,8 @@ runtime/
   bin/
     rust-lld[.exe]              # bundled linker (optional, enables ORI_USE_BUNDLED_RUST_LLD=1)
   {target-triple}/
-    {runtime-artifact}
+    {runtime-artifact}          # staticlib: ori_runtime.lib / libori_runtime.a
+    {runtime-cdylib}            # cdylib:    ori_runtime.dll / libori_runtime.so / libori_runtime.dylib
     runtime-link.json
 examples/
 README.md
@@ -55,6 +56,26 @@ with the same CRT discovery as `BundledRustLld`, bypassing both `rust-lld` and
 `x86_64-unknown-linux-gnu` (via `cc -print-prog-name=ld`), and
 `x86_64-apple-darwin` / `aarch64-apple-darwin` (via `xcrun --find ld`).
 Phase 2 is now complete for all three desktop OSes.
+
+`ori-runtime` now ships three crate types: `staticlib` (consumed by the AOT
+link path), `rlib` (consumed by other Rust crates in the workspace), and
+`cdylib` (consumed by the JIT path). The `cdylib` artifact —
+`ori_runtime.dll` on Windows MSVC, `libori_runtime.so` on Linux GNU,
+`libori_runtime.dylib` on macOS — is staged next to the staticlib and
+recorded in `runtime-link.json` under the `runtime_cdylib` field.
+
+Users can opt into the JIT execution path via `ORI_USE_JIT=1` (Rust removal
+Phase 3). When enabled, `ori run` skips the AOT compile+link steps entirely:
+the Cranelift `JITModule` lowers the HIR into executable memory in-process,
+and the `ori_*` runtime symbols are resolved on demand from the staged
+cdylib through `libloading`. No `.o` file is written, no linker is invoked,
+no subprocess binary is spawned. `ori compile` and `ori test` remain AOT
+(distribution requires a binary artifact; `ori test` requires process
+isolation so `ori_test_assert` can `std::process::abort()` on failure).
+Override the cdylib path with `ORI_RUNTIME_CDYLIB`. Phase 3 completes the
+A→B→D hybrid for `ori run` — the driver can now execute Ori programs
+without `rustc`, without a linker, and without writing any temporary
+object file.
 
 `ori-runtime` is the source of truth for native runtime semantics. The C backend
 is a debug/transpile route and must not be used as the semantic reference for

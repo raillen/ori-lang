@@ -16,3 +16,5 @@ cranelift-frontend = { workspace = true }
 cranelift-module   = { workspace = true }
 cranelift-object   = { workspace = true }
 cranelift-native   = { workspace = true }
+cranelift-jit      = { workspace = true }
+libloading         = { workspace = true }

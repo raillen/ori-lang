@@ -1,0 +1,126 @@
+//! Integration tests for the JIT execution path (Rust removal Phase 3).
+//!
+//! These tests spawn `ori run` as a subprocess with `ORI_USE_JIT=1` to avoid
+//! env-var races with the parallel test runner. The JIT path loads the staged
+//! runtime cdylib via `libloading`, lowers the HIR into a `JITModule`, and
+//! invokes the C `main` wrapper in-process — no `.o` file, no linker, no
+//! subprocess binary.
+
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT_DIR_ID: AtomicU64 = AtomicU64::new(0);
+
+struct TestDir {
+    path: PathBuf,
+}
+
+impl TestDir {
+    fn new(name: &str) -> Self {
+        let id = NEXT_DIR_ID.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "ori_driver_jit_test_{}_{}_{}",
+            std::process::id(),
+            id,
+            name,
+        ));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).unwrap();
+        Self { path }
+    }
+
+    fn path(&self, name: &str) -> PathBuf {
+        self.path.join(name)
+    }
+
+    fn write(&self, name: &str, source: &str) {
+        let path = self.path(name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(path, source).unwrap();
+    }
+}
+
+impl Drop for TestDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+/// Locate the `ori` driver binary built alongside this test crate.
+fn ori_exe() -> PathBuf {
+    PathBuf::from(env!("CARGO_BIN_EXE_ori"))
+}
+
+fn run_jit(main_orl: &std::path::Path) -> std::process::Output {
+    Command::new(ori_exe())
+        .arg("run")
+        .arg(main_orl)
+        .env("ORI_USE_JIT", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .expect("failed to spawn `ori run` subprocess")
+}
+
+#[test]
+fn jit_run_hello_world() {
+    let dir = TestDir::new("jit_hello_world");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+func main()
+    io.print("hello from JIT")
+end
+"#,
+    );
+
+    let output = run_jit(&dir.path("main.orl"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "ori run (JIT) failed: status={:?} stderr={stderr}",
+        output.status
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("hello from JIT"),
+        "expected `hello from JIT` in stdout, got: {stdout}"
+    );
+}
+
+#[test]
+fn jit_run_computes_arithmetic() {
+    let dir = TestDir::new("jit_arithmetic");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+func main()
+    const a: int = 21 * 2
+    io.print(f"answer={a}")
+end
+"#,
+    );
+
+    let output = run_jit(&dir.path("main.orl"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "ori run (JIT) failed: status={:?} stderr={stderr}",
+        output.status
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("answer=42"),
+        "expected `answer=42` in stdout, got: {stdout}"
+    );
+}

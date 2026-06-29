@@ -119,3 +119,41 @@ compiler-side CRT discovery without requiring `vcvarsall.bat` (Windows) or a Rus
 toolchain. Phase 2 eliminates the `rust-lld` dependency when the platform system
 linker is available. Override paths: `ORI_RUST_LLD` (Phase 1), `ORI_SYSTEM_LINKER`
 (Phase 2).
+
+## JIT execution path (Rust removal Phase 3)
+
+In addition to the four AOT link strategies above, `ori run` supports a JIT
+execution path that bypasses the link step entirely. Opt in with
+`ORI_USE_JIT=1`.
+
+| Aspect | AOT path (`ori compile` / `ori test` / default `ori run`) | JIT path (`ori run` with `ORI_USE_JIT=1`) |
+|--------|------------------------------------------------------------|---------------------------------------------|
+| Cranelift module | `ObjectModule` → `.o`/`.obj` file | `JITModule` → in-memory executable code |
+| Runtime symbol resolution | Static link against `staticlib` (`ori_runtime.lib` / `libori_runtime.a`) | Dynamic lookup against `cdylib` (`ori_runtime.dll` / `libori_runtime.so` / `libori_runtime.dylib`) via `libloading` |
+| Linker | `rust-lld`, `link.exe`, `ld`, or `rustc` (per strategy above) | None |
+| Process model | Subprocess binary (`.exe` / ELF / Mach-O) | In-process function pointer call |
+| Output artifact | Persistent binary (compile) or temp binary (run/test) | None |
+
+The JIT path requires the runtime cdylib to be staged alongside the staticlib
+(see `runtime/README.md`). `find_native_runtime_cdylib()` in the driver resolves
+the cdylib path with the same search order as the staticlib (`ORI_RUNTIME_CDYLIB`
+override → packaged → cargo fallback).
+
+`ori compile` and `ori test` remain AOT-only:
+- `ori compile` produces a distributable binary artifact; JIT'd code cannot be
+  shipped.
+- `ori test` requires process isolation so `ori_test_assert` can call
+  `std::process::abort()` on failure without taking down the driver process.
+
+`NativeBackend<M: Module>` is generic over the Cranelift module type so the
+same HIR-lowering code (`prepare()`) feeds both the AOT (`ObjectModule`) and
+JIT (`JITModule`) paths. The AOT path adds `compile()` (calls `prepare()` then
+`module.finish().emit()`); the JIT path calls `prepare()`, then
+`module.finalize_definitions()` and `module.get_finalized_function(main_id)` to
+retrieve the entry pointer.
+
+If an Ori program calls `os.exit(code)` under JIT, the runtime invokes
+`std::process::exit(code)` and the driver process terminates with that code —
+matching AOT `ori run` semantics. JIT'd code that panics or segfaults also
+terminates the driver (acceptable for an opt-in mode).
+

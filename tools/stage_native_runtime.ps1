@@ -61,6 +61,17 @@ function Get-RuntimeArtifactName([string]$TargetTriple) {
     return "libori_runtime.a"
 }
 
+function Get-RuntimeCdylibName([string]$TargetTriple) {
+    if ($TargetTriple -like "*windows-msvc*") {
+        return "ori_runtime.dll"
+    }
+    if ($TargetTriple -like "*apple-darwin*") {
+        return "libori_runtime.dylib"
+    }
+
+    return "libori_runtime.so"
+}
+
 function Get-WorkspaceVersion([string]$RepoRoot) {
     $cargoToml = Join-Path $RepoRoot "Cargo.toml"
     $inWorkspacePackage = $false
@@ -154,6 +165,7 @@ if ([string]::IsNullOrWhiteSpace($Target)) {
 $oriVersion = Get-WorkspaceVersion $repoRoot
 $abiVersion = Get-OriAbiVersion $repoRoot
 $artifact = Get-RuntimeArtifactName $Target
+$cdylibArtifact = Get-RuntimeCdylibName $Target
 $profileArgs = @()
 if ($Profile -eq "release") {
     $profileArgs += "--release"
@@ -192,6 +204,19 @@ try {
         throw "Runtime artifact $artifact was not found after build."
     }
 
+    $cdylibCandidates = @(
+        (Join-Path $targetRoot (Join-Path $Target (Join-Path $Profile $cdylibArtifact))),
+        (Join-Path $targetRoot (Join-Path $Profile $cdylibArtifact))
+    )
+
+    $cdylibSource = $null
+    foreach ($candidate in $cdylibCandidates) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            $cdylibSource = Resolve-Path -LiteralPath $candidate
+            break
+        }
+    }
+
     $stageRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
         Join-Path $repoRoot "runtime"
     } else {
@@ -203,10 +228,19 @@ try {
     $dest = Join-Path $targetDir $artifact
     Copy-Item -LiteralPath $source -Destination $dest -Force
 
+    if ($null -ne $cdylibSource) {
+        $cdylibDest = Join-Path $targetDir $cdylibArtifact
+        Copy-Item -LiteralPath $cdylibSource -Destination $cdylibDest -Force
+        Write-Host "staged runtime cdylib: $cdylibDest"
+    } else {
+        Write-Warning "runtime cdylib $cdylibArtifact was not found after build; JIT mode (ORI_USE_JIT=1) will not be available."
+    }
+
     $nativeStaticLibs = Get-NativeStaticLibs $Target $Profile
     $metadata = [ordered]@{
         target = $Target
         runtime = $artifact
+        runtime_cdylib = if ($null -ne $cdylibSource) { $cdylibArtifact } else { "" }
         ori_version = $oriVersion
         abi_version = $abiVersion
         profile = $Profile

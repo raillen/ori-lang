@@ -605,6 +605,19 @@ pub fn stdlib_runtime_functions() -> &'static [StdlibRuntimeFunction] {
     STDLIB_RUNTIME_FUNCTIONS
 }
 
+/// Iterator over the runtime symbol names that must be resolved at link/JIT
+/// time. Yields the `runtime_symbol` for every entry where `native_runtime`
+/// is true (i.e. the symbol is provided by `ori-runtime` and consumed via
+/// FFI). Used by the JIT backend to register symbols in `JITBuilder` and by
+/// the AOT link path to validate that all imported symbols exist in the
+/// runtime library.
+pub fn stdlib_runtime_symbols() -> impl Iterator<Item = &'static str> {
+    STDLIB_RUNTIME_FUNCTIONS
+        .iter()
+        .filter(|entry| entry.native_runtime)
+        .map(|entry| entry.runtime_symbol)
+}
+
 pub fn stdlib_runtime_symbol(path: &str) -> Option<&'static str> {
     stdlib_entry_for_path(path).map(|entry| entry.runtime_symbol)
 }

@@ -221,6 +221,24 @@ fn main() {
         }
 
         Commands::Run { file, native_raw } => {
+            if pipeline::env_flag("ORI_USE_JIT") {
+                match pipeline::run_jit(file) {
+                    Err(e) => {
+                        eprintln!("ori: {}", e);
+                        process::exit(2);
+                    }
+                    Ok(out) => {
+                        let errors = out.diagnostics.iter().filter(|d| d.is_error()).count();
+                        let warnings = out.diagnostics.len() - errors;
+                        emit::render_all(&out.cache, &out.diagnostics, color);
+                        emit::print_summary(errors, warnings, color);
+                        if out.has_errors {
+                            process::exit(1);
+                        }
+                        process::exit(out.exit_code);
+                    }
+                }
+            }
             let exe = temp_run_exe_path(file);
             let compile = pipeline::run_compile_with_options(
                 file,

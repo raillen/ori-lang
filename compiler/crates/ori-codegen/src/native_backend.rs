@@ -19,6 +19,8 @@ use ori_types::{
 mod string_collector;
 use string_collector::collect_all_strings;
 
+pub mod jit;
+
 #[cfg(test)]
 const INTERNAL_NATIVE_RUNTIME_IMPORTS: &[&str] = &[
     "ori_abort_concurrent_modification",
@@ -2815,8 +2817,8 @@ struct LoopContext {
     managed_cleanup_start: usize,
 }
 
-pub struct NativeBackend {
-    module: ObjectModule,
+pub struct NativeBackend<M: Module> {
+    module: M,
     ptr_ty: types::Type,
     func_ids: HashMap<SmolStr, FuncId>,
     func_wrapper_ids: HashMap<SmolStr, FuncId>,
@@ -2836,21 +2838,17 @@ pub struct NativeBackend {
     tuple_dtors: HashMap<Vec<Ty>, FuncId>,
     struct_dtors: HashMap<ori_types::DefId, FuncId>,
     enum_dtors: HashMap<ori_types::DefId, FuncId>,
+    /// `FuncId` of the exported C `main` wrapper, set by `define_all` when the
+    /// HIR has an entry `main`. Used by the JIT backend to locate the entry
+    /// function pointer after `finalize_definitions`.
+    main_func_id: Option<FuncId>,
 }
 
-impl NativeBackend {
-    pub fn new() -> Result<Self, String> {
-        let flags = settings::Flags::new(settings::builder());
-        let isa = cranelift_native::builder()
-            .map_err(|e| format!("native ISA unavailable: {e}"))?
-            .finish(flags)
-            .map_err(|e| format!("ISA build failed: {e}"))?;
-        let ptr_ty = isa.pointer_type();
-        let builder =
-            ObjectBuilder::new(isa, "ori_module", cranelift_module::default_libcall_names())
-                .map_err(|e| format!("ObjectBuilder failed: {e}"))?;
+impl<M: Module> NativeBackend<M> {
+    pub fn new(module: M) -> Result<Self, String> {
+        let ptr_ty = module.isa().pointer_type();
         Ok(Self {
-            module: ObjectModule::new(builder),
+            module,
             ptr_ty,
             func_ids: HashMap::new(),
             func_wrapper_ids: HashMap::new(),
@@ -2867,10 +2865,18 @@ impl NativeBackend {
             tuple_dtors: HashMap::new(),
             struct_dtors: HashMap::new(),
             enum_dtors: HashMap::new(),
+            main_func_id: None,
         })
     }
 
-    pub fn compile(mut self, hir: &HirModule) -> Result<Vec<u8>, String> {
+    /// Lower the HIR into the module: validate, compute layouts, declare and
+    /// define all functions and data. Consumes `self` and returns the backend
+    /// with `main_func_id` populated (when an entry `main` exists). After this
+    /// returns, the caller can either:
+    /// - call `compile` (AOT, `ObjectModule` only) to emit a `.o`/`.obj`, or
+    /// - call `into_module` (JIT) to retrieve the `JITModule` and
+    ///   `finalize_definitions` + `get_address(main_func_id)`.
+    pub fn prepare(mut self, hir: &HirModule) -> Result<Self, String> {
         validate_native_hir(hir)?;
         // Compute struct layouts before anything else
         for s in &hir.structs {
@@ -2902,10 +2908,20 @@ impl NativeBackend {
         self.declare_stdlib()?;
         self.declare_all(hir)?;
         self.define_all(hir)?;
+        Ok(self)
+    }
+
+    /// Consume the backend and return the underlying module. Used by the JIT
+    /// path to call `finalize_definitions` and `get_address` on the
+    /// `JITModule`.
+    pub fn into_module(self) -> M {
         self.module
-            .finish()
-            .emit()
-            .map_err(|e| format!("object emit failed: {e}"))
+    }
+
+    /// Returns the `FuncId` of the exported C `main` wrapper, or `None` if the
+    /// HIR has no entry `main`.
+    pub fn main_func_id(&self) -> Option<FuncId> {
+        self.main_func_id
     }
 
     /// Emit all string literals as static null-terminated data in .data.
@@ -4285,6 +4301,7 @@ impl NativeBackend {
                 .module
                 .declare_function("main", Linkage::Export, &sig)
                 .map_err(|e| format!("re-declare main: {e}"))?;
+            self.main_func_id = Some(main_id);
             let mut ctx = self.module.make_context();
             ctx.func.signature = sig;
             let ori_ref = self.module.declare_func_in_func(ori_main_id, &mut ctx.func);
@@ -12565,8 +12582,37 @@ impl<'a> FuncCodegen<'a> {
 
 // == Public entry points ==
 
+/// Construct an `ObjectModule` configured for the host target with the
+/// standard Cranelift settings. Used by `emit_native` (AOT) and available to
+/// callers that need to build a compatible module by hand.
+fn make_object_module() -> Result<ObjectModule, String> {
+    let flags = settings::Flags::new(settings::builder());
+    let isa = cranelift_native::builder()
+        .map_err(|e| format!("native ISA unavailable: {e}"))?
+        .finish(flags)
+        .map_err(|e| format!("ISA build failed: {e}"))?;
+    let builder =
+        ObjectBuilder::new(isa, "ori_module", cranelift_module::default_libcall_names())
+            .map_err(|e| format!("ObjectBuilder failed: {e}"))?;
+    Ok(ObjectModule::new(builder))
+}
+
+impl NativeBackend<ObjectModule> {
+    /// AOT compile: lower the HIR, finish the `ObjectModule`, and emit the
+    /// object file bytes (`*.o` on Unix, `*.obj` on Windows MSVC).
+    pub fn compile(self, hir: &HirModule) -> Result<Vec<u8>, String> {
+        let backend = self.prepare(hir)?;
+        backend
+            .module
+            .finish()
+            .emit()
+            .map_err(|e| format!("object emit failed: {e}"))
+    }
+}
+
 pub fn emit_native(hir: &HirModule, obj_path: &std::path::Path) -> Result<(), String> {
-    let backend = NativeBackend::new()?;
+    let module = make_object_module()?;
+    let backend = NativeBackend::new(module)?;
     let bytes = backend.compile(hir)?;
     std::fs::write(obj_path, &bytes)
         .map_err(|e| format!("write {} failed: {e}", obj_path.display()))

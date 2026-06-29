@@ -113,6 +113,14 @@ runtime_artifact_name() {
     esac
 }
 
+runtime_cdylib_name() {
+    case "$1" in
+        *windows-msvc*) printf '%s\n' "ori_runtime.dll" ;;
+        *apple-darwin*) printf '%s\n' "libori_runtime.dylib" ;;
+        *) printf '%s\n' "libori_runtime.so" ;;
+    esac
+}
+
 fallback_native_static_libs() {
     case "$1" in
         *linux*) printf '%s\n' "pthread dl m" ;;
@@ -177,6 +185,7 @@ if [ -z "$abi_version" ]; then
 fi
 
 artifact=$(runtime_artifact_name "$target")
+cdylib_artifact=$(runtime_cdylib_name "$target")
 profile_args=""
 if [ "$profile" = "release" ]; then
     profile_args="--release"
@@ -196,6 +205,15 @@ if [ ! -f "$source" ]; then
     exit 1
 fi
 
+cdylib_source="$target_root/$target/$profile/$cdylib_artifact"
+if [ ! -f "$cdylib_source" ]; then
+    cdylib_source="$target_root/$profile/$cdylib_artifact"
+fi
+cdylib_found=0
+if [ -f "$cdylib_source" ]; then
+    cdylib_found=1
+fi
+
 if [ -z "$output_root" ]; then
     stage_root="$repo_root/runtime"
 else
@@ -207,6 +225,19 @@ mkdir -p "$target_dir"
 dest="$target_dir/$artifact"
 cp "$source" "$dest"
 
+if [ "$cdylib_found" -eq 1 ]; then
+    cdylib_dest="$target_dir/$cdylib_artifact"
+    cp "$cdylib_source" "$cdylib_dest"
+    printf 'staged runtime cdylib: %s\n' "$cdylib_dest"
+else
+    echo "warning: runtime cdylib $cdylib_artifact was not found after build; JIT mode (ORI_USE_JIT=1) will not be available." >&2
+fi
+
+cdylib_value="$cdylib_artifact"
+if [ "$cdylib_found" -ne 1 ]; then
+    cdylib_value=""
+fi
+
 libs=$(native_static_libs)
 libs_json=$(json_array_from_words "$libs")
 metadata_path="$target_dir/runtime-link.json"
@@ -214,6 +245,7 @@ cat > "$metadata_path" <<JSON
 {
   "target": "$target",
   "runtime": "$artifact",
+  "runtime_cdylib": "$cdylib_value",
   "ori_version": "$ori_version",
   "abi_version": "$abi_version",
   "profile": "$profile",

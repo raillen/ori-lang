@@ -209,6 +209,50 @@ pub fn run_compile_with_options(
     })
 }
 
+/// Output of a JIT `run` (Rust removal Phase 3). When `has_errors` is false,
+/// `exit_code` is the value returned by the Ori `main` wrapper executed
+/// in-process via Cranelift JIT. When the Ori program calls `os.exit(code)`,
+/// the driver process terminates immediately with `code` and this struct is
+/// never returned.
+pub struct JitRunOutput {
+    pub cache: SourceCache,
+    pub diagnostics: Vec<Diagnostic>,
+    pub has_errors: bool,
+    pub exit_code: i32,
+}
+
+/// JIT execution pipeline: lex -> parse -> resolve -> type-check -> lower HIR
+/// -> Cranelift JIT -> invoke `main` in-process. No `.o` file, no linker, no
+/// subprocess. The runtime `ori_*` symbols are resolved from the staged
+/// cdylib via `libloading`.
+pub fn run_jit(source_path: &Path) -> Result<JitRunOutput, String> {
+    let mut cache = SourceCache::default();
+    let mut sink = DiagnosticSink::default();
+    let (loaded, resolved) = load_and_resolve(source_path, &mut cache, &mut sink)?;
+
+    if !sink.has_errors() {
+        check_loaded_sources(&loaded, &resolved, &mut sink);
+    }
+
+    let mut exit_code = 0;
+    if !sink.has_errors() {
+        let hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
+        if !sink.has_errors() {
+            let cdylib = find_native_runtime_cdylib()?;
+            exit_code = ori_codegen::run_jit(&hir, &cdylib)?;
+        }
+    }
+
+    let has_errors = sink.has_errors();
+    let diagnostics = sink.into_diagnostics();
+    Ok(JitRunOutput {
+        cache,
+        diagnostics,
+        has_errors,
+        exit_code,
+    })
+}
+
 /// Full pipeline: lex â†’ parse â†’ resolve names â†’ type-check.
 fn find_native_runtime_link() -> Result<NativeRuntimeLink, String> {
     static CACHED: std::sync::OnceLock<Result<NativeRuntimeLink, String>> =
@@ -266,11 +310,55 @@ fn find_native_runtime_link_uncached() -> Result<NativeRuntimeLink, String> {
     ))
 }
 
-fn env_flag(name: &str) -> bool {
+pub fn env_flag(name: &str) -> bool {
     matches!(
         std::env::var(name).ok().as_deref(),
         Some("1" | "true" | "TRUE" | "yes" | "YES")
     )
+}
+
+fn find_native_runtime_cdylib() -> Result<PathBuf, String> {
+    if let Ok(path) = std::env::var("ORI_RUNTIME_CDYLIB") {
+        let path = PathBuf::from(path);
+        return if path.is_file() {
+            Ok(path)
+        } else {
+            Err(format!(
+                "ORI_RUNTIME_CDYLIB points to `{}`, but that file does not exist",
+                path.display()
+            ))
+        };
+    }
+
+    let target = native_target_triple();
+    let cdylib_artifact = native_runtime_cdylib_name(&target);
+    let mut searched = Vec::new();
+
+    let packaged_candidates = packaged_runtime_candidates(&target, cdylib_artifact);
+    for candidate in &packaged_candidates {
+        if candidate.is_file() {
+            return Ok(candidate.clone());
+        }
+    }
+    searched.extend(packaged_candidates);
+
+    if env_flag("ORI_REQUIRE_PACKAGED_RUNTIME") {
+        return Err(missing_native_runtime_message(
+            &target, cdylib_artifact, &searched, true,
+        ));
+    }
+
+    let cargo_candidates = cargo_runtime_candidates(&target, cdylib_artifact);
+    for candidate in &cargo_candidates {
+        if candidate.is_file() {
+            return Ok(candidate.clone());
+        }
+    }
+    searched.extend(cargo_candidates);
+
+    Err(missing_native_runtime_message(
+        &target, cdylib_artifact, &searched, false,
+    ))
 }
 
 fn missing_native_runtime_message(
@@ -359,6 +447,7 @@ fn native_runtime_link_for(
 struct RuntimeLinkMetadata {
     target: String,
     runtime: String,
+    runtime_cdylib: Option<String>,
     ori_version: String,
     abi_version: String,
     native_static_libs: Vec<String>,
@@ -383,6 +472,8 @@ fn read_runtime_link_metadata(path: &Path) -> Result<RuntimeLinkMetadata, String
             path.display()
         )
     })?;
+    let runtime_cdylib = json_string_field(&source, "runtime_cdylib")
+        .filter(|value| !value.is_empty());
     let ori_version = json_string_field(&source, "ori_version").ok_or_else(|| {
         format!(
             "{NATIVE_RUNTIME_METADATA_INVALID}: runtime metadata `{}` is missing string field `ori_version`",
@@ -405,6 +496,7 @@ fn read_runtime_link_metadata(path: &Path) -> Result<RuntimeLinkMetadata, String
     Ok(RuntimeLinkMetadata {
         target,
         runtime,
+        runtime_cdylib,
         ori_version,
         abi_version,
         native_static_libs,
@@ -504,6 +596,16 @@ fn native_runtime_artifact_name(target: &str) -> &'static str {
         "ori_runtime.lib"
     } else {
         "libori_runtime.a"
+    }
+}
+
+fn native_runtime_cdylib_name(target: &str) -> &'static str {
+    if target.contains("windows-msvc") {
+        "ori_runtime.dll"
+    } else if target.contains("apple-darwin") {
+        "libori_runtime.dylib"
+    } else {
+        "libori_runtime.so"
     }
 }
 
@@ -634,10 +736,16 @@ mod tests {
     #[test]
     fn native_compile_and_test_pipeline_do_not_use_legacy_c_runtime_hooks() {
         let source = include_str!("pipeline.rs");
+        // The legacy `ORI_RUNTIME_C` env var (pointing at a C runtime path) was
+        // removed when the native pipeline switched to `find_native_runtime_link`.
+        // We match `ORI_RUNTIME_C` followed by a closing quote so the new
+        // `ORI_RUNTIME_CDYLIB` env var (Rust removal Phase 3, JIT runtime
+        // resolution) is not flagged. The `concat!` split prevents the test
+        // from matching its own source text.
         for forbidden in [
             concat!("ensure_", "cc_available"),
             concat!("build_", "runtime_lib"),
-            concat!("ORI_", "RUNTIME_C"),
+            concat!("ORI_", "RUNTIME_C", "\""),
         ] {
             assert!(
                 !source.contains(forbidden),
