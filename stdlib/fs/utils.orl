@@ -1,0 +1,42 @@
+namespace ori.fs.utils
+
+import ori.fs as fs
+
+public func read_text_or(path: string, fallback: string) -> string
+    match fs.read_text(path)
+        case success(text):
+            return text
+        case error(_):
+            return fallback
+    end
+    return fallback
+end
+
+public func write_text_result(path: string, content: string) -> result<string, string>
+    return fs.write_text(path, content)
+end
+
+public func create_dir_all(path: string) -> result<bool, string>
+    if fs.create_dir_all(path)
+        return success(true)
+    end
+    return error("create_dir_all failed")
+end
+
+public func exists_result(path: string) -> result<bool, string>
+    return success(fs.exists(path))
+end
+
+public func remove_file(path: string) -> result<bool, string>
+    if fs.delete(path)
+        return success(true)
+    end
+    return error("remove failed")
+end
+
+public func move_path(from: string, to: string) -> result<bool, string>
+    if fs.rename(from, to)
+        return success(true)
+    end
+    return error("move failed")
+end

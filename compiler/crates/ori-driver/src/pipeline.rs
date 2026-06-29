@@ -16,6 +16,7 @@ const NATIVE_RUNTIME_METADATA_INVALID: &str = "native.runtime_metadata_invalid";
 const NATIVE_RUNTIME_METADATA_MISMATCH: &str = "native.runtime_metadata_mismatch";
 const NATIVE_ABI_MISMATCH: &str = "native.abi_mismatch";
 
+mod doc_html;
 mod fmt;
 
 // â”€â”€ Output types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -40,9 +41,29 @@ pub struct CheckOutput {
     pub has_errors: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DocFormat {
+    #[default]
+    Markdown,
+    Html,
+}
+
+pub struct DocOptions {
+    pub format: DocFormat,
+}
+
+impl Default for DocOptions {
+    fn default() -> Self {
+        Self {
+            format: DocFormat::Markdown,
+        }
+    }
+}
+
 pub struct DocOutput {
     pub cache: SourceCache,
     pub markdown: String,
+    pub html: String,
     pub diagnostics: Vec<Diagnostic>,
     pub has_errors: bool,
 }
@@ -57,6 +78,7 @@ pub struct TestOutput {
 pub struct TestResult {
     pub name: String,
     pub passed: bool,
+    pub skipped: bool,
     pub stdout: String,
     pub stderr: String,
     pub status: Option<i32>,
@@ -315,6 +337,21 @@ pub fn env_flag(name: &str) -> bool {
         std::env::var(name).ok().as_deref(),
         Some("1" | "true" | "TRUE" | "yes" | "YES")
     )
+}
+
+/// Returns true when `ori run` should use the JIT path instead of AOT compile+link.
+///
+/// - Explicit opt-in: `ORI_USE_JIT=1`
+/// - Explicit opt-out: `ORI_USE_AOT=1`
+/// - Default: JIT when a runtime cdylib is available (packaged layout or cargo-built)
+pub fn should_use_jit_for_run() -> bool {
+    if env_flag("ORI_USE_AOT") {
+        return false;
+    }
+    if env_flag("ORI_USE_JIT") {
+        return true;
+    }
+    find_native_runtime_cdylib().is_ok()
 }
 
 fn find_native_runtime_cdylib() -> Result<PathBuf, String> {
@@ -1034,6 +1071,10 @@ pub fn run_check_source(path: &Path, source: String) -> Result<CheckOutput, Stri
 }
 
 pub fn run_doc(path: &Path) -> Result<DocOutput, String> {
+    run_doc_with_options(path, DocOptions::default())
+}
+
+pub fn run_doc_with_options(path: &Path, options: DocOptions) -> Result<DocOutput, String> {
     let mut cache = SourceCache::default();
     let mut sink = DiagnosticSink::default();
     let (loaded, resolved) = load_and_resolve(path, &mut cache, &mut sink)?;
@@ -1047,11 +1088,17 @@ pub fn run_doc(path: &Path) -> Result<DocOutput, String> {
     } else {
         String::new()
     };
+    let html = if !sink.has_errors() && options.format == DocFormat::Html {
+        doc_html::render_static_html(&markdown)
+    } else {
+        String::new()
+    };
     let has_errors = sink.has_errors();
     let diagnostics = sink.into_diagnostics();
     Ok(DocOutput {
         cache,
         markdown,
+        html,
         diagnostics,
         has_errors,
     })
@@ -1703,7 +1750,8 @@ fn run_native_tests(
                 .map_err(|e| format!("failed to run test `{}`: {e}", test.name))?;
             Ok::<TestResult, String>(TestResult {
                 name: test.name.clone(),
-                passed: output.status.success(),
+                passed: output.status.success() || output.status.code() == Some(77),
+                skipped: output.status.code() == Some(77),
                 stdout: String::from_utf8_lossy(&output.stdout).to_string(),
                 stderr: String::from_utf8_lossy(&output.stderr).to_string(),
                 status: output.status.code(),
@@ -1719,6 +1767,7 @@ fn run_native_tests(
                 results.push(TestResult {
                     name: test.name.clone(),
                     passed: false,
+                    skipped: false,
                     stdout: String::new(),
                     stderr: error,
                     status: Some(1),

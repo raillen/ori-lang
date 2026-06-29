@@ -1,0 +1,101 @@
+namespace ori.bytes.utils
+
+import ori.bytes as bytes_mod
+import ori.list as lists
+import ori.string as str
+
+public func is_empty(b: bytes) -> bool
+    return bytes_mod.len(b) == 0
+end
+
+public func equals(a: bytes, b: bytes) -> bool
+    const a_len: int = bytes_mod.len(a)
+    if a_len != bytes_mod.len(b)
+        return false
+    end
+    var i: int = 0
+    while i < a_len
+        if bytes_mod.get(a, i) != bytes_mod.get(b, i)
+            return false
+        end
+        i = i + 1
+    end
+    return true
+end
+
+public func from_hex_or(hex: string, fallback: bytes) -> bytes
+    return bytes_mod.from_hex(hex).or(fallback)
+end
+
+public func empty_bytes() -> bytes
+    return str.to_bytes("")
+end
+
+public func join(left: bytes, right: bytes) -> bytes
+    return bytes_mod.concat(left, right)
+end
+
+public func starts_with(value: bytes, prefix: bytes) -> bool
+    const prefix_len: int = bytes_mod.len(prefix)
+    if bytes_mod.len(value) < prefix_len
+        return false
+    end
+    var i: int = 0
+    while i < prefix_len
+        if bytes_mod.get(value, i) != bytes_mod.get(prefix, i)
+            return false
+        end
+        i = i + 1
+    end
+    return true
+end
+
+public func ends_with(value: bytes, suffix: bytes) -> bool
+    const suffix_len: int = bytes_mod.len(suffix)
+    const value_len: int = bytes_mod.len(value)
+    if value_len < suffix_len
+        return false
+    end
+    const offset: int = value_len - suffix_len
+    var i: int = 0
+    while i < suffix_len
+        if bytes_mod.get(value, offset + i) != bytes_mod.get(suffix, i)
+            return false
+        end
+        i = i + 1
+    end
+    return true
+end
+
+public func contains(value: bytes, part: bytes) -> bool
+    const part_len: int = bytes_mod.len(part)
+    if part_len == 0
+        return true
+    end
+    const value_len: int = bytes_mod.len(value)
+    var pos: int = 0
+    while pos + part_len <= value_len
+        var matched: bool = true
+        var i: int = 0
+        while i < part_len
+            if bytes_mod.get(value, pos + i) != bytes_mod.get(part, i)
+                matched = false
+                break
+            end
+            i = i + 1
+        end
+        if matched
+            return true
+        end
+        pos = pos + 1
+    end
+    return false
+end
+
+public func from_list(values: list<int>) -> bytes
+    return bytes_mod.from_list(values)
+end
+
+public func to_list(value: bytes) -> list<int>
+    return bytes_mod.to_list(value)
+end

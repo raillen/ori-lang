@@ -142,6 +142,27 @@ end
         }
 
         Invoke-Checked { & $packageOri test (Join-Path "examples" "package_smoke_test.orl") } "ori test in packaged release folder"
+
+        $runtimeTripleDir = Join-Path $runtimeDir $hostTriple
+        $cdylibName = if ($IsWindows -or $env:OS -eq "Windows_NT") {
+            "ori_runtime.dll"
+        } elseif ($hostTriple -like "*apple-darwin*") {
+            "libori_runtime.dylib"
+        } else {
+            "libori_runtime.so"
+        }
+        $cdylibPath = Join-Path $runtimeTripleDir $cdylibName
+        if (-not (Test-Path -LiteralPath $cdylibPath -PathType Leaf)) {
+            throw "packaged runtime cdylib was not staged at $cdylibPath."
+        }
+
+        $jitOutput = & $packageOri run (Join-Path "examples" "hello_world.orl")
+        if ($LASTEXITCODE -ne 0) {
+            throw "ori run (JIT default) failed with exit code $LASTEXITCODE."
+        }
+        if (($jitOutput -join "`n") -notmatch "The answer is: 42") {
+            throw "ori run (JIT default) did not print the expected answer."
+        }
     } finally {
         Pop-Location
         if ($null -eq $previousRequirePackagedRuntime) {

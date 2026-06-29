@@ -1,0 +1,21 @@
+namespace ori.io.utils
+
+import ori.io as io
+import ori.string as str
+import ori.string.utils as su
+
+public func print_line(value: string)
+    io.println(value)
+end
+
+public func try_read_line() -> optional<string>
+    const line: string = io.read_line()
+    if su.is_empty(line)
+        return none
+    end
+    return some(line)
+end
+
+public func write(value: string)
+    io.print(value)
+end

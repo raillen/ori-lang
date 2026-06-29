@@ -15,6 +15,7 @@ pub enum OpaqueTy {
     Heap,
     File,
     CancelToken,
+    Connection,
 }
 
 impl OpaqueTy {
@@ -32,6 +33,7 @@ impl OpaqueTy {
             OpaqueTy::Heap => "heap.Heap",
             OpaqueTy::File => "fs.File",
             OpaqueTy::CancelToken => "task.CancelToken",
+            OpaqueTy::Connection => "net.Connection",
         }
     }
 

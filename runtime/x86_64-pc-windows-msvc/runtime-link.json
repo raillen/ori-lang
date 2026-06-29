@@ -1,9 +1,10 @@
 ﻿{
     "target":  "x86_64-pc-windows-msvc",
     "runtime":  "ori_runtime.lib",
+    "runtime_cdylib":  "ori_runtime.dll",
     "ori_version":  "0.2.0",
     "abi_version":  "ori-native-abi-1",
-    "profile":  "release",
+    "profile":  "debug",
     "native_static_libs":  [
                                "legacy_stdio_definitions.lib",
                                "kernel32.lib",

@@ -1,5 +1,7 @@
 namespace ori.string.utils
 
+import ori.bytes as bytes_mod
+import ori.list as lists
 import ori.string as str
 
 public func is_empty(s: string) -> bool
@@ -64,4 +66,196 @@ public func count(s: string, sub: string) -> int
         end
     end
     return n
+end
+
+public func reverse(s: string) -> string
+    const s_len: int = str.len(s)
+    var out: list<string> = []
+    var i: int = s_len - 1
+    while i >= 0
+        lists.push(out, str.slice(s, i, i + 1))
+        i = i - 1
+    end
+    return str.join(out, "")
+end
+
+public func capitalize(s: string) -> string
+    if is_empty(s)
+        return s
+    end
+    const head: string = str.slice(s, 0, 1)
+    const tail: string = str.slice(s, 1, str.len(s))
+    return str.concat(str.to_upper(head), str.to_lower(tail))
+end
+
+public func title(s: string) -> string
+    const parts: list<string> = str.split(s, " ")
+    var titled: list<string> = []
+    var i: int = 0
+    const parts_len: int = lists.len(parts)
+    while i < parts_len
+        if some(part) = lists.try_get(parts, i)
+            lists.push(titled, capitalize(part))
+        end
+        i = i + 1
+    end
+    return str.join(titled, " ")
+end
+
+func swap_char(ch: string) -> string
+    const raw: bytes = str.to_bytes(ch)
+    if bytes_mod.len(raw) != 1
+        return ch
+    end
+    const code: int = int(bytes_mod.get(raw, 0))
+    if code >= 65 and code <= 90
+        match str.from_bytes(bytes_mod.from_list([code + 32]))
+            case success(out):
+                return out
+            case error(_):
+                return ch
+        end
+    end
+    if code >= 97 and code <= 122
+        match str.from_bytes(bytes_mod.from_list([code - 32]))
+            case success(out):
+                return out
+            case error(_):
+                return ch
+        end
+    end
+    return ch
+end
+
+public func swap_case(s: string) -> string
+    const s_len: int = str.len(s)
+    var out: list<string> = []
+    var i: int = 0
+    while i < s_len
+        const ch: string = str.slice(s, i, i + 1)
+        lists.push(out, swap_char(ch))
+        i = i + 1
+    end
+    return str.join(out, "")
+end
+
+public func lines(s: string) -> list<string>
+    return str.split(s, "\n")
+end
+
+public func left(s: string, n: int) -> string
+    return str.slice(s, 0, n)
+end
+
+public func right(s: string, n: int) -> string
+    const s_len: int = str.len(s)
+    if n >= s_len
+        return s
+    end
+    return str.slice(s, s_len - n, s_len)
+end
+
+public func words(s: string) -> list<string>
+    const parts: list<string> = str.split(str.trim(s), " ")
+    var out: list<string> = []
+    var i: int = 0
+    const parts_len: int = lists.len(parts)
+    while i < parts_len
+        if some(part) = lists.try_get(parts, i)
+            if not is_empty(part)
+                lists.push(out, part)
+            end
+        end
+        i = i + 1
+    end
+    return out
+end
+
+public func trim_all(s: string) -> string
+    return str.join(words(s), " ")
+end
+
+public func last_index_of(s: string, needle: string) -> int
+    const needle_len: int = str.len(needle)
+    if needle_len == 0
+        return -1
+    end
+    const s_len: int = str.len(s)
+    var pos: int = s_len - needle_len
+    while pos >= 0
+        const window: string = str.slice(s, pos, pos + needle_len)
+        if window == needle
+            return pos
+        end
+        pos = pos - 1
+    end
+    return -1
+end
+
+public func is_digits(s: string) -> bool
+    if is_empty(s)
+        return false
+    end
+    const digits: string = "0123456789"
+    var i: int = 0
+    while i < str.len(s)
+        const ch: string = str.slice(s, i, i + 1)
+        if not str.contains(digits, ch)
+            return false
+        end
+        i = i + 1
+    end
+    return true
+end
+
+public func has_whitespace(s: string) -> bool
+    var i: int = 0
+    while i < str.len(s)
+        const ch: string = str.slice(s, i, i + 1)
+        if ch == " " or ch == "\t" or ch == "\n" or ch == "\r"
+            return true
+        end
+        i = i + 1
+    end
+    return false
+end
+
+public func limit(s: string, max_len: int) -> string
+    if str.len(s) <= max_len
+        return s
+    end
+    return str.slice(s, 0, max_len)
+end
+
+public func replace_all(s: string, needle: string, replacement: string) -> string
+    const needle_len: int = str.len(needle)
+    if needle_len == 0
+        return s
+    end
+    var out: string = ""
+    var pos: int = 0
+    loop
+        const remaining: int = str.len(s) - pos
+        if remaining < needle_len
+            out = str.concat(out, str.slice(s, pos, str.len(s)))
+            break
+        end
+        const window: string = str.slice(s, pos, pos + needle_len)
+        if window == needle
+            out = str.concat(out, replacement)
+            pos = pos + needle_len
+        else
+            out = str.concat(out, str.slice(s, pos, pos + 1))
+            pos = pos + 1
+        end
+    end
+    return out
+end
+
+public func has_prefix(s: string, prefix: string) -> bool
+    return str.starts_with(s, prefix)
+end
+
+public func has_suffix(s: string, suffix: string) -> bool
+    return str.ends_with(s, suffix)
 end

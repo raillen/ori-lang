@@ -1,0 +1,52 @@
+namespace ori.math.utils
+
+import ori.math as math
+
+public func sign(n: int) -> int
+    if n < 0
+        return -1
+    end
+    if n > 0
+        return 1
+    end
+    return 0
+end
+
+public func approx_eq(a: float, b: float, eps: float) -> bool
+    const diff: float = a - b
+    if diff < 0.0
+        return -diff <= eps
+    end
+    return diff <= eps
+end
+
+public func clamp_int(value: int, min_val: int, max_val: int) -> int
+    return math.clamp(value, min_val, max_val)
+end
+
+public func lerp(a: float, b: float, t: float) -> float
+    return a + (b - a) * t
+end
+
+public func deg_to_rad(degrees: float) -> float
+    return degrees * 3.141592653589793 / 180.0
+end
+
+public func rad_to_deg(radians: float) -> float
+    return radians * 180.0 / 3.141592653589793
+end
+
+public func trunc_float(value: float) -> float
+    return math.trunc(value)
+end
+
+public func log10(value: float) -> float
+    return math.log10(value)
+end
+
+public func abs_float(value: float) -> float
+    if value < 0.0
+        return -value
+    end
+    return value
+end

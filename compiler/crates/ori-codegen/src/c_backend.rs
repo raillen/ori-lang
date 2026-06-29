@@ -884,6 +884,15 @@ static inline double ori_math_cos(double n) { return cos(n); }
 static inline double ori_math_tan(double n) { return tan(n); }
 static inline bool ori_math_is_nan(double n) { return isnan(n); }
 static inline bool ori_math_is_infinite(double n) { return isinf(n); }
+static inline double ori_math_trunc(double n) { return trunc(n); }
+static inline double ori_math_ln(double n) { return log(n); }
+static inline double ori_math_exp(double n) { return exp(n); }
+static inline double ori_math_asin(double n) { return asin(n); }
+static inline double ori_math_acos(double n) { return acos(n); }
+static inline double ori_math_atan(double n) { return atan(n); }
+static inline double ori_math_atan2(double y, double x) { return atan2(y, x); }
+static inline double ori_math_log10(double n) { return log10(n); }
+static inline bool ori_math_is_finite(double n) { return isfinite(n); }
 static inline int64_t ori_time_now(void) {
 #if defined(_WIN32)
     FILETIME ft;
@@ -1097,6 +1106,15 @@ static inline ori_string_t ori_os_arch(void) {
 #endif
 }
 
+static inline void* ori_os_current_dir(void) {
+    return NULL;
+}
+
+static inline void* ori_os_change_dir(ori_string_t path) {
+    (void)path;
+    return NULL;
+}
+
 static uint64_t ori_random_state = 0;
 
 static inline uint64_t ori_random_next_u64(void) {
@@ -1159,6 +1177,10 @@ static inline ori_list_t ori_random_shuffle(ori_list_t items) {
         *((int64_t*)ori_list_at(&out, (int64_t)j)) = a;
     }
     return out;
+}
+
+static inline void ori_random_seed(int64_t seed) {
+    ori_random_state = (uint64_t)seed;
 }
 
 static inline void ori_test_assert(bool condition, ori_string_t message) {
@@ -1227,6 +1249,11 @@ static inline void ori_test_assert_ne_string(ori_string_t left, ori_string_t rig
 static inline void ori_test_fail(ori_string_t message) {
     fprintf(stderr, "ori test failure: %.*s\n", (int)message.len, message.data ? message.data : "");
     abort();
+}
+
+static inline void ori_test_skip(ori_string_t message) {
+    (void)message;
+    exit(77);
 }
 
 static inline int64_t ori_test_live_allocations(void) {

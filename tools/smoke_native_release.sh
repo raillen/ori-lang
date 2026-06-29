@@ -169,4 +169,29 @@ esac
     ORI_REQUIRE_PACKAGED_RUNTIME=1 "$package_ori" test "examples/package_smoke_test.orl"
 )
 
+runtime_triple_dir="$runtime_dir/$host"
+case "$host" in
+    *windows-msvc*) cdylib_name="ori_runtime.dll" ;;
+    *apple-darwin*) cdylib_name="libori_runtime.dylib" ;;
+    *) cdylib_name="libori_runtime.so" ;;
+esac
+cdylib_path="$runtime_triple_dir/$cdylib_name"
+if [ ! -f "$cdylib_path" ]; then
+    echo "packaged runtime cdylib was not staged at $cdylib_path" >&2
+    exit 1
+fi
+
+jit_output=$(
+    cd "$package_root"
+    ORI_REQUIRE_PACKAGED_RUNTIME=1 "$package_ori" run "examples/hello_world.orl"
+)
+case "$jit_output" in
+    *"The answer is: 42"*) ;;
+    *)
+        echo "ori run (JIT default) did not print expected answer" >&2
+        echo "$jit_output" >&2
+        exit 1
+        ;;
+esac
+
 printf 'native release smoke passed: %s\n' "$package_root"

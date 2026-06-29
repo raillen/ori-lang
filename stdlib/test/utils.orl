@@ -1,0 +1,27 @@
+namespace ori.test.utils
+
+import ori.test as test
+
+public func is_true(value: bool)
+    test.assert(value, "expected true")
+end
+
+public func is_false(value: bool)
+    test.assert(not value, "expected false")
+end
+
+public func equal_int(actual: int, expected: int)
+    test.assert_eq(actual, expected)
+end
+
+public func equal_text(actual: string, expected: string)
+    test.assert_eq(actual, expected)
+end
+
+public func not_equal_int(actual: int, expected: int)
+    test.assert_ne(actual, expected)
+end
+
+public func not_equal_text(actual: string, expected: string)
+    test.assert_ne(actual, expected)
+end

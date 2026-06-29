@@ -27,10 +27,26 @@ enum Commands {
         /// Path to the `.orl` source file.
         file: PathBuf,
     },
-    /// Extract documentation comments as Markdown.
+    /// Extract documentation comments as Markdown or static HTML.
     Doc {
         /// Path to the `.orl` source file or project manifest.
         file: PathBuf,
+        /// Output format (`markdown` default, or `html` for a static page).
+        #[arg(long, value_enum, default_value_t = DocFormatCli::Markdown)]
+        format: DocFormatCli,
+        /// Write output to this file instead of stdout.
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
+    /// Install an Ori package from the registry (not yet available).
+    Install {
+        /// Package name (e.g. `example.demo`).
+        name: String,
+    },
+    /// Publish an Ori package to the registry (not yet available).
+    Publish {
+        /// Path to the package manifest or project root.
+        path: PathBuf,
     },
     /// Run functions marked with `@test` through the native runtime.
     Test {
@@ -81,6 +97,12 @@ enum Commands {
     },
 }
 
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum DocFormatCli {
+    Markdown,
+    Html,
+}
+
 fn main() {
     let cli = Cli::parse();
     let color = !cli.no_color && std::env::var("NO_COLOR").is_err();
@@ -100,22 +122,57 @@ fn main() {
             }
         },
 
-        Commands::Doc { file } => match pipeline::run_doc(file) {
-            Err(e) => {
-                eprintln!("ori: {}", e);
-                process::exit(2);
-            }
-            Ok(out) => {
-                let errors = out.diagnostics.iter().filter(|d| d.is_error()).count();
-                let warnings = out.diagnostics.len() - errors;
-                emit::render_all(&out.cache, &out.diagnostics, color);
-                emit::print_summary(errors, warnings, color);
-                if !out.has_errors {
-                    print!("{}", out.markdown);
+        Commands::Doc { file, format, out } => {
+            let doc_format = match format {
+                DocFormatCli::Markdown => pipeline::DocFormat::Markdown,
+                DocFormatCli::Html => pipeline::DocFormat::Html,
+            };
+            match pipeline::run_doc_with_options(file, pipeline::DocOptions { format: doc_format })
+            {
+                Err(e) => {
+                    eprintln!("ori: {}", e);
+                    process::exit(2);
                 }
-                process::exit(if out.has_errors { 1 } else { 0 });
+                Ok(doc) => {
+                    let errors = doc.diagnostics.iter().filter(|d| d.is_error()).count();
+                    let warnings = doc.diagnostics.len() - errors;
+                    emit::render_all(&doc.cache, &doc.diagnostics, color);
+                    emit::print_summary(errors, warnings, color);
+                    if !doc.has_errors {
+                        let content = match doc_format {
+                            pipeline::DocFormat::Html => &doc.html,
+                            pipeline::DocFormat::Markdown => &doc.markdown,
+                        };
+                        if let Some(path) = out {
+                            std::fs::write(path, content).unwrap_or_else(|e| {
+                                eprintln!("ori: {}", e);
+                                process::exit(2);
+                            });
+                        } else {
+                            print!("{content}");
+                        }
+                    }
+                    process::exit(if doc.has_errors { 1 } else { 0 });
+                }
             }
-        },
+        }
+
+        Commands::Install { name } => {
+            eprintln!(
+                "ori: registry install is not available yet (backlog v2)\n\
+                 package `{name}` cannot be fetched — see docs/planning/registry-v2.md"
+            );
+            process::exit(2);
+        }
+
+        Commands::Publish { path } => {
+            eprintln!(
+                "ori: registry publish is not available yet (backlog v2)\n\
+                 cannot publish `{}` — see docs/planning/registry-v2.md",
+                path.display()
+            );
+            process::exit(2);
+        }
 
         Commands::Test { file } => match pipeline::run_test(file) {
             Err(e) => {
@@ -128,10 +185,21 @@ fn main() {
                 emit::render_all(&out.cache, &out.diagnostics, color);
                 emit::print_summary(errors, warnings, color);
                 if !out.has_errors {
-                    let passed = out.results.iter().filter(|result| result.passed).count();
-                    let failed = out.results.len() - passed;
+                    let skipped = out.results.iter().filter(|result| result.skipped).count();
+                    let passed = out
+                        .results
+                        .iter()
+                        .filter(|result| result.passed && !result.skipped)
+                        .count();
+                    let failed = out
+                        .results
+                        .iter()
+                        .filter(|result| !result.passed)
+                        .count();
                     for result in &out.results {
-                        if result.passed {
+                        if result.skipped {
+                            eprintln!("skip: {}", result.name);
+                        } else if result.passed {
                             eprintln!("ok: {}", result.name);
                         } else {
                             eprintln!(
@@ -150,7 +218,11 @@ fn main() {
                             }
                         }
                     }
-                    eprintln!("tests: {passed} passed, {failed} failed");
+                    if skipped > 0 {
+                        eprintln!("tests: {passed} passed, {skipped} skipped, {failed} failed");
+                    } else {
+                        eprintln!("tests: {passed} passed, {failed} failed");
+                    }
                 }
                 let failed = out.results.iter().any(|result| !result.passed);
                 process::exit(if out.has_errors || failed { 1 } else { 0 });
@@ -221,7 +293,7 @@ fn main() {
         }
 
         Commands::Run { file, native_raw } => {
-            if pipeline::env_flag("ORI_USE_JIT") {
+            if pipeline::should_use_jit_for_run() {
                 match pipeline::run_jit(file) {
                     Err(e) => {
                         eprintln!("ori: {}", e);

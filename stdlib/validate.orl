@@ -1,0 +1,88 @@
+namespace ori.validate
+
+import ori.list as lists
+import ori.string as str
+import ori.string.utils as su
+
+public func between(value: int, min_val: int, max_val: int) -> bool
+    if value < min_val
+        return false
+    end
+    return value <= max_val
+end
+
+public func positive(value: int) -> bool
+    return value > 0
+end
+
+public func non_negative(value: int) -> bool
+    return value >= 0
+end
+
+public func negative(value: int) -> bool
+    return value < 0
+end
+
+public func non_zero(value: int) -> bool
+    return value != 0
+end
+
+public func one_of(value: int, candidates: list<int>) -> bool
+    var i: int = 0
+    const n: int = lists.len(candidates)
+    while i < n
+        if some(item) = lists.try_get(candidates, i)
+            if item == value
+                return true
+            end
+        end
+        i = i + 1
+    end
+    return false
+end
+
+public func one_of_string(value: string, candidates: list<string>) -> bool
+    var i: int = 0
+    const n: int = lists.len(candidates)
+    while i < n
+        if some(item) = lists.try_get(candidates, i)
+            if item == value
+                return true
+            end
+        end
+        i = i + 1
+    end
+    return false
+end
+
+public func not_empty(value: string) -> bool
+    return not su.is_empty(value)
+end
+
+public func not_empty_text(value: string) -> bool
+    return not_empty(value)
+end
+
+public func min_length(value: string, min_val: int) -> bool
+    return str.len(value) >= min_val
+end
+
+public func min_len(value: string, min_val: int) -> bool
+    return min_length(value, min_val)
+end
+
+public func max_length(value: string, max_val: int) -> bool
+    return str.len(value) <= max_val
+end
+
+public func max_len(value: string, max_val: int) -> bool
+    return max_length(value, max_val)
+end
+
+public func length_between(value: string, min_val: int, max_val: int) -> bool
+    const value_len: int = str.len(value)
+    if value_len < min_val
+        return false
+    end
+    return value_len <= max_val
+end

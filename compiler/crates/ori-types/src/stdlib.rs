@@ -67,6 +67,13 @@ fn cancel_token_ty() -> Ty {
     }
 }
 
+fn connection_ty() -> Ty {
+    Ty::Opaque {
+        kind: OpaqueTy::Connection,
+        args: vec![],
+    }
+}
+
 fn list_backed_collection_kind(path: &str, ops: &[&str]) -> Option<OpaqueTy> {
     let candidates = [
         ("ori.deque.", OpaqueTy::Deque),
@@ -599,6 +606,55 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
         "ori.fs.close",
         ["fs.close", "ori.files.close", "files.close"] => "ori_files_close"
     ),
+    stdlib!(
+        "ori.fs.create_dir_all",
+        ["fs.create_dir_all", "ori.files.create_dir_all", "files.create_dir_all"] =>
+            "ori_files_create_dir"
+    ),
+    stdlib!(
+        "ori.fs.file_size",
+        ["fs.file_size", "fs.size"] => "ori_files_file_size"
+    ),
+    stdlib!(
+        "ori.fs.modified_at",
+        ["fs.modified_at"] => "ori_files_modified_at"
+    ),
+    stdlib!(
+        "ori.fs.created_at",
+        ["fs.created_at"] => "ori_files_created_at"
+    ),
+    stdlib!("ori.os.current_dir", ["os.current_dir"] => "ori_os_current_dir", c_backend),
+    stdlib!("ori.os.change_dir", ["os.change_dir"] => "ori_os_change_dir", c_backend),
+    stdlib!("ori.random.seed", ["random.seed"] => "ori_random_seed", c_backend),
+    stdlib!("ori.test.skip", ["test.skip"] => "ori_test_skip", c_backend),
+    stdlib!("ori.bytes.from_list", ["bytes.from_list"] => "ori_bytes_from_list"),
+    stdlib!("ori.bytes.to_list", ["bytes.to_list"] => "ori_bytes_to_list"),
+    stdlib!("ori.process.run", ["process.run"] => "ori_process_run"),
+    stdlib!(
+        "ori.process.run_capture",
+        ["process.run_capture"] => "ori_process_run_capture"
+    ),
+    stdlib!("ori.net.connect", ["net.connect"] => "ori_net_connect"),
+    stdlib!("ori.net.read_some", ["net.read_some"] => "ori_net_read_some"),
+    stdlib!("ori.net.write_all", ["net.write_all"] => "ori_net_write_all"),
+    stdlib!("ori.net.close", ["net.close"] => "ori_net_close"),
+    stdlib!("ori.net.is_closed", ["net.is_closed"] => "ori_net_is_closed"),
+    stdlib!("ori.math.trunc", ["math.trunc"] => "ori_math_trunc", c_backend),
+    stdlib!("ori.math.ln", ["math.ln"] => "ori_math_ln", c_backend),
+    stdlib!("ori.math.exp", ["math.exp"] => "ori_math_exp", c_backend),
+    stdlib!("ori.math.asin", ["math.asin"] => "ori_math_asin", c_backend),
+    stdlib!("ori.math.acos", ["math.acos"] => "ori_math_acos", c_backend),
+    stdlib!("ori.math.atan", ["math.atan"] => "ori_math_atan", c_backend),
+    stdlib!("ori.math.atan2", ["math.atan2"] => "ori_math_atan2", c_backend),
+    stdlib!("ori.math.log10", ["math.log10"] => "ori_math_log10", c_backend),
+    stdlib!("ori.math.is_finite", ["math.is_finite"] => "ori_math_is_finite", c_backend),
+    StdlibRuntimeFunction {
+        canonical_path: "ori.lazy.is_consumed",
+        aliases: &["lazy.is_consumed"],
+        runtime_symbol: "ori_lazy_is_consumed",
+        native_runtime: false,
+        c_backend_runtime: false,
+    },
 ];
 
 pub fn stdlib_runtime_functions() -> &'static [StdlibRuntimeFunction] {
@@ -637,7 +693,7 @@ pub fn stdlib_native_codegen_available(path: &str) -> bool {
     }
     matches!(
         canonical_stdlib_path(path).unwrap_or(path),
-        "ori.lazy.once" | "ori.lazy.force"
+        "ori.lazy.once" | "ori.lazy.force" | "ori.lazy.is_consumed"
     )
 }
 
@@ -740,6 +796,7 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             Ty::Lazy(Box::new(Ty::Infer(0))),
         ),
         "ori.lazy.force" => (vec![Ty::Lazy(Box::new(Ty::Infer(0)))], Ty::Infer(0)),
+        "ori.lazy.is_consumed" => (vec![Ty::Lazy(Box::new(Ty::Infer(0)))], Ty::Bool),
         "ori.task.spawn" => (
             vec![Ty::Func {
                 params: vec![],
@@ -1425,6 +1482,64 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             Ty::Result(Box::new(Ty::Int), Box::new(Ty::String)),
         ),
         "ori.fs.close" => (vec![file_ty()], Ty::Void),
+        "ori.fs.create_dir_all" => (vec![Ty::String], Ty::Bool),
+        "ori.fs.file_size" | "ori.fs.modified_at" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(Ty::Int), Box::new(Ty::String)),
+        ),
+        "ori.fs.created_at" => (
+            vec![Ty::String],
+            Ty::Result(
+                Box::new(Ty::Optional(Box::new(Ty::Int))),
+                Box::new(Ty::String),
+            ),
+        ),
+        "ori.os.current_dir" => (
+            vec![],
+            Ty::Result(Box::new(Ty::String), Box::new(Ty::String)),
+        ),
+        "ori.os.change_dir" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
+        ),
+        "ori.random.seed" => (vec![Ty::Int], Ty::Void),
+        "ori.test.skip" => (vec![Ty::String], Ty::Void),
+        "ori.bytes.from_list" => (vec![Ty::List(Box::new(Ty::Int))], Ty::Bytes),
+        "ori.bytes.to_list" => (vec![Ty::Bytes], Ty::List(Box::new(Ty::Int))),
+        "ori.process.run" => (
+            vec![Ty::String, Ty::List(Box::new(Ty::String))],
+            Ty::Result(Box::new(Ty::Int), Box::new(Ty::String)),
+        ),
+        "ori.process.run_capture" => (
+            vec![Ty::String, Ty::List(Box::new(Ty::String))],
+            Ty::Result(
+                Box::new(Ty::Map(
+                    Box::new(Ty::String),
+                    Box::new(Ty::String),
+                )),
+                Box::new(Ty::String),
+            ),
+        ),
+        "ori.net.connect" => (
+            vec![Ty::String, Ty::Int, Ty::Int],
+            Ty::Result(Box::new(connection_ty()), Box::new(Ty::String)),
+        ),
+        "ori.net.read_some" => (
+            vec![connection_ty(), Ty::Int],
+            Ty::Result(Box::new(Ty::Bytes), Box::new(Ty::String)),
+        ),
+        "ori.net.write_all" => (
+            vec![connection_ty(), Ty::Bytes],
+            Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
+        ),
+        "ori.net.close" => (vec![connection_ty()], Ty::Void),
+        "ori.net.is_closed" => (vec![connection_ty()], Ty::Bool),
+        "ori.math.trunc" | "ori.math.ln" | "ori.math.exp" | "ori.math.asin" | "ori.math.acos" | "ori.math.atan" => {
+            (vec![Ty::Float], Ty::Float)
+        }
+        "ori.math.atan2" => (vec![Ty::Float, Ty::Float], Ty::Float),
+        "ori.math.log10" => (vec![Ty::Float], Ty::Float),
+        "ori.math.is_finite" => (vec![Ty::Float], Ty::Bool),
         _ => return None,
     };
     Some(sig)
@@ -1743,6 +1858,30 @@ pub fn stdlib_native_abi(
         "ori_files_read" => (vec![Ptr, I64], Some(Ptr)),
         "ori_files_write" => (vec![Ptr, Ptr], Some(Ptr)),
         "ori_files_close" => (vec![Ptr], None),
+        "ori_files_file_size" | "ori_files_modified_at" | "ori_files_created_at" => {
+            (vec![Ptr], Some(Ptr))
+        }
+        "ori_os_current_dir" => (vec![], Some(Ptr)),
+        "ori_os_change_dir" => (vec![Ptr], Some(Ptr)),
+        "ori_random_seed" => (vec![I64], None),
+        "ori_test_skip" => (vec![Ptr], None),
+        "ori_bytes_from_list" => (vec![Ptr], Some(Ptr)),
+        "ori_bytes_to_list" => (vec![Ptr], Some(Ptr)),
+        "ori_process_run" | "ori_process_run_capture" => (vec![Ptr, Ptr], Some(Ptr)),
+        "ori_net_connect" => (vec![Ptr, I64, I64], Some(Ptr)),
+        "ori_net_read_some" => (vec![Ptr, I64], Some(Ptr)),
+        "ori_net_write_all" => (vec![Ptr, Ptr], Some(Ptr)),
+        "ori_net_close" => (vec![Ptr], None),
+        "ori_net_is_closed" => (vec![Ptr], Some(I8)),
+        "ori_math_trunc"
+        | "ori_math_ln"
+        | "ori_math_exp"
+        | "ori_math_asin"
+        | "ori_math_acos"
+        | "ori_math_atan"
+        | "ori_math_log10" => (vec![F64], Some(F64)),
+        "ori_math_atan2" => (vec![F64, F64], Some(F64)),
+        "ori_math_is_finite" => (vec![F64], Some(I8)),
         _ => return None,
     };
     Some(sig)

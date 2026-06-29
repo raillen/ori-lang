@@ -1,0 +1,41 @@
+namespace ori.concurrent.utils
+
+import ori.list as lists
+import ori.map as maps
+import ori.set as sets
+
+public func copy_int(value: int) -> int
+    return value
+end
+
+public func copy_bool(value: bool) -> bool
+    return value
+end
+
+public func copy_float(value: float) -> float
+    return value
+end
+
+public func copy_string(value: string) -> string
+    return value
+end
+
+public func copy_bytes(value: bytes) -> bytes
+    return value
+end
+
+public func copy_list_int(value: list<int>) -> list<int>
+    return lists.clone(value)
+end
+
+public func copy_list_string(value: list<string>) -> list<string>
+    return lists.clone(value)
+end
+
+public func copy_map_string_string(value: map<string, string>) -> map<string, string>
+    return maps.clone(value)
+end
+
+public func copy_set_string(value: set<string>) -> set<string>
+    return sets.clone(value)
+end

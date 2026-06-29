@@ -7653,5 +7653,325 @@ pub unsafe extern "C" fn ori_graph_iterator_next(iter: *mut OriGraphIterator) ->
     &mut (*iter).last_value
 }
 
+// ── Stdlib parity extensions (gap closure) ─────────────────────────────────
+
+struct RuntimeConnection {
+    stream: Option<std::net::TcpStream>,
+}
+
+unsafe extern "C" fn ori_net_destructor(ptr: *mut u8) {
+    if !ptr.is_null() {
+        std::ptr::drop_in_place(ptr as *mut RuntimeConnection);
+    }
+}
+
+unsafe fn list_string_at(list: *mut OriList, index: i64) -> Option<String> {
+    if list.is_null() || index < 0 || index >= (*list).len {
+        return None;
+    }
+    let ptr = ori_list_get(list, index) as *const u8;
+    if ptr.is_null() {
+        return None;
+    }
+    Some(cstr_str(ptr).to_string())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_file_size(path: *const u8) -> *mut u8 {
+    match std::fs::metadata(cstr_str(path)) {
+        Ok(meta) => new_result_i64_ok(meta.len() as i64),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_modified_at(path: *const u8) -> *mut u8 {
+    match std::fs::metadata(cstr_str(path)) {
+        Ok(meta) => match meta.modified() {
+            Ok(time) => {
+                let millis = time
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or(Duration::ZERO)
+                    .as_millis() as i64;
+                new_result_i64_ok(millis)
+            }
+            Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+        },
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_files_created_at(path: *const u8) -> *mut u8 {
+    match std::fs::metadata(cstr_str(path)) {
+        Ok(meta) => {
+            let optional = match meta.created() {
+                Ok(time) => {
+                    let millis = time
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or(Duration::ZERO)
+                        .as_millis() as i64;
+                    alloc_optional_int(1, millis) as *mut u8
+                }
+                Err(_) => alloc_optional_int(0, 0) as *mut u8,
+            };
+            new_result(true, optional)
+        }
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_os_current_dir() -> *mut u8 {
+    match std::env::current_dir() {
+        Ok(path) => new_result(true, cstring_from_str(&path.to_string_lossy())),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_os_change_dir(path: *const u8) -> *mut u8 {
+    match std::env::set_current_dir(cstr_str(path)) {
+        Ok(()) => new_result(true, std::ptr::null_mut()),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ori_random_seed(seed: i64) {
+    let value = if seed == 0 {
+        random_seed()
+    } else {
+        seed as u64
+    };
+    RANDOM_STATE.store(value, Ordering::Relaxed);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_bytes_from_list(values: *mut OriList) -> *mut u8 {
+    if values.is_null() {
+        return std::ptr::null_mut();
+    }
+    let mut bytes = Vec::new();
+    for i in 0..(*values).len {
+        let n = ori_list_get(values, i);
+        if n < 0 || n > 255 {
+            return std::ptr::null_mut();
+        }
+        bytes.push(n as u8);
+    }
+    cstring_from_bytes(bytes)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_bytes_to_list(value: *const u8) -> *mut OriList {
+    let data = if value.is_null() {
+        &[][..]
+    } else {
+        CStr::from_ptr(value as *const i8).to_bytes()
+    };
+    let list = ori_list_new();
+    for byte in data {
+        ori_list_push(list, i64::from(*byte));
+    }
+    list
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_process_run(program: *const u8, args: *mut OriList) -> *mut u8 {
+    let program_str = cstr_str(program);
+    let mut command = std::process::Command::new(program_str);
+    if !args.is_null() {
+        for i in 0..(*args).len {
+            if let Some(arg) = list_string_at(args, i) {
+                command.arg(arg);
+            }
+        }
+    }
+    match command.status() {
+        Ok(status) => new_result_i64_ok(status.code().unwrap_or(-1) as i64),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_process_run_capture(
+    program: *const u8,
+    args: *mut OriList,
+) -> *mut u8 {
+    let program_str = cstr_str(program);
+    let mut command = std::process::Command::new(program_str);
+    if !args.is_null() {
+        for i in 0..(*args).len {
+            if let Some(arg) = list_string_at(args, i) {
+                command.arg(arg);
+            }
+        }
+    }
+    match command.output() {
+        Ok(output) => {
+            let map = ori_map_new();
+            let status = output.status.code().unwrap_or(-1).to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+            let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+            let status_key = cstring_from_str("status");
+            let stdout_key = cstring_from_str("stdout");
+            let stderr_key = cstring_from_str("stderr");
+            let status_val = cstring_from_str(&status);
+            let stdout_val = cstring_from_str(&stdout);
+            let stderr_val = cstring_from_str(&stderr);
+            ori_map_set_string(map, status_key, status_val as i64);
+            ori_map_set_string(map, stdout_key, stdout_val as i64);
+            ori_map_set_string(map, stderr_key, stderr_val as i64);
+            ori_arc_release(status_key);
+            ori_arc_release(stdout_key);
+            ori_arc_release(stderr_key);
+            ori_arc_release(status_val);
+            ori_arc_release(stdout_val);
+            ori_arc_release(stderr_val);
+            new_result(true, map as *mut u8)
+        }
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_connect(host: *const u8, port: i64, timeout_ms: i64) -> *mut u8 {
+    use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
+    let host_str = cstr_str(host);
+    let address = format!("{host_str}:{port}");
+    let connect_result = if timeout_ms > 0 {
+        let timeout = Duration::from_millis(timeout_ms as u64);
+        address
+            .to_socket_addrs()
+            .ok()
+            .and_then(|mut addrs| addrs.next())
+            .map(|addr: SocketAddr| TcpStream::connect_timeout(&addr, timeout))
+            .unwrap_or_else(|| TcpStream::connect(address.as_str()))
+    } else {
+        TcpStream::connect(address.as_str())
+    };
+    match connect_result {
+        Ok(stream) => {
+            let layout_size = std::mem::size_of::<RuntimeConnection>();
+            let payload =
+                ori_alloc(layout_size, Some(ori_net_destructor)) as *mut RuntimeConnection;
+            if payload.is_null() {
+                return new_result(false, cstring_from_str("allocation failed"));
+            }
+            std::ptr::write(payload, RuntimeConnection { stream: Some(stream) });
+            new_result(true, payload as *mut u8)
+        }
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_read_some(conn: *mut u8, max_bytes: i64) -> *mut u8 {
+    use std::io::Read;
+    if conn.is_null() {
+        return new_result(false, cstring_from_str("invalid connection"));
+    }
+    let connection = &mut *(conn as *mut RuntimeConnection);
+    let Some(stream) = connection.stream.as_mut() else {
+        return new_result(false, cstring_from_str("connection closed"));
+    };
+    let cap = max_bytes.clamp(0, 1_048_576) as usize;
+    let mut buf = vec![0_u8; cap.max(1)];
+    match stream.read(&mut buf) {
+        Ok(n) => {
+            buf.truncate(n);
+            new_result(true, cstring_from_bytes(buf))
+        }
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_write_all(conn: *mut u8, data: *const u8) -> *mut u8 {
+    if conn.is_null() {
+        return new_result(false, cstring_from_str("invalid connection"));
+    }
+    let connection = &mut *(conn as *mut RuntimeConnection);
+    let Some(stream) = connection.stream.as_mut() else {
+        return new_result(false, cstring_from_str("connection closed"));
+    };
+    let bytes = if data.is_null() {
+        &[][..]
+    } else {
+        CStr::from_ptr(data as *const i8).to_bytes()
+    };
+    match stream.write_all(bytes) {
+        Ok(()) => new_result(true, std::ptr::null_mut()),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_close(conn: *mut u8) {
+    if conn.is_null() {
+        return;
+    }
+    let connection = &mut *(conn as *mut RuntimeConnection);
+    if let Some(stream) = connection.stream.take() {
+        let _ = stream.shutdown(std::net::Shutdown::Both);
+    }
+    ori_arc_release(conn);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_is_closed(conn: *mut u8) -> c_uchar {
+    if conn.is_null() {
+        return 1;
+    }
+    let connection = &*(conn as *mut RuntimeConnection);
+    u8::from(connection.stream.is_none()) as c_uchar
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_trunc(x: f64) -> f64 {
+    x.trunc()
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_ln(x: f64) -> f64 {
+    x.ln()
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_exp(x: f64) -> f64 {
+    x.exp()
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_asin(x: f64) -> f64 {
+    x.asin()
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_acos(x: f64) -> f64 {
+    x.acos()
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_atan(x: f64) -> f64 {
+    x.atan()
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_atan2(y: f64, x: f64) -> f64 {
+    y.atan2(x)
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_log10(x: f64) -> f64 {
+    x.log10()
+}
+
+#[no_mangle]
+pub extern "C" fn ori_math_is_finite(x: f64) -> c_uchar {
+    u8::from(x.is_finite()) as c_uchar
+}
+
 #[cfg(test)]
 mod tests;

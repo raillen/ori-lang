@@ -4,8 +4,8 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ori_driver::pipeline::{
-    run_build, run_check, run_compile, run_compile_with_options, run_doc, run_fmt, run_test,
-    CheckOutput, CompileOptions,
+    run_build, run_check, run_compile, run_compile_with_options, run_doc, run_doc_with_options,
+    run_fmt, run_test, CheckOutput, CompileOptions, DocFormat, DocOptions,
 };
 
 static NEXT_DIR_ID: AtomicU64 = AtomicU64::new(0);
@@ -216,6 +216,67 @@ end
         "{}",
         out.markdown
     );
+}
+
+#[test]
+fn doc_renders_static_html_output() {
+    let dir = TestDir::new("doc_html_output");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+--|
+Greets the user.
+|--
+public func greet(name: string) -> string
+    return name
+end
+"#,
+    );
+
+    let out = run_doc_with_options(
+        &dir.path("main.orl"),
+        DocOptions {
+            format: DocFormat::Html,
+        },
+    )
+    .unwrap();
+
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(out.html.contains("<!DOCTYPE html>"));
+    assert!(out.html.contains("<h2 id=\"app.main.greet\">"));
+    assert!(out.html.contains("Greets the user."));
+    assert!(out.html.contains("<code>"));
+}
+
+#[test]
+fn compile_runs_for_in_over_list_string_without_corruption() {
+    let dir = TestDir::new("for_in_list_string");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.list as lists
+import ori.string as str
+
+func main()
+    var acc: string = ""
+    for ch in str.chars("AbC123")
+        acc = str.concat(acc, ch)
+    end
+    io.print(acc)
+    var tags: list<string> = []
+    for piece in ["a", "bb", "c"]
+        lists.push(tags, str.concat("-", piece))
+    end
+    io.print(str.join(tags, ","))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "for_in_list_string");
+    assert_eq!(stdout, "AbC123\n-a,-bb,-c\n");
 }
 
 #[test]
@@ -8880,6 +8941,735 @@ end
 
     let stdout = compile_and_run(&dir, "stdlib_source_string_utils_layer2");
     assert_eq!(stdout, "fb\nx\ntrue\nfalse\n  hi  \nhello\n3\n1\n0\n0\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_string_utils_layer2_expanded() {
+    let dir = TestDir::new("stdlib_source_string_utils_layer2_expanded");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.string.utils as su
+
+func main()
+    io.print(su.reverse("abc"))
+    io.print(su.capitalize("hello"))
+    io.print(su.capitalize(""))
+    io.print(su.title("hello world"))
+    io.print(su.swap_case("AbC123"))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_string_utils_layer2_expanded");
+    assert_eq!(stdout, "cba\nHello\n\nHello World\naBc123\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_list_utils() {
+    let dir = TestDir::new("stdlib_source_list_utils");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.list.utils as lu
+
+func main()
+    const items: list<string> = ["a", "b", "c"]
+    io.print(lu.first_or(items, "missing"))
+    io.print(lu.last_or(items, "missing"))
+    io.print(lu.get_or(items, 1, "missing"))
+    io.print(lu.get_or(items, 9, "missing"))
+    const empty: list<string> = []
+    io.print(lu.first_or(empty, "empty"))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_list_utils");
+    assert_eq!(stdout, "a\nc\nb\nmissing\nempty\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_convert_utils() {
+    let dir = TestDir::new("stdlib_source_convert_utils");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.convert as conv
+import ori.convert.utils as cu
+import ori.io as io
+
+func main()
+    io.print(string(cu.parse_int_or("41", 0) + 1))
+    io.print(string(cu.parse_int_or("nope", 7)))
+    io.print(conv.float_to_string(cu.parse_float_or("3.5", 0.0)))
+    io.print(conv.float_to_string(cu.parse_float_or("bad", 1.25)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_convert_utils");
+    assert_eq!(stdout, "42\n7\n3.5\n1.25\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_map_utils() {
+    let dir = TestDir::new("stdlib_source_map_utils");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.map.utils as mu
+
+func main()
+    const scores: map<string, int> = { "a": 1, "b": 2 }
+    io.print(string(mu.get_or(scores, "a", 0)))
+    io.print(string(mu.get_or(scores, "z", 9)))
+    io.print(string(mu.contains_key(scores, "b")))
+    io.print(string(mu.contains_key(scores, "z")))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_map_utils");
+    assert_eq!(stdout, "1\n9\ntrue\nfalse\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_set_utils() {
+    let dir = TestDir::new("stdlib_source_set_utils");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.set.utils as su
+
+func main()
+    const tags: set<string> = su.from_list(["a", "b", "a"])
+    io.print(string(su.contains_all(tags, ["a", "b"])))
+    io.print(string(su.contains_all(tags, ["a", "c"])))
+    const subset: set<string> = su.from_list(["a"])
+    io.print(string(su.is_subset(subset, tags)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_set_utils");
+    assert_eq!(stdout, "true\nfalse\ntrue\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_bytes_utils() {
+    let dir = TestDir::new("stdlib_source_bytes_utils");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.bytes as bytes_mod
+import ori.bytes.utils as bu
+import ori.io as io
+import ori.string as str
+
+func main()
+    const a: bytes = str.to_bytes("ab")
+    const b: bytes = str.to_bytes("ab")
+    const c: bytes = str.to_bytes("ac")
+    io.print(string(bu.is_empty(bu.empty_bytes())))
+    io.print(string(bu.equals(a, b)))
+    io.print(string(bu.equals(a, c)))
+    const fb: bytes = bu.empty_bytes()
+    io.print(string(bytes_mod.len(bu.from_hex_or("deadbeef", fb))))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_bytes_utils");
+    assert_eq!(stdout, "true\ntrue\nfalse\n4\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_math_utils() {
+    let dir = TestDir::new("stdlib_source_math_utils");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.math.utils as mu
+
+func main()
+    io.print(string(mu.sign(-3)))
+    io.print(string(mu.sign(0)))
+    io.print(string(mu.sign(5)))
+    io.print(string(mu.clamp_int(10, 0, 7)))
+    io.print(string(mu.approx_eq(1.0, 1.0000001, 0.001)))
+    io.print(string(mu.approx_eq(1.0, 2.0, 0.001)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_math_utils");
+    assert_eq!(stdout, "-1\n0\n1\n7\ntrue\nfalse\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_string_utils_layer2_full() {
+    let dir = TestDir::new("stdlib_source_string_utils_layer2_full");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.list as lists
+import ori.string.utils as su
+
+func main()
+    io.print(su.left("hello", 2))
+    io.print(su.right("hello", 3))
+    io.print(su.trim_all("  a   b  c  "))
+    const parts: list<string> = su.words("one two  three")
+    io.print(string(lists.len(parts)))
+    const rows: list<string> = su.lines("a\nb")
+    io.print(string(lists.len(rows)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_string_utils_layer2_full");
+    assert_eq!(stdout, "he\nllo\na b c\n3\n2\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_list_utils_expanded() {
+    let dir = TestDir::new("stdlib_source_list_utils_expanded");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.list.utils as lu
+
+func main()
+    const one: list<int> = lu.singleton(42)
+    io.print(string(lu.first_or(one, 0)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_list_utils_expanded");
+    assert_eq!(stdout, "42\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_convert_utils_expanded() {
+    let dir = TestDir::new("stdlib_source_convert_utils_expanded");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.convert.utils as cu
+import ori.io as io
+
+func main()
+    io.print(string(cu.parse_bool_or("true", false)))
+    io.print(string(cu.parse_bool_or("nope", true)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_convert_utils_expanded");
+    assert_eq!(stdout, "true\ntrue\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_list_algorithms() {
+    let dir = TestDir::new("stdlib_source_list_algorithms");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.list.algorithms as la
+
+func main()
+    const nums: list<int> = [1, 2, 3, 4]
+    io.print(string(la.sum_int(nums)))
+    const sorted: list<int> = [1, 3, 5, 7, 9]
+    io.print(string(la.binary_search_int(sorted, 5)))
+    io.print(string(la.binary_search_int(sorted, 4)))
+    io.print(string(la.all_equal_int([2, 2, 2], 2)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_list_algorithms");
+    assert_eq!(stdout, "10\n2\n-1\ntrue\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_tree_algorithms() {
+    let dir = TestDir::new("stdlib_source_tree_algorithms");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.list as lists
+import ori.tree as tree
+import ori.tree.algorithms as ta
+
+func main()
+    const outline: tree.Tree<string> = tree.new("root")
+    const root: tree.NodeId = tree.root(outline)
+    const left: tree.NodeId = tree.add_child(outline, root, "left")
+    tree.add_child(outline, root, "right")
+    tree.add_child(outline, left, "leaf")
+    io.print(string(ta.leaf_count(outline)))
+    io.print(string(ta.is_leaf(outline, left)))
+    io.print(string(ta.is_leaf(outline, root)))
+    const values: list<string> = ta.values_preorder(outline)
+    io.print(string(lists.len(values)))
+    io.print(string(ta.max_depth_from(outline, root)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_tree_algorithms");
+    assert_eq!(stdout, "2\nfalse\nfalse\n4\n2\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_graph_algorithms() {
+    let dir = TestDir::new("stdlib_source_graph_algorithms");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.graph as graph
+import ori.graph.algorithms as ga
+import ori.io as io
+
+func main()
+    const g: graph.Graph<string> = graph.new(false)
+    graph.add_edge(g, "a", "b")
+    graph.add_edge(g, "b", "c")
+    io.print(string(ga.has_path(g, "a", "c")))
+    io.print(string(ga.has_path(g, "c", "a")))
+    io.print(string(ga.reachable_count(g, "a")))
+    io.print(string(ga.is_reachable(g, "b", "c")))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_graph_algorithms");
+    assert_eq!(stdout, "true\ntrue\n3\ntrue\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_validate() {
+    let dir = TestDir::new("stdlib_source_validate");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.validate as validate
+
+func main()
+    io.print(string(validate.between(5, 1, 10)))
+    io.print(string(validate.positive(0)))
+    io.print(string(validate.positive(3)))
+    io.print(string(validate.not_empty("x")))
+    io.print(string(validate.length_between("abc", 2, 4)))
+    io.print(string(validate.one_of(2, [1, 2, 3])))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_validate");
+    assert_eq!(stdout, "true\nfalse\ntrue\ntrue\ntrue\ntrue\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_path() {
+    let dir = TestDir::new("stdlib_source_path");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.path as path
+
+func main()
+    io.print(path.base_name("foo/bar/baz.txt"))
+    io.print(path.extension("foo/bar/baz.txt"))
+    io.print(path.name_without_extension("baz.txt"))
+    io.print(string(path.is_absolute("/tmp/x")))
+    io.print(string(path.is_relative("tmp/x")))
+    io.print(path.join(["a", "b", "c"]))
+    io.print(path.change_extension("dir/file.orl", "txt"))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_path");
+    assert_eq!(
+        stdout,
+        "baz.txt\ntxt\nbaz\ntrue\ntrue\na/b/c\ndir/file.txt\n"
+    );
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_json_utils() {
+    let dir = TestDir::new("stdlib_source_json_utils");
+    let json_path = ori_path_literal(&dir.path("data.json"));
+    dir.write(
+        "main.orl",
+        &format!(
+            r#"namespace app.main
+
+import ori.io as io
+import ori.json as json
+import ori.json.utils as ju
+
+func main()
+    const path: string = "{json_path}"
+    match json.parse("{{}}")
+        case success(doc):
+            match ju.write(path, doc)
+                case success(_):
+                    match ju.read(path)
+                        case success(_):
+                            io.print("true")
+                        case error(_):
+                            io.print("false")
+                    end
+                case error(_):
+                    io.print("false")
+            end
+        case error(_):
+            io.print("false")
+    end
+end
+"#
+        ),
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_json_utils");
+    assert_eq!(stdout, "true\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_io_and_time_utils() {
+    let dir = TestDir::new("stdlib_source_io_time_utils");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.io.utils as iu
+import ori.time.utils as tu
+
+func main()
+    iu.print_line("line")
+    io.print(string(tu.seconds(2)))
+    io.print(string(tu.minutes(1)))
+    io.print(string(tu.hours(1)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_io_time_utils");
+    assert_eq!(stdout, "line\n2000\n60000\n3600000\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_fs_utils() {
+    let dir = TestDir::new("stdlib_source_fs_utils");
+    let data_path = ori_path_literal(&dir.path("nested/data.txt"));
+    let dir_path = ori_path_literal(&dir.path("nested"));
+    dir.write(
+        "main.orl",
+        &format!(
+            r#"namespace app.main
+
+import ori.fs.utils as fu
+import ori.io as io
+
+func main()
+    match fu.create_dir_all("{dir_path}")
+        case success(_):
+            match fu.write_text_result("{data_path}", "payload")
+                case success(_):
+                    io.print(fu.read_text_or("{data_path}", "missing"))
+                    match fu.exists_result("{data_path}")
+                        case success(exists):
+                            io.print(string(exists))
+                        case error(_):
+                            io.print("false")
+                    end
+                case error(_):
+                    io.print("fail")
+            end
+        case error(_):
+            io.print("fail")
+    end
+end
+"#
+        ),
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_fs_utils");
+    assert_eq!(stdout, "payload\ntrue\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_string_utils_gap_parity() {
+    let dir = TestDir::new("stdlib_source_string_utils_gap");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.string.utils as su
+
+func main()
+    io.print(string(su.last_index_of("abab", "ab")))
+    io.print(string(su.is_digits("123")))
+    io.print(string(su.is_digits("12a")))
+    io.print(string(su.has_whitespace("a b")))
+    io.print(su.limit("hello", 3))
+    io.print(su.replace_all("a-a", "a", "b"))
+    io.print(string(su.has_prefix("abc", "ab")))
+    io.print(string(su.has_suffix("abc", "bc")))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_string_utils_gap");
+    assert_eq!(stdout, "2\ntrue\nfalse\ntrue\nhel\nb-b\ntrue\ntrue\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_bytes_utils_gap_parity() {
+    let dir = TestDir::new("stdlib_source_bytes_utils_gap");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.bytes as bytes_mod
+import ori.bytes.utils as bu
+import ori.io as io
+import ori.list as lists
+import ori.string as str
+
+func main()
+    const payload: bytes = str.to_bytes("hello")
+    const prefix: bytes = str.to_bytes("he")
+    const suffix: bytes = str.to_bytes("lo")
+    const part: bytes = str.to_bytes("ell")
+    io.print(string(bu.starts_with(payload, prefix)))
+    io.print(string(bu.ends_with(payload, suffix)))
+    io.print(string(bu.contains(payload, part)))
+    const values: list<int> = bu.to_list(payload)
+    io.print(string(lists.len(values)))
+    const packed: bytes = bu.from_list([65, 66])
+    io.print(string(bytes_mod.len(packed)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_bytes_utils_gap");
+    assert_eq!(stdout, "true\ntrue\ntrue\n5\n2\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_math_utils_gap_parity() {
+    let dir = TestDir::new("stdlib_source_math_utils_gap");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.math.utils as mu
+
+func main()
+    io.print(string(mu.deg_to_rad(180.0) > 3.0))
+    io.print(string(mu.rad_to_deg(3.14159) > 179.0))
+    io.print(string(mu.trunc_float(3.9) == 3.0))
+    io.print(string(mu.log10(100.0) == 2.0))
+    io.print(string(mu.abs_float(-2.5) == 2.5))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_math_utils_gap");
+    assert_eq!(stdout, "true\ntrue\ntrue\ntrue\ntrue\n");
+}
+
+#[test]
+fn compile_runs_stdlib_source_module_map_utils_gap_parity() {
+    let dir = TestDir::new("stdlib_source_map_utils_gap");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.map.utils as mu
+
+func main()
+    const empty: map<string, int> = {}
+    io.print(string(mu.is_empty(empty)))
+    const data: map<string, int> = { "x": 1 }
+    io.print(string(mu.has_key(data, "x")))
+    io.print(string(mu.has_key(data, "y")))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_map_utils_gap");
+    assert_eq!(stdout, "true\ntrue\nfalse\n");
+}
+
+#[test]
+fn compile_runs_stdlib_layer1_os_current_dir_and_lazy_is_consumed() {
+    let dir = TestDir::new("stdlib_layer1_os_lazy");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.lazy as lz
+import ori.os as os_mod
+import ori.string as string_mod
+
+func main()
+    match os_mod.current_dir()
+        case success(cwd):
+            io.print(string(string_mod.len(cwd) > 0))
+        case error(_):
+            io.print("false")
+    end
+    const delayed: lazy<int> = lz.once(do() => 7)
+    io.print(string(lz.is_consumed(delayed)))
+    const value: int = lz.force(delayed)
+    io.print(string(value))
+    io.print(string(lz.is_consumed(delayed)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_layer1_os_lazy");
+    assert_eq!(stdout, "true\nfalse\n7\ntrue\n");
+}
+
+#[test]
+fn compile_runs_stdlib_layer1_math_extensions() {
+    let dir = TestDir::new("stdlib_layer1_math_ext");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.math as math
+
+func main()
+    io.print(string(math.trunc(3.9) == 3.0))
+    io.print(string(math.log10(1000.0) == 3.0))
+    io.print(string(math.is_finite(1.0)))
+    io.print(string(math.is_finite(0.0 / 0.0)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_layer1_math_ext");
+    assert_eq!(stdout, "true\ntrue\ntrue\nfalse\n");
+}
+
+#[test]
+fn compile_runs_stdlib_layer1_process_utils() {
+    let dir = TestDir::new("stdlib_layer1_process_utils");
+    #[cfg(windows)]
+    let source = r#"namespace app.main
+
+import ori.bytes as bytes_mod
+import ori.io as io
+import ori.process as proc
+import ori.process.utils as pu
+import ori.string as string_mod
+
+func main()
+    var c_flag: string = "c"
+    match string_mod.from_bytes(bytes_mod.from_list([47, 99]))
+        case success(flag):
+            c_flag = flag
+        case error(_):
+            c_flag = "c"
+    end
+    match proc.run_capture("cmd", [c_flag, "echo", "hi"])
+        case success(capture):
+            io.print(pu.stdout(capture))
+            io.print(string(pu.exit_code(capture) == 0))
+        case error(_):
+            io.print("fail")
+    end
+end
+"#;
+    #[cfg(not(windows))]
+    let source = r#"namespace app.main
+
+import ori.io as io
+import ori.process as proc
+import ori.process.utils as pu
+
+func main()
+    match proc.run_capture("echo", ["hi"])
+        case success(capture):
+            io.print(pu.stdout(capture))
+            io.print(string(pu.exit_code(capture) == 0))
+        case error(_):
+            io.print("fail")
+    end
+end
+"#;
+    dir.write("main.orl", source);
+
+    let stdout = compile_and_run(&dir, "stdlib_layer1_process_utils");
+    assert!(stdout.contains("hi"), "stdout: {stdout}");
+    assert!(stdout.contains("true"), "stdout: {stdout}");
+}
+
+#[test]
+fn check_accepts_stdlib_gap_parity_imports() {
+    let dir = TestDir::new("stdlib_gap_parity_imports");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.validate as validate
+import ori.path as path
+import ori.json.utils as json_utils
+import ori.io.utils as io_utils
+import ori.fs.utils as fs_utils
+import ori.time.utils as time_utils
+import ori.test.utils as test_utils
+import ori.process.utils as process_utils
+import ori.concurrent.utils as concurrent_utils
+
+func main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
 }
 
 #[test]

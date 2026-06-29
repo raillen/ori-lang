@@ -81,6 +81,12 @@ pub unsafe extern "C" fn ori_test_assert_ne_string(left: *const u8, right: *cons
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn ori_test_skip(message: *const u8) {
+    eprintln!("ori test skipped: {}", super::cstr_str(message));
+    std::process::exit(77);
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn ori_test_fail(message: *const u8) {
     eprintln!("ori test failure: {}", super::cstr_str(message));
     std::process::abort();

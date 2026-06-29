@@ -1,0 +1,29 @@
+namespace ori.map.utils
+
+import ori.map as maps
+
+public func get_or(m: map<string, int>, key: string, fallback: int) -> int
+    if some(value) = maps.try_get(m, key)
+        return value
+    end
+    return fallback
+end
+
+public func get_or_string(m: map<string, string>, key: string, fallback: string) -> string
+    if some(value) = maps.try_get(m, key)
+        return value
+    end
+    return fallback
+end
+
+public func contains_key(m: map<string, int>, key: string) -> bool
+    return maps.contains(m, key)
+end
+
+public func has_key(m: map<string, int>, key: string) -> bool
+    return contains_key(m, key)
+end
+
+public func is_empty(m: map<string, int>) -> bool
+    return maps.is_empty(m)
+end

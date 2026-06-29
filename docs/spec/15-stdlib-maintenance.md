@@ -91,11 +91,20 @@ This is no longer a future item — the infrastructure is live.
   Hot-path modules (collections, async, I/O, ARC, string primitives like
   `concat`/`slice` that allocate) stay here.
 - **Layer 2 (`.orl` wrappers):** `stdlib/**/*.orl`, call Layer 1 via normal
-  `import`. Cold compositional functions go here. Current surface in
-  `stdlib/string/utils.orl`: `is_empty`, `blank`, `replicate`, `default`,
-  `equals_ignore_case`, `center`, `count`.
-- **Layer 3 (`.orl` algorithms):** pure-Ori algorithms on top of Layer 1+2
-  (e.g. `ori.tree` traversals). Planned for the future (long-term, no version assigned).
+  `import`. Cold compositional functions go here. Modules include
+  `ori.validate`, `ori.path`, `ori.string.utils`, `ori.list.utils`,
+  `ori.convert.utils`, `ori.map.utils`, `ori.set.utils`, `ori.bytes.utils`,
+  `ori.math.utils`, `ori.json.utils`, `ori.io.utils`, `ori.fs.utils`,
+  `ori.time.utils`, `ori.test.utils`, `ori.process.utils`,
+  `ori.concurrent.utils`. Gap parity map: `docs/planning/stdlib-gap-parity.md`.
+- **Layer 3 (`.orl` algorithms):** pure-Ori algorithms on top of Layer 1+2.
+  Modules: `ori.list.algorithms` (`sum_int`, `binary_search_int`,
+  `all_equal_int`), `ori.tree.algorithms` (iterative traversals:
+  `values_preorder`, `leaf_count`, `max_depth_from`, `is_leaf`),
+  `ori.graph.algorithms` (BFS in `.orl`: `has_path`, `reachable_count`,
+  `is_reachable`, `has_path_int`). Layer 3 avoids recursive generic helpers
+  (typechecker rejects `generic.circular_instantiation`) and runtime traversal
+  shortcuts where the goal is to express logic in Ori itself.
 
 ### Path convention
 
@@ -138,6 +147,10 @@ module).
   and conflicts with the runtime symbol, producing `undefined variable
   'ori_len' in native codegen` at compile time. Use a qualified name like
   `s_len`, `sub_len`, `total_len` instead.
+- [ ] Prefer indexed iteration over `for item in list<string>` in Layer 2/3
+  stdlib (ARC loop binding still fragile for managed string elements).
+- [ ] Map/set/graph modules: use concrete key types (`string`, `int`) until
+  the `Hashable` + `Equatable` trait gate supports generic keys.
 - [ ] Add a regression test in `multifile_imports.rs` that imports the module
       and validates behavior end-to-end (check -> compile -> run).
 

@@ -5640,6 +5640,22 @@ impl<'a> FuncCodegen<'a> {
         Ok(object)
     }
 
+    fn emit_lazy_is_consumed(&mut self, value: &HirExpr) -> Result<ir::Value, String> {
+        let Ty::Lazy(_inner) = &value.ty else {
+            return Err(format!(
+                "lazy.is_consumed expected lazy value, got `{}`",
+                value.ty.display()
+            ));
+        };
+        let lazy_value = self.emit_expr(value)?;
+        let ptr_size = self.ptr_ty.bytes() as i32;
+        let forced = self
+            .builder
+            .ins()
+            .load(types::I8, MemFlags::new(), lazy_value, ptr_size);
+        Ok(forced)
+    }
+
     fn emit_lazy_force(&mut self, value: &HirExpr, ret_ty: &Ty) -> Result<ir::Value, String> {
         let Ty::Lazy(inner) = &value.ty else {
             return Err(format!(
@@ -6304,6 +6320,10 @@ impl<'a> FuncCodegen<'a> {
                 kind: OpaqueTy::File,
                 ..
             } => Some(SmolStr::new("ori_files_close")),
+            Ty::Opaque {
+                kind: OpaqueTy::Connection,
+                ..
+            } => Some(SmolStr::new("ori_net_close")),
             _ => None,
         }
     }
@@ -8662,6 +8682,46 @@ impl<'a> FuncCodegen<'a> {
         self.emit_for_list_value(binding, index_binding, elem_ty, list_v, body, has_await)
     }
 
+    /// Assign a for-loop element binding. `ori_list_get` / map accessors return
+    /// borrowed managed pointers; retain the new element and release the previous
+    /// iteration's retained value before overwriting the loop variable.
+    fn emit_for_element_binding(
+        &mut self,
+        binding: &SmolStr,
+        elem_ty: &Ty,
+        elem: ir::Value,
+        has_await: bool,
+    ) -> Result<(), String> {
+        let Some((bvar, _)) = self.lookup_var(binding) else {
+            return Err(format!(
+                "for-loop binding `{binding}` missing in native codegen"
+            ));
+        };
+        if is_managed_ty(elem_ty) {
+            let old = self.builder.use_var(bvar);
+            self.emit_arc_retain_if_managed(elem_ty, elem)?;
+            self.emit_arc_release_if_managed(elem_ty, old)?;
+        }
+        self.builder.def_var(bvar, elem);
+        if has_await {
+            self.store_async_local_if_any(binding, elem)?;
+            if let Some(frame) = self.async_frame {
+                self.emit_arc_register_edge_if_managed(elem_ty, frame, elem)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_for_release_element_binding(&mut self, binding: &SmolStr) -> Result<(), String> {
+        if let Some((bvar, bty)) = self.lookup_var(binding) {
+            if is_managed_ty(&bty) {
+                let final_val = self.builder.use_var(bvar);
+                self.emit_arc_release_if_managed(&bty, final_val)?;
+            }
+        }
+        Ok(())
+    }
+
     fn emit_for_list_value(
         &mut self,
         binding: &SmolStr,
@@ -8728,6 +8788,8 @@ impl<'a> FuncCodegen<'a> {
         if !has_await {
             if let Some(cl_ty) = cl_type(elem_ty, self.ptr_ty) {
                 let bvar = self.builder.declare_var(cl_ty);
+                let zero = self.builder.ins().iconst(cl_ty, 0);
+                self.builder.def_var(bvar, zero);
                 self.insert_var(binding.clone(), (bvar, elem_ty.clone()));
             }
         }
@@ -8769,16 +8831,12 @@ impl<'a> FuncCodegen<'a> {
         self.builder.seal_block(check_b);
         self.builder.switch_to_block(check_b);
 
-        if let Some((bvar, _)) = self.lookup_var(binding) {
-                        let cur2 = self.builder.use_var(idx_var);
+        if let Some((_bvar, _)) = self.lookup_var(binding) {
+            let cur2 = self.builder.use_var(idx_var);
             let call = self.builder.ins().call(get_ref, &[list_val, cur2]);
             let elem = self.builder.inst_results(call)[0];
             let elem = self.from_list_storage_value(elem, elem_ty);
-            self.builder.def_var(bvar, elem);
-            if has_await {
-                self.store_async_local_if_any(binding, elem)?;
-                self.emit_arc_register_edge_if_managed(elem_ty, self.async_frame.unwrap(), elem)?;
-            }
+            self.emit_for_element_binding(binding, elem_ty, elem, has_await)?;
         }
 
         if let Some(ib_name) = index_binding {
@@ -8817,6 +8875,9 @@ impl<'a> FuncCodegen<'a> {
 
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
+        if !has_await {
+            self.emit_for_release_element_binding(binding)?;
+        }
         if let Some(loop_id) = loop_id {
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
             let ver_name = SmolStr::new(format!(".__loop_version_{}", loop_id));
@@ -8902,11 +8963,15 @@ impl<'a> FuncCodegen<'a> {
         if !has_await {
             if let Some(cl_ty) = cl_type(key_ty, self.ptr_ty) {
                 let key_var = self.builder.declare_var(cl_ty);
+                let zero = self.builder.ins().iconst(cl_ty, 0);
+                self.builder.def_var(key_var, zero);
                 self.insert_var(binding.clone(), (key_var, key_ty.clone()));
             }
             if let Some(value_name) = value_binding {
                 if let Some(cl_ty) = cl_type(value_ty, self.ptr_ty) {
                     let value_var = self.builder.declare_var(cl_ty);
+                    let zero = self.builder.ins().iconst(cl_ty, 0);
+                    self.builder.def_var(value_var, zero);
                     self.insert_var(value_name.clone(), (value_var, value_ty.clone()));
                 }
             }
@@ -8950,26 +9015,18 @@ impl<'a> FuncCodegen<'a> {
         self.builder.switch_to_block(check_b);
 
         let cur2 = self.builder.use_var(idx_var);
-        if let Some((key_var, _)) = self.lookup_var(binding) {
-                        let key_call = self.builder.ins().call(key_at_ref, &[map_val, cur2]);
+        if let Some((_key_var, _)) = self.lookup_var(binding) {
+            let key_call = self.builder.ins().call(key_at_ref, &[map_val, cur2]);
             let key = self.builder.inst_results(key_call)[0];
             let key = self.from_list_storage_value(key, key_ty);
-            self.builder.def_var(key_var, key);
-            if has_await {
-                self.store_async_local_if_any(binding, key)?;
-                self.emit_arc_register_edge_if_managed(key_ty, self.async_frame.unwrap(), key)?;
-            }
+            self.emit_for_element_binding(binding, key_ty, key, has_await)?;
         }
         if let Some(value_name) = value_binding {
-            if let Some((value_var, _)) = self.lookup_var(value_name) {
-                                let value_call = self.builder.ins().call(value_at_ref, &[map_val, cur2]);
+            if let Some((_value_var, _)) = self.lookup_var(value_name) {
+                let value_call = self.builder.ins().call(value_at_ref, &[map_val, cur2]);
                 let value = self.builder.inst_results(value_call)[0];
                 let value = self.from_list_storage_value(value, value_ty);
-                self.builder.def_var(value_var, value);
-                if has_await {
-                    self.store_async_local_if_any(value_name, value)?;
-                    self.emit_arc_register_edge_if_managed(value_ty, self.async_frame.unwrap(), value)?;
-                }
+                self.emit_for_element_binding(value_name, value_ty, value, has_await)?;
             }
         }
 
@@ -8995,6 +9052,12 @@ impl<'a> FuncCodegen<'a> {
         self.builder.seal_block(header);
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
+        if !has_await {
+            self.emit_for_release_element_binding(binding)?;
+            if let Some(value_name) = value_binding {
+                self.emit_for_release_element_binding(value_name)?;
+            }
+        }
         if let Some(loop_id) = loop_id {
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
             let ver_name = SmolStr::new(format!(".__loop_version_{}", loop_id));
@@ -9201,14 +9264,14 @@ impl<'a> FuncCodegen<'a> {
             (idx_var, len_var, list_v)
         };
 
-        let bvar = if has_await {
-            let (bvar, _) = self.lookup_var(binding).unwrap();
-            bvar
+        if has_await {
+            let (_bvar, _) = self.lookup_var(binding).unwrap();
         } else {
             let bvar = self.builder.declare_var(self.ptr_ty);
+            let zero = self.builder.ins().iconst(self.ptr_ty, 0);
+            self.builder.def_var(bvar, zero);
             self.insert_var(binding.clone(), (bvar, Ty::String));
-            bvar
-        };
+        }
 
         let header = self.builder.create_block();
         let body_b = self.builder.create_block();
@@ -9228,11 +9291,7 @@ impl<'a> FuncCodegen<'a> {
         let cur2 = self.builder.use_var(idx_var);
         let call = self.builder.ins().call(get_ref, &[list_val, cur2]);
         let elem = self.builder.inst_results(call)[0];
-        self.builder.def_var(bvar, elem);
-        if has_await {
-            self.store_async_local_if_any(binding, elem)?;
-            self.emit_arc_register_edge_if_managed(&Ty::String, self.async_frame.unwrap(), elem)?;
-        }
+        self.emit_for_element_binding(binding, &Ty::String, elem, has_await)?;
         if let Some(ib_name) = index_binding {
             let cur3 = self.builder.use_var(idx_var);
             if has_await {
@@ -9268,6 +9327,9 @@ impl<'a> FuncCodegen<'a> {
         self.builder.seal_block(header);
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
+        if !has_await {
+            self.emit_for_release_element_binding(binding)?;
+        }
         if has_await {
             let loop_id = self.async_loop_index - 1;
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
@@ -9930,6 +9992,9 @@ impl<'a> FuncCodegen<'a> {
                     }
                     if name.as_str() == "ori_lazy_force" && args.len() == 1 {
                         return self.emit_lazy_force(&args[0].value, &expr.ty);
+                    }
+                    if name.as_str() == "ori_lazy_is_consumed" && args.len() == 1 {
+                        return self.emit_lazy_is_consumed(&args[0].value);
                     }
                     // ori_io_print takes (ptr: *u8, len: i64) — build args accordingly
                     if matches!(name.as_str(), "ori_test_assert_eq" | "ori_test_assert_ne") {

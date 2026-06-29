@@ -1,10 +1,7 @@
 //! Integration tests for the JIT execution path (Rust removal Phase 3).
 //!
-//! These tests spawn `ori run` as a subprocess with `ORI_USE_JIT=1` to avoid
-//! env-var races with the parallel test runner. The JIT path loads the staged
-//! runtime cdylib via `libloading`, lowers the HIR into a `JITModule`, and
-//! invokes the C `main` wrapper in-process — no `.o` file, no linker, no
-//! subprocess binary.
+//! These tests spawn `ori run` as a subprocess. Explicit JIT tests set
+//! `ORI_USE_JIT=1`; the default-path test relies on a cargo-built cdylib.
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -92,6 +89,42 @@ end
     assert!(
         stdout.contains("hello from JIT"),
         "expected `hello from JIT` in stdout, got: {stdout}"
+    );
+}
+
+#[test]
+fn jit_run_uses_jit_by_default_when_cdylib_available() {
+    let dir = TestDir::new("jit_default");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+
+func main()
+    io.print("jit default path")
+end
+"#,
+    );
+
+    let output = Command::new(ori_exe())
+        .arg("run")
+        .arg(dir.path("main.orl"))
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .expect("failed to spawn `ori run` subprocess");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "ori run (JIT default) failed: status={:?} stderr={stderr}",
+        output.status
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("jit default path"),
+        "expected JIT default output, got: {stdout}"
     );
 }
 

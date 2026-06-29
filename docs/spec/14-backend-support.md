@@ -143,6 +143,33 @@ Legend:
 - Changing a row from `no` to `yes` requires a positive `build_c_backend_*`
   test in `multifile_imports.rs`.
 
+## C/debug async parity (v2 backlog — deferred)
+
+Full async/concurrency parity in the C/debug backend is **not planned for v1**.
+The native Cranelift backend is the reference implementation for `async func`,
+`await`, `task.*`, `channel.*`, and `atomic.*`.
+
+Current C/debug behaviour (unchanged until v2):
+
+- `async func` / `await` in user code: rejected at C codegen with an actionable
+  message (`backend.c_unsupported` via `ori build`).
+- Stdlib async/concurrency symbols: rejected at C codegen (same route).
+- Sync subset (`ori build` on non-async programs): supported per the matrix above.
+
+Rationale: async on native uses a dedicated state machine, ARC frame edges, and
+runtime executor hooks that would duplicate a large fraction of `ori-runtime`
+in `ORI_RUNTIME_H`. The C route remains a **debug/transpile** path for sync
+programs, not a second production backend.
+
+Future options (v2, pick one):
+
+1. **Selective parity** — inline executor stubs for a minimal async subset.
+2. **Explicit deprecation** — document C backend as sync-only permanently.
+3. **Shared IR** — generate async state machines in a backend-agnostic layer
+   (large refactor).
+
+Until a v2 decision lands, do not mark C async as partial/yes in the matrix.
+
 ## Rules for future work
 
 - Add a positive native test before changing a row from partial to yes.

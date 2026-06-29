@@ -1,0 +1,24 @@
+namespace ori.json.utils
+
+import ori.fs as fs
+import ori.json as json
+
+public func read(file_path: string) -> result<json.Value, string>
+    match fs.read_text(file_path)
+        case success(text):
+            return json.parse(text)
+        case error(_):
+            return error("failed to read json file")
+    end
+    return error("failed to read json file")
+end
+
+public func write(file_path: string, value: json.Value) -> result<string, string>
+    const text: string = json.stringify(value)
+    return fs.write_text(file_path, text)
+end
+
+public func write_pretty(file_path: string, value: json.Value) -> result<string, string>
+    const text: string = json.stringify_pretty(value)
+    return fs.write_text(file_path, text)
+end

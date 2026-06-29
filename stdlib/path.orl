@@ -1,0 +1,160 @@
+namespace ori.path
+
+import ori.bytes as bytes_mod
+import ori.list as lists
+import ori.string as str
+import ori.string.utils as su
+
+func normalize_separators(value: string) -> string
+    var backslash: string = "/"
+    match str.from_bytes(bytes_mod.from_list([92]))
+        case success(sep):
+            backslash = sep
+        case error(_):
+            backslash = "/"
+    end
+    var out: string = ""
+    var i: int = 0
+    const value_len: int = str.len(value)
+    while i < value_len
+        const ch: string = str.slice(value, i, i + 1)
+        if ch == backslash
+            out = str.concat(out, "/")
+        else
+            out = str.concat(out, ch)
+        end
+        i = i + 1
+    end
+    return out
+end
+
+public func join(parts: list<string>) -> string
+    var out: string = ""
+    var i: int = 0
+    const n: int = lists.len(parts)
+    while i < n
+        if some(part) = lists.try_get(parts, i)
+            if not su.is_empty(part)
+                if su.is_empty(out)
+                    out = part
+                else
+                    out = str.concat(str.concat(out, "/"), part)
+                end
+            end
+        end
+        i = i + 1
+    end
+    return normalize_separators(out)
+end
+
+public func normalize(value: string) -> string
+    return normalize_separators(str.trim(value))
+end
+
+public func is_absolute(value: string) -> bool
+    const norm: string = normalize(value)
+    if su.is_empty(norm)
+        return false
+    end
+    const head: string = str.slice(norm, 0, 1)
+    if head == "/"
+        return true
+    end
+    if str.len(norm) >= 3
+        const drive: string = str.slice(norm, 1, 2)
+        if drive == ":"
+            return true
+        end
+    end
+    return false
+end
+
+public func is_relative(value: string) -> bool
+    return not is_absolute(value)
+end
+
+public func base_name(value: string) -> string
+    const norm: string = normalize(value)
+    if su.is_empty(norm)
+        return ""
+    end
+    var pos: int = str.len(norm) - 1
+    while pos >= 0
+        const ch: string = str.slice(norm, pos, pos + 1)
+        if ch == "/"
+            return str.slice(norm, pos + 1, str.len(norm))
+        end
+        pos = pos - 1
+    end
+    return norm
+end
+
+public func extension(value: string) -> string
+    const name: string = base_name(value)
+    var pos: int = str.len(name) - 1
+    while pos >= 0
+        const ch: string = str.slice(name, pos, pos + 1)
+        if ch == "."
+            return str.slice(name, pos + 1, str.len(name))
+        end
+        pos = pos - 1
+    end
+    return ""
+end
+
+public func name_without_extension(value: string) -> string
+    const name: string = base_name(value)
+    var pos: int = str.len(name) - 1
+    while pos >= 0
+        const ch: string = str.slice(name, pos, pos + 1)
+        if ch == "."
+            return str.slice(name, 0, pos)
+        end
+        pos = pos - 1
+    end
+    return name
+end
+
+public func parent(value: string) -> string
+    const norm: string = normalize(value)
+    if su.is_empty(norm)
+        return ""
+    end
+    var pos: int = str.len(norm) - 1
+    while pos >= 0
+        const ch: string = str.slice(norm, pos, pos + 1)
+        if ch == "/"
+            if pos == 0
+                return "/"
+            end
+            return str.slice(norm, 0, pos)
+        end
+        pos = pos - 1
+    end
+    return ""
+end
+
+public func has_extension(value: string, expected: string) -> bool
+    return extension(value) == expected
+end
+
+public func change_extension(value: string, new_ext: string) -> string
+    const parent_path: string = parent(value)
+    const stem: string = name_without_extension(base_name(value))
+    const file_name: string = str.concat(str.concat(stem, "."), new_ext)
+    if su.is_empty(parent_path)
+        return file_name
+    end
+    return join([parent_path, file_name])
+end
+
+public func absolute(value: string, base: string) -> string
+    if is_absolute(value)
+        return normalize(value)
+    end
+    return join([base, value])
+end
+
+public func relative(value: string, from: string) -> string
+    return normalize(value)
+end

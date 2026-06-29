@@ -588,14 +588,47 @@ sh tools/smoke_native_release.sh
 | Etapa 7 | Etapa 5 (diagnósticos) |
 | Etapa 8 | *(novo — organização)* |
 | Etapa 9 | Etapa 6 (release) |
+| Apêndice C (backlog v2) | Backlog v2 — Paridade de referência e DX |
 
 ## Apêndice C — Backlog pós-release (v2, não bloqueia Etapa 9)
+
+Checklist detalhado com gates de teste: [`PENDENTES.md`](PENDENTES.md) § **Backlog v2 — Paridade de referência e DX**.
+
+### Infraestrutura e ecossistema
 
 - [ ] Stdlib escrita em `.orl` com bootstrap gradual
 - [ ] Paridade C debug para async/concurrency (ou deprecar C backend)
 - [ ] Suporte a triples adicionais além dos 5 do CI
 - [ ] Publicação em registry / instalador
 - [ ] `ori doc` com output HTML estático
+
+### DX e toolchain pedagógica (alta — espelhar referência `zt *`)
+
+- [ ] `ori explain <code>` — catálogo cap. 13 interativo
+- [ ] `ori doctor` — validação de ambiente (runtime, linker, stdlib root, triple)
+- [ ] Guia pedagógico único **Errors, Null, Void** (linkado do README)
+
+### Uniformização stdlib Layer 1 (alta)
+
+- [ ] `ori.io.read_line` → `optional<string>` (EOF = `none`)
+- [ ] FS Layer 1: migrar retornos `bool` → `result<…>` (wrappers Layer 2 de transição)
+- [ ] Sincronizar cap. 12 + `stdlib_func_sig` pós-migração
+
+> Detalhes: [`stdlib-gap-parity.md`](stdlib-gap-parity.md).
+
+### Ergonomia (média)
+
+- [ ] `ori repl` — REPL interativo
+- [ ] `if then else` como expressão
+- [ ] `ori summary` — visão de projeto (entry, namespaces, imports)
+
+### I/O e rede avançados (baixa)
+
+- [ ] `time.Instant` / `Duration` tipados (`ori.time` v2)
+- [ ] Streams `io.Input` / `io.Output` (redesign; spike antes de codar)
+- [ ] Rede TLS / UDP / async (fora do escopo v1 TCP síncrono)
+
+**Explicitamente fora de escopo v2:** alias ou rename `string` → `text`.
 
 ---
 
