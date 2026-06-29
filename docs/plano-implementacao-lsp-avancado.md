@@ -1,3 +1,6 @@
+> **Histórico — não usar como backlog ativo.**  
+> Para o roadmap atual, veja [`docs/planning/PLANO-MATURIDADE-COMPLETO.md`](planning/PLANO-MATURIDADE-COMPLETO.md) Etapa 6.
+
 # Plano de Implementação Avançada do Ori LSP
 
 Data: 2026-05-17
@@ -55,31 +58,43 @@ indexação cross-file, análise incremental e refactorings.
 
 ## Estado Atual vs Alvo
 
+> Atualizado em 2026-06-28 para refletir as entregas dos Sprints 1–5 (CHANGELOG
+> `[Unreleased]`) e da Etapa 6.1–6.6 do `PLANO-MATURIDADE-COMPLETO.md`. Esta
+> tabela é um snapshot histórico; o roadmap ativo é o PLANO-MATURIDADE-COMPLETO.
+
 | Funcionalidade | Atual | Alvo |
 |---|---|---|
-| Diagnostics (check) | ✅ Via `ori check` | ✅ Incremental por arquivo |
+| Diagnostics (check) | ✅ Via `ori check` + LSP `publishDiagnostics` (debounced) | ✅ Incremental por arquivo |
 | Diagnostics (lint) | ❌ | ✅ Warnings de estilo |
+| Diagnostics (project) | ✅ `project.circular_import`/`namespace_file_mismatch` (driver) + `project.entry_not_found`/`no_proj_file` (LSP mapping); roteamento cross-file (Etapa 6.5) | ✅ |
 | Hover (tipos built-in) | ✅ | ✅ |
-| Hover (símbolos locais) | ✅ Regex | ✅ Semântico (AST) |
-| Hover (cross-file) | ❌ | ✅ Resolução de imports |
-| Hover (stdlib) | ❌ | ✅ Assinaturas + docs |
-| Go-to-definition (local) | ✅ Regex | ✅ Semântico cross-file |
-| Go-to-definition (import) | ❌ | ✅ Resolve imports |
+| Hover (símbolos locais) | ✅ Semântico (AST via `SemanticIndex`) + cross-file via `ProjectSemanticIndex` (Etapa 6.1) | ✅ |
+| Hover (cross-file) | ✅ `ProjectSemanticIndex` resolve sigs de imports transitivos (Etapa 6.1) | ✅ Resolução de imports |
+| Hover (stdlib) | ✅ Assinaturas + docs | ✅ |
+| Go-to-definition (local) | ✅ Semântico | ✅ Semântico cross-file |
+| Go-to-definition (import) | ✅ Cross-file via `ProjectSemanticIndex.cross_file_definition` (Etapa 6.1) | ✅ Resolve imports |
 | Go-to-definition (stdlib) | ❌ | ✅ Navega para declaração |
-| Find references | ❌ | ✅ Todos os usos |
-| Completions (stdlib) | ✅ Lista plana | ✅ Context-aware + snippets |
-| Completions (local) | ❌ | ✅ Escopo + tipos |
-| Completions (dot) | ❌ | ✅ Campos/métodos após `.` |
-| Signature help | ❌ | ✅ Parâmetros de função |
-| Document symbols | ❌ | ✅ Estrutura do arquivo |
-| Workspace symbols | ❌ | ✅ Busca cross-file |
-| Code lens | ❌ | ✅ `@test` runner, references |
-| Rename | ❌ | ✅ Renomear símbolo |
-| Formatting | ❌ | ✅ `ori fmt` |
-| Code actions | ❌ | ✅ Quick fixes |
-| Inlay hints | ❌ | ✅ Tipos inferidos |
-| Semantic tokens | ❌ | ✅ Syntax highlighting |
-| Diagnostics on change | ❌ | ✅ Incremental, debounced |
+| Find references | ✅ Local + cross-file via `ProjectSemanticIndex.find_references_cross_file` (Etapa 6.2) | ✅ Todos os usos cross-file |
+| Completions (stdlib) | ✅ Context-aware (Default/AfterDot/InType) | ✅ |
+| Completions (local) | ✅ Escopo + imports | ✅ |
+| Completions (dot) | ✅ Type-aware: `complete_after_dot` resolve tipo declarado do receptor e lista campos/variantes/métodos (Etapa 6.2) | ✅ Campos/métodos após `.` por tipo real |
+| Signature help | ✅ | ✅ |
+| Document symbols | ✅ | ✅ |
+| Workspace symbols | ✅ | ✅ |
+| Code lens | ✅ `@test` runner, references | ✅ |
+| Rename | ✅ Local + imports + cross-file via `ProjectSemanticIndex` (Etapa 6.2) | ✅ Cross-file via DefMap |
+| Formatting | ✅ `ori fmt` + LSP `textDocument/formatting` (idempotente em async) | ✅ |
+| Code actions | ✅ Quick fixes | ✅ |
+| Inlay hints | ✅ Tipos inferidos | ✅ |
+| Semantic tokens | ✅ Syntax highlighting | ✅ |
+| Diagnostics on change | ✅ Incremental, debounced (300ms) | ✅ |
+| E2E test harness | ✅ `ori-lsp/tests/e2e.rs` (10+ cenários via subprocess) | ✅ |
+
+**Pendências remanescentes (Etapa 6.1/6.2/6.5 do PLANO-MATURIDADE-COMPLETO):**
+`ProjectSemanticIndex` cross-file com reuso do pipeline do driver, completion
+type-aware de membros após `.` (baseada no tipo inferido real), find references
+cross-file via DefMap, e diagnósticos de nível de projeto (`project.circular_import`,
+`project.namespace_file_mismatch`, etc.) no LSP.
 
 ---
 

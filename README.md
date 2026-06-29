@@ -6,7 +6,13 @@ Ori is a reading-first, explicitly typed programming language designed for clari
 
 ## Status
 
-Early development. Compiler being written in Rust.
+**v0.2.0** — feature-complete for v1 targets. Compiler written in Rust, native
+codegen via Cranelift, LSP with cross-file semantics, ~580 passing tests, 5 CI
+triples (Windows MSVC/GNU, Linux GNU, macOS x86_64/aarch64). Pre-1.0: breaking
+changes may still occur; two known limitations documented in
+`docs/planning/PLANO-MATURIDADE-COMPLETO.md` (await in nested loops, formatter
+quirk after `trait` declarations). See `CHANGELOG.md` for the full v0.2.0
+release notes.
 
 ## Current CLI Contract
 
@@ -34,8 +40,28 @@ package that must use only the packaged `runtime/` directory.
 - `ori-lsp` implements a real Language Server Protocol entry point over
   stdin/stdout.
 - The LSP publishes parser/checker diagnostics, resolves local imports, and
-  provides basic hover, go-to-definition, and stdlib completion.
+  provides hover, go-to-definition, completions, rename, semantic tokens,
+  inlay hints, workspace symbols, formatting, signature help, code lens, and
+  code actions.
+- A `ProjectSemanticIndex` (Etapa 6.1) reuses the driver's `run_check`
+  `ResolvedModule` + `SourceCache` to resolve symbols across transitively
+  imported files: cross-file hover, go-to-definition, and find-references work
+  without opening the imported file. Type-aware dot-completion (Etapa 6.2)
+  lists struct/enum fields and impl/trait methods from the receiver's declared
+  type. Project-level diagnostics `project.circular_import`,
+  `project.namespace_file_mismatch`, `project.entry_not_found`, and
+  `project.no_proj_file` (Etapa 6.5) are surfaced on the open file.
+- An E2E LSP test harness (`compiler/crates/ori-lsp/tests/e2e.rs`) drives the
+  binary over stdio and covers initialize, didOpen, diagnostics, hover,
+  definition, completion, formatting (idempotency verified), rename, document
+  symbols, shutdown, cross-file go-to-definition, type-aware dot completion,
+  cross-file find-references, and circular-import diagnostics
+  (`cargo test -p ori-lsp --test e2e`).
+- `ori fmt` formats Ori source and is idempotent on async/concurrency
+  constructs; `ori doc` extracts documentation.
 - `ori check file.orl` remains the shortest CLI path for CI diagnostics.
+
+See `docs/planning/PLANO-MATURIDADE-COMPLETO.md` for the full maturity roadmap.
 
 ## Release Layout
 

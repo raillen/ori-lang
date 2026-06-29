@@ -89,6 +89,15 @@ impl SourceCache {
     pub fn get(&self, id: FileId) -> Option<&SourceFile> {
         self.files.get(id.0 as usize)
     }
+
+    /// Iterate over all source files registered in this cache.
+    ///
+    /// Used by the LSP `ProjectSemanticIndex` to scan every loaded file
+    /// (entry + transitive imports) for cross-file navigation queries
+    /// such as find-references.
+    pub fn all_files(&self) -> &[SourceFile] {
+        &self.files
+    }
 }
 
 #[cfg(test)]

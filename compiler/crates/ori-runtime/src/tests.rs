@@ -849,6 +849,70 @@ fn arc_collect_cycles_reclaims_struct_like_registered_cycle() {
 }
 
 #[test]
+fn cooperative_collect_fires_after_allocation_threshold() {
+    let _guard = TEST_ARC_LOCK.lock().unwrap();
+    arc_state().lock().unwrap().allocations.clear();
+    arc_state().lock().unwrap().edges.clear();
+    TEST_DTOR_CALLS.store(0, AtomicOrdering::SeqCst);
+
+    // Reset the cooperative counter window so the test controls the delta
+    // regardless of allocations performed by earlier tests.
+    let baseline = COOPERATIVE_ALLOC_COUNTER.load(AtomicOrdering::SeqCst);
+    COOPERATIVE_LAST_COLLECTED.store(baseline, AtomicOrdering::SeqCst);
+    let threshold = cooperative_collect_threshold();
+
+    unsafe {
+        // Build an orphan cycle: left <-> right. After releasing the external
+        // refs both objects survive only via the cycle edges (refcount 1).
+        let left = ori_alloc(8, Some(test_destructor));
+        let right = ori_alloc(8, Some(test_destructor));
+        assert!(!left.is_null() && !right.is_null());
+        ori_arc_register_edge(left, right);
+        ori_arc_register_edge(right, left);
+        ori_arc_release(left);
+        ori_arc_release(right);
+        assert_eq!(TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst), 0);
+
+        // A second cooperative call with no new allocations must be a no-op.
+        maybe_collect_cycles_cooperative();
+        assert_eq!(
+            TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst),
+            0,
+            "no collection before crossing the threshold"
+        );
+
+        // Allocate enough managed objects to cross the cooperative threshold.
+        let mut buffers = Vec::new();
+        for _ in 0..(threshold + 4) {
+            let buf = ori_alloc(8, None);
+            assert!(!buf.is_null());
+            buffers.push(buf);
+        }
+
+        // Now the cooperative trigger must call ori_arc_collect_cycles and
+        // reclaim the orphaned cycle.
+        maybe_collect_cycles_cooperative();
+        assert_eq!(
+            TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst),
+            2,
+            "cooperative collection should reclaim the orphan cycle"
+        );
+
+        // A repeat call without new allocations must not collect again.
+        maybe_collect_cycles_cooperative();
+        assert_eq!(
+            TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst),
+            2,
+            "no double collection within the same window"
+        );
+
+        for buf in buffers {
+            ori_arc_release(buf);
+        }
+    }
+}
+
+#[test]
 fn arc_collect_cycles_reclaims_list_map_set_cycle() {
     let _guard = TEST_ARC_LOCK.lock().unwrap();
     arc_state().lock().unwrap().allocations.clear();
@@ -1342,6 +1406,8 @@ fn async_spawn_i64_propagates_cancelled_await_status() {
 #[test]
 fn rust_runtime_exports_manifest_native_symbols() {
     let source = include_str!("lib.rs");
+    let test_harness = include_str!("test_harness.rs");
+    let combined = format!("{source}\n{test_harness}");
     let mut checked = HashSet::new();
     let mut missing = Vec::new();
     for entry in stdlib_runtime_functions()
@@ -1350,7 +1416,7 @@ fn rust_runtime_exports_manifest_native_symbols() {
     {
         if checked.insert(entry.runtime_symbol) {
             let needle = format!("fn {}", entry.runtime_symbol);
-            if !source.contains(&needle) {
+            if !combined.contains(&needle) {
                 missing.push(entry.runtime_symbol);
             }
         }

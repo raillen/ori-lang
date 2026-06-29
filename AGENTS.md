@@ -36,7 +36,7 @@ ori-lang/
 ├── branding/                  # Logo and brand assets
 ├── examples/                  # Example Ori programs
 ├── tools/                     # Auxiliary tools
-└── vendor/                    # Vendored dependencies
+└── (vendor/ — reserved for future vendored deps; not created yet)
 ```
 
 ## Convention Matrix
@@ -49,7 +49,7 @@ ori-lang/
 | **Testing** | Always use `ori-testing` skill for new features |
 | **Changelog** | Always update `CHANGELOG.md` with changes |
 | **Bug fixes** | Always add regression test in `compiler/crates/ori-driver/tests/` |
-| **Pre-implementation** | Check `IMPLEMENTATION_CHECKLIST.md` and `IMPLEMENTATION_CHECKLIST_2.md` |
+| **Pre-implementation** | Check `docs/planning/PLANO-MATURIDADE-COMPLETO.md` and `docs/planning/PENDENTES.md` |
 | **Stdlib changes** | Update `stdlib.rs`, `lower.rs` (stdlib_c_name + stdlib_c_func_ty), and changelog |
 | **Documentation** | Keep `spec/` (normative), `planning/` (plans), `_reversa_sdd/` (historical) |
 | **Dedup** | Consolidate documents of same scope, avoid duplication |
@@ -99,6 +99,8 @@ cargo run -p ori-driver -- run <file.orl>
 | `ORI_USE_RUST_LLD=1` | Use rust-lld instead of system linker |
 | `ORI_REQUIRE_PACKAGED_RUNTIME=1` | Validate release package uses only packaged runtime |
 | `UPDATE_EXPECT=1` | Update expected diagnostic outputs in tests |
+| `ORI_TEST_LEAK_CHECK=1` | When set, `ori.test.assert_no_leaks(label)` aborts with a stderr diagnostic if live ARC allocations remain after running the cycle collector. Use in E2E tests to fail fast on memory leaks. |
+| `ORI_COOPERATIVE_COLLECT_THRESHOLD=N` | Number of managed allocations between cooperative cycle collections in the async executor (default 256). Set to a small value in tests to force frequent collection. |
 
 ## Compiler Pipeline
 
@@ -114,11 +116,14 @@ Source (.orl)
   → Binary
 ```
 
-## Current Status (2026-06-03)
+## Current Status (2026-06-29)
 
-- **Rust:** 1.95.0 (via rustup)
+- **Rust:** 1.95.0 (via `rust-toolchain.toml`)
+- **Version:** `0.2.0` (release consolidada — Etapas 0–9 do `PLANO-MATURIDADE-COMPLETO.md` concluídas)
 - **cargo check --workspace:** PASSES cleanly
-- **cargo test --workspace:** PASSES cleanly (100% of tests pass, including advanced structural equality, file handles, and cooperative task cancellation)
+- **cargo test --workspace:** PASSES cleanly (~580 tests, including advanced structural equality, file handles, cooperative task cancellation, async branching, Etapa 5 leak-check plumbing, Etapa 6 LSP cross-file semantics + `project.*` diagnostics, Etapa 7 diagnostic catalog audit, Etapa 8 monolith extractions, and Etapa 9 release smoke with `ORI_REQUIRE_PACKAGED_RUNTIME=1`)
+- **Release smoke:** `tools/smoke_native_release.ps1 -SkipBuild` passes — `ori compile` + `ori test` validados em package isolado com runtime empacotada (Windows MSVC).
+- **Master plan:** `docs/planning/PLANO-MATURIDADE-COMPLETO.md` — Etapas 0–9 concluídas; backlog v2 em Apêndice C (stdlib em `.orl`, paridade C debug para async, mais triples, registry/installer, `ori doc` HTML)
 
 ## Known Pitfalls
 
@@ -128,7 +133,7 @@ Source (.orl)
 
 3. **Runtime config:** `.cargo/config.toml` requires `relocation-model=pic`. `runtime-link.json` requires `-lpthread -ldl -lm -no-pie`.
 
-4. **Diagnostic code prefixes:** MUST match catalog in `docs/spec/13-error-catalog.md`. Use `bind.duplicate_*` (not `name.duplicate_*`), `bind.stdlib_*` for stdlib availability.
+4. **Diagnostic code prefixes:** MUST match catalog in `docs/spec/13-error-catalog.md` (enforced by `diagnostic_catalog_matches_emitted_codes`). Convention: `name.*` for name resolution (`name.undefined`, `name.private`, `name.duplicate` for top-level duplicates); `bind.*` for binding/import/field/param errors (`bind.duplicate_field`, `bind.duplicate_param`, `bind.import_not_found`, `bind.stdlib_module_unknown`, `bind.stdlib_module_unavailable`). `bind.undefined` is a reserved alias only — the emitted code is `name.undefined`.
 
 5. **Ori syntax:** `end`-delimited blocks (not braces). Struct fields and enum variants are newline-separated. Enum variants with named fields use commas inside parens.
 

@@ -14,5 +14,6 @@ Use:
 - `15-stdlib-maintenance.md` for the stdlib update flow.
 - `16-runtime-ffi-safety.md` for runtime FFI safety contracts.
 
-Do not place public tutorials here. User-facing explanations belong in
-`docs/public/` or `docs/reference/`.
+Do not place public tutorials here. User-facing tutorials are planned for a
+future `docs/public/` directory (not yet created). Implementation docs stay in
+`docs/spec/` and `docs/planning/`.

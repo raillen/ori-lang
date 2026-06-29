@@ -1226,15 +1226,9 @@ impl<'a> Checker<'a> {
                 self.pop_scope();
             }
             Stmt::Using(u) => {
-                if self.current_async_depth > 0 {
-                    // TODO: async state machine currently stores the resource
-                    // in the frame (ARC-managed) but does not yet emit the
-                    // dispose call on all terminal paths. The resource WILL
-                    // be freed when the frame is cleaned up, but the Disposable
-                    // trait's dispose method won't be called automatically.
-                    // This is safe for memory but may leak non-memory resources
-                    // (file handles, etc.) that rely on dispose for cleanup.
-                }
+                // Native async codegen emits `dispose()` via `emit_scope_cleanup_calls_from`
+                // and `emit_async_frame_dispose_live_values` on all terminal paths (return,
+                // propagate, cancel, fail). See `emit_async_terminal_cleanup` in native_backend.
                 let ann_ty = self.lower(&u.ty, tp);
                 self.check_collection_runtime_limits(&ann_ty, u.ty.span());
                 let val_ty = self.infer_expr(&u.value);
@@ -3196,8 +3190,8 @@ impl<'a> Checker<'a> {
         let (params, ret) = stdlib_func_sig(path)?;
         let params: Vec<Ty> = params.into_iter().map(|p| self.replace_json_placeholder(p)).collect();
         let ret = self.replace_json_placeholder(ret);
-        // Warn if this stdlib function lacks native runtime support.
-        if !crate::stdlib::stdlib_native_runtime_available(path) {
+        // Warn if this stdlib function lacks native codegen support.
+        if !crate::stdlib::stdlib_native_codegen_available(path) {
             self.sink.emit(
                 Diagnostic::warning(
                     "bind.stdlib_module_unavailable",

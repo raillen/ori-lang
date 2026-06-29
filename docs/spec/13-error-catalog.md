@@ -175,8 +175,6 @@ when the compiler starts producing it.
 | `bind.duplicate_param` | error | Function, method, or signature parameter is declared more than once |
 | `bind.duplicate_variant` | error | Enum variant is declared more than once |
 | `bind.import_ambiguous` | error | Import path matches more than one file |
-| `bind.import_cycle` | error | Local imports form a cycle |
-| `bind.import_namespace_mismatch` | error | Imported file declares a different namespace |
 | `bind.import_not_found` | error | Imported namespace could not be resolved to a file |
 | `bind.self_outside_method` | error | `self` is used outside method scope |
 | `bind.shadowing` | error | Binding shadows another binding in the same scope |
@@ -203,6 +201,10 @@ when the compiler starts producing it.
 | `doc.param_name_mismatch` | warning | Documentation `@param` tag names a parameter that does not exist on the documented function |
 
 ### `name`
+
+Name-resolution diagnostics. The `name.*` prefix covers undefined, private, and
+top-level duplicate names. Binding-specific duplicates (fields, params, variants,
+aliases) use the `bind.*` prefix instead — see the `bind` section below.
 
 | Code | Severity | Description |
 |---|---|---|
@@ -267,6 +269,19 @@ when the compiler starts producing it.
 | `extern.managed_type_in_ffi` | error | `extern` member uses an Ori-managed type at the raw FFI boundary |
 | `extern.unknown_abi` | error | `extern` block names an unsupported ABI |
 
+### `project`
+
+Project-level diagnostics emitted while loading the entry file and its
+transitive imports. The `project.*` namespace consolidates configuration and
+import-graph failures that span more than one source file.
+
+| Code | Severity | Description |
+|---|---|---|
+| `project.circular_import` | error | Local imports form a cycle |
+| `project.namespace_file_mismatch` | error | Imported file declares a different namespace |
+| `project.entry_not_found` | error | Project entrypoint declared in `ori.proj` does not exist, or the manifest is missing an `entry` key |
+| `project.no_proj_file` | error | Project manifest (`ori.proj`) was not found at the workspace root |
+
 ---
 
 ## Planned Or Reserved Diagnostics
@@ -274,31 +289,48 @@ when the compiler starts producing it.
 These codes are documented for future work or for runtime/tooling contracts.
 They are not emitted by the compiler today.
 
-| Code | Intended severity | Status |
+### Reserved aliases
+
+Each code below is a reserved alias. The compiler emits the more specific
+code listed in the "Emitted as" column instead. Tools that match on
+diagnostic codes should accept the alias for compatibility, but the
+compiler will not produce it.
+
+| Code | Intended severity | Emitted as |
 |---|---|---|
-| `bind.undefined` | error | reserved alias; emitted code is `name.undefined` |
-| `contract.check_failure` | runtime panic | runtime contract reporting |
-| `contract.field_violation` | runtime panic | runtime contract reporting |
-| `contract.param_violation` | runtime panic | runtime contract reporting |
-| `doc.unclosed_block` | error | planned documentation/comment lexer work |
-| `generic.ambiguous_type_arg` | error | planned generic diagnostics |
-| `match.guard_not_exhaustive` | warning | planned match diagnostics |
-| `project.circular_import` | error | planned project-level diagnostic |
-| `project.entry_not_found` | error | planned project-level diagnostic |
-| `project.namespace_file_mismatch` | warning | planned project-level diagnostic |
-| `project.no_proj_file` | error | planned project-level diagnostic |
-| `type.ambiguous_generic` | error | planned generic diagnostic alias |
-| `type.annotation_required` | error | planned inference diagnostic |
-| `type.callable_mismatch` | error | reserved alias; emitted calls use `type.arg_*` |
-| `type.constraint_not_satisfied` | error | reserved alias; emitted code is `generic.constraint_not_satisfied` |
-| `type.incompatible_result_error` | error | reserved alias; emitted code is `type.propagate_err_mismatch` |
-| `type.index_non_indexable` | error | reserved alias; emitted code is `type.not_indexable` |
-| `type.invalid_is_check` | error | reserved alias; emitted code is `type.is_target_not_type` |
-| `type.mismatch` | error | reserved alias; emitted code is `type.type_mismatch` |
-| `type.propagation_context` | error | reserved alias; emitted propagation codes are more specific |
-| `type.undefined` | error | reserved alias; emitted code is `type.undefined_name` |
-| `using.non_result_init` | error | planned `using` diagnostic |
-| `async.using_unsupported` | error | reserved; previously emitted when `using` was rejected in async; now allowed with TODO cleanup |
+| `bind.undefined` | error | `name.undefined` |
+| `type.callable_mismatch` | error | `type.arg_count_mismatch` / `type.arg_type_mismatch` |
+| `type.constraint_not_satisfied` | error | `generic.constraint_not_satisfied` |
+| `type.incompatible_result_error` | error | `type.propagate_err_mismatch` |
+| `type.index_non_indexable` | error | `type.not_indexable` |
+| `type.invalid_is_check` | error | `type.is_target_not_type` |
+| `type.mismatch` | error | `type.type_mismatch` |
+| `type.propagation_context` | error | `type.propagate_*` (more specific) |
+| `type.undefined` | error | `type.undefined_name` |
+
+The code `async.using_unsupported` is **obsolete** — `using` inside `async func`
+is now allowed. Do not emit this diagnostic.
+
+---
+
+## Removed From v1 Catalog (Audited 2026-06-29)
+
+The following codes were listed as planned in earlier catalog revisions.
+The Etapa 7 nomenclature audit determined that each is either redundant
+with an existing emitted code, not applicable to Ori's explicitly-typed
+design, or deferred to v2. They are no longer tracked as planned.
+
+| Code | Reason for removal |
+|---|---|
+| `contract.check_failure` | Runtime contract checking is not implemented in v1; deferred to v2. Compiler does not emit; runtime does not use the code string. |
+| `contract.field_violation` | Same as `contract.check_failure` — runtime-only, deferred to v2. |
+| `contract.param_violation` | Same as `contract.check_failure` — runtime-only, deferred to v2. |
+| `doc.unclosed_block` | Redundant with `lex.unclosed_block_comment`, which already covers unclosed `--| ... |--` block comments. Doc comments use the same delimiter syntax. |
+| `generic.ambiguous_type_arg` | Ambiguous type argument inference is reported via `type.type_mismatch` when inference fails; a dedicated code is deferred to v2. |
+| `match.guard_not_exhaustive` | Guard exhaustiveness analysis is not implemented in v1; `match.non_exhaustive` covers unguarded cases. Guarded exhaustiveness deferred to v2. |
+| `type.ambiguous_generic` | Alias for existing generic diagnostics (`type.type_mismatch`, `generic.constraint_not_satisfied`); no separate emission needed. |
+| `type.annotation_required` | Ori is explicitly typed; type annotations are enforced by the grammar (`parse.expected_type`), not by an inference diagnostic. Not applicable. |
+| `using.non_result_init` | `using` accepts any `Disposable` value; non-disposable inits are reported by `using.not_disposable`. The `result`-specific variant is not part of the v1 `using` contract. |
 
 ---
 

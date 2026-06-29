@@ -131,8 +131,66 @@ Todas as coleções listadas abaixo estão integradas com o type-checker, possue
 
 ---
 
-## 10. Bugs e Ajustes Críticos Resolvidos (Fase 0)
+## 11. Etapa 2 — Sistema de Tipos Avançado (2026-06)
+
+- **Igualdade dinâmica (`any<Trait>`)**: `==` / `!=` via vtable lookup no runtime nativo quando o trait constraint permite igualdade.
+- **Associated types**: declaração `type Item` em traits; validação no checker e resolução na monomorfização.
+- **Const generics**: parâmetros genéricos de constante (ex.: tamanhos fixos) aceitos pelo parser e checker.
+- **Higher-kinded types (HKT)**: tipos genéricos parametrizados por construtores de tipo, com constraints avançadas.
+- **Igualdade em coleções opacas**: `deque`, `queue`, `stack`, `linked_list`, etc. comparáveis quando elementos suportam `Equatable`.
+- **Propagação estática de traits**: `list<T> is Equatable` somente se `T is Equatable`.
+- **Iteradores lazy**: interface lazy para estruturas opacas sem snapshot completo (`to_list()`).
+- **JSON estruturado**: `json.Value` como enum recursivo (`Null`, `Bool`, `Number`, `String`, `Array`, `Object`) com parse/stringify nativos.
+
+---
+
+## 12. Bugs e Ajustes Críticos Resolvidos (Fase 0)
 
 - **Bug 0.1 (Heap)**: Resolvido o problema de ordenação incorreta de elementos no custom min-heap devido ao registro tardio de arestas ARC (`ori_arc_register_edge` invocado corretamente antes de `heap_push_raw`).
 - **Bug 0.2 (Iterable)**: Corrigido o avanço incorreto de iteradores customizados em loops `for` nativos (injetando retenção e liberação corretas no cabeçalho do loop).
 - **Bug 0.3 (Git)**: Limpeza de objetos inacessíveis no repositório executada com sucesso.
+
+---
+
+## 13. Release v0.2.0 — Snapshot (2026-06-29)
+
+Snapshot completo do que entra na release `v0.2.0` (Etapa 9 do `PLANO-MATURIDADE-COMPLETO.md`). Esta release consolida as Etapas 0–8 (estabilização do workspace, features bloqueadoras, sistema de tipos avançado, sync documental normativa, dívida técnica do compilador, runtime/ARC, LSP semântico cross-file, catálogo de diagnósticos auditado, organização/infra/qualidade).
+
+### Componentes versionados
+
+- **Workspace version:** `0.2.0` (`Cargo.toml [workspace.package]`); todos os 10 crates usam `version.workspace = true`.
+- **Runtime ABI:** `ori-native-abi-1` (`ORI_ABI_VERSION` em `ori-runtime/src/lib.rs`).
+- **Rust toolchain:** `1.95.0` via `rust-toolchain.toml` (canal + `rustfmt` + `clippy`).
+
+### Binários de release (Windows MSVC, build desta release)
+
+| Artefato | Profile | Tamanho |
+|----------|---------|---------|
+| `ori.exe` (compilador) | release | ~9.65 MB |
+| `ori-lsp.exe` (LSP server) | release | ~11.83 MB |
+| `ori_runtime.lib` (Win MSVC) | release | ~12.76 MB |
+
+### Validação de release
+
+- **Smoke de package:** `tools/smoke_native_release.ps1 -SkipBuild` passa com `ORI_REQUIRE_PACKAGED_RUNTIME=1` — `ori compile` (hello_world.orl + async_demo.orl) e `ori test` (package_smoke_test.orl com `@test` sync + async) validados em package isolado.
+- **Testes workspace:** `cargo test --workspace` verde — ~580 testes, 0 falhas, 2 `#[ignore]` documentados (await em loops aninhados, cycle stress 10k).
+- **Catálogo de diagnósticos:** `cargo test -p ori-driver --test diagnostic_catalog` verde (consistência bidirecional emitted×catalog + guarda contra reintrodução de códigos removidos).
+- **LSP E2E:** `cargo test -p ori-lsp` verde — 8 testes E2E + testes unitários (cross-file goto-def, type-aware dot completion, cross-file find-references, circular import diagnostic, formatting idempotency).
+
+### CI
+
+- **Pipeline:** `native-route.yml` define jobs para 5 triples: windows-msvc, windows-gnu, linux-gnu, macos-x86_64, macos-aarch64. Execução no CI remoto pendente de push (não executado automaticamente nesta release).
+
+### Known Issues (não bloqueadoras, documentadas)
+
+1. **Async em loops aninhados:** `await` no corpo interno de `for { while { await } }` aciona o general async path que produz IR Cranelift inválido (verifier error: SSA dominance). Loops single-level com await funcionam. Teste `compile_runs_async_await_in_deeply_nested_bodies_native` marcado `#[ignore]` documenta o caso.
+2. **Formatter:** `trait` declarations quebram indentação de itens top-level subsequentes (consome `end` do trait como `end` de método). Constructs async/concurrency não são afetados (formatter idempotente para eles).
+
+### Backlog v2 (não entra nesta release)
+
+- Stdlib escrita em `.orl` com bootstrap gradual (hoje embutida em Rust manifesto `STDLIB_RUNTIME_FUNCTIONS`).
+- Paridade C debug para async/concurrency (ou deprecar C backend).
+- Suporte a triples adicionais além dos 5 do CI.
+- Publicação em registry / instalador.
+- `ori doc` com output HTML estático.
+- Bundle `rust-lld` no release package para eliminar dependência de Rust toolchain no `ori compile` (ver discussão em `PLANO-MATURIDADE-COMPLETO.md` Etapa 9 + resposta de arquitetura sobre "transpiler vs compilador").

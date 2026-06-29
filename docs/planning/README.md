@@ -6,7 +6,12 @@ This directory contains all documentation for the Ori programming language.
 
 ```
 docs/
-├── CHANGELOG.md                              # Histórico de mudanças
+```
+
+Changelog na **raiz** do repositório: `CHANGELOG.md`
+
+```
+docs/
 ├── plano-correcao-bugs-2026-05-17.md         # Plano de correção de bugs atuais
 ├── plano-implementacao-lsp-avancado.md       # Plano de implementação do LSP
 ├── spec/                                     # Especificação formal (normativa)
@@ -29,9 +34,15 @@ docs/
 │   └── 16-runtime-ffi-safety.md              # Segurança FFI do runtime
 ├── planning/                                 # Planos de implementação
 │   ├── README.md                             # Este índice
+│   ├── PLANO-MATURIDADE-COMPLETO.md          # Plano mestre (correções, melhorias, gates)
 │   ├── IMPLEMENTADOS.md                      # Recursos implementados e resolvidos
-│   └── PENDENTES.md                          # Recursos pendentes e plano de correções com checkboxes
-└── _reversa_sdd/                             # Arquivo histórico de auditorias
+│   └── PENDENTES.md                          # Backlog resumido por fases (Etapas 1–6)
+```
+
+Histórico de auditorias (raiz do repositório, **não** sob `docs/`):
+
+```
+_reversa_sdd/                                 # Arquivo histórico de auditorias
     ├── auditoria-profunda-implementacao-2026-05-17.md  # Auditoria mais recente
     ├── auditoria-profunda-implementacao-linguagem-2026-05-13.md
     ├── analise-profunda-implementacao-linguagem.md
@@ -49,8 +60,9 @@ Status: 16 chapters, covering the complete language contract.
 ## Planning Status
 
 The `planning/` directory tracks implementation progress and technical decisions:
+- `PLANO-MATURIDADE-COMPLETO.md` — **master plan** with mandatory checkboxes, tests, and gate criteria per stage (start here for full roadmap).
 - `IMPLEMENTADOS.md` — tracks what has been built, tested, and resolved (Cranelift compiler, stdlib, collections v1, concurrency and basic async).
-- `PENDENTES.md` — tracks remaining features, bugs, and advanced compiler/runtime enhancements structured as a sequential phase plan.
+- `PENDENTES.md` — condensed phase backlog (Etapas 1–6); kept in sync with the master plan.
 
 The `_reversa_sdd/` directory contains historical audit reports. The most recent
 is `auditoria-profunda-implementacao-2026-05-17.md`.
@@ -59,13 +71,15 @@ is `auditoria-profunda-implementacao-2026-05-17.md`.
 
 | Document | Purpose | Status |
 |---|---|---|
-| `docs/planning/PENDENTES.md` | Sequential phase-based backlog & bug fixes | In progress |
-| `docs/plano-implementacao-lsp-avancado.md` | LSP advanced features | Planned |
+| `docs/planning/PLANO-MATURIDADE-COMPLETO.md` | Master plan: fixes, improvements, gates | **Active — Etapa 0** |
+| `docs/planning/PENDENTES.md` | Condensed phase backlog | In progress (Etapas 3–6 open) |
+| `docs/plano-implementacao-lsp-avancado.md` | LSP advanced features | **Historical** — see Etapa 6 of master plan |
 
 ## Key Documents for Contributors
 
 1. **Spec:** `docs/spec/01-overview.md` — start here for language design
 2. **Architecture:** `docs/spec/14-backend-support.md` — backend architecture
 3. **Implementation:** `docs/planning/IMPLEMENTADOS.md` — what's built
-4. **Bugs & Backlog:** `docs/planning/PENDENTES.md` — current pending checklist
-5. **Changelog:** `CHANGELOG.md` — project history
+4. **Master plan:** `docs/planning/PLANO-MATURIDADE-COMPLETO.md` — full roadmap with test gates
+5. **Bugs & Backlog:** `docs/planning/PENDENTES.md` — condensed pending checklist
+6. **Changelog:** `CHANGELOG.md` (repo root) — project history

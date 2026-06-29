@@ -1,3 +1,6 @@
+> **Histórico — não usar como backlog ativo.**  
+> Para o roadmap atual, veja [`docs/planning/PLANO-MATURIDADE-COMPLETO.md`](planning/PLANO-MATURIDADE-COMPLETO.md).
+
 # Plano de Correção — Bugs Remanescentes da Implementação Ori
 
 Data: 2026-05-17

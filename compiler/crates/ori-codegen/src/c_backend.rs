@@ -1229,6 +1229,22 @@ static inline void ori_test_fail(ori_string_t message) {
     abort();
 }
 
+static inline int64_t ori_test_live_allocations(void) {
+    /* Native runtime only; C debug backend has no ARC registry.
+       Return 0 so test programs that call this on the C route do not fail. */
+    return 0;
+}
+
+static inline int64_t ori_test_collect_cycles(void) {
+    /* Native runtime only; C debug backend frees via explicit drop calls. */
+    return 0;
+}
+
+static inline int64_t ori_test_assert_no_leaks(ori_string_t label) {
+    (void)label;
+    return 0;
+}
+
 /* Iterator signatures for opaque collections */
 void* ori_deque_iterator_new(void* deque);
 int64_t* ori_deque_iterator_next(void* iter);

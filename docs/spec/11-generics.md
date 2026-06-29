@@ -206,11 +206,55 @@ alias Callback<T> = func(T) -> bool
 
 ## Limitations in v1
 
-The following generic features are not supported in Ori v1:
+The following generic features are **supported** in the current compiler.
 
-- **Higher-kinded types** (type constructors as type parameters): `trait Functor<F<_>>` — not supported.
-- **Associated types** in traits: `trait Iterator { type Item }` - not supported. Use `core.Iterable` as a marker trait and implement `mut func next() -> optional<T>` on the concrete type. The item type is inferred from `next`.
-- **Const generics** (type parameters that are values): `struct Matrix<const N: int>` — not supported.
-- **Variadic type parameters**: `tuple<T...>` — not supported; use `tuple<A, B, ...>` with fixed arity.
+### Associated types in traits
 
-These may be added in future versions via explicit design decisions.
+A trait may declare an associated `type` member that is resolved at
+monomorphization time:
+
+```ori
+trait Container
+    type Item
+    func get(self) -> Item
+end
+```
+
+### Const generics
+
+A struct may take a compile-time integer constant as a type parameter:
+
+```ori
+struct Matrix<const N: int>
+    value: int
+end
+```
+
+### Higher-kinded types (HKT)
+
+Type constructors may appear as type parameters in constrained forms:
+
+```ori
+trait Functor<F<_>>
+    func fmap<A, B>(fa: F<A>, f: func(A) -> B) -> F<B>
+end
+```
+
+### Not supported in v1
+
+- **Variadic type parameters**: `tuple<T...>` — not supported; use
+  `tuple<A, B, ...>` with fixed arity.
+
+These may be extended in future versions via explicit design decisions.
+
+### Sanity tests
+
+The syntax above is verified by `ori check` in `ori_spec.rs`:
+
+- `generic_accepts_associated_type_in_trait` — `type Item` in a trait.
+- `generic_accepts_const_generic_param` — `struct Matrix<const N: int>`.
+- `generic_accepts_hkt` — `trait Functor<F<_>>`.
+- `generic_accepts_where_constraint` — `where T is Comparable`.
+- `generic_accepts_negative_constraint` — `where T is not Disposable`.
+- `generic_accepts_generic_struct` — `struct Pair<A, B>`.
+- `generic_accepts_type_inference` — type argument inferred from call site.

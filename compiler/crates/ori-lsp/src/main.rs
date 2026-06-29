@@ -3,6 +3,7 @@ mod index;
 mod utils;
 
 use index::project::ProjectManager;
+use index::project_semantic::ProjectSemanticIndex;
 use index::semantic::{CompletionContext, SemanticIndex, SemanticSymbol};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -60,15 +61,52 @@ impl Backend {
         };
         let mut diagnostics = match result {
             Ok(output) => {
-                if let Some(target) = &path {
-                    handlers::diagnostics::diagnostics_for_path(
+                let diags = if let Some(target) = &path {
+                    let mut d = handlers::diagnostics::diagnostics_for_path(
                         &output.cache, &output.diagnostics, target,
-                    )
+                    );
+                    // Etapa 6.5: surface project-level diagnostics (e.g.
+                    // circular imports) whose label sits on another file so
+                    // the user sees them on the file they are editing.
+                    d.extend(handlers::diagnostics::project_diagnostics_for_path(
+                        &output.cache,
+                        &output.diagnostics,
+                        target,
+                    ));
+                    d
                 } else {
                     Vec::new()
+                };
+                // Capture the cross-file semantic index (Etapa 6.1) so that
+                // hover / go-to-definition / completion / find-references can
+                // resolve symbols across imports. The index is rebuilt on
+                // every successful `run_check_source`, which is debounced for
+                // `didChange` and immediate for `didOpen` / `didSave`.
+                if let Some(target) = &path {
+                    let active_path =
+                        std::fs::canonicalize(target).unwrap_or_else(|_| target.to_owned());
+                    let index = ProjectSemanticIndex::new(
+                        output.resolved,
+                        output.cache,
+                        active_path,
+                    );
+                    self.project
+                        .write()
+                        .await
+                        .upsert_semantic_index(uri.clone(), index);
+                }
+                diags
+            }
+            Err(message) => {
+                // Etapa 6.5: surface known project-configuration failures
+                // under structured `project.*` codes; fall back to a generic
+                // file error for anything else.
+                if let Some(diag) = handlers::diagnostics::project_error_diagnostic(&message) {
+                    vec![diag]
+                } else {
+                    vec![handlers::diagnostics::file_error_diagnostic(message)]
                 }
             }
-            Err(message) => vec![handlers::diagnostics::file_error_diagnostic(message)],
         };
         if let Some(ref src) = source {
             let config = handlers::lint::LintConfig::default();
@@ -116,16 +154,44 @@ impl Backend {
             };
             let diagnostics = match result {
                 Ok(output) => {
-                    if let Some(target) = &path {
-                        handlers::diagnostics::diagnostics_for_path(
+                    let diags = if let Some(target) = &path {
+                        let mut d = handlers::diagnostics::diagnostics_for_path(
                             &output.cache, &output.diagnostics, target,
-                        )
+                        );
+                        d.extend(handlers::diagnostics::project_diagnostics_for_path(
+                            &output.cache,
+                            &output.diagnostics,
+                            target,
+                        ));
+                        d
                     } else {
                         Vec::new()
+                    };
+                    // Capture the cross-file semantic index (Etapa 6.1).
+                    if let Some(target) = &path {
+                        let active_path =
+                            std::fs::canonicalize(target).unwrap_or_else(|_| target.to_owned());
+                        let index = ProjectSemanticIndex::new(
+                            output.resolved,
+                            output.cache,
+                            active_path,
+                        );
+                        project
+                            .write()
+                            .await
+                            .upsert_semantic_index(uri.clone(), index);
                     }
+                    diags
                 }
                 Err(message) => {
-                    vec![handlers::diagnostics::file_error_diagnostic(message)]
+                    // Etapa 6.5: map known project failures to `project.*`.
+                    if let Some(diag) =
+                        handlers::diagnostics::project_error_diagnostic(&message)
+                    {
+                        vec![diag]
+                    } else {
+                        vec![handlers::diagnostics::file_error_diagnostic(message)]
+                    }
                 }
             };
             client
@@ -147,6 +213,15 @@ impl Backend {
                 .unwrap_or_else(|| SemanticIndex::build(&source))
         };
         Some((source, index))
+    }
+
+    /// Fetch the cross-file `ProjectSemanticIndex` snapshot for `uri`, if one
+    /// has been produced by a successful `run_check_source` since the last
+    /// edit. Used by hover / go-to-definition / completion / find-references
+    /// to resolve symbols across imports (Etapa 6.1 / 6.2).
+    async fn get_semantic_index(&self, uri: &Url) -> Option<std::sync::Arc<ProjectSemanticIndex>> {
+        let project = self.project.read().await;
+        project.semantic_index(uri)
     }
 }
 
@@ -230,6 +305,13 @@ impl LanguageServer for Backend {
         if let Some(hover_text) = index.hover(&symbol) {
             return Ok(Some(handlers::hover::markdown_hover(hover_text)));
         }
+        // Etapa 6.1: fall back to the cross-file project semantic index for
+        // symbols resolved by `run_check` (e.g. imported structs/enums/funcs).
+        if let Some(psi) = self.get_semantic_index(&uri).await {
+            if let Some(hover_text) = psi.cross_file_hover(&symbol) {
+                return Ok(Some(handlers::hover::markdown_hover(hover_text)));
+            }
+        }
         Ok(None)
     }
 
@@ -260,6 +342,18 @@ impl LanguageServer for Backend {
                 }
             }
         }
+        // Etapa 6.1: cross-file go-to-definition via the driver's `DefMap`.
+        // Resolves symbols defined in transitively imported files without
+        // needing the import target to be open in the workspace.
+        if let Some(psi) = self.get_semantic_index(&uri).await {
+            if let Some((path, range)) = psi.cross_file_definition(&symbol) {
+                if let Ok(target_uri) = Url::from_file_path(&path) {
+                    return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
+                        target_uri, range,
+                    ))));
+                }
+            }
+        }
         Ok(None)
     }
 
@@ -277,11 +371,34 @@ impl LanguageServer for Backend {
         let Some(symbol) = utils::uri::word_at_position(&source, position) else {
             return Ok(None);
         };
-        let refs = index.find_references(&source, &symbol);
-        let locations: Vec<Location> = refs
+        let mut locations: Vec<Location> = index
+            .find_references(&source, &symbol)
             .into_iter()
             .map(|range| Location::new(uri.clone(), range))
             .collect();
+
+        // Etapa 6.2: cross-file find-references via the driver's
+        // `SourceCache`, scanning every loaded source (entry + transitive
+        // imports) for word-boundary occurrences of the symbol.
+        if let Some(psi) = self.get_semantic_index(&uri).await {
+            for (path, range) in psi.find_references_cross_file(&symbol) {
+                if let Ok(ref_uri) = Url::from_file_path(&path) {
+                    locations.push(Location::new(ref_uri, range));
+                }
+            }
+        }
+
+        // Deduplicate by (uri, range) since the local index and the project
+        // index may both surface the occurrence in the active file.
+        locations.sort_by(|a, b| {
+            a.uri
+                .as_str()
+                .cmp(b.uri.as_str())
+                .then(a.range.start.line.cmp(&b.range.start.line))
+                .then(a.range.start.character.cmp(&b.range.start.character))
+        });
+        locations.dedup_by(|a, b| a.uri == b.uri && a.range == b.range);
+
         if locations.is_empty() {
             Ok(None)
         } else {
@@ -306,8 +423,18 @@ impl LanguageServer for Backend {
         };
 
         match context {
-            CompletionContext::AfterDot { .. } => {
+            CompletionContext::AfterDot { receiver } => {
                 items.extend(handlers::completion::stdlib_completion_items());
+                // Etapa 6.2: type-aware dot completion. Resolve the
+                // receiver's declared type from the active source and list
+                // the type's fields / variants / methods from the resolved
+                // signatures. Falls back gracefully to stdlib-only when the
+                // receiver type cannot be inferred.
+                if let Some((source, _)) = self.get_source_and_index(&uri).await {
+                    if let Some(psi) = self.get_semantic_index(&uri).await {
+                        items.extend(psi.complete_after_dot(&receiver, &source));
+                    }
+                }
             }
             CompletionContext::Import => {
                 items.extend(handlers::completion::stdlib_completion_items());
@@ -666,12 +793,46 @@ impl LanguageServer for Backend {
             });
         }
 
-        if edits.is_empty() {
-            return Ok(None);
+        let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+        if !edits.is_empty() {
+            changes.insert(uri.clone(), edits);
         }
 
-        let mut changes = HashMap::new();
-        changes.insert(uri, edits);
+        // Etapa 6.2: cross-file rename. Include occurrences in transitively
+        // imported files via the project semantic index. The active file is
+        // already covered above; imported files get their own edit buckets.
+        if let Some(psi) = self.get_semantic_index(&uri).await {
+            for (path, range) in psi.find_references_cross_file(&old_name) {
+                if let Ok(ref_uri) = Url::from_file_path(&path) {
+                    if ref_uri == uri {
+                        continue;
+                    }
+                    changes
+                        .entry(ref_uri)
+                        .or_default()
+                        .push(TextEdit {
+                            range,
+                            new_text: new_name.clone(),
+                        });
+                }
+            }
+            // Also jump to the cross-file definition site when it lives in an
+            // imported file, so the binding itself is renamed.
+            if let Some((path, range)) = psi.cross_file_definition(&old_name) {
+                if let Ok(def_uri) = Url::from_file_path(&path) {
+                    if def_uri != uri {
+                        changes.entry(def_uri).or_default().push(TextEdit {
+                            range,
+                            new_text: new_name.clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        if changes.is_empty() {
+            return Ok(None);
+        }
 
         Ok(Some(WorkspaceEdit {
             changes: Some(changes),

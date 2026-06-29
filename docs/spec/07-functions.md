@@ -49,8 +49,9 @@ Rules:
 - `await` requires `expr` to have type `future<T>` and produces `T`.
 - `async func main()` is allowed in the native backend. The generated entry
   point waits for its returned future through the native executor.
-- `using` is rejected inside `async func` until cleanup across suspension is
-  specified and implemented safely.
+- `using` is allowed inside `async func`. Resources are stored in the async
+  frame and `dispose()` runs on scope exit. Full coverage of every terminal path
+  (cancellation, early exit) is tracked in the implementation master plan.
 
 Implementation status:
 - The native runtime has pollable futures, failed/cancelled internal states,
@@ -67,9 +68,8 @@ Implementation status:
 - Failed and cancelled future states observed by the state machine are
   propagated by generated async wrappers instead of becoming silent default
   values.
-- Public cancellation tokens are not part of the v1 language surface. Failed
-  and cancelled future states are runtime-internal until a public cancellation
-  API is specified.
+- Public cooperative cancellation via `task.CancelToken` (`create_token`,
+  `cancel`, `is_cancelled`, `associate`).
 
 ---
 

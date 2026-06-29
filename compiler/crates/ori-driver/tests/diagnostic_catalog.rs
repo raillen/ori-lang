@@ -54,6 +54,30 @@ fn diagnostic_catalog_matches_emitted_codes() {
     if !planned_unused.is_empty() {
         eprintln!("planned/reserved diagnostic codes not emitted today: {planned_unused:#?}");
     }
+
+    // Etapa 7 nomenclature audit: codes explicitly removed from the v1
+    // catalog must not reappear as planned. Each removed code is redundant,
+    // not applicable, or deferred to v2 with documented justification in
+    // `docs/spec/13-error-catalog.md`.
+    let removed_in_audit: BTreeSet<String> = [
+        "contract.check_failure",
+        "contract.field_violation",
+        "contract.param_violation",
+        "doc.unclosed_block",
+        "generic.ambiguous_type_arg",
+        "match.guard_not_exhaustive",
+        "type.ambiguous_generic",
+        "type.annotation_required",
+        "using.non_result_init",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    let reintroduced: Vec<_> = catalog_planned.intersection(&removed_in_audit).cloned().collect();
+    assert!(
+        reintroduced.is_empty(),
+        "diagnostic codes removed in Etapa 7 audit reappeared as planned: {reintroduced:#?}"
+    );
 }
 
 fn repo_root() -> PathBuf {

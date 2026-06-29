@@ -439,6 +439,9 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.test.assert_eq", ["test.assert_eq"] => "ori_test_assert_eq", c_backend),
     stdlib!("ori.test.assert_ne", ["test.assert_ne"] => "ori_test_assert_ne", c_backend),
     stdlib!("ori.test.fail", ["test.fail"] => "ori_test_fail", c_backend),
+    stdlib!("ori.test.live_allocations", ["test.live_allocations"] => "ori_test_live_allocations"),
+    stdlib!("ori.test.collect_cycles", ["test.collect_cycles"] => "ori_test_collect_cycles"),
+    stdlib!("ori.test.assert_no_leaks", ["test.assert_no_leaks"] => "ori_test_assert_no_leaks"),
     stdlib!("ori.panic" => "ori_panic"),
     stdlib!("ori.list.pop", ["list.pop"] => "ori_list_pop"),
     stdlib!("ori.list.try_pop", ["list.try_pop"] => "ori_list_try_pop"),
@@ -606,12 +609,23 @@ pub fn stdlib_runtime_symbol(path: &str) -> Option<&'static str> {
     stdlib_entry_for_path(path).map(|entry| entry.runtime_symbol)
 }
 
-/// Returns true if the given stdlib path has native runtime support.
-/// Functions without native runtime will fail at codegen/link time.
+/// Returns true if the given stdlib path has native runtime FFI support.
 pub fn stdlib_native_runtime_available(path: &str) -> bool {
     stdlib_entry_for_path(path)
         .map(|entry| entry.native_runtime)
         .unwrap_or(false)
+}
+
+/// Returns true if the native Cranelift backend can codegen this stdlib call.
+/// Some functions (e.g. `lazy.once`) use inline codegen instead of runtime FFI.
+pub fn stdlib_native_codegen_available(path: &str) -> bool {
+    if stdlib_native_runtime_available(path) {
+        return true;
+    }
+    matches!(
+        canonical_stdlib_path(path).unwrap_or(path),
+        "ori.lazy.once" | "ori.lazy.force"
+    )
 }
 
 pub fn canonical_stdlib_path(path: &str) -> Option<&'static str> {
@@ -751,6 +765,9 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.test.assert" => (vec![Ty::Bool, Ty::String], Ty::Void),
         "ori.test.assert_eq" | "ori.test.assert_ne" => (vec![Ty::Infer(0), Ty::Infer(0)], Ty::Void),
         "ori.test.fail" => (vec![Ty::String], Ty::Never),
+        "ori.test.live_allocations" => (vec![], Ty::Int),
+        "ori.test.collect_cycles" => (vec![], Ty::Int),
+        "ori.test.assert_no_leaks" => (vec![Ty::String], Ty::Int),
         "ori.panic" => (vec![Ty::String], Ty::Never),
         "ori.list.new" => (vec![], Ty::List(Box::new(Ty::Infer(0)))),
         "ori.list.push" => (
@@ -1695,6 +1712,9 @@ pub fn stdlib_native_abi(
         "ori_test_assert" => (vec![I8, Ptr], None),
         "ori_test_assert_eq" | "ori_test_assert_ne" => (vec![I64, I64], None),
         "ori_test_fail" => (vec![Ptr], None),
+        "ori_test_live_allocations" => (vec![], Some(I64)),
+        "ori_test_collect_cycles" => (vec![], Some(I64)),
+        "ori_test_assert_no_leaks" => (vec![Ptr], Some(I64)),
         "ori_panic" => (vec![Ptr], None),
         "ori_files_write_text" | "ori_files_write_text_async" | "ori_files_write_bytes" => {
             (vec![Ptr, Ptr], Some(Ptr))
@@ -1719,6 +1739,83 @@ pub fn stdlib_entry_for_path(path: &str) -> Option<&'static StdlibRuntimeFunctio
     STDLIB_RUNTIME_FUNCTIONS
         .iter()
         .find(|entry| entry.canonical_path == path || entry.aliases.contains(&path))
+}
+
+/// Stdlib paths that are importable as modules but have no runtime function
+/// entry in `STDLIB_RUNTIME_FUNCTIONS`. There are three reasons a module lives
+/// here instead of the manifest:
+///
+/// - Types or traits registered directly in the `DefMap`
+///   (e.g. `ori.Error` struct, `ori.core.Hashable` trait, the `ori` root).
+/// - Inline codegen intrinsics with no runtime FFI symbol
+///   (e.g. `ori.mem.size_of` / `ori.mem.align_of` compile to constants).
+/// - Umbrella modules that only re-export other modules' APIs
+///   (e.g. `ori.concurrent` points to `ori.task`, `ori.channel`,
+///   `ori.atomic`).
+///
+/// This list is the only hand-maintained addition to the manifest-derived
+/// module set; keep it small and document why each entry cannot be derived
+/// from `STDLIB_RUNTIME_FUNCTIONS`.
+const STDLIB_MODULE_ONLY_PATHS: &[&str] = &[
+    "ori",
+    "ori.core",
+    "ori.Error",
+    "ori.mem",
+    "ori.concurrent",
+];
+
+/// Extracts the module prefix from a canonical stdlib path.
+/// `"ori.io.print"` -> `Some("ori.io")`. Returns `None` for unqualified names
+/// like `"string"` or `"len"` that have no module component.
+fn module_of_canonical_path(canonical: &str) -> Option<&str> {
+    canonical.rsplit_once('.').map(|(module, _)| module)
+}
+
+/// Returns true if `import` is an implemented `ori.*` module path.
+///
+/// This is the single source of truth for stdlib import classification,
+/// derived from `STDLIB_RUNTIME_FUNCTIONS` plus `STDLIB_MODULE_ONLY_PATHS`.
+/// Module prefixes come from both canonical paths and `ori.*` aliases, so
+/// compatibility aliases like `ori.files` (alias of `ori.fs`) are accepted.
+/// Callers (e.g. `classify_stdlib_import` in the driver) must not keep
+/// parallel hardcoded module lists.
+pub fn is_implemented_stdlib_module(import: &str) -> bool {
+    if STDLIB_MODULE_ONLY_PATHS.contains(&import) {
+        return true;
+    }
+    STDLIB_RUNTIME_FUNCTIONS.iter().any(|entry| {
+        module_of_canonical_path(entry.canonical_path) == Some(import)
+            || entry
+                .aliases
+                .iter()
+                .filter(|alias| alias.starts_with("ori."))
+                .any(|alias| module_of_canonical_path(alias) == Some(import))
+    })
+}
+
+/// Returns the sorted list of implemented `ori.*` module paths, derived from
+/// the manifest plus the module-only allowlist. Module prefixes come from
+/// both canonical paths and `ori.*` aliases, so compatibility aliases like
+/// `ori.files` are included. Useful for diagnostics, documentation, and
+/// parity tests.
+pub fn implemented_stdlib_modules() -> Vec<&'static str> {
+    let mut modules: std::collections::BTreeSet<&'static str> = STDLIB_MODULE_ONLY_PATHS
+        .iter()
+        .copied()
+        .collect();
+    for entry in STDLIB_RUNTIME_FUNCTIONS {
+        if let Some(module) = module_of_canonical_path(entry.canonical_path) {
+            modules.insert(module);
+        }
+        for alias in entry.aliases {
+            if alias.starts_with("ori.") {
+                if let Some(module) = module_of_canonical_path(alias) {
+                    modules.insert(module);
+                }
+            }
+        }
+    }
+    modules.into_iter().collect()
 }
 
 #[cfg(test)]
@@ -1785,5 +1882,188 @@ mod tests {
             missing_native_abi.is_empty(),
             "stdlib manifest entries missing native ABI metadata: {missing_native_abi:#?}"
         );
+    }
+
+    /// Spec cap. 12 sanity check: the documented `ori.fs.File` and `ori.json`
+    /// contracts must match the actual `stdlib_func_sig` return values. This
+    /// guards against the spec drifting from the implementation.
+    #[test]
+    fn spec_fs_and_json_contracts_match_stdlib_sig() {
+        // fs.open_read / fs.open_write: (string) -> result<File, string>
+        for path in ["ori.fs.open_read", "ori.fs.open_write"] {
+            let (params, ret) = stdlib_func_sig(path).expect("fs file open sig");
+            assert_eq!(params, vec![Ty::String], "{path} params");
+            assert_eq!(
+                ret,
+                Ty::Result(Box::new(file_ty()), Box::new(Ty::String)),
+                "{path} return"
+            );
+        }
+
+        // fs.read: (File, int) -> result<bytes, string>
+        let (params, ret) = stdlib_func_sig("ori.fs.read").expect("fs.read sig");
+        assert_eq!(params, vec![file_ty(), Ty::Int], "fs.read params");
+        assert_eq!(
+            ret,
+            Ty::Result(Box::new(Ty::Bytes), Box::new(Ty::String)),
+            "fs.read return"
+        );
+
+        // fs.write: (File, bytes) -> result<int, string>
+        let (params, ret) = stdlib_func_sig("ori.fs.write").expect("fs.write sig");
+        assert_eq!(params, vec![file_ty(), Ty::Bytes], "fs.write params");
+        assert_eq!(
+            ret,
+            Ty::Result(Box::new(Ty::Int), Box::new(Ty::String)),
+            "fs.write return"
+        );
+
+        // fs.close: (File) -> void
+        let (params, ret) = stdlib_func_sig("ori.fs.close").expect("fs.close sig");
+        assert_eq!(params, vec![file_ty()], "fs.close params");
+        assert_eq!(ret, Ty::Void, "fs.close return");
+
+        // json.parse: (string) -> result<Value, string>
+        let json_value = Ty::Named(JSON_VALUE_PLACEHOLDER, Vec::new());
+        let (params, ret) = stdlib_func_sig("ori.json.parse").expect("json.parse sig");
+        assert_eq!(params, vec![Ty::String], "json.parse params");
+        assert_eq!(
+            ret,
+            Ty::Result(Box::new(json_value.clone()), Box::new(Ty::String)),
+            "json.parse return"
+        );
+
+        // json.stringify / json.stringify_pretty: (Value) -> string
+        for path in ["ori.json.stringify", "ori.json.stringify_pretty"] {
+            let (params, ret) = stdlib_func_sig(path).expect("json stringify sig");
+            assert_eq!(params, vec![json_value.clone()], "{path} params");
+            assert_eq!(ret, Ty::String, "{path} return");
+        }
+    }
+
+    /// Spec cap. 14 sanity check: the C/debug backend stdlib matrix documents
+    /// which modules carry the `c_backend` flag. This test asserts the flag
+    /// value for representative entries from each matrix row, guarding against
+    /// the spec drifting from the manifest.
+    #[test]
+    fn spec_c_backend_matrix_matches_manifest_flags() {
+        fn flagged(path: &str) -> bool {
+            stdlib_entry_for_path(path)
+                .expect("manifest entry exists")
+                .c_backend_runtime
+        }
+
+        // Rows documented as "yes" (every function carries the flag).
+        assert!(flagged("ori.io.print"), "io.print should be c_backend");
+        assert!(flagged("ori.io.println"), "io.println should be c_backend");
+        assert!(flagged("ori.math.sqrt"), "math should be c_backend");
+        assert!(flagged("ori.time.now"), "time should be c_backend");
+        assert!(flagged("ori.format.number"), "format should be c_backend");
+        assert!(flagged("ori.os.args"), "os should be c_backend");
+        assert!(flagged("ori.random.int"), "random should be c_backend");
+        assert!(flagged("ori.test.assert"), "test.assert should be c_backend");
+        assert!(flagged("ori.iter.map"), "iter should be c_backend");
+        assert!(flagged("string"), "string builtin should be c_backend");
+        assert!(flagged("int"), "int builtin should be c_backend");
+        assert!(flagged("float"), "float builtin should be c_backend");
+
+        // Rows documented as "no" (native-only or extern stubs).
+        assert!(!flagged("ori.io.eprint"), "io.eprint should NOT be c_backend");
+        assert!(!flagged("ori.io.read_line"), "io.read_line should NOT be c_backend");
+        assert!(!flagged("ori.string.len"), "string.* should NOT be c_backend");
+        assert!(!flagged("ori.bytes.len"), "bytes.* should NOT be c_backend");
+        assert!(!flagged("ori.list.new"), "list.* should NOT be c_backend");
+        assert!(!flagged("ori.map.new"), "map.* should NOT be c_backend");
+        assert!(!flagged("ori.set.new"), "set.* should NOT be c_backend");
+        assert!(!flagged("ori.tree.new"), "tree.* should NOT be c_backend");
+        assert!(!flagged("ori.json.parse"), "json should NOT be c_backend");
+        assert!(!flagged("ori.fs.read_text"), "fs.* should NOT be c_backend");
+        assert!(!flagged("ori.task.spawn"), "task.* should NOT be c_backend");
+        assert!(!flagged("ori.channel.create"), "channel.* should NOT be c_backend");
+        assert!(!flagged("ori.atomic.new"), "atomic.* should NOT be c_backend");
+        assert!(!flagged("ori.test.live_allocations"), "test leak checks NOT c_backend");
+        assert!(!flagged("len"), "len builtin should NOT be c_backend");
+        assert!(!flagged("ori.panic"), "panic should NOT be c_backend");
+    }
+
+    /// Parity test: every module prefix derived from the manifest must be
+    /// classified as implemented. This guards against future manifest entries
+    /// whose module prefix is not recognized by `is_implemented_stdlib_module`.
+    #[test]
+    fn manifest_module_prefixes_are_all_implemented() {
+        let modules = implemented_stdlib_modules();
+        for module in &modules {
+            assert!(
+                is_implemented_stdlib_module(module),
+                "implemented_stdlib_modules returned {module} but is_implemented_stdlib_module rejects it"
+            );
+        }
+    }
+
+    /// Regression test: the set of modules accepted by the manifest-derived
+    /// classifier must cover every module that the old hardcoded
+    /// `classify_stdlib_import` list accepted. If a module is added or removed
+    /// from the manifest, this test catches the change explicitly.
+    #[test]
+    fn implemented_stdlib_modules_covers_legacy_hardcoded_list() {
+        let modules = implemented_stdlib_modules();
+        let legacy: &[&str] = &[
+            "ori",
+            "ori.core",
+            "ori.io",
+            "ori.fs",
+            "ori.files",
+            "ori.string",
+            "ori.bytes",
+            "ori.list",
+            "ori.map",
+            "ori.set",
+            "ori.deque",
+            "ori.queue",
+            "ori.stack",
+            "ori.linked_list",
+            "ori.doubly_linked_list",
+            "ori.tree",
+            "ori.hash_table",
+            "ori.graph",
+            "ori.heap",
+            "ori.math",
+            "ori.convert",
+            "ori.mem",
+            "ori.time",
+            "ori.format",
+            "ori.os",
+            "ori.random",
+            "ori.iter",
+            "ori.lazy",
+            "ori.concurrent",
+            "ori.task",
+            "ori.channel",
+            "ori.atomic",
+            "ori.test",
+            "ori.json",
+            "ori.Error",
+        ];
+        for &expected in legacy {
+            assert!(
+                modules.contains(&expected),
+                "legacy stdlib module {expected} missing from implemented_stdlib_modules: {modules:?}"
+            );
+            assert!(
+                is_implemented_stdlib_module(expected),
+                "legacy stdlib module {expected} rejected by is_implemented_stdlib_module"
+            );
+        }
+    }
+
+    /// Negative test: unknown `ori.*` modules must be rejected so the driver
+    /// can emit `bind.stdlib_module_unknown`.
+    #[test]
+    fn unknown_stdlib_modules_are_rejected() {
+        assert!(!is_implemented_stdlib_module("ori.nope"));
+        assert!(!is_implemented_stdlib_module("ori.io.sub"));
+        assert!(!is_implemented_stdlib_module("ori.future"));
+        assert!(!is_implemented_stdlib_module("notori.io"));
+        assert!(!is_implemented_stdlib_module(""));
     }
 }

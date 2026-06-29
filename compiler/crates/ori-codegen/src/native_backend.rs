@@ -16,6 +16,9 @@ use ori_types::{
     OpaqueTy, Ty, substitute_ty_params,
 };
 
+mod string_collector;
+use string_collector::collect_all_strings;
+
 #[cfg(test)]
 const INTERNAL_NATIVE_RUNTIME_IMPORTS: &[&str] = &[
     "ori_abort_concurrent_modification",
@@ -113,261 +116,6 @@ const INTERNAL_NATIVE_RUNTIME_IMPORTS: &[&str] = &[
     "ori_string_concat_parts",
     "ori_to_string_parts",
 ];
-
-struct StringCollector {
-    out: Vec<SmolStr>,
-    seen: std::collections::HashSet<SmolStr>,
-}
-
-impl StringCollector {
-    fn new() -> Self {
-        let mut seen = std::collections::HashSet::new();
-        let empty = SmolStr::new("");
-        seen.insert(empty.clone());
-        Self {
-            out: vec![empty],
-            seen,
-        }
-    }
-
-    fn add(&mut self, s: SmolStr) {
-        if self.seen.insert(s.clone()) {
-            self.out.push(s);
-        }
-    }
-}
-
-fn collect_strings_expr(expr: &HirExpr, out: &mut StringCollector) {
-    match &expr.kind {
-        HirExprKind::BoolLit(_)
-        | HirExprKind::IntLit(_)
-        | HirExprKind::FloatLit(_)
-        | HirExprKind::BytesLit(_)
-        | HirExprKind::Unit
-        | HirExprKind::None_
-        | HirExprKind::Var(_)
-        | HirExprKind::Closure { .. } => {}
-        HirExprKind::StrLit(s) => out.add(s.clone()),
-        HirExprKind::Call { callee, args } => {
-            collect_strings_expr(callee, out);
-            for a in args {
-                collect_strings_expr(&a.value, out);
-            }
-        }
-        HirExprKind::Binary { lhs, rhs, .. } => {
-            collect_strings_expr(lhs, out);
-            collect_strings_expr(rhs, out);
-        }
-        HirExprKind::Unary { operand, .. } => collect_strings_expr(operand, out),
-        HirExprKind::Field { object, .. } => collect_strings_expr(object, out),
-        HirExprKind::IfExpr { cond, then, else_ } => {
-            collect_strings_expr(cond, out);
-            collect_strings_expr(then, out);
-            collect_strings_expr(else_, out);
-        }
-        HirExprKind::Propagate(e)
-        | HirExprKind::Await(e)
-        | HirExprKind::Some_(e)
-        | HirExprKind::Ok_(e)
-        | HirExprKind::Err_(e) => collect_strings_expr(e, out),
-        HirExprKind::ListLit { elements, .. } => {
-            for e in elements {
-                collect_strings_expr(e, out);
-            }
-        }
-        HirExprKind::ListSpreadLit { elements, .. } => {
-            for e in elements {
-                collect_strings_expr(&e.value, out);
-            }
-        }
-        HirExprKind::TupleLit(elems) => {
-            for e in elems {
-                collect_strings_expr(e, out);
-            }
-        }
-        HirExprKind::InterpolatedStr(parts) => {
-            for p in parts {
-                match p {
-                    HirStrPart::Literal(s) => out.add(s.clone()),
-                    HirStrPart::Expr(e) => collect_strings_expr(e, out),
-                }
-            }
-        }
-        HirExprKind::Range { start, end } => {
-            collect_strings_expr(start, out);
-            collect_strings_expr(end, out);
-        }
-        HirExprKind::StructLit { fields, .. } => {
-            for (_, e) in fields {
-                collect_strings_expr(e, out);
-            }
-        }
-        HirExprKind::EnumVariant { fields, .. } => {
-            for (_, e) in fields {
-                collect_strings_expr(e, out);
-            }
-        }
-        HirExprKind::MapLit { entries, .. } => {
-            for (k, v) in entries {
-                collect_strings_expr(k, out);
-                collect_strings_expr(v, out);
-            }
-        }
-        HirExprKind::SetLit { elements, .. } => {
-            for e in elements {
-                collect_strings_expr(e, out);
-            }
-        }
-        HirExprKind::StructUpdate { base, updates, .. } => {
-            collect_strings_expr(base, out);
-            for (_, e) in updates {
-                collect_strings_expr(e, out);
-            }
-        }
-        HirExprKind::MethodCall { receiver, args, .. } => {
-            collect_strings_expr(receiver, out);
-            for a in args {
-                collect_strings_expr(a, out);
-            }
-        }
-        HirExprKind::Index { object, index } => {
-            collect_strings_expr(object, out);
-            collect_strings_expr(index, out);
-        }
-        HirExprKind::TupleIndex { object, .. } => {
-            collect_strings_expr(object, out);
-        }
-        HirExprKind::IsCheck { value, .. } => collect_strings_expr(value, out),
-    }
-}
-
-fn collect_strings_block(block: &HirBlock, out: &mut StringCollector) {
-    for s in &block.stmts {
-        collect_strings_stmt(s, out);
-    }
-}
-
-fn collect_strings_stmt(stmt: &HirStmt, out: &mut StringCollector) {
-    match stmt {
-        HirStmt::Let { value, .. } => collect_strings_expr(value, out),
-        HirStmt::Assign { lvalue, value, .. } => {
-            collect_strings_lvalue(lvalue, out);
-            collect_strings_expr(value, out);
-        }
-        HirStmt::Return(Some(e), _) => collect_strings_expr(e, out),
-        HirStmt::Return(None, _) | HirStmt::Break(_) | HirStmt::Continue(_) => {}
-        HirStmt::Expr(e) => collect_strings_expr(e, out),
-        HirStmt::If {
-            cond,
-            then,
-            else_ifs,
-            else_,
-            ..
-        } => {
-            collect_strings_expr(cond, out);
-            collect_strings_block(then, out);
-            for (c, b) in else_ifs {
-                collect_strings_expr(c, out);
-                collect_strings_block(b, out);
-            }
-            if let Some(eb) = else_ {
-                collect_strings_block(eb, out);
-            }
-        }
-        HirStmt::While { cond, body, .. } => {
-            collect_strings_expr(cond, out);
-            collect_strings_block(body, out);
-        }
-        HirStmt::For { iterable, body, .. } => {
-            collect_strings_expr(iterable, out);
-            collect_strings_block(body, out);
-        }
-        HirStmt::Loop { body, .. } => collect_strings_block(body, out),
-        HirStmt::Repeat { count, body, .. } => {
-            collect_strings_expr(count, out);
-            collect_strings_block(body, out);
-        }
-        HirStmt::Match {
-            scrutinee, arms, ..
-        } => {
-            collect_strings_expr(scrutinee, out);
-            for arm in arms {
-                collect_strings_pattern(&arm.pattern, out);
-                for s in &arm.body {
-                    collect_strings_stmt(s, out);
-                }
-            }
-        }
-        HirStmt::IfSome {
-            value, then, else_, ..
-        } => {
-            collect_strings_expr(value, out);
-            collect_strings_block(then, out);
-            if let Some(eb) = else_ {
-                collect_strings_block(eb, out);
-            }
-        }
-        HirStmt::WhileSome { value, body, .. } => {
-            collect_strings_expr(value, out);
-            collect_strings_block(body, out);
-        }
-        HirStmt::Using { value, .. } => collect_strings_expr(value, out),
-        HirStmt::Check {
-            condition, message, ..
-        } => {
-            collect_strings_expr(condition, out);
-            if let Some(message) = message {
-                out.add(message.clone());
-            }
-        }
-    }
-}
-
-fn collect_strings_lvalue(lvalue: &HirLValue, out: &mut StringCollector) {
-    match lvalue {
-        HirLValue::Var(_) => {}
-        HirLValue::Field { base, .. } => collect_strings_lvalue(base, out),
-        HirLValue::Index { base, index } => {
-            collect_strings_lvalue(base, out);
-            collect_strings_expr(index, out);
-        }
-    }
-}
-
-fn collect_all_strings(hir: &HirModule) -> Vec<SmolStr> {
-    let mut collector = StringCollector::new();
-    for f in &hir.funcs {
-        collect_strings_block(&f.body, &mut collector);
-    }
-    for c in &hir.consts {
-        collect_strings_expr(&c.value, &mut collector);
-    }
-    collector.out
-}
-
-fn collect_strings_pattern(pat: &HirPattern, out: &mut StringCollector) {
-    match pat {
-        HirPattern::Wildcard
-        | HirPattern::Binding(_, _)
-        | HirPattern::BoolLit(_)
-        | HirPattern::IntLit(_)
-        | HirPattern::None_ => {}
-        HirPattern::StrLit(s) => out.add(s.clone()),
-        HirPattern::Some_(inner) | HirPattern::Ok_(inner) | HirPattern::Err_(inner) => {
-            collect_strings_pattern(inner, out);
-        }
-        HirPattern::Variant { fields, .. } => {
-            for (_, pat) in fields {
-                collect_strings_pattern(pat, out);
-            }
-        }
-        HirPattern::Tuple(patterns) => {
-            for pat in patterns {
-                collect_strings_pattern(pat, out);
-            }
-        }
-    }
-}
 
 // == Type mapping ==
 
@@ -2737,6 +2485,307 @@ fn compute_enum_layout(variants: &[ori_hir::hir::HirVariant], ptr_ty: types::Typ
     }
 }
 
+fn type_needs_destructor(
+    ty: &Ty,
+    struct_layouts: &HashMap<ori_types::DefId, StructLayout>,
+    enum_layouts: &HashMap<ori_types::DefId, EnumLayout>,
+) -> bool {
+    fn needs_dtor_inner(
+        ty: &Ty,
+        struct_layouts: &HashMap<ori_types::DefId, StructLayout>,
+        enum_layouts: &HashMap<ori_types::DefId, EnumLayout>,
+        visited: &mut HashSet<ori_types::DefId>,
+    ) -> bool {
+        match ty {
+            Ty::String
+            | Ty::Bytes
+            | Ty::List(_)
+            | Ty::Map(_, _)
+            | Ty::Set(_)
+            | Ty::Any(_)
+            | Ty::Func { .. }
+            | Ty::Lazy(_)
+            | Ty::Future(_)
+            | Ty::TaskJob(_)
+            | Ty::Channel(_)
+            | Ty::AtomicInt
+            | Ty::TaskJoinError
+            | Ty::ChannelSendError
+            | Ty::ChannelReceiveError
+            | Ty::Opaque { .. } => true,
+
+            Ty::Optional(inner) => needs_dtor_inner(inner, struct_layouts, enum_layouts, visited),
+            Ty::Result(ok, err) => {
+                needs_dtor_inner(ok, struct_layouts, enum_layouts, visited)
+                    || needs_dtor_inner(err, struct_layouts, enum_layouts, visited)
+            }
+            Ty::Tuple(elems) => elems
+                .iter()
+                .any(|e| needs_dtor_inner(e, struct_layouts, enum_layouts, visited)),
+            Ty::Named(def_id, _) => {
+                if !visited.insert(*def_id) {
+                    return false;
+                }
+                let res = if let Some(layout) = struct_layouts.get(def_id) {
+                    layout
+                        .fields
+                        .iter()
+                        .any(|(_, f)| needs_dtor_inner(&f.ty, struct_layouts, enum_layouts, visited))
+                } else if let Some(layout) = enum_layouts.get(def_id) {
+                    layout.variants.values().any(|variant_layout| {
+                        variant_layout
+                            .fields
+                            .fields
+                            .iter()
+                            .any(|(_, f)| needs_dtor_inner(&f.ty, struct_layouts, enum_layouts, visited))
+                    })
+                } else {
+                    false
+                };
+                visited.remove(def_id);
+                res
+            }
+            _ => false,
+        }
+    }
+
+    needs_dtor_inner(ty, struct_layouts, enum_layouts, &mut HashSet::new())
+}
+
+fn collect_all_tys(ty: &Ty, tuples: &mut HashSet<Vec<Ty>>) {
+    match ty {
+        Ty::Tuple(elems) => {
+            if tuples.insert(elems.clone()) {
+                for elem in elems {
+                    collect_all_tys(elem, tuples);
+                }
+            }
+        }
+        Ty::List(inner) => collect_all_tys(inner, tuples),
+        Ty::Map(k, v) => {
+            collect_all_tys(k, tuples);
+            collect_all_tys(v, tuples);
+        }
+        Ty::Set(inner) => collect_all_tys(inner, tuples),
+        Ty::Optional(inner) => collect_all_tys(inner, tuples),
+        Ty::Result(ok, err) => {
+            collect_all_tys(ok, tuples);
+            collect_all_tys(err, tuples);
+        }
+        Ty::Func { params, ret } => {
+            for param in params {
+                collect_all_tys(param, tuples);
+            }
+            collect_all_tys(ret, tuples);
+        }
+        Ty::Lazy(inner) => collect_all_tys(inner, tuples),
+        Ty::Future(inner) => collect_all_tys(inner, tuples),
+        Ty::Named(_, args) => {
+            for arg in args {
+                collect_all_tys(arg, tuples);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_tys_from_expr(expr: &HirExpr, tuples: &mut HashSet<Vec<Ty>>) {
+    collect_all_tys(&expr.ty, tuples);
+    match &expr.kind {
+        HirExprKind::Binary { lhs, rhs, .. } => {
+            collect_tys_from_expr(lhs, tuples);
+            collect_tys_from_expr(rhs, tuples);
+        }
+        HirExprKind::Unary { operand, .. } => {
+            collect_tys_from_expr(operand, tuples);
+        }
+        HirExprKind::Field { object, .. } => {
+            collect_tys_from_expr(object, tuples);
+        }
+        HirExprKind::Index { object, index } => {
+            collect_tys_from_expr(object, tuples);
+            collect_tys_from_expr(index, tuples);
+        }
+        HirExprKind::TupleIndex { object, .. } => {
+            collect_tys_from_expr(object, tuples);
+        }
+        HirExprKind::Call { callee, args } => {
+            collect_tys_from_expr(callee, tuples);
+            for arg in args {
+                collect_tys_from_expr(&arg.value, tuples);
+            }
+        }
+        HirExprKind::MethodCall { receiver, args, .. } => {
+            collect_tys_from_expr(receiver, tuples);
+            for arg in args {
+                collect_tys_from_expr(arg, tuples);
+            }
+        }
+        HirExprKind::StructLit { fields, .. } => {
+            for (_, f) in fields {
+                collect_tys_from_expr(f, tuples);
+            }
+        }
+        HirExprKind::EnumVariant { fields, .. } => {
+            for (_, f) in fields {
+                collect_tys_from_expr(f, tuples);
+            }
+        }
+        HirExprKind::ListLit { elements, .. } => {
+            for e in elements {
+                collect_tys_from_expr(e, tuples);
+            }
+        }
+        HirExprKind::ListSpreadLit { elements, .. } => {
+            for e in elements {
+                collect_tys_from_expr(&e.value, tuples);
+            }
+        }
+        HirExprKind::TupleLit(elements) => {
+            for e in elements {
+                collect_tys_from_expr(e, tuples);
+            }
+        }
+        HirExprKind::Some_(e) | HirExprKind::Ok_(e) | HirExprKind::Err_(e) | HirExprKind::Propagate(e) | HirExprKind::Await(e) => {
+            collect_tys_from_expr(e, tuples);
+        }
+        HirExprKind::IfExpr { cond, then, else_ } => {
+            collect_tys_from_expr(cond, tuples);
+            collect_tys_from_expr(then, tuples);
+            collect_tys_from_expr(else_, tuples);
+        }
+        HirExprKind::Range { start, end } => {
+            collect_tys_from_expr(start, tuples);
+            collect_tys_from_expr(end, tuples);
+        }
+        HirExprKind::MapLit { entries, .. } => {
+            for (k, v) in entries {
+                collect_tys_from_expr(k, tuples);
+                collect_tys_from_expr(v, tuples);
+            }
+        }
+        HirExprKind::SetLit { elements, .. } => {
+            for e in elements {
+                collect_tys_from_expr(e, tuples);
+            }
+        }
+        HirExprKind::StructUpdate { base, updates, .. } => {
+            collect_tys_from_expr(base, tuples);
+            for (_, u) in updates {
+                collect_tys_from_expr(u, tuples);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_tys_from_stmt(stmt: &HirStmt, tuples: &mut HashSet<Vec<Ty>>) {
+    match stmt {
+        HirStmt::Let { ty, value, .. } => {
+            collect_all_tys(ty, tuples);
+            collect_tys_from_expr(value, tuples);
+        }
+        HirStmt::Assign { lvalue: _, value, .. } => {
+            collect_tys_from_expr(value, tuples);
+        }
+        HirStmt::Return(val, _) => {
+            if let Some(v) = val {
+                collect_tys_from_expr(v, tuples);
+            }
+        }
+        HirStmt::Expr(e) => {
+            collect_tys_from_expr(e, tuples);
+        }
+        HirStmt::If { cond, then, else_ifs, else_, .. } => {
+            collect_tys_from_expr(cond, tuples);
+            collect_tys_from_block(then, tuples);
+            for (c, b) in else_ifs {
+                collect_tys_from_expr(c, tuples);
+                collect_tys_from_block(b, tuples);
+            }
+            if let Some(b) = else_ {
+                collect_tys_from_block(b, tuples);
+            }
+        }
+        HirStmt::While { cond, body, .. } => {
+            collect_tys_from_expr(cond, tuples);
+            collect_tys_from_block(body, tuples);
+        }
+        HirStmt::For { iterable, body, .. } => {
+            collect_tys_from_expr(iterable, tuples);
+            collect_tys_from_block(body, tuples);
+        }
+        HirStmt::Loop { body, .. } => {
+            collect_tys_from_block(body, tuples);
+        }
+        HirStmt::Repeat { count, body, .. } => {
+            collect_tys_from_expr(count, tuples);
+            collect_tys_from_block(body, tuples);
+        }
+        HirStmt::Match { scrutinee, arms, .. } => {
+            collect_tys_from_expr(scrutinee, tuples);
+            for arm in arms {
+                for s in &arm.body {
+                    collect_tys_from_stmt(s, tuples);
+                }
+            }
+        }
+        HirStmt::IfSome { value, then, else_, .. } => {
+            collect_tys_from_expr(value, tuples);
+            collect_tys_from_block(then, tuples);
+            if let Some(b) = else_ {
+                collect_tys_from_block(b, tuples);
+            }
+        }
+        HirStmt::WhileSome { value, body, .. } => {
+            collect_tys_from_expr(value, tuples);
+            collect_tys_from_block(body, tuples);
+        }
+        HirStmt::Using { ty, value, .. } => {
+            collect_all_tys(ty, tuples);
+            collect_tys_from_expr(value, tuples);
+        }
+        HirStmt::Check { condition, .. } => {
+            collect_tys_from_expr(condition, tuples);
+        }
+        HirStmt::Break(_) | HirStmt::Continue(_) => {}
+    }
+}
+
+fn collect_tys_from_block(block: &HirBlock, tuples: &mut HashSet<Vec<Ty>>) {
+    for s in &block.stmts {
+        collect_tys_from_stmt(s, tuples);
+    }
+}
+
+fn collect_module_tuples(hir: &HirModule) -> HashSet<Vec<Ty>> {
+    let mut tuples = HashSet::new();
+    for s in &hir.structs {
+        for f in &s.fields {
+            collect_all_tys(&f.ty, &mut tuples);
+        }
+    }
+    for e in &hir.enums {
+        for v in &e.variants {
+            for f in &v.fields {
+                collect_all_tys(&f.ty, &mut tuples);
+            }
+        }
+    }
+    for f in &hir.funcs {
+        for p in &f.params {
+            collect_all_tys(&p.ty, &mut tuples);
+        }
+        collect_all_tys(&f.return_ty, &mut tuples);
+        collect_tys_from_block(&f.body, &mut tuples);
+    }
+    for c in &hir.consts {
+        collect_all_tys(&c.ty, &mut tuples);
+        collect_tys_from_expr(&c.value, &mut tuples);
+    }
+    tuples
+}
+
 // == Module-level backend ==
 
 #[derive(Debug, Clone)]
@@ -2780,6 +2829,13 @@ pub struct NativeBackend {
     trait_layouts: HashMap<ori_types::DefId, HirTrait>,
     trait_impls: HashMap<(ori_types::DefId, ori_types::DefId), HirTraitImpl>,
     func_param_tys: HashMap<SmolStr, Vec<Ty>>,
+    /// Names of user-defined functions only (excludes stdlib FFI imports).
+    /// Used to distinguish user functions (which release params via scope
+    /// cleanup) from stdlib FFI (which borrows args without releasing).
+    user_func_names: HashSet<SmolStr>,
+    tuple_dtors: HashMap<Vec<Ty>, FuncId>,
+    struct_dtors: HashMap<ori_types::DefId, FuncId>,
+    enum_dtors: HashMap<ori_types::DefId, FuncId>,
 }
 
 impl NativeBackend {
@@ -2807,6 +2863,10 @@ impl NativeBackend {
             trait_layouts: HashMap::new(),
             trait_impls: HashMap::new(),
             func_param_tys: HashMap::new(),
+            user_func_names: HashSet::new(),
+            tuple_dtors: HashMap::new(),
+            struct_dtors: HashMap::new(),
+            enum_dtors: HashMap::new(),
         })
     }
 
@@ -2835,6 +2895,7 @@ impl NativeBackend {
                 f.name.clone(),
                 f.params.iter().map(|param| param.ty.clone()).collect(),
             );
+            self.user_func_names.insert(f.name.clone());
         }
         self.emit_module_strings(hir)?;
         self.emit_global_data(hir)?;
@@ -3288,6 +3349,20 @@ impl NativeBackend {
         self.stdlib_ids.insert(SmolStr::new("ori_test_assert"), id);
         let id = decl("ori_test_fail", &[pt], vec![Ty::String], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_test_fail"), id);
+        let id = decl("ori_test_live_allocations", &[], vec![], Some(types::I64))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_test_live_allocations"), id);
+        let id = decl("ori_test_collect_cycles", &[], vec![], Some(types::I64))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_test_collect_cycles"), id);
+        let id = decl(
+            "ori_test_assert_no_leaks",
+            &[pt],
+            vec![Ty::String],
+            Some(types::I64),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_test_assert_no_leaks"), id);
         let test_assert_overloads = [
             ("ori_test_assert_eq_float", vec![types::F64, types::F64]),
             ("ori_test_assert_ne_float", vec![types::F64, types::F64]),
@@ -3915,7 +3990,71 @@ impl NativeBackend {
         sig
     }
 
+    fn make_dtor_sig(&self) -> ir::Signature {
+        let mut sig = self.module.make_signature();
+        sig.params.push(AbiParam::new(self.ptr_ty));
+        sig
+    }
+
     fn declare_all(&mut self, hir: &HirModule) -> Result<(), String> {
+        // Declare destructor functions for structs that need them
+        let mut declared_struct_dtors = std::collections::HashSet::new();
+        let mut struct_dtors = HashMap::new();
+        for s in &hir.structs {
+            if !declared_struct_dtors.insert(s.def_id) {
+                continue;
+            }
+            if type_needs_destructor(&Ty::Named(s.def_id, Vec::new()), &self.struct_layouts, &self.enum_layouts) {
+                let sig = self.make_dtor_sig();
+                let name = format!("__dtor_struct_{}", s.def_id.0);
+                let id = self
+                    .module
+                    .declare_function(&name, Linkage::Local, &sig)
+                    .map_err(|e| format!("declare struct dtor '{name}': {e}"))?;
+                self.func_ids.insert(SmolStr::new(name), id);
+                struct_dtors.insert(s.def_id, id);
+            }
+        }
+        self.struct_dtors = struct_dtors;
+
+        // Declare destructor functions for enums that need them
+        let mut declared_enum_dtors = std::collections::HashSet::new();
+        let mut enum_dtors = HashMap::new();
+        for e in &hir.enums {
+            if !declared_enum_dtors.insert(e.def_id) {
+                continue;
+            }
+            if type_needs_destructor(&Ty::Named(e.def_id, Vec::new()), &self.struct_layouts, &self.enum_layouts) {
+                let sig = self.make_dtor_sig();
+                let name = format!("__dtor_enum_{}", e.def_id.0);
+                let id = self
+                    .module
+                    .declare_function(&name, Linkage::Local, &sig)
+                    .map_err(|e| format!("declare enum dtor '{name}': {e}"))?;
+                self.func_ids.insert(SmolStr::new(name), id);
+                enum_dtors.insert(e.def_id, id);
+            }
+        }
+        self.enum_dtors = enum_dtors;
+
+        // Declare destructor functions for tuples that need them
+        let tuple_tys = collect_module_tuples(hir);
+        let mut tuple_dtors = HashMap::new();
+        for elems in tuple_tys {
+            let tuple_ty = Ty::Tuple(elems.clone());
+            if type_needs_destructor(&tuple_ty, &self.struct_layouts, &self.enum_layouts) {
+                let sig = self.make_dtor_sig();
+                let name = format!("__dtor_tuple_{}", tuple_dtors.len());
+                let id = self
+                    .module
+                    .declare_function(&name, Linkage::Local, &sig)
+                    .map_err(|e| format!("declare tuple dtor '{name}': {e}"))?;
+                self.func_ids.insert(SmolStr::new(name.clone()), id);
+                tuple_dtors.insert(elems, id);
+            }
+        }
+        self.tuple_dtors = tuple_dtors;
+
         // Declare equality helper functions for all structs
         let mut declared_structs = std::collections::HashSet::new();
         for s in &hir.structs {
@@ -4028,6 +4167,22 @@ impl NativeBackend {
                 global_gvs.insert(name.clone(), gv);
             }
 
+            let mut struct_dtor_refs = HashMap::new();
+            for (&def_id, &id) in &self.struct_dtors {
+                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+                struct_dtor_refs.insert(def_id, fref);
+            }
+            let mut enum_dtor_refs = HashMap::new();
+            for (&def_id, &id) in &self.enum_dtors {
+                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+                enum_dtor_refs.insert(def_id, fref);
+            }
+            let mut tuple_dtor_refs = HashMap::new();
+            for (elems, &id) in &self.tuple_dtors {
+                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+                tuple_dtor_refs.insert(elems.clone(), fref);
+            }
+
             let mut bctx = FunctionBuilderContext::new();
             {
                 let builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
@@ -4044,6 +4199,10 @@ impl NativeBackend {
                     trait_layouts: &self.trait_layouts,
                     trait_impls: &self.trait_impls,
                     func_param_tys: &self.func_param_tys,
+                    user_func_names: &self.user_func_names,
+                    struct_dtor_refs: &struct_dtor_refs,
+                    enum_dtor_refs: &enum_dtor_refs,
+                    tuple_dtor_refs: &tuple_dtor_refs,
                     vars: vec![HashMap::new()],
                     ptr_ty: self.ptr_ty,
                     loop_stack: Vec::new(),
@@ -4182,6 +4341,190 @@ impl NativeBackend {
                 .map_err(|e| format!("define main wrapper: {e}"))?;
         }
         self.define_struct_eq_helpers(hir)?;
+        self.define_struct_dtors(hir)?;
+        self.define_enum_dtors(hir)?;
+        self.define_tuple_dtors()?;
+        Ok(())
+    }
+
+    fn define_struct_dtors(&mut self, hir: &HirModule) -> Result<(), String> {
+        let mut defined_structs = std::collections::HashSet::new();
+        for s in &hir.structs {
+            if !defined_structs.insert(s.def_id) {
+                continue;
+            }
+            if !type_needs_destructor(&Ty::Named(s.def_id, Vec::new()), &self.struct_layouts, &self.enum_layouts) {
+                continue;
+            }
+            let name = format!("__dtor_struct_{}", s.def_id.0);
+            let func_id = self.func_ids[name.as_str()];
+            let mut ctx = self.module.make_context();
+            ctx.func.signature = self.make_dtor_sig();
+
+            let mut func_refs: HashMap<SmolStr, ir::FuncRef> = HashMap::new();
+            for (name, &id) in self.func_ids.iter().chain(self.stdlib_ids.iter()) {
+                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+                func_refs.insert(name.clone(), fref);
+            }
+
+            let mut bctx = FunctionBuilderContext::new();
+            {
+                let mut builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
+                let block = builder.create_block();
+                builder.append_block_params_for_function_params(block);
+                builder.switch_to_block(block);
+                builder.seal_block(block);
+
+                let params = builder.block_params(block);
+                let ptr = params[0];
+
+                let layout = self.struct_layouts.get(&s.def_id).cloned().unwrap();
+                for (_, fi) in &layout.fields {
+                    if is_managed_ty(&fi.ty) {
+                        let cl_ty = cl_type(&fi.ty, self.ptr_ty).unwrap();
+                        let val = builder.ins().load(cl_ty, MemFlags::new(), ptr, fi.offset as i32);
+                        let release_ref = func_refs["ori_arc_release"];
+                        builder.ins().call(release_ref, &[val]);
+                    }
+                }
+
+                builder.ins().return_(&[]);
+                builder.seal_all_blocks();
+                builder.finalize();
+            }
+
+            self.module
+                .define_function(func_id, &mut ctx)
+                .map_err(|e| format!("define struct dtor '{name}': {e}"))?;
+        }
+        Ok(())
+    }
+
+    fn define_enum_dtors(&mut self, hir: &HirModule) -> Result<(), String> {
+        let mut defined_enums = std::collections::HashSet::new();
+        for e in &hir.enums {
+            if !defined_enums.insert(e.def_id) {
+                continue;
+            }
+            if !type_needs_destructor(&Ty::Named(e.def_id, Vec::new()), &self.struct_layouts, &self.enum_layouts) {
+                continue;
+            }
+            let name = format!("__dtor_enum_{}", e.def_id.0);
+            let func_id = self.func_ids[name.as_str()];
+            let mut ctx = self.module.make_context();
+            ctx.func.signature = self.make_dtor_sig();
+
+            let mut func_refs: HashMap<SmolStr, ir::FuncRef> = HashMap::new();
+            for (name, &id) in self.func_ids.iter().chain(self.stdlib_ids.iter()) {
+                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+                func_refs.insert(name.clone(), fref);
+            }
+
+            let mut bctx = FunctionBuilderContext::new();
+            {
+                let mut builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
+                let block = builder.create_block();
+                builder.append_block_params_for_function_params(block);
+                builder.switch_to_block(block);
+                builder.seal_block(block);
+
+                let params = builder.block_params(block);
+                let ptr = params[0];
+
+                let layout = self.enum_layouts.get(&e.def_id).cloned().unwrap();
+                let tag_val = builder.ins().load(types::I32, MemFlags::new(), ptr, 0);
+
+                let end_block = builder.create_block();
+
+                for (_v_name, v_layout) in &layout.variants {
+                    let match_block = builder.create_block();
+                    let next_block = builder.create_block();
+
+                    let expected_tag = builder.ins().iconst(types::I32, v_layout.tag as i64);
+                    let is_match = builder.ins().icmp(ir::condcodes::IntCC::Equal, tag_val, expected_tag);
+                    builder.ins().brif(is_match, match_block, &[], next_block, &[]);
+
+                    builder.switch_to_block(match_block);
+                    builder.seal_block(match_block);
+
+                    for (_, fi) in &v_layout.fields.fields {
+                        if is_managed_ty(&fi.ty) {
+                            let cl_ty = cl_type(&fi.ty, self.ptr_ty).unwrap();
+                            let total_offset = (layout.payload_offset + fi.offset) as i32;
+                            let val = builder.ins().load(cl_ty, MemFlags::new(), ptr, total_offset);
+                            let release_ref = func_refs["ori_arc_release"];
+                            builder.ins().call(release_ref, &[val]);
+                        }
+                    }
+                    builder.ins().jump(end_block, &[]);
+
+                    builder.switch_to_block(next_block);
+                    builder.seal_block(next_block);
+                }
+
+                builder.ins().jump(end_block, &[]);
+                builder.switch_to_block(end_block);
+                builder.seal_block(end_block);
+
+                builder.ins().return_(&[]);
+                builder.seal_all_blocks();
+                builder.finalize();
+            }
+
+            self.module
+                .define_function(func_id, &mut ctx)
+                .map_err(|e| format!("define enum dtor '{name}': {e}"))?;
+        }
+        Ok(())
+    }
+
+    fn define_tuple_dtors(&mut self) -> Result<(), String> {
+        let tuple_dtors = self.tuple_dtors.clone();
+        for (elems, func_id) in tuple_dtors {
+            let name = self.func_ids.iter()
+                .find(|(_, &fid)| fid == func_id)
+                .map(|(n, _)| n.clone())
+                .unwrap_or_else(|| SmolStr::new("__dtor_tuple_unknown"));
+
+            let mut ctx = self.module.make_context();
+            ctx.func.signature = self.make_dtor_sig();
+
+            let mut func_refs: HashMap<SmolStr, ir::FuncRef> = HashMap::new();
+            for (n, &id) in self.func_ids.iter().chain(self.stdlib_ids.iter()) {
+                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+                func_refs.insert(n.clone(), fref);
+            }
+
+            let mut bctx = FunctionBuilderContext::new();
+            {
+                let mut builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
+                let block = builder.create_block();
+                builder.append_block_params_for_function_params(block);
+                builder.switch_to_block(block);
+                builder.seal_block(block);
+
+                let params = builder.block_params(block);
+                let ptr = params[0];
+
+                let (layout, _, _) = tuple_layout(&elems, self.ptr_ty);
+                for (offset, elem_ty) in layout {
+                    if is_managed_ty(&elem_ty) {
+                        let cl_ty = cl_type(&elem_ty, self.ptr_ty).unwrap();
+                        let val = builder.ins().load(cl_ty, MemFlags::new(), ptr, offset as i32);
+                        let release_ref = func_refs["ori_arc_release"];
+                        builder.ins().call(release_ref, &[val]);
+                    }
+                }
+
+                builder.ins().return_(&[]);
+                builder.seal_all_blocks();
+                builder.finalize();
+            }
+
+            self.module
+                .define_function(func_id, &mut ctx)
+                .map_err(|e| format!("define tuple dtor '{name}': {e}"))?;
+        }
         Ok(())
     }
 
@@ -4211,6 +4554,22 @@ impl NativeBackend {
                 func_refs.insert(SmolStr::new(format!("{name}.__fnptr_wrapper")), fref);
             }
 
+            let mut struct_dtor_refs = HashMap::new();
+            for (&def_id, &id) in &self.struct_dtors {
+                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+                struct_dtor_refs.insert(def_id, fref);
+            }
+            let mut enum_dtor_refs = HashMap::new();
+            for (&def_id, &id) in &self.enum_dtors {
+                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+                enum_dtor_refs.insert(def_id, fref);
+            }
+            let mut tuple_dtor_refs = HashMap::new();
+            for (elems, &id) in &self.tuple_dtors {
+                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+                tuple_dtor_refs.insert(elems.clone(), fref);
+            }
+
             let mut bctx = FunctionBuilderContext::new();
             {
                 let mut builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
@@ -4236,6 +4595,10 @@ impl NativeBackend {
                     trait_layouts: &self.trait_layouts,
                     trait_impls: &self.trait_impls,
                     func_param_tys: &self.func_param_tys,
+                    user_func_names: &self.user_func_names,
+                    struct_dtor_refs: &struct_dtor_refs,
+                    enum_dtor_refs: &enum_dtor_refs,
+                    tuple_dtor_refs: &tuple_dtor_refs,
                     vars: vec![HashMap::new()],
                     ptr_ty: self.ptr_ty,
                     loop_stack: Vec::new(),
@@ -4305,10 +4668,26 @@ impl NativeBackend {
             global_gvs.insert(name.clone(), gv);
         }
 
+        let mut struct_dtor_refs = HashMap::new();
+        for (&def_id, &id) in &self.struct_dtors {
+            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+            struct_dtor_refs.insert(def_id, fref);
+        }
+        let mut enum_dtor_refs = HashMap::new();
+        for (&def_id, &id) in &self.enum_dtors {
+            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+            enum_dtor_refs.insert(def_id, fref);
+        }
+        let mut tuple_dtor_refs = HashMap::new();
+        for (elems, &id) in &self.tuple_dtors {
+            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+            tuple_dtor_refs.insert(elems.clone(), fref);
+        }
+
         let mut bctx = FunctionBuilderContext::new();
         {
             let builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
-            let mut codegen = FuncCodegen {
+            let codegen = FuncCodegen {
                 builder,
                 func_refs: &func_refs,
                 string_gvs: &string_gvs,
@@ -4321,6 +4700,10 @@ impl NativeBackend {
                 trait_layouts: &self.trait_layouts,
                 trait_impls: &self.trait_impls,
                 func_param_tys: &self.func_param_tys,
+                user_func_names: &self.user_func_names,
+                struct_dtor_refs: &struct_dtor_refs,
+                enum_dtor_refs: &enum_dtor_refs,
+                tuple_dtor_refs: &tuple_dtor_refs,
                 vars: vec![HashMap::new()],
                 ptr_ty: self.ptr_ty,
                 loop_stack: Vec::new(),
@@ -4382,6 +4765,22 @@ impl NativeBackend {
             global_gvs.insert(name.clone(), gv);
         }
 
+        let mut struct_dtor_refs = HashMap::new();
+        for (&def_id, &id) in &self.struct_dtors {
+            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+            struct_dtor_refs.insert(def_id, fref);
+        }
+        let mut enum_dtor_refs = HashMap::new();
+        for (&def_id, &id) in &self.enum_dtors {
+            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+            enum_dtor_refs.insert(def_id, fref);
+        }
+        let mut tuple_dtor_refs = HashMap::new();
+        for (elems, &id) in &self.tuple_dtors {
+            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
+            tuple_dtor_refs.insert(elems.clone(), fref);
+        }
+
         let const_exprs: HashMap<SmolStr, HirExpr> = hir
             .consts
             .iter()
@@ -4402,6 +4801,10 @@ impl NativeBackend {
                 trait_layouts: &self.trait_layouts,
                 trait_impls: &self.trait_impls,
                 func_param_tys: &self.func_param_tys,
+                user_func_names: &self.user_func_names,
+                struct_dtor_refs: &struct_dtor_refs,
+                enum_dtor_refs: &enum_dtor_refs,
+                tuple_dtor_refs: &tuple_dtor_refs,
                 vars: vec![HashMap::new()],
                 ptr_ty: self.ptr_ty,
                 loop_stack: Vec::new(),
@@ -4461,6 +4864,10 @@ struct FuncCodegen<'a> {
     trait_layouts: &'a HashMap<ori_types::DefId, HirTrait>,
     trait_impls: &'a HashMap<(ori_types::DefId, ori_types::DefId), HirTraitImpl>,
     func_param_tys: &'a HashMap<SmolStr, Vec<Ty>>,
+    user_func_names: &'a HashSet<SmolStr>,
+    struct_dtor_refs: &'a HashMap<ori_types::DefId, ir::FuncRef>,
+    enum_dtor_refs: &'a HashMap<ori_types::DefId, ir::FuncRef>,
+    tuple_dtor_refs: &'a HashMap<Vec<Ty>, ir::FuncRef>,
     vars: Vec<HashMap<SmolStr, (Variable, Ty)>>,
     ptr_ty: types::Type,
     loop_stack: Vec<LoopContext>,
@@ -4740,11 +5147,18 @@ impl<'a> FuncCodegen<'a> {
             if let Ty::Future(inner) = &f.return_ty {
                 let future = self.emit_future_ready(inner, None)?;
                 self.builder.ins().return_(&[future]);
-            } else if cl_type(&f.return_ty, self.ptr_ty).is_none() {
-                self.builder.ins().return_(&[]);
             } else {
-                let zero = self.zero_val(&f.return_ty);
-                self.builder.ins().return_(&[zero]);
+                // Implicit fall-through: run scope cleanup (using + managed
+                // values) before returning, mirroring the explicit `return`
+                // statement path. Without this, any managed value still live
+                // at the end of the function would be leaked.
+                self.emit_scope_cleanup_calls_from(0, 0)?;
+                if cl_type(&f.return_ty, self.ptr_ty).is_none() {
+                    self.builder.ins().return_(&[]);
+                } else {
+                    let zero = self.zero_val(&f.return_ty);
+                    self.builder.ins().return_(&[zero]);
+                }
             }
         }
 
@@ -5492,6 +5906,16 @@ impl<'a> FuncCodegen<'a> {
         Ok(self.builder.inst_results(call)[0])
     }
 
+    fn malloc_bytes_with_dtor(&mut self, size: u32, dtor_v: ir::Value) -> Result<ir::Value, String> {
+        let alloc_ref = *self
+            .func_refs
+            .get("ori_alloc")
+            .ok_or_else(|| "missing runtime function `ori_alloc`".to_string())?;
+        let size_v = self.builder.ins().iconst(types::I64, size as i64);
+        let call = self.builder.ins().call(alloc_ref, &[size_v, dtor_v]);
+        Ok(self.builder.inst_results(call)[0])
+    }
+
     fn string_ptr(&mut self, value: &str) -> Result<ir::Value, String> {
         let gv = *self
             .string_gvs
@@ -5748,6 +6172,88 @@ impl<'a> FuncCodegen<'a> {
         Ok(())
     }
 
+    fn emit_dispose_call_for_value(&mut self, ty: &Ty, value: ir::Value) -> Result<(), String> {
+        let Some(func_name) = self.dispose_func_name_for_ty(ty) else {
+            return Ok(());
+        };
+        let Some(&dispose_ref) = self.func_refs.get(func_name.as_str()) else {
+            return Ok(());
+        };
+        self.builder.ins().call(dispose_ref, &[value]);
+        Ok(())
+    }
+
+    fn emit_async_frame_dispose_live_values(
+        &mut self,
+        plan: &SimpleAsyncStateMachinePlan,
+        frame: ir::Value,
+        completed_await_count: usize,
+    ) -> Result<(), String> {
+        for (index, step) in plan
+            .awaits
+            .iter()
+            .take(completed_await_count)
+            .enumerate()
+            .rev()
+        {
+            let Some(binding) = &step.binding else {
+                continue;
+            };
+            let Some(func_name) = self.dispose_func_name_for_ty(&binding.ty) else {
+                continue;
+            };
+            if !self.func_refs.contains_key(func_name.as_str()) {
+                continue;
+            }
+            let cl_ty = cl_type(&binding.ty, self.ptr_ty).ok_or_else(|| {
+                format!(
+                    "async dispose for binding `{}` has no native value type",
+                    binding.name
+                )
+            })?;
+            let offset = simple_async_frame_binding_offset(plan, index, self.ptr_ty)
+                .expect("async frame binding offset");
+            let value = self
+                .builder
+                .ins()
+                .load(cl_ty, MemFlags::new(), frame, offset as i32);
+            self.emit_dispose_call_for_value(&binding.ty, value)?;
+        }
+        for (local_index, local) in plan.locals.iter().enumerate().rev() {
+            let Some(func_name) = self.dispose_func_name_for_ty(&local.ty) else {
+                continue;
+            };
+            if !self.func_refs.contains_key(func_name.as_str()) {
+                continue;
+            }
+            let cl_ty = cl_type(&local.ty, self.ptr_ty).ok_or_else(|| {
+                format!(
+                    "async dispose for local `{}` has no native value type",
+                    local.name
+                )
+            })?;
+            let offset = simple_async_frame_local_offset(plan, local_index, self.ptr_ty)
+                .expect("async frame local offset");
+            let value = self
+                .builder
+                .ins()
+                .load(cl_ty, MemFlags::new(), frame, offset as i32);
+            self.emit_dispose_call_for_value(&local.ty, value)?;
+        }
+        Ok(())
+    }
+
+    fn emit_async_terminal_cleanup(
+        &mut self,
+        plan: &SimpleAsyncStateMachinePlan,
+        frame: ir::Value,
+        completed_await_count: usize,
+    ) -> Result<(), String> {
+        self.emit_scope_cleanup_calls_from(0, 0)?;
+        self.emit_async_frame_dispose_live_values(plan, frame, completed_await_count)?;
+        self.emit_simple_async_frame_cleanup(plan, frame, completed_await_count, true)
+    }
+
     fn dispose_func_name_for_ty(&self, ty: &Ty) -> Option<SmolStr> {
         match ty {
             Ty::Named(def_id, _) => {
@@ -5906,6 +6412,35 @@ impl<'a> FuncCodegen<'a> {
         Ok(())
     }
 
+    /// Whether `emit_expr` for this expression yields a freshly-owned +1 ref
+    /// (from malloc or a callee's return path), meaning the binding/return
+    /// path must NOT add an extra retain — otherwise the value leaks because
+    /// the temporary is never pushed to the managed stack and scope cleanup
+    /// never releases the extra ref.
+    fn expr_produces_owned_ref(expr: &HirExpr) -> bool {
+        matches!(
+            expr.kind,
+            HirExprKind::StructLit { .. }
+                | HirExprKind::EnumVariant { .. }
+                | HirExprKind::TupleLit(_)
+                | HirExprKind::ListLit { .. }
+                | HirExprKind::ListSpreadLit { .. }
+                | HirExprKind::MapLit { .. }
+                | HirExprKind::Call { .. }
+                | HirExprKind::MethodCall { .. }
+                | HirExprKind::Some_(_)
+                | HirExprKind::Ok_(_)
+                | HirExprKind::Err_(_)
+                | HirExprKind::Await(_)
+                | HirExprKind::Range { .. }
+                | HirExprKind::InterpolatedStr(_)
+                // Binary/Unary on managed types (string/bytes concat, etc.)
+                // allocate a fresh +1 ref via runtime helpers.
+                | HirExprKind::Binary { .. }
+                | HirExprKind::Unary { .. }
+        )
+    }
+
     fn current_loop(&self) -> Option<LoopContext> {
         self.loop_stack.last().copied()
     }
@@ -5973,11 +6508,14 @@ impl<'a> FuncCodegen<'a> {
             self.terminated = true;
             return Ok(());
         }
+        let return_expr_is_owned = val.map(Self::expr_produces_owned_ref).unwrap_or(false);
         let return_value = val
             .map(|e| self.emit_expr_for_expected(e, &return_ty))
             .transpose()?;
         if let Some(value) = return_value {
-            self.emit_arc_retain_if_managed(&return_ty, value)?;
+            if !return_expr_is_owned {
+                self.emit_arc_retain_if_managed(&return_ty, value)?;
+            }
         }
         self.emit_scope_cleanup_calls_from(0, 0)?;
         if let Some(v) = return_value {
@@ -6325,7 +6863,7 @@ impl<'a> FuncCodegen<'a> {
                 );
                 self.emit_future_complete(result_future, &plan.inner_ty, Some(result_value))?;
                 self.emit_arc_unregister_edge(frame, awaited)?;
-                self.emit_simple_async_frame_cleanup(plan, frame, index, true)?;
+                self.emit_async_terminal_cleanup(plan, frame, index)?;
                 let zero = self.builder.ins().iconst(types::I64, 0);
                 self.builder.ins().return_(&[zero]);
 
@@ -6437,7 +6975,7 @@ impl<'a> FuncCodegen<'a> {
                 .ok_or_else(|| "missing runtime function `ori_future_cancel`".to_string())?;
             self.emit_arc_unregister_edge(frame, awaited)?;
             self.builder.ins().call(cancel_ref, &[result_future]);
-            self.emit_simple_async_frame_cleanup(plan, frame, index, true)?;
+            self.emit_async_terminal_cleanup(plan, frame, index)?;
             let zero = self.builder.ins().iconst(types::I64, 0);
             self.builder.ins().return_(&[zero]);
 
@@ -6454,7 +6992,7 @@ impl<'a> FuncCodegen<'a> {
                 .ok_or_else(|| "missing runtime function `ori_future_fail`".to_string())?;
             self.emit_arc_unregister_edge(frame, awaited)?;
             self.builder.ins().call(fail_ref, &[result_future]);
-            self.emit_simple_async_frame_cleanup(plan, frame, index, true)?;
+            self.emit_async_terminal_cleanup(plan, frame, index)?;
             let zero = self.builder.ins().iconst(types::I64, 0);
             self.builder.ins().return_(&[zero]);
         }
@@ -6471,7 +7009,7 @@ impl<'a> FuncCodegen<'a> {
             .get("ori_future_cancel")
             .ok_or_else(|| "missing runtime function `ori_future_cancel`".to_string())?;
         self.builder.ins().call(cancel_ref, &[result_future]);
-        self.emit_simple_async_frame_cleanup(plan, frame, await_count, true)?;
+        self.emit_async_terminal_cleanup(plan, frame, await_count)?;
         let zero = self.builder.ins().iconst(types::I64, 0);
         self.builder.ins().return_(&[zero]);
 
@@ -7005,6 +7543,7 @@ impl<'a> FuncCodegen<'a> {
             HirStmt::Let {
                 name, ty, value, ..
             } => {
+                let value_is_owned = Self::expr_produces_owned_ref(value);
                 let val = self.emit_expr_for_expected(value, ty)?;
                 if let Some(cl_ty) = cl_type(ty, self.ptr_ty) {
                     let var = self.lookup_var(name).map(|(v, _)| v).unwrap_or_else(|| {
@@ -7012,10 +7551,11 @@ impl<'a> FuncCodegen<'a> {
                         self.insert_var(name.clone(), (v, ty.clone()));
                         v
                     });
-                    let val_ty = self.builder.func.dfg.value_type(val);
                     self.builder.def_var(var, val);
                     if is_managed_ty(ty) {
-                        self.emit_arc_retain_if_managed(ty, val)?;
+                        if !value_is_owned {
+                            self.emit_arc_retain_if_managed(ty, val)?;
+                        }
                         self.managed_stack.push(ManagedCleanup {
                             var,
                             ty: ty.clone(),
@@ -7027,18 +7567,24 @@ impl<'a> FuncCodegen<'a> {
             HirStmt::Assign { lvalue, value, .. } => {
                 if let HirLValue::Var(name) = lvalue {
                     if let Some((var, ty)) = self.lookup_var(name) {
+                        let value_is_owned = Self::expr_produces_owned_ref(value);
                         let val = self.emit_expr_for_expected(value, &ty)?;
                         let old = self.builder.use_var(var);
-                        self.emit_arc_retain_if_managed(&ty, val)?;
+                        if !value_is_owned {
+                            self.emit_arc_retain_if_managed(&ty, val)?;
+                        }
                         self.emit_arc_release_if_managed(&ty, old)?;
                         self.builder.def_var(var, val);
                         self.store_async_local_if_any(name, val)?;
                     } else {
                         let val = if let Some(info) = self.global_data.get(name).cloned() {
+                            let value_is_owned = Self::expr_produces_owned_ref(value);
                             let val = self.emit_expr_for_expected(value, &info.ty)?;
                             if info.mutable && is_managed_ty(&info.ty) {
                                 if let Some(old) = self.load_global(name) {
-                                    self.emit_arc_retain_if_managed(&info.ty, val)?;
+                                    if !value_is_owned {
+                                        self.emit_arc_retain_if_managed(&info.ty, val)?;
+                                    }
                                     self.emit_arc_release_if_managed(&info.ty, old)?;
                                 }
                             }
@@ -7105,7 +7651,15 @@ impl<'a> FuncCodegen<'a> {
             }
             HirStmt::Expr(e) => {
                 if !self.emit_never_call_stmt(e)? {
-                    self.emit_expr(e)?;
+                    let v = self.emit_expr(e)?;
+                    // Discarded managed temporaries (e.g. a struct literal
+                    // or a Call returning a managed value used as a
+                    // statement) must be released so the +1 from creation
+                    // does not leak. Borrowed refs (Var/Field) are owned by
+                    // their binding and are released by scope cleanup.
+                    if is_managed_ty(&e.ty) && Self::expr_produces_owned_ref(e) {
+                        self.emit_arc_release_if_managed(&e.ty, v)?;
+                    }
                 }
             }
 
@@ -7156,6 +7710,7 @@ impl<'a> FuncCodegen<'a> {
             HirStmt::Using {
                 name, ty, value, ..
             } => {
+                let value_is_owned = Self::expr_produces_owned_ref(value);
                 let val = self.emit_expr_for_expected(value, ty)?;
                 if let Some(cl_ty) = cl_type(ty, self.ptr_ty) {
                     let var = self.lookup_var(name).map(|(v, _)| v).unwrap_or_else(|| {
@@ -7165,7 +7720,9 @@ impl<'a> FuncCodegen<'a> {
                     });
                     self.builder.def_var(var, val);
                     if is_managed_ty(ty) {
-                        self.emit_arc_retain_if_managed(ty, val)?;
+                        if !value_is_owned {
+                            self.emit_arc_retain_if_managed(ty, val)?;
+                        }
                         self.managed_stack.push(ManagedCleanup {
                             var,
                             ty: ty.clone(),
@@ -7647,7 +8204,7 @@ impl<'a> FuncCodegen<'a> {
         let call = self.builder.ins().call(new_ref, &[handle]);
         let iter_value = self.builder.inst_results(call)[0];
 
-        let (idx_var, iter_var, iter_val) = if has_await {
+        let (idx_var, iter_var, _iter_val) = if has_await {
             let loop_id = self.async_loop_index;
             self.async_loop_index += 1;
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
@@ -7715,17 +8272,15 @@ impl<'a> FuncCodegen<'a> {
 
         if let Some(ib_name) = index_binding {
             let cur = self.builder.use_var(idx_var);
-            let ib_var = if has_await {
+            if has_await {
                 let (ib_var, _) = self.lookup_var(ib_name).unwrap();
                 self.builder.def_var(ib_var, cur);
                 self.store_async_local_if_any(ib_name, cur)?;
-                ib_var
             } else {
                 let ib_var = self.builder.declare_var(types::I64);
                 self.builder.def_var(ib_var, cur);
                 self.insert_var(ib_name.clone(), (ib_var, Ty::Int));
-                ib_var
-            };
+            }
         }
 
         self.terminated = false;
@@ -7796,7 +8351,7 @@ impl<'a> FuncCodegen<'a> {
         let iter_value = self.emit_expr(iterable)?;
         self.emit_arc_retain_if_managed(&iterable.ty, iter_value)?;
 
-        let (idx_var, iter_var, iter_val) = if has_await {
+        let (idx_var, iter_var, _iter_val) = if has_await {
             let loop_id = self.async_loop_index;
             self.async_loop_index += 1;
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
@@ -7872,17 +8427,15 @@ impl<'a> FuncCodegen<'a> {
         }
         if let Some(ib_name) = index_binding {
             let cur = self.builder.use_var(idx_var);
-            let ib_var = if has_await {
+            if has_await {
                 let (ib_var, _) = self.lookup_var(ib_name).unwrap();
                 self.builder.def_var(ib_var, cur);
                 self.store_async_local_if_any(ib_name, cur)?;
-                ib_var
             } else {
                 let ib_var = self.builder.declare_var(types::I64);
                 self.builder.def_var(ib_var, cur);
                 self.insert_var(ib_name.clone(), (ib_var, Ty::Int));
-                ib_var
-            };
+            }
         }
         self.terminated = false;
         self.push_loop(step, exit);
@@ -8025,17 +8578,15 @@ impl<'a> FuncCodegen<'a> {
         if let Some(ib_name) = index_binding {
             if let Some(ic_var) = iter_count_var {
                 let ic = self.builder.use_var(ic_var);
-                let ib_var = if has_await {
+                if has_await {
                     let (ib_var, _) = self.lookup_var(ib_name).unwrap();
                     self.builder.def_var(ib_var, ic);
                     self.store_async_local_if_any(ib_name, ic)?;
-                    ib_var
                 } else {
                     let ib_var = self.builder.declare_var(types::I64);
                     self.builder.def_var(ib_var, ic);
                     self.insert_var(ib_name.clone(), (ib_var, Ty::Int));
-                    ib_var
-                };
+                }
             }
         }
 
@@ -8215,17 +8766,15 @@ impl<'a> FuncCodegen<'a> {
 
         if let Some(ib_name) = index_binding {
             let cur2 = self.builder.use_var(idx_var);
-            let ib_var = if has_await {
+            if has_await {
                 let (ib_var, _) = self.lookup_var(ib_name).unwrap();
                 self.builder.def_var(ib_var, cur2);
                 self.store_async_local_if_any(ib_name, cur2)?;
-                ib_var
             } else {
                 let ib_var = self.builder.declare_var(types::I64);
                 self.builder.def_var(ib_var, cur2);
                 self.insert_var(ib_name.clone(), (ib_var, Ty::Int));
-                ib_var
-            };
+            }
         }
 
         self.terminated = false;
@@ -8530,17 +9079,15 @@ impl<'a> FuncCodegen<'a> {
 
         if let Some(ib_name) = index_binding {
             let cur3 = self.builder.use_var(idx_var);
-            let ib_var = if has_await {
+            if has_await {
                 let (ib_var, _) = self.lookup_var(ib_name).unwrap();
                 self.builder.def_var(ib_var, cur3);
                 self.store_async_local_if_any(ib_name, cur3)?;
-                ib_var
             } else {
                 let ib_var = self.builder.declare_var(types::I64);
                 self.builder.def_var(ib_var, cur3);
                 self.insert_var(ib_name.clone(), (ib_var, Ty::Int));
-                ib_var
-            };
+            }
         }
 
         self.terminated = false;
@@ -8671,17 +9218,15 @@ impl<'a> FuncCodegen<'a> {
         }
         if let Some(ib_name) = index_binding {
             let cur3 = self.builder.use_var(idx_var);
-            let ib_var = if has_await {
+            if has_await {
                 let (ib_var, _) = self.lookup_var(ib_name).unwrap();
                 self.builder.def_var(ib_var, cur3);
                 self.store_async_local_if_any(ib_name, cur3)?;
-                ib_var
             } else {
                 let ib_var = self.builder.declare_var(types::I64);
                 self.builder.def_var(ib_var, cur3);
                 self.insert_var(ib_name.clone(), (ib_var, Ty::Int));
-                ib_var
-            };
+            }
         }
         self.terminated = false;
         self.push_loop(step, exit);
@@ -9237,6 +9782,7 @@ impl<'a> FuncCodegen<'a> {
                 base
             }
             HirExprKind::Some_(inner) => {
+                let inner_is_owned = Self::expr_produces_owned_ref(inner);
                 let val = self.emit_expr(inner)?;
                 let inner_ty = if let Ty::Optional(t) = &expr.ty {
                     &**t
@@ -9251,9 +9797,16 @@ impl<'a> FuncCodegen<'a> {
                     .ins()
                     .store(MemFlags::new(), val, base, val_off as i32);
                 self.emit_arc_register_edge_if_managed(inner_ty, base, val)?;
+                // The edge now owns the +1 from the inner temporary's malloc.
+                // Release the temporary's own +1 so it does not leak. Borrowed
+                // refs (Var/Field) keep their binding's ref untouched.
+                if inner_is_owned && is_managed_ty(inner_ty) {
+                    self.emit_arc_release_if_managed(inner_ty, val)?;
+                }
                 base
             }
             HirExprKind::Ok_(inner) => {
+                let inner_is_owned = Self::expr_produces_owned_ref(inner);
                 let val = self.emit_expr(inner)?;
                 let (ok_ty, err_ty) = if let Ty::Result(o, e) = &expr.ty {
                     (&**o, &**e)
@@ -9268,9 +9821,13 @@ impl<'a> FuncCodegen<'a> {
                     .ins()
                     .store(MemFlags::new(), val, base, pay_off as i32);
                 self.emit_arc_register_edge_if_managed(ok_ty, base, val)?;
+                if inner_is_owned && is_managed_ty(ok_ty) {
+                    self.emit_arc_release_if_managed(ok_ty, val)?;
+                }
                 base
             }
             HirExprKind::Err_(inner) => {
+                let inner_is_owned = Self::expr_produces_owned_ref(inner);
                 let val = self.emit_expr(inner)?;
                 let (ok_ty, err_ty) = if let Ty::Result(o, e) = &expr.ty {
                     (&**o, &**e)
@@ -9285,6 +9842,9 @@ impl<'a> FuncCodegen<'a> {
                     .ins()
                     .store(MemFlags::new(), val, base, pay_off as i32);
                 self.emit_arc_register_edge_if_managed(err_ty, base, val)?;
+                if inner_is_owned && is_managed_ty(err_ty) {
+                    self.emit_arc_release_if_managed(err_ty, val)?;
+                }
                 base
             }
             HirExprKind::StrLit(s) => self.string_ptr(s.as_str())?,
@@ -9305,9 +9865,27 @@ impl<'a> FuncCodegen<'a> {
                 if matches!(op, BinaryOp::And | BinaryOp::Or) {
                     return self.emit_short_circuit_binary(*op, lhs, rhs);
                 }
+                let lhs_owned = Self::expr_produces_owned_ref(lhs);
+                let rhs_owned = Self::expr_produces_owned_ref(rhs);
                 let lv = self.emit_expr(lhs)?;
                 let rv = self.emit_expr(rhs)?;
-                self.emit_binary(*op, lv, rv, &lhs.ty)?
+                let res = self.emit_binary(*op, lv, rv, &lhs.ty)?;
+                // String/bytes concat runtime helpers borrow their operands
+                // without releasing them, so fresh +1 temporaries passed as
+                // operands would leak. Release owned managed operands after
+                // the concat call. Literal/Var operands are either static or
+                // owned by a binding (released by scope cleanup).
+                if matches!(op, BinaryOp::Add)
+                    && matches!(lhs.ty, Ty::String | Ty::Bytes)
+                {
+                    if lhs_owned && is_managed_ty(&lhs.ty) {
+                        self.emit_arc_release_if_managed(&lhs.ty, lv)?;
+                    }
+                    if rhs_owned && is_managed_ty(&rhs.ty) {
+                        self.emit_arc_release_if_managed(&rhs.ty, rv)?;
+                    }
+                }
+                res
             }
             HirExprKind::Unary { op, operand } => {
                 let v = self.emit_expr(operand)?;
@@ -9608,29 +10186,53 @@ impl<'a> FuncCodegen<'a> {
                             }
                         }
                         let param_tys = self.func_param_tys.get(name).cloned();
+                        let is_user_func = self.user_func_names.contains(name.as_str());
                         let mut args_v = Vec::new();
+                        // Track owned (fresh +1) managed args so we can release
+                        // them after a stdlib FFI call. User functions balance
+                        // via callee scope cleanup of the param, but stdlib FFI
+                        // borrows args without releasing, so the +1 from the
+                        // temporary's malloc would leak.
+                        let mut owned_temp_args: Vec<(ir::Value, Ty)> = Vec::new();
                         for (index, arg) in args.iter().enumerate() {
                             if let Some(expected) = param_tys
                                 .as_ref()
                                 .and_then(|params| params.get(index))
                                 .cloned()
                             {
+                                let arg_is_owned = Self::expr_produces_owned_ref(&arg.value);
                                 let value = self.emit_expr_for_expected(&arg.value, &expected)?;
                                 let retain_ty = if expected.contains_infer() {
                                     &arg.value.ty
                                 } else {
                                     &expected
                                 };
-                                self.emit_arc_retain_if_managed(retain_ty, value)?;
+                                if is_user_func && !arg_is_owned {
+                                    self.emit_arc_retain_if_managed(retain_ty, value)?;
+                                }
+                                if !is_user_func && arg_is_owned && is_managed_ty(retain_ty) {
+                                    owned_temp_args.push((value, retain_ty.clone()));
+                                }
                                 args_v.push(value);
                             } else {
+                                let arg_is_owned = Self::expr_produces_owned_ref(&arg.value);
                                 let value = self.emit_expr(&arg.value)?;
-                                self.emit_arc_retain_if_managed(&arg.value.ty, value)?;
+                                if is_user_func && !arg_is_owned {
+                                    self.emit_arc_retain_if_managed(&arg.value.ty, value)?;
+                                }
+                                if !is_user_func && arg_is_owned && is_managed_ty(&arg.value.ty) {
+                                    owned_temp_args.push((value, arg.value.ty.clone()));
+                                }
                                 args_v.push(value);
                             }
                         }
                         if let Some(&fref) = self.func_refs.get(name.as_str()) {
                             let call = self.builder.ins().call(fref, &args_v);
+                            // Release fresh managed temporaries passed to
+                            // stdlib FFI after the call returns.
+                            for (v, ty) in owned_temp_args {
+                                self.emit_arc_release_if_managed(&ty, v)?;
+                            }
                             let res = self.builder.inst_results(call);
                             if res.is_empty() {
                                 self.builder.ins().iconst(types::I8, 0)
@@ -9714,8 +10316,14 @@ impl<'a> FuncCodegen<'a> {
             HirExprKind::Await(inner) => self.emit_await(inner, &expr.ty)?,
             HirExprKind::StructLit { def_id, fields } => {
                 if let Some(layout) = self.struct_layouts.get(def_id).cloned() {
-                    let base = self.malloc_bytes(layout.size)?;
+                    let dtor_v = if let Some(&fref) = self.struct_dtor_refs.get(def_id) {
+                        self.builder.ins().func_addr(self.ptr_ty, fref)
+                    } else {
+                        self.builder.ins().iconst(self.ptr_ty, 0)
+                    };
+                    let base = self.malloc_bytes_with_dtor(layout.size, dtor_v)?;
                     for (fname, fexpr) in fields {
+                        let fexpr_is_owned = Self::expr_produces_owned_ref(fexpr);
                         let val = self.emit_expr(fexpr)?;
                         if let Some(fi) = layout.field(fname) {
                             if let Some(contract) = &fi.contract {
@@ -9729,6 +10337,13 @@ impl<'a> FuncCodegen<'a> {
                                     fi.offset as i32,
                                 );
                                 self.emit_arc_register_edge_if_managed(&fi.ty, base, val)?;
+                                // The edge owns the field's +1. Release the
+                                // temporary's own +1 so it does not leak.
+                                // Borrowed refs (Var/Field) keep their
+                                // binding's ref untouched.
+                                if fexpr_is_owned && is_managed_ty(&fi.ty) {
+                                    self.emit_arc_release_if_managed(&fi.ty, val)?;
+                                }
                             }
                         } else {
                             return Err(format!(
@@ -9843,7 +10458,12 @@ impl<'a> FuncCodegen<'a> {
                 ..
             } => {
                 if let Some(layout) = self.enum_layouts.get(def_id).cloned() {
-                    let base = self.malloc_bytes(layout.size)?;
+                    let dtor_v = if let Some(&fref) = self.enum_dtor_refs.get(def_id) {
+                        self.builder.ins().func_addr(self.ptr_ty, fref)
+                    } else {
+                        self.builder.ins().iconst(self.ptr_ty, 0)
+                    };
+                    let base = self.malloc_bytes_with_dtor(layout.size, dtor_v)?;
 
                     if let Some(v_layout) = layout.variant(variant) {
                         // Store the tag at offset 0
@@ -9852,6 +10472,7 @@ impl<'a> FuncCodegen<'a> {
 
                         // Store fields in the payload layout
                         for (fname, fexpr) in fields {
+                            let fexpr_is_owned = Self::expr_produces_owned_ref(fexpr);
                             let val = self.emit_expr(fexpr)?;
                             if let Some(fi) = v_layout.fields.field(fname) {
                                 let total_offset = (layout.payload_offset + fi.offset) as i32;
@@ -9859,6 +10480,11 @@ impl<'a> FuncCodegen<'a> {
                                     .ins()
                                     .store(MemFlags::new(), val, base, total_offset);
                                 self.emit_arc_register_edge_if_managed(&fi.ty, base, val)?;
+                                // The edge owns the field's +1. Release the
+                                // temporary's own +1 so it does not leak.
+                                if fexpr_is_owned && is_managed_ty(&fi.ty) {
+                                    self.emit_arc_release_if_managed(&fi.ty, val)?;
+                                }
                             } else {
                                 return Err(format!("layout for enum variant `{variant}` is missing field `{fname}`"));
                             }
@@ -9882,7 +10508,12 @@ impl<'a> FuncCodegen<'a> {
                     let v = self.emit_expr(e)?;
                     vals_and_offsets.push((v, *offset, elem_ty.clone()));
                 }
-                let base = self.malloc_bytes(total)?;
+                let dtor_v = if let Some(&fref) = self.tuple_dtor_refs.get(&elem_tys) {
+                    self.builder.ins().func_addr(self.ptr_ty, fref)
+                } else {
+                    self.builder.ins().iconst(self.ptr_ty, 0)
+                };
+                let base = self.malloc_bytes_with_dtor(total, dtor_v)?;
 
                 for (v, off, elem_ty) in vals_and_offsets {
                     self.builder

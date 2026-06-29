@@ -1536,3 +1536,442 @@ end
     assert_eq!(stdout.trim(), "disposed: 330");
 }
 
+#[test]
+fn compile_runs_async_using_dispose_on_cancel() {
+    let dir = TestDir::new("compile_async_using_dispose_on_cancel");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.task as task
+
+trait Disposable
+    mut func dispose(self)
+end
+
+var dispose_count: int = 0
+
+struct Resource
+    id: int
+end
+
+implement Disposable for Resource
+    mut func dispose(self)
+        dispose_count = dispose_count + self.id
+    end
+end
+
+async func get_resource(id: int) -> Resource
+    await task.sleep(1)
+    return Resource(id: id)
+end
+
+async func worker(token: task.CancelToken)
+    using r: Resource = await get_resource(77)
+    const fut: future<void> = task.sleep(5000)
+    task.associate(token, fut)
+    await fut
+end
+
+func main()
+    const token: task.CancelToken = task.create_token()
+    const job: task.Job<void> = task.spawn(do() -> void
+        task.block_on(worker(token))
+    end)
+    task.block_on(task.sleep(50))
+    task.cancel(token)
+    task.join(job)
+    io.print("disposed: " + string(dispose_count))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "async_using_dispose_cancel");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), "disposed: 77");
+}
+
+#[test]
+fn compile_runs_async_using_dispose_on_break() {
+    let dir = TestDir::new("compile_async_using_dispose_on_break");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.task as task
+
+trait Disposable
+    mut func dispose(self)
+end
+
+var dispose_count: int = 0
+
+struct Resource
+    id: int
+end
+
+implement Disposable for Resource
+    mut func dispose(self)
+        dispose_count = dispose_count + self.id
+    end
+end
+
+async func get_resource(id: int) -> Resource
+    await task.sleep(1)
+    return Resource(id: id)
+end
+
+async func worker()
+    var total: int = 0
+    while total < 100
+        using r: Resource = await get_resource(10)
+        total = total + 10
+        if total >= 20
+            break
+        end
+        await task.sleep(1)
+    end
+end
+
+func main()
+    task.block_on(worker())
+    io.print("disposed: " + string(dispose_count))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "async_using_dispose_break");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), "disposed: 20");
+}
+
+#[test]
+fn compile_runs_async_file_using_dispose_on_cancel() {
+    let dir = TestDir::new("compile_async_file_using_dispose_on_cancel");
+    let test_file = dir.path("async_file.txt").to_string_lossy().replace('\\', "/");
+    dir.write(
+        "main.orl",
+        &format!(
+            r#"namespace app.main
+
+import ori.fs as fs
+import ori.io as io
+import ori.bytes as bytes_mod
+import ori.task as task
+
+async func worker(token: task.CancelToken, path: string) -> result<int, string>
+    using file: fs.File = fs.open_write(path)?
+    fs.write(file, b"ok")?
+    const fut: future<void> = task.sleep(5000)
+    task.associate(token, fut)
+    await fut
+    return success(0)
+end
+
+func main()
+    const path: string = "{test_file}"
+    const token: task.CancelToken = task.create_token()
+    const job: task.Job<void> = task.spawn(do() -> void
+        task.block_on(worker(token, path))
+    end)
+    task.block_on(task.sleep(50))
+    task.cancel(token)
+    task.join(job)
+    match fs.open_read(path)
+        case success(file):
+            match fs.read(file, 8)
+                case success(data):
+                    fs.close(file)
+                    io.print(string(bytes_mod.len(data)))
+                case error(err):
+                    fs.close(file)
+                    io.print("err:" + err)
+            end
+        case error(err):
+            io.print("open-err:" + err)
+    end
+end
+"#
+        ),
+    );
+
+    let exe = exe_path(&dir, "async_file_using_dispose_cancel");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), "2");
+}
+
+#[test]
+fn compile_runs_async_await_in_match_native() {
+    let dir = TestDir::new("compile_async_await_in_match_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.task as task
+
+async func compute(x: int) -> int
+    await task.sleep(1)
+    return x + 1
+end
+
+async func pick(flag: bool) -> int
+    var out: int = 0
+    match flag
+        case true:
+            out = await compute(10)
+        case false:
+            out = await compute(20)
+    end
+    return out
+end
+
+func main()
+    const left: int = task.block_on(pick(true))
+    const right: int = task.block_on(pick(false))
+    io.print(string(left) + " " + string(right))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "async_await_in_match");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.trim(), "11 21");
+}
+
+/// Matrix coverage: `for` loop with `await` inside the body. The async state
+/// machine must lift the for-loop iterator state across the await point so
+/// the loop resumes correctly after each await. This complements the existing
+/// if/else, while, and match coverage to complete the
+/// if/else/match/while/for async matrix.
+#[test]
+fn compile_runs_async_await_in_for_loop_native() {
+    let dir = TestDir::new("compile_async_await_in_for_loop_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.task as task
+
+async func compute(x: int) -> int
+    await task.sleep(1)
+    return x * x
+end
+
+async func sum_squares(values: list<int>) -> int
+    var total: int = 0
+    for value in values
+        const sq: int = await compute(value)
+        total = total + sq
+    end
+    return total
+end
+
+func main()
+    const xs: list<int> = [1, 2, 3, 4]
+    const outcome: int = task.block_on(sum_squares(xs))
+    io.print(string(outcome))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "async_await_in_for_loop");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    // 1*1 + 2*2 + 3*3 + 4*4 = 1 + 4 + 9 + 16 = 30
+    assert_eq!(stdout.trim(), "30");
+}
+
+/// Etapa 4.3 regression (KNOWN LIMITATION — `#[ignore]`): deeply nested await
+/// bodies. The async state machine's *general* path (`emit_general_async_step`)
+/// produces invalid Cranelift IR (verifier error: SSA dominance across step
+/// boundaries) when an `await` sits inside a loop that is itself nested inside
+/// another loop — e.g. `for { while { await ... } }`.
+///
+/// The *simple* path (`simple_async_lift_stmt_awaits`) correctly bails out on
+/// this shape (it returns `None` for `While` and for `For` whose body contains
+/// an await), so the general path is taken. The general collector
+/// (`GeneralAsyncCollector`) does register loop-state locals
+/// (`.__loop_idx_*`, `.__loop_list_*`, etc.) so they survive across suspension
+/// points, but the emission of the nested loop bodies across poll blocks does
+/// not thread every live SSA value correctly, and `define_function` fails with
+/// "Compilation error: Verifier errors".
+///
+/// Single-level loops with await (`for { await }`, `while { await }`) work —
+/// covered by `compile_runs_async_await_in_for_loop_native` and
+/// `compile_runs_async_await_in_loop_and_branch_native`. The gap is specifically
+/// *loop nesting* with await in the inner body.
+///
+/// This test is kept as a regression marker: un-ignore when the general async
+/// state machine emits valid SSA for nested loops with await.
+#[test]
+#[ignore = "Etapa 4.3: await in nested loops (for→while) triggers Cranelift verifier error in general async path — known limitation"]
+fn compile_runs_async_await_in_deeply_nested_bodies_native() {
+    let dir = TestDir::new("compile_async_await_deeply_nested_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.task as task
+
+async func compute(x: int) -> int
+    await task.sleep(1)
+    return x + 1
+end
+
+async func deeply_nested(limit: int) -> int
+    var total: int = 0
+    const xs: list<int> = [1, 2, 3]
+    for value in xs
+        var guard: int = 0
+        while guard < limit
+            total = total + await compute(value)
+            guard = guard + 1
+        end
+    end
+    return total
+end
+
+func main()
+    const r: int = task.block_on(deeply_nested(2))
+    io.print(string(r))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "async_await_deeply_nested");
+    let out = match run_compile(&dir.path("main.orl"), Path::new(&exe)) {
+        Ok(o) => o,
+        Err(e) => panic!("compile error: {e}"),
+    };
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    // For value=1,2,3 with limit=2 (guard=0,1):
+    //   value=1: compute(1)=2 twice -> 4; value=2: 3 twice -> 6; value=3: 4 twice -> 8
+    // total = 4 + 6 + 8 = 18
+    assert_eq!(stdout.trim(), "18");
+}
+
+/// Etapa 6.4 — formatter audit for async/concurrency constructs + idempotency.
+/// Covers: `async func` + `await`, `task.spawn` with a closure, nested `using`
+/// (a `using` inside a `match` arm that is itself inside a `using` scope), and
+/// a multi-line `match`. Asserts the formatter produces correctly indented
+/// output AND is idempotent (formatting the formatted output yields the same
+/// text).
+///
+/// Note: a pre-existing formatter regression with `trait` declarations (the
+/// trait's `end` is consumed by the first method signature, leaving subsequent
+/// top-level items over-indented) is documented in PLANO Etapa 6.4 Known
+/// Issues; this test avoids custom `trait`/`struct` definitions to keep the
+/// audit focused on async/concurrency constructs.
+#[test]
+fn fmt_preserves_async_spawn_nested_using_and_multiline_match_idempotent() {
+    let dir = TestDir::new("fmt_async_audit_idempotent");
+    let source = r#"namespace app.main
+
+import ori.fs as fs
+import ori.io as io
+import ori.task as task
+
+async func work(n: int) -> int
+await task.sleep(1)
+return n * 2
+end
+
+func handle(path: string) -> result<int, string>
+using file: fs.File = fs.open_read(path)?
+match fs.read(file, 100)
+case success(data):
+using copy: fs.File = fs.open_write(path)?
+fs.write(copy, data)?
+return success(10)
+case error(msg):
+return error(msg)
+end
+end
+
+func pick(flag: bool) -> int
+match flag
+case true:
+return 1
+case false:
+return 2
+end
+end
+
+func main()
+const job: task.Job<int> = task.spawn(do() => 41)
+const r: int = task.block_on(work(task.join(job)))
+io.print(string(r))
+end
+"#;
+    dir.write("main.orl", source);
+
+    let out = run_fmt(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "fmt must parse without errors: {:?}", out.diagnostics);
+    let once = out.formatted.clone();
+
+    // Audit: async func + await + return at one indent level inside the func.
+    assert!(
+        once.contains("async func work(n: int) -> int\n    await task.sleep(1)\n    return n * 2\nend\n"),
+        "async func + await indentation: {once}"
+    );
+    // task.spawn with closure at 4-space indent inside main.
+    assert!(
+        once.contains("    const job: task.Job<int> = task.spawn(do() => 41)\n"),
+        "task.spawn formatting: {once}"
+    );
+    // Nested using: `using file` at 4, match at 4, case arm at 4, `using copy`
+    // (nested using) at 8 inside the case body. The formatter places `case`
+    // labels at the same indent as `match` (switch/case style) with bodies one
+    // level deeper.
+    assert!(
+        once.contains("    using file: fs.File = fs.open_read(path)?\n    match fs.read(file, 100)\n    case success(data):\n        using copy: fs.File = fs.open_write(path)?\n        fs.write(copy, data)?\n        return success(10)\n    case error(msg):\n        return error(msg)\n    end\n"),
+        "nested using + match arm indentation: {once}"
+    );
+    // Multi-line match: `match` and `case` at 4, bodies at 8, `end` at 4.
+    assert!(
+        once.contains("    match flag\n    case true:\n        return 1\n    case false:\n        return 2\n    end\n"),
+        "multi-line match indentation: {once}"
+    );
+
+    // Idempotency: formatting the already-formatted output must be a no-op.
+    dir.write("main.orl", &once);
+    let out2 = run_fmt(&dir.path("main.orl")).unwrap();
+    assert!(!out2.has_errors, "second fmt must parse: {:?}", out2.diagnostics);
+    assert_eq!(
+        once, out2.formatted,
+        "formatter must be idempotent (format(format(x)) == format(x))"
+    );
+}

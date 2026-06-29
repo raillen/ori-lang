@@ -2501,7 +2501,7 @@ end
     let out = run_check(&dir.path("a.orl")).unwrap();
     assert!(out.has_errors);
     assert!(
-        diagnostic_codes(&out).contains(&"bind.import_cycle"),
+        diagnostic_codes(&out).contains(&"project.circular_import"),
         "{:?}",
         out.diagnostics
     );
@@ -2529,7 +2529,7 @@ end
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
     assert!(
-        diagnostic_codes(&out).contains(&"bind.import_namespace_mismatch"),
+        diagnostic_codes(&out).contains(&"project.namespace_file_mismatch"),
         "{:?}",
         out.diagnostics
     );

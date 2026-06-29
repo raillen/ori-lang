@@ -313,7 +313,38 @@ shape.draw(canvas)
 Only methods declared in `Trait` may be called through `any<Trait>`.
 The concrete type is erased; the compiler generates a vtable.
 
-`any<Trait>` values are heap-allocated (boxed). Prefer generics for
-performance-sensitive code.
+`==` on `any<Trait>` uses runtime vtable dispatch: the concrete type's
+`Equatable` implementation is invoked when both operands implement the trait
+constraint. Prefer generics for performance-sensitive paths.
 
-`==` on `any<Trait>` is a compile error.
+```ori
+const a: any<core.Equatable> = 1
+const b: any<core.Equatable> = 1
+const same: bool = a == b   -- ok: structural equality via vtable
+```
+
+---
+
+## Current implementation status
+
+> Status: current as of 2026-06-27.
+
+| Feature | Status | Sanity test |
+| --- | --- | --- |
+| Trait declaration (required + default methods) | implemented | `ori_spec.rs` — `trait_accepts_required_and_default_methods` |
+| `Self` in trait signatures | implemented | `ori_spec.rs` — `generic_accepts_type_inference` |
+| `implement Trait for Type` blocks | implemented | `method_resolution.rs` — `build_lowers_implement_method_call` |
+| Missing required method rejected | implemented | `ori_spec.rs` — `trait_rejects_implement_missing_required_method` |
+| `mut func` in traits/implement (`Disposable`) | implemented | `multifile_imports.rs` — `check_accepts_core_traits_and_using_core_disposable` |
+| Generic traits (`Container<T>`) | implemented | `ori_spec.rs` — `generic_accepts_generic_struct` |
+| HKT, associated types, const generics | implemented | `ori_spec.rs` — `generic_accepts_hkt`, `generic_accepts_associated_type_in_trait`, `generic_accepts_const_generic_param` |
+| Operator traits (`Comparable`, `Equatable`, `Hashable`) | implemented | `collections.rs` — `check_accepts_hash_table_user_defined_hashable_equatable_key`, `check_rejects_heap_without_comparable_element` |
+| `any<Trait>` dynamic dispatch + vtable | implemented | `ori_spec.rs` — `trait_accepts_any_dynamic_dispatch` |
+| `==` / `!=` on `any<Trait>` via vtable | implemented | `ori_spec.rs` — `trait_object_equality_works` |
+| `core.Iterable` + `for` loops | implemented | `collections.rs` — `compile_runs_custom_iterable_native`, `check_reports_non_iterable_for_loop` |
+| Disambiguation via `Trait.method(value)` | implemented | `ori_spec.rs` — `trait_rejects_ambiguous_method_call` |
+| Overlapping `implement` blocks | rejected (compile error) | `method_resolution.rs` — `check_reports_duplicate_implement_pair` |
+
+The `any<Trait>` equality example above (lines 320–324) compiles and runs as
+the `trait_object_equality_works` test: two `Circle` values with the same
+radius compare equal through `any<Drawable>` vtable dispatch.

@@ -104,9 +104,9 @@ Current compiler behavior:
   namespace.
 - Imports are resolved from namespace-like paths to matching `.orl` files near
   the importing file.
-- An import cycle is rejected with `bind.import_cycle`.
+- An import cycle is rejected with `project.circular_import`.
 - If a resolved file declares a different namespace, the compiler emits
-  `bind.import_namespace_mismatch`.
+  `project.namespace_file_mismatch`.
 - Known but unfinished standard-library modules are rejected with
   `bind.stdlib_module_unavailable`.
 - Unknown `ori.*` modules are rejected with `bind.stdlib_module_unknown`.

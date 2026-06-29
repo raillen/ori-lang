@@ -960,7 +960,7 @@ fn native_hir_statement_coverage_has_codegen_evidence() {
 
 #[test]
 fn native_string_collectors_are_exhaustive_over_hir_shapes() {
-    let source = include_str!("../native_backend.rs");
+    let source = include_str!("string_collector.rs");
     let expr_collector = source_section(
         source,
         "fn collect_strings_expr",
@@ -971,7 +971,7 @@ fn native_string_collectors_are_exhaustive_over_hir_shapes() {
     let pattern_collector = source_section(
         source,
         "fn collect_strings_pattern",
-        "// == Type mapping ==",
+        "pub(super) fn collect_all_strings",
     );
 
     for (name, section) in [
@@ -998,7 +998,7 @@ fn native_codegen_unsupported_errors_are_coded() {
 
     let source = source_section(
         include_str!("../native_backend.rs"),
-        "fn collect_strings_expr",
+        "// == Type mapping ==",
         "#[cfg(test)]",
     );
     for raw in [
@@ -1377,14 +1377,27 @@ fn simple_async_state_machine_cleans_frame_on_terminal_paths() {
     );
 
     assert_eq!(
-        step.matches("self.emit_simple_async_frame_cleanup(plan, frame, index, true)?;")
+        step.matches("self.emit_async_terminal_cleanup(plan, frame, index)?;")
             .count(),
         3,
         "step cleanup must run on `?`, failed future and cancelled future paths"
     );
     assert!(
-        step.contains("self.emit_simple_async_frame_cleanup(plan, frame, await_count, true)?;"),
-        "normal completion must cleanup the async frame"
+        step.contains("self.emit_async_terminal_cleanup(plan, frame, await_count)?;"),
+        "invalid-state completion must cleanup the async frame"
+    );
+    assert!(
+        step.contains("self.emit_scope_cleanup_calls_from(0, 0)?;"),
+        "normal completion must run using cleanup"
+    );
+    let terminal_cleanup = source_section(
+        source,
+        "fn emit_async_terminal_cleanup(",
+        "fn dispose_func_name_for_ty(",
+    );
+    assert!(
+        terminal_cleanup.contains("self.emit_async_frame_dispose_live_values(plan, frame,"),
+        "terminal async cleanup must dispose live frame bindings"
     );
     for expected in [
         "ASYNC_FRAME_RESULT_OFFSET",

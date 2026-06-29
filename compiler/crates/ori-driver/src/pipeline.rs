@@ -16,6 +16,8 @@ const NATIVE_RUNTIME_METADATA_INVALID: &str = "native.runtime_metadata_invalid";
 const NATIVE_RUNTIME_METADATA_MISMATCH: &str = "native.runtime_metadata_mismatch";
 const NATIVE_ABI_MISMATCH: &str = "native.abi_mismatch";
 
+mod fmt;
+
 // â”€â”€ Output types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 pub struct LexOutput {
@@ -866,6 +868,21 @@ mod tests {
         assert!(libs.contains(&"dl"));
         assert!(libs.contains(&"m"));
     }
+
+    /// Parity guard: every module referenced by `COLLECTION_STDLIB_DOC_SIGNATURES`
+    /// must be an implemented stdlib module according to the manifest-derived
+    /// `is_implemented_stdlib_module`. Catches drift where a doc signature is
+    /// added for a module that does not exist or is not importable.
+    #[test]
+    fn collection_stdlib_doc_signatures_reference_implemented_modules() {
+        for entry in super::COLLECTION_STDLIB_DOC_SIGNATURES {
+            assert!(
+                ori_types::stdlib::is_implemented_stdlib_module(entry.module),
+                "COLLECTION_STDLIB_DOC_SIGNATURES references `{}` which is not an implemented stdlib module",
+                entry.module
+            );
+        }
+    }
 }
 
 pub fn run_check(path: &Path) -> Result<CheckOutput, String> {
@@ -1181,7 +1198,7 @@ fn load_source_recursive(
                     let cycle = import_cycle_description(active, loaded, &import_path, &import);
                     sink.emit(
                         Diagnostic::error(
-                            "bind.import_cycle",
+                            "project.circular_import",
                             format!("import cycle detected: {}", cycle),
                         )
                         .with_label(Label::primary(file_id, span, "cyclic import here"))
@@ -1245,7 +1262,7 @@ fn validate_import_namespace(
         if declared != import {
             sink.emit(
                 Diagnostic::error(
-                    "bind.import_namespace_mismatch",
+                    "project.namespace_file_mismatch",
                     format!(
                         "import `{}` resolved to file declaring `{}`",
                         import, declared
@@ -1293,44 +1310,10 @@ fn classify_stdlib_import(import: &str) -> StdlibImportStatus {
     if import != "ori" && !import.starts_with("ori.") {
         return StdlibImportStatus::NotStdlib;
     }
-
-    match import {
-        "ori"
-        | "ori.core"
-        | "ori.io"
-        | "ori.fs"
-        | "ori.files"
-        | "ori.string"
-        | "ori.bytes"
-        | "ori.list"
-        | "ori.map"
-        | "ori.set"
-        | "ori.deque"
-        | "ori.queue"
-        | "ori.stack"
-        | "ori.linked_list"
-        | "ori.doubly_linked_list"
-        | "ori.tree"
-        | "ori.hash_table"
-        | "ori.graph"
-        | "ori.heap"
-        | "ori.math"
-        | "ori.convert"
-        | "ori.mem"
-        | "ori.time"
-        | "ori.format"
-        | "ori.os"
-        | "ori.random"
-        | "ori.iter"
-        | "ori.lazy"
-        | "ori.concurrent"
-        | "ori.task"
-        | "ori.channel"
-        | "ori.atomic"
-        | "ori.test"
-        | "ori.json"
-        | "ori.Error" => StdlibImportStatus::Implemented,
-        _ => StdlibImportStatus::Unknown,
+    if ori_types::stdlib::is_implemented_stdlib_module(import) {
+        StdlibImportStatus::Implemented
+    } else {
+        StdlibImportStatus::Unknown
     }
 }
 
@@ -1647,75 +1630,7 @@ fn temp_test_paths() -> (PathBuf, PathBuf) {
 }
 
 pub fn format_source_text(source: &str) -> String {
-    let mut indent = 0usize;
-    let mut out = String::new();
-
-    for raw_line in source.replace("\r\n", "\n").replace('\r', "\n").lines() {
-        let line = raw_line.trim();
-        if line.is_empty() {
-            out.push('\n');
-            continue;
-        }
-
-        if should_dedent_before(line) {
-            indent = indent.saturating_sub(1);
-        }
-
-        out.push_str(&"    ".repeat(indent));
-        out.push_str(line);
-        out.push('\n');
-
-        if opens_block_after(line) {
-            indent += 1;
-        }
-    }
-
-    out
-}
-
-fn should_dedent_before(line: &str) -> bool {
-    line == "end" || line == "else" || line.starts_with("else if ") || line.starts_with("case ")
-}
-
-fn opens_block_after(line: &str) -> bool {
-    if is_comment_line(line) || line == "end" || line.starts_with("@") {
-        return false;
-    }
-
-    line == "else"
-        || line.starts_with("else if ")
-        || line.starts_with("case ")
-        || line == "loop"
-        || line.starts_with("if ")
-        || line.starts_with("while ")
-        || line.starts_with("for ")
-        || line.starts_with("repeat ")
-        || line.starts_with("match ")
-        || declaration_opens_block(line)
-}
-
-fn declaration_opens_block(line: &str) -> bool {
-    let mut line = line;
-    loop {
-        let next = line
-            .strip_prefix("public ")
-            .or_else(|| line.strip_prefix("async "))
-            .or_else(|| line.strip_prefix("mut "));
-        let Some(next) = next else {
-            break;
-        };
-        line = next;
-    }
-    line.starts_with("func ")
-        || line.starts_with("struct ")
-        || line.starts_with("enum ")
-        || line.starts_with("trait ")
-        || line.starts_with("implement ")
-        || line.starts_with("extern ")
-}
-
-fn is_comment_line(line: &str) -> bool {
-    line.starts_with("--") || line.starts_with("|--")
+    fmt::format_source_text(source)
 }
 
 fn validate_doc_tags(source: &LoadedSource, sink: &mut DiagnosticSink) {
@@ -2424,12 +2339,13 @@ fn render_documentation_markdown(loaded: &[LoadedSource]) -> String {
 }
 
 fn append_stdlib_documentation(out: &mut String) {
-    let mut modules = BTreeSet::new();
-    for entry in ori_types::stdlib::stdlib_runtime_functions() {
-        if let Some((module, _)) = entry.canonical_path.rsplit_once('.') {
-            modules.insert(module);
-        }
-    }
+    // Module list is derived from the stdlib manifest via the single source
+    // of truth in `ori-types::stdlib`. Do not reimplement module derivation
+    // here; `implemented_stdlib_modules()` covers canonical paths, `ori.*`
+    // aliases (e.g. `ori.files`), and the module-only allowlist
+    // (`ori`, `ori.core`, `ori.Error`, `ori.mem`, `ori.concurrent`).
+    let modules: BTreeSet<&'static str> =
+        ori_types::stdlib::implemented_stdlib_modules().into_iter().collect();
 
     out.push_str("## Standard Library\n\n");
     out.push_str("### Modules\n\n");

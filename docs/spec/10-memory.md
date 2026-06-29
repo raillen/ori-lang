@@ -72,8 +72,61 @@ Rules:
 
 **Cycle detection:** the native runtime tracks compiler-registered strong edges
 between managed heap objects. `ori_arc_collect_cycles()` reclaims unreachable
-cycles from that registered graph. The return value is the number of heap
-objects reclaimed in the pass.
+cycles from that registered graph using a trial-deletion algorithm. The return
+value is the number of heap objects reclaimed in the pass.
+
+**Cooperative collection points:** the native backend calls
+`ori_arc_collect_cycles()` at the following safe points:
+
+- At the end of a sync function body (after scope cleanup, before returning
+  control to the caller), when the function is a top-level scope
+  (`managed_start == 0`).
+- After dropping dead frame values following an `await` resume, if any values
+  were released.
+- Explicitly from Ori code via `ori.test.collect_cycles()` (intended for
+  tests and diagnostic tooling).
+
+The runtime does **not** currently run the collector on a periodic schedule or
+after N allocations. Collection is driven by scope exits and explicit calls.
+
+### Type-specific destructors
+
+The native backend generates a Cranelift function destructor for each
+composite type that has at least one managed field:
+
+- **Structs:** `__dtor_struct_{id}` — loads each managed field by offset and
+  calls `ori_arc_release` on it.
+- **Enums:** `__dtor_enum_{id}` — switches on the active variant tag and
+  releases the managed payload fields of that variant only.
+- **Tuples:** `__dtor_tuple_{n}` — releases each managed element by offset.
+
+When a managed struct/enum/tuple allocation is created via a literal, the
+codegen registers the generated destructor as the `ori_alloc` destructor hook.
+When the object's refcount drops to zero, the runtime calls that destructor
+before freeing the header, which cascades releases to nested managed fields.
+
+`optional` and `result` do not have dedicated destructors. They rely on
+compiler-registered edges from the optional/result allocation to its managed
+payload: when the optional/result is released, the runtime releases the owned
+edges, which releases the payload.
+
+### Leak check mode
+
+The runtime exposes `ori.test.live_allocations()`, `ori.test.collect_cycles()`
+and `ori.test.assert_no_leaks(label)` for test programs:
+
+- `ori.test.live_allocations()` returns the number of live ARC-managed heap
+  allocations (does not run the collector).
+- `ori.test.collect_cycles()` runs the cycle collector and returns the number
+  of objects reclaimed.
+- `ori.test.assert_no_leaks(label)` runs the collector, then returns the
+  remaining live count. If the `ORI_TEST_LEAK_CHECK=1` environment variable is
+  set and the count is non-zero, it prints a diagnostic to stderr and aborts
+  with a non-zero exit code so the test fails loudly.
+
+These hooks are available on the native backend. The C debug backend provides
+inline stubs that return 0 (the C backend has no ARC registry). See
+`AGENTS.md` for the `ORI_TEST_LEAK_CHECK` env var convention.
 
 ### Backend Status
 
@@ -106,9 +159,10 @@ Current native status:
   dead managed frame values after resumption, and still runs terminal cleanup.
 - Failed/cancelled future states observed by the state machine are propagated by
   the generated async wrapper.
-- `using` inside `async func` is rejected with `async.using_unsupported` until
-  the compiler can guarantee deterministic cleanup across every suspension,
-  return, failed future, and cancelled future path.
+- `using` inside `async func` is **allowed**. The async frame stores the
+  managed resource; `dispose()` is injected on scope exit. A residual compiler
+  TODO remains for every terminal path (cancelled future, some `break`/`continue`
+  combinations) — see master plan Etapa 4.
 
 Async shapes outside the current state-machine subset are rejected before
 Cranelift with `backend.native_unsupported` instead of falling back to a sync

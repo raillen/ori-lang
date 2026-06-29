@@ -3297,6 +3297,33 @@ end
 }
 
 #[test]
+fn build_c_backend_emits_json_parse_extern_without_c_lowering() {
+    let dir = TestDir::new("c_backend_json_extern_only");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.json as json
+
+func main()
+    const parsed: result<json.Value, string> = json.parse("{}")
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(
+        !out.has_errors,
+        "C backend may emit JSON calls as runtime FFI stubs: {:?}",
+        out.diagnostics
+    );
+    assert!(
+        out.c_source.contains("ori_json_parse"),
+        "expected C source to reference native JSON runtime symbol"
+    );
+}
+
+#[test]
 fn build_c_backend_reports_unsupported_feature_diagnostic() {
     let dir = TestDir::new("c_backend_unsupported_feature_diagnostic");
     dir.write(
@@ -5830,7 +5857,7 @@ end
 
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
-    assert!(diagnostic_codes(&out).contains(&"bind.import_namespace_mismatch"));
+    assert!(diagnostic_codes(&out).contains(&"project.namespace_file_mismatch"));
 }
 
 #[test]
@@ -5860,7 +5887,7 @@ end
 
     let out = run_check(&dir.path("a.orl")).unwrap();
     assert!(out.has_errors);
-    assert!(diagnostic_codes(&out).contains(&"bind.import_cycle"));
+    assert!(diagnostic_codes(&out).contains(&"project.circular_import"));
 }
 
 #[test]

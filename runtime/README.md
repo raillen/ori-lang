@@ -65,7 +65,22 @@ and runs with `ORI_REQUIRE_PACKAGED_RUNTIME=1`, so it does not silently fall bac
 to the workspace runtime.
 
 The `.github/workflows/native-route.yml` workflow runs the native route against
-Windows MSVC, Windows GNU, Linux GNU, macOS x86_64, and macOS aarch64.
+the five CI triples below. Each triple has a staging command; the smoke step in
+CI runs `tools/smoke_native_release.{ps1,sh}` with `ORI_REQUIRE_PACKAGED_RUNTIME=1`
+to validate the staged runtime end-to-end.
+
+| Triple | Runner | Stage command |
+|---|---|---|
+| `x86_64-pc-windows-msvc` | `windows-latest` | `.\tools\stage_native_runtime.ps1` |
+| `x86_64-pc-windows-gnu` | `windows-latest` (GNU toolchain) | `.\tools\stage_native_runtime.ps1 -Target x86_64-pc-windows-gnu` |
+| `x86_64-unknown-linux-gnu` | `ubuntu-latest` | `./tools/stage_native_runtime.sh` |
+| `x86_64-apple-darwin` | `macos-15-intel` | `./tools/stage_native_runtime.sh --target x86_64-apple-darwin` |
+| `aarch64-apple-darwin` | `macos-15` | `./tools/stage_native_runtime.sh --target aarch64-apple-darwin` |
+
+Only `x86_64-pc-windows-msvc` and `x86_64-unknown-linux-gnu` runtime folders are
+versioned in git as the canonical development baseline. The other three triples
+are staged in CI and shipped with release packages, but not committed to the
+repository — see `CONTRIBUTING.md` for the pre-built artifact policy.
 
 Use this command to verify that the compiled static library exports every native
 runtime symbol required by the stdlib manifest and backend:

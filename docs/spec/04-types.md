@@ -278,7 +278,7 @@ shape.draw()
 Rules:
 - `any<Trait>` values have heap-allocated vtable dispatch.
 - Prefer generics for performance-sensitive paths.
-- `==` on `any<Trait>` is a compile error.
+- `==` on `any<Trait>` is supported when the trait constraint includes equality (runtime vtable dispatch to the concrete type's `Equatable` implementation).
 - Passing `any<Trait>` across FFI requires explicit ABI annotation.
 
 ---
@@ -339,13 +339,15 @@ when the expected type is not `result<void, _>`.
 Current implementation status:
 
 - `==` and `!=` are implemented for numeric types, `bool`, `string`, `bytes`,
-  `optional<T>`, `result<T, E>`, `tuple<...>`, `list<T>`, and non-generic
-  structs whose fields also support equality.
+  `optional<T>`, `result<T, E>`, `tuple<...>`, `list<T>`, generic structs (with
+  correct generic parameter substitution), opaque collections (`deque`, `queue`,
+  `stack`, `linked_list`, etc.) when element types support equality, and
+  non-generic structs whose fields also support equality.
 - Function values are not comparable.
-- `any<Trait>` values are not comparable.
-- Native and C/debug structural equality for `set<int|string>` and
-  `map<int|string, V>` is implemented.
-- Structural equality for generic structs is planned.
+- `any<Trait>` values support structural equality via runtime vtable when the
+  trait constraint permits it.
+- Native and C/debug structural equality for `set<T>` and `map<K, V>` is
+  implemented when keys/elements implement `Equatable` or builtin equality.
 
 | Type | Current `==` behavior |
 |---|---|
@@ -353,17 +355,16 @@ Current implementation status:
 | `bool` | Value equality |
 | `string` | UTF-8 text equality |
 | `bytes` | Byte equality |
-| `list<T>` | Structural equality |
-| `map<int|string, V>` | Structural equality when values support equality |
-| `map<K, V>` | Planned for other key types |
-| `set<int|string>` | Structural equality |
-| `set<T>` | Planned for other element types |
+| `list<T>` | Structural equality when `T` supports equality |
+| `map<K, V>` | Structural equality when `K` and `V` support equality |
+| `set<T>` | Structural equality when `T` supports equality |
 | `optional<T>` | Structural equality |
 | `result<T, E>` | Structural equality |
 | `tuple<...>` | Structural equality |
 | non-generic `struct` | Structural equality when all fields support equality |
-| generic `struct<T>` | Planned |
-| `any<Trait>` | Compile error |
+| generic `struct<T>` | Structural equality with generic substitution |
+| opaque collections | Structural equality when elements/keys support equality |
+| `any<Trait>` | Vtable equality when trait constraint allows |
 | `func(...)` | Compile error |
 
 Structural equality rules:

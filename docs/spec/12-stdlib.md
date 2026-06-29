@@ -24,6 +24,82 @@ The stdlib is small and layered:
 
 ---
 
+## Implementation Architecture (v1.x)
+
+The v1.x stdlib is implemented as a Rust manifest plus a native runtime, not
+as separate `.orl` source modules. This is the canonical source of truth
+until the language bootstraps enough to port cold modules to `.orl` (v2
+backlog, not a v1 release gate).
+
+### Single source of truth
+
+`compiler/crates/ori-types/src/stdlib.rs` owns the stdlib contract surface:
+
+- `STDLIB_RUNTIME_FUNCTIONS` — every canonical path, alias, runtime symbol,
+  and `c_backend` flag. Adding a stdlib function means adding one entry here.
+- `stdlib_func_sig()` — semantic type signature per canonical path.
+- `stdlib_native_abi()` — Cranelift ABI metadata per runtime symbol.
+- `is_implemented_stdlib_module()` / `implemented_stdlib_modules()` — the
+  importable `ori.*` module set, derived from the manifest plus
+  `STDLIB_MODULE_ONLY_PATHS` (a small documented allowlist for modules
+  without runtime entries: `ori`, `ori.core`, `ori.Error`,
+  `ori.mem` (inline intrinsics), `ori.concurrent` (umbrella)).
+
+Downstream crates must not keep parallel hardcoded lists:
+
+- `ori-hir::lower::stdlib_c_name` is a thin wrapper over
+  `stdlib_runtime_symbol`.
+- `ori-driver::pipeline::classify_stdlib_import` delegates to
+  `is_implemented_stdlib_module`.
+
+### Runtime
+
+`compiler/crates/ori-runtime/src/lib.rs` implements each manifest symbol as
+an `extern "C" fn` (e.g. `ori_io_print`, `ori_bytes_len`). The `extern "C"`
+ABI is the stable link contract between Cranelift-generated object code and
+the pre-compiled `libori_runtime.a`. `ORI_ABI_VERSION` in the runtime marks
+the ABI revision.
+
+### Parity guards
+
+The manifest is protected by tests in `ori-types::stdlib::tests`:
+
+- `manifest_paths_and_aliases_are_unique` — no duplicate paths or aliases.
+- `manifest_runtime_entries_have_type_and_native_abi_metadata` — every
+  manifest entry has both a semantic sig and a native ABI entry.
+- `manifest_module_prefixes_are_all_implemented` — every module prefix
+  derived from the manifest is accepted by `is_implemented_stdlib_module`.
+- `implemented_stdlib_modules_covers_legacy_hardcoded_list` — regression
+  guard against the pre-consolidation hardcoded module list.
+- `unknown_stdlib_modules_are_rejected` — unknown `ori.*` modules are
+  rejected so the driver can emit `bind.stdlib_module_unknown`.
+- `spec_c_backend_matrix_matches_manifest_flags` — the C/backend matrix
+  below stays in sync with manifest `c_backend` flags.
+- `spec_fs_and_json_contracts_match_stdlib_sig` — the `ori.fs.File` and
+  `ori.json.Value` contracts match `stdlib_func_sig` return types.
+
+### Adding a stdlib function
+
+1. Add an entry to `STDLIB_RUNTIME_FUNCTIONS` (canonical path, aliases,
+   runtime symbol, `c_backend` flag).
+2. Add the semantic type signature to `stdlib_func_sig()`.
+3. Add the native ABI metadata to `stdlib_native_abi()`.
+4. Implement the `extern "C" fn` in `ori-runtime/src/lib.rs`.
+5. Add a regression test in `compiler/crates/ori-driver/tests/`.
+
+Steps 1-3 are guarded by the parity tests above; the build fails fast if
+they diverge.
+
+### Future: `.orl` modules
+
+Migrating stdlib modules to `.orl` source is a v2 backlog item. Hot-path
+modules (collections, async, I/O, ARC) will remain runtime intrinsics; only
+cold compositional modules (e.g. `ori.format` helpers, `ori.iter`
+combinators) are candidates for `.orl` facades over intrinsics. See
+`docs/planning/PLANO-MATURIDADE-COMPLETO.md` Etapa 8.1.
+
+---
+
 ## Current Implementation Status
 
 Implemented and importable today:
@@ -178,8 +254,24 @@ The async variants complete on the native runtime and return the same
 current `bytes` ABI is NUL-terminated, files containing `0x00` return an error
 until `bytes` gains explicit length storage.
 
-Planned but not implemented in the current compiler/runtime: `open_read`,
-`open_write`, and `ori.fs.File`.
+Planned but not implemented in the current compiler/runtime: none of the above
+file-handle APIs are missing — see **Dedicated file handle** below.
+
+### Dedicated file handle (`ori.fs.File`)
+
+Status: **implemented** in the native runtime.
+
+```ori
+import ori.fs as fs
+
+fs.open_read(path: string)  -> result<fs.File, string>
+fs.open_write(path: string) -> result<fs.File, string>
+fs.read(file: fs.File, bytes_count: int) -> result<bytes, string>
+fs.write(file: fs.File, data: bytes)     -> result<int, string>
+fs.close(file: fs.File)                  -> void
+```
+
+`File` is an opaque managed type. Use `using` or explicit `close` for cleanup.
 ```
 
 ---
@@ -731,6 +823,9 @@ lazy.once<T>(thunk: func() -> T) -> lazy<T>
 lazy.force<T>(value: lazy<T>) -> T
 ```
 
+**Native runtime note:** `lazy.once` and `lazy.force` are implemented via **inline Cranelift
+codegen** (no runtime FFI symbols). They are fully supported on the native route.
+
 The shorthand `lazy.once(...)` and `lazy.force(...)` are also accepted without
 an import.
 
@@ -786,6 +881,10 @@ task.join<T>(job: task.Job<T>) -> result<T, task.JoinError>
 task.detach<T>(job: task.Job<T>) -> void
 task.block_on<T>(future: future<T>) -> T
 task.sleep(ms: int) -> future<void>
+task.create_token() -> task.CancelToken
+task.cancel(token: task.CancelToken) -> void
+task.is_cancelled(token: task.CancelToken) -> bool
+task.associate(token: task.CancelToken, future: future<void>) -> void
 ```
 
 Rules:
@@ -809,9 +908,9 @@ Future runtime state:
 - `failed`: internal runtime failure state;
 - `cancelled`: internal cancellation state.
 
-Public cancellation APIs are not exposed yet. Until they are designed, user code
-cannot cancel a future directly. The current executor policy is a process-local
-FIFO queue with a separate runtime timer thread for delayed futures.
+Public cooperative cancellation is available through `task.CancelToken`.
+Associate a token with a future via `task.associate`; poll cancellation with
+`task.is_cancelled` or cancel explicitly with `task.cancel`.
 
 Ownership rule: a future keeps its stored value alive until `block_on` observes
 it or until the future object is released. `task.sleep` produces
@@ -868,30 +967,31 @@ intentionally deferred until there is a concrete need.
 
 ## `ori.json` — JSON
 
-Status: implemented in the native runtime. `ori.json.Value` is currently an
-alias for `string`: it represents validated, canonical JSON text. This keeps
-the language/runtime ABI small while the richer structured JSON value type is
-still not part of the compiler.
+Status: **implemented** in the native runtime with a structured recursive value type.
 
 ```ori
 import ori.json as json
 
-type json.Value = string
+enum Value
+    Null
+    Bool(value: bool)
+    Number(value: float)
+    String(value: string)
+    Array(items: list<Value>)
+    Object(fields: map<string, Value>)
+end
 
-json.parse(text: string) -> result<ori.json.Value, string>
-json.stringify(value: ori.json.Value) -> string
-json.stringify_pretty(value: ori.json.Value) -> string
+json.parse(text: string) -> result<json.Value, string>
+json.stringify(value: json.Value) -> string
+json.stringify_pretty(value: json.Value) -> string
 ```
 
 Current behavior:
 
-- `json.parse(text)` returns `ok(canonical_json_text)` for valid JSON.
+- `json.parse(text)` returns `ok(Value)` for valid JSON.
 - `json.parse(text)` returns `error("invalid json")` for invalid JSON.
-- `json.stringify(value)` canonicalizes valid JSON text. If the input is plain
-  text rather than valid JSON, it returns a quoted JSON string.
-- `json.stringify_pretty(value)` uses the same value rules as
-  `json.stringify`, but returns formatted JSON with indentation.
-- A structured JSON object/array API remains future work.
+- `json.stringify` and `json.stringify_pretty` serialize the structured `Value`
+  enum recursively.
 
 ---
 

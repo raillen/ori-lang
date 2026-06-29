@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tower_lsp::lsp_types::Url;
 
+use super::project_semantic::ProjectSemanticIndex;
 use super::semantic::SemanticIndex;
 use crate::utils::uri;
 
@@ -9,6 +11,12 @@ use crate::utils::uri;
 pub struct ProjectManager {
     /// Currently open documents (buffer in memory).
     open_documents: HashMap<Url, DocumentState>,
+    /// Per-document project-wide semantic index, produced by `run_check`.
+    ///
+    /// This is the Etapa 6.1 cross-file index: it captures the driver's
+    /// `ResolvedModule` + `SourceCache` so that hover / go-to-definition /
+    /// completion / find-references can resolve symbols across imports.
+    semantic_indices: HashMap<Url, Arc<ProjectSemanticIndex>>,
     /// Discovered workspace root.
     workspace_root: Option<PathBuf>,
 }
@@ -25,6 +33,7 @@ impl ProjectManager {
     pub fn new() -> Self {
         Self {
             open_documents: HashMap::new(),
+            semantic_indices: HashMap::new(),
             workspace_root: None,
         }
     }
@@ -53,6 +62,18 @@ impl ProjectManager {
         );
     }
 
+    /// Store the project-wide semantic index produced for `uri` by
+    /// `run_check_source`. Replaces any previous snapshot.
+    pub fn upsert_semantic_index(&mut self, uri: Url, index: ProjectSemanticIndex) {
+        self.semantic_indices.insert(uri, Arc::new(index));
+    }
+
+    /// Get the project-wide semantic index for `uri`, if one has been
+    /// produced since the last edit.
+    pub fn semantic_index(&self, uri: &Url) -> Option<Arc<ProjectSemanticIndex>> {
+        self.semantic_indices.get(uri).cloned()
+    }
+
     /// Get the content of a document (from buffer or disk).
     pub fn document_content(&self, uri: &Url) -> Option<String> {
         if let Some(state) = self.open_documents.get(uri) {
@@ -70,6 +91,7 @@ impl ProjectManager {
     /// Remove a document (when closed).
     pub fn remove_document(&mut self, uri: &Url) {
         self.open_documents.remove(uri);
+        self.semantic_indices.remove(uri);
     }
 
     /// Check if a document is open.

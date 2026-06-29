@@ -65,6 +65,37 @@ calling user code.
 - Comparator failures must not skip release cleanup.
 - Repeated comparisons must not increase the refcount of heap items.
 
+## Cycle collector
+
+The runtime ships a trial-deletion cycle collector accessible via
+`ori_arc_collect_cycles()`.
+
+- The collector only reclaims objects whose trial-deletion refcount reaches
+  zero (i.e. objects reachable only from themselves). Objects with external
+  references are never collected.
+- The collector calls each reclaimed object's destructor (if any) before
+  freeing the header, which cascades releases to owned edges.
+- Collected objects are removed from the allocation registry before any
+  destructor runs, so a destructor that releases a sibling cycle member is a
+  no-op (the sibling is already unregistered).
+- The collector is not currently invoked on a periodic schedule. It runs at
+  specific safe points (see `docs/spec/10-memory.md` — Cooperative collection
+  points) and via explicit `ori.test.collect_cycles()` calls.
+- FFI code that manually registers edges must ensure every registered edge is
+  eventually unregistered or that the owner is collected; otherwise the
+  collector cannot prove the cycle is unreachable.
+
+## Leak check FFI
+
+- `ori_test_live_allocations()` returns the live allocation count without
+  running the collector. Safe to call from any thread.
+- `ori_test_collect_cycles()` runs the collector and returns the number of
+  objects reclaimed.
+- `ori_test_assert_no_leaks(label)` runs the collector, then returns the live
+  count. When `ORI_TEST_LEAK_CHECK=1` is set in the environment and the count
+  is non-zero, it prints a diagnostic and aborts. The `label` is a
+  null-terminated C string used in the diagnostic.
+
 ## Source-level rustdoc policy
 
 Critical ARC and memory functions should keep local `# Safety` rustdoc near the

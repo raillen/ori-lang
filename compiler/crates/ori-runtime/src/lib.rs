@@ -47,6 +47,54 @@ struct ArcState {
 
 static ARC_STATE: OnceLock<Mutex<ArcState>> = OnceLock::new();
 
+/// Total managed allocations since process start. Incremented in `ori_alloc`
+/// without holding `ARC_STATE` so the fast path stays lock-free. Used by the
+/// async executor to trigger cooperative cycle collection at safe points.
+static COOPERATIVE_ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Counter value at the last cooperative collection. The executor collects when
+/// `COOPERATIVE_ALLOC_COUNTER - COOPERATIVE_LAST_COLLECTED` crosses the threshold.
+static COOPERATIVE_LAST_COLLECTED: AtomicU64 = AtomicU64::new(0);
+
+/// Number of managed allocations between cooperative cycle collections. Tuned
+/// to amortize the O(n) trial-deletion scan over many allocations. Override via
+/// `ORI_COOPERATIVE_COLLECT_THRESHOLD` for tests.
+const DEFAULT_COOPERATIVE_COLLECT_THRESHOLD: u64 = 256;
+
+fn cooperative_collect_threshold() -> u64 {
+    static OVERRIDE: OnceLock<u64> = OnceLock::new();
+    *OVERRIDE.get_or_init(|| {
+        std::env::var("ORI_COOPERATIVE_COLLECT_THRESHOLD")
+            .ok()
+            .and_then(|raw| raw.parse::<u64>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(DEFAULT_COOPERATIVE_COLLECT_THRESHOLD)
+    })
+}
+
+/// Trigger cycle collection when the allocation counter has advanced past the
+/// threshold since the last collection. Called at executor safe points (after a
+/// task batch in `ori_task_block_on` and at the end of `ori_executor_drain`).
+/// Uses `compare_exchange` so only one thread pays the collection cost per
+/// window; `ori_arc_collect_cycles` itself is safe to call concurrently because
+/// it locks `ARC_STATE`.
+fn maybe_collect_cycles_cooperative() {
+    let threshold = cooperative_collect_threshold();
+    let counter = COOPERATIVE_ALLOC_COUNTER.load(Ordering::Acquire);
+    let last = COOPERATIVE_LAST_COLLECTED.load(Ordering::Acquire);
+    if counter.wrapping_sub(last) < threshold {
+        return;
+    }
+    if COOPERATIVE_LAST_COLLECTED
+        .compare_exchange(last, counter, Ordering::SeqCst, Ordering::Relaxed)
+        .is_ok()
+    {
+        unsafe {
+            ori_arc_collect_cycles();
+        }
+    }
+}
+
 thread_local! {
     static TASK_LAST_AWAIT_STATUS: Cell<i64> = const { Cell::new(1) };
 }
@@ -169,6 +217,7 @@ pub unsafe extern "C" fn ori_alloc(
         (*header).destructor = destructor;
         let payload = ptr.add(std::mem::size_of::<OriHeapHeader>());
         register_allocation(header, payload, size);
+        COOPERATIVE_ALLOC_COUNTER.fetch_add(1, Ordering::Relaxed);
         payload
     } else {
         ptr
@@ -1221,6 +1270,7 @@ pub unsafe extern "C" fn ori_executor_drain() -> i64 {
     while ori_executor_run_one() != 0 {
         ran += 1;
     }
+    maybe_collect_cycles_cooperative();
     ran
 }
 
@@ -1255,6 +1305,12 @@ pub unsafe extern "C" fn ori_task_block_on(future: *mut OriFuture) -> i64 {
         }
 
         while ori_executor_run_one() != 0 {}
+
+        // Cooperative safe point: between task batches while the awaited future
+        // is still pending. No Ori task is mid-flight on this thread, so managed
+        // refcounts are quiescent and the trial-deletion scan sees a consistent
+        // heap.
+        maybe_collect_cycles_cooperative();
 
         let guard = match (*future).state.lock() {
             Ok(guard) => guard,
@@ -6814,83 +6870,9 @@ pub unsafe extern "C" fn ori_json_stringify_pretty(value: *const u8) -> *mut u8 
     }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn ori_test_assert(condition: c_uchar, message: *const u8) {
-    if condition == 0 {
-        eprintln!("ori test assertion failed: {}", cstr_str(message));
-        std::process::abort();
-    }
-}
+mod test_harness;
 
-#[no_mangle]
-pub unsafe extern "C" fn ori_test_assert_eq(left: i64, right: i64) {
-    if left != right {
-        eprintln!("ori test assert_eq failed: {left} != {right}");
-        std::process::abort();
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn ori_test_assert_ne(left: i64, right: i64) {
-    if left == right {
-        eprintln!("ori test assert_ne failed: both values are {left}");
-        std::process::abort();
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn ori_test_assert_eq_float(left: f64, right: f64) {
-    if left != right {
-        eprintln!("ori test assert_eq failed: {left} != {right}");
-        std::process::abort();
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn ori_test_assert_ne_float(left: f64, right: f64) {
-    if left == right {
-        eprintln!("ori test assert_ne failed: both values are {left}");
-        std::process::abort();
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn ori_test_assert_eq_bool(left: c_uchar, right: c_uchar) {
-    if (left != 0) != (right != 0) {
-        eprintln!("ori test assert_eq failed: bool values differ");
-        std::process::abort();
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn ori_test_assert_ne_bool(left: c_uchar, right: c_uchar) {
-    if (left != 0) == (right != 0) {
-        eprintln!("ori test assert_ne failed: bool values are equal");
-        std::process::abort();
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn ori_test_assert_eq_string(left: *const u8, right: *const u8) {
-    if cstr_str(left) != cstr_str(right) {
-        eprintln!("ori test assert_eq failed: strings differ");
-        std::process::abort();
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn ori_test_assert_ne_string(left: *const u8, right: *const u8) {
-    if cstr_str(left) == cstr_str(right) {
-        eprintln!("ori test assert_ne failed: strings are equal");
-        std::process::abort();
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn ori_test_fail(message: *const u8) {
-    eprintln!("ori test failure: {}", cstr_str(message));
-    std::process::abort();
-}
+// `ori_test_*` entry points moved to `test_harness.rs` (Etapa 8.3).
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_panic(message: *const u8) {

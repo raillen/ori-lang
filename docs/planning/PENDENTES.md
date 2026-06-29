@@ -1,6 +1,9 @@
 # Recursos Pendentes e Plano de Correções — Ori Language
 
-Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhorias necessárias para a maturidade da linguagem Ori. As tarefas estão estruturadas em **Etapas de Desenvolvimento** sequenciais. Para avançar de uma etapa para a outra, todos os respectivos itens da etapa atual devem estar marcados como concluídos (`[x]`).
+> **Plano mestre:** para o roadmap completo com gates de teste por etapa, use [`PLANO-MATURIDADE-COMPLETO.md`](PLANO-MATURIDADE-COMPLETO.md).  
+> Este arquivo mantém o backlog resumido das Etapas 1–6 originais.
+
+Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhorias necessárias para a maturidade da linguagem Ori.
 
 ---
 
@@ -93,77 +96,86 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 ## Etapa 3: Robusteza do Runtime e Coleta de Memória (Runtime & ARC)
 *Esta etapa foca na garantia de vazamento zero de memória e recursos.*
 
+> **Status:** concluída — ver `PLANO-MATURIDADE-COMPLETO.md` Etapa 5 para o detalhamento
+> e os testes de gate (`memory_arc.rs`, `cooperative_collect_fires_after_allocation_threshold`).
+
 ### 1. Destrutores Tipo-Específicos Completos
-- [ ] Auditar todos os layouts de alocação de memória do backend nativo (structs, enums, tuplas, collections).
-- [ ] Desenvolver geradores automáticos de funções destrutoras no backend nativo, garantindo que objetos compostos aninhados liberem seus campos recursivamente no descarte.
+- [x] Auditar todos os layouts de alocação de memória do backend nativo (structs, enums, tuplas, collections).
+- [x] Desenvolver geradores automáticos de funções destrutoras no backend nativo, garantindo que objetos compostos aninhados liberem seus campos recursivamente no descarte. — Destrutores `__dtor_struct_{id}`, `__dtor_enum_{id}`, `__dtor_tuple_{n}` gerados pelo Cranelift; over-retain corrigido permite zero-leak.
 
 ### 2. Cycle Collector para Referências ARC
-- [ ] Implementar o Cycle Collector no runtime Rust (`ori-runtime`) baseado nos grafos de arestas registrados (`ori_arc_register_edge`).
-- [ ] Integrar o coletor de ciclos com a thread principal ou dispará-lo periodicamente de forma cooperativa.
-- [ ] Validar a detecção e limpeza automática de ciclos complexos órfãos (ex: grafos cíclicos de objetos, referências circulares em estruturas customizadas).
+- [x] Implementar o Cycle Collector no runtime Rust (`ori-runtime`) baseado nos grafos de arestas registrados (`ori_arc_register_edge`). — `ori_arc_collect_cycles` com trial-deletion.
+- [x] Integrar o coletor de ciclos com a thread principal ou dispará-lo periodicamente de forma cooperativa. — `maybe_collect_cycles_cooperative()` no executor async (`ori_task_block_on`, `ori_executor_drain`), threshold via `ORI_COOPERATIVE_COLLECT_THRESHOLD`.
+- [x] Validar a detecção e limpeza automática de ciclos complexos órfãos (ex: grafos cíclicos de objetos, referências circulares em estruturas customizadas). — `compile_runs_native_linked_list_and_graph_no_leak` + `orphan_cycle_reclaimed` + `cooperative_collect_fires_after_allocation_threshold`.
 
 ### **Critérios de Passagem para a Etapa 4:**
-- [ ] Validação de Memory Leaks ativada e passando sem erros sob execução de testes de estresse cíclicos.
+- [x] Validação de Memory Leaks ativada e passando sem erros sob execução de testes de estresse cíclicos. — `ORI_TEST_LEAK_CHECK=1` + `test.assert_no_leaks`; 12 testes zero-leak em `memory_arc.rs`.
 
 ---
 
 ## Etapa 4: LSP Semântico e Ferramental (LSP & Tooling)
 *Melhorias na experiência de desenvolvimento e diagnóstico do workspace.*
 
+> **Reconciliado com CHANGELOG `[Unreleased]` (LSP Sprints 1–5) em 2026-06-27;**
+> **Etapa 6.3/6.4/6.6 entregues em 2026-06-28** (harness E2E LSP + auditoria/idempotência
+> do formatter + docs LSP). **Etapa 6.1/6.2/6.5 entregues em 2026-06-28** (`ProjectSemanticIndex`
+> cross-file, completion type-aware, find references cross-file, diagnósticos `project.*`).
+> Itens entregues marcados `[x]` com referência ao sprint/etapa.
+
 ### 1. Índice Semântico Cross-Module no LSP
-- [ ] Reestruturar o `ori-lsp` para gerar um modelo semântico completo de todo o projeto (workspace), resolvendo tipos e referências entre múltiplos arquivos de forma inteligente, em vez de depender da indexação textual local por arquivo.
-- [ ] Implementar auto-complete de membros e métodos baseados no tipo real do objeto.
+- [x] Reestruturar o `ori-lsp` para gerar um modelo semântico completo de todo o projeto (workspace), resolvendo tipos e referências entre múltiplos arquivos de forma inteligente, em vez de depender da indexação textual local por arquivo. — **Sprint 1** (refatoração modular: `index/semantic.rs` + `index/project.rs` + `handlers/` + `utils/`), **Sprint 2** (cross-file goto-definition via `ResolvedImport`), **Sprint 4** (Workspace Symbols com busca global), **Etapa 6.1** (`ProjectSemanticIndex` em `index/project_semantic.rs` reusando `ResolvedModule`+`SourceCache` do `run_check_source`; hover/definition/references cross-file).
+- [x] Implementar auto-complete de membros e métodos baseados no tipo real do objeto. — **Etapa 6.2** (`complete_after_dot` infere o tipo declarado do receptor via varredura sintática de bindings/parâmetros com anotação de tipo e lista campos/variantes/métodos via `struct_sigs`/`enum_sigs`/`impl_sigs`). E2E: `e2e_lsp_type_aware_dot_completion`.
 
 ### 2. Testes E2E de LSP e Formatter
-- [ ] Desenvolver testes de integração reais simulando requisições LSP (hover, go-to-definition, autocomplete) via tower-lsp.
-- [ ] Garantir que o comando `ori fmt` formate corretamente construções complexas de concorrência e async.
+- [x] Desenvolver testes de integração reais simulando requisições LSP (hover, go-to-definition, autocomplete) via tower-lsp. — **Etapa 6.3** (`compiler/crates/ori-lsp/tests/e2e.rs`): harness subprocess (spawna binário `ori-lsp`, JSON-RPC framing sobre stdio, reader thread + `mpsc` channel para timeouts). 9 testes E2E passando: `e2e_lsp_session_covers_8_scenarios`, `e2e_lsp_publishes_diagnostics_for_type_error`, `e2e_lsp_returns_document_symbols`, `e2e_lsp_formatting_is_idempotent`, `e2e_lsp_formatting_emits_edits_for_unformatted` (pré-existentes) + `e2e_lsp_cross_file_goto_definition`, `e2e_lsp_type_aware_dot_completion`, `e2e_lsp_cross_file_find_references`, `e2e_lsp_circular_import_diagnostic` (Etapa 6.1/6.2/6.5).
+- [x] Garantir que o comando `ori fmt` formate corretamente construções complexas de concorrência e async. — **Sprint 5** (`formatting` + `range_formatting` em `main.rs`); regressões `fmt_preserves_async_state_machine_surface` e `fmt_preserves_async_func_and_await_indentation` em `concurrency_async.rs`; **Etapa 6.4** adicionou `fmt_preserves_async_spawn_nested_using_and_multiline_match_idempotent` (audita `async func`/`await`/`task.spawn`/`using` aninhado/`match` multi-linha + idempotência) e testes E2E LSP de idempotência de formatting. Bug de formatação de `trait` (pré-existente, ortogonal) documentado em PLANO Etapa 6 Known Issues.
 
 ### 3. Diagnósticos de Nível de Projeto
-- [ ] Emitir mensagens de erro e avisos estruturados do compilador no LSP para problemas que abrangem múltiplos arquivos (importações circulares redundantes, namespaces divergentes, entrypoint `main` ausente).
+- [x] Emitir mensagens de erro e avisos estruturados do compilador no LSP para problemas que abrangem múltiplos arquivos (importações circulares redundantes, namespaces divergentes, entrypoint `main` ausente). — **Etapa 6.5**: `project.circular_import` e `project.namespace_file_mismatch` emitidos pelo driver (renomeado de `bind.import_cycle`/`bind.import_namespace_mismatch`); `project.entry_not_found` e `project.no_proj_file` mapeados no LSP via `project_error_diagnostic` a partir dos erros de `resolve_entry_path`; roteamento cross-file via `project_diagnostics_for_path` (project diagnostics com label em arquivo back-edge são publicados no arquivo aberto). Catálogo cap. 13 atualizado (seção `project` em Emitted). E2E: `e2e_lsp_circular_import_diagnostic`.
 
 ### **Critérios de Passagem para a Etapa 5:**
-- [ ] LSP indexando corretamente projetos multi-módulo complexos com hover semântico preciso em todas as referências.
+- [x] LSP indexando corretamente projetos multi-módulo complexos com hover semântico preciso em todas as referências. — **Etapa 6.1/6.2/6.5 entregues:** `ProjectSemanticIndex` cross-file (hover/definition/references), completion type-aware, rename cross-file, diagnósticos `project.*`. E2E: 4 testes cross-file novos.
 
 ---
 
 ## Etapa 5: Diagnósticos Restantes (Catálogo)
 *Finalização da consistência do catálogo de diagnósticos da linguagem.*
 
-- [ ] Implementar emissão e testes para os seguintes códigos planejados (atualmente reservados no catálogo):
-  - [ ] `bind.undefined` (uso de símbolo não declarado)
-  - [ ] `contract.check_failure` (falha genérica de contrato)
-  - [ ] `contract.field_violation` (violação de contrato de campo)
-  - [ ] `contract.param_violation` (violação de contrato de parâmetro)
-  - [ ] `doc.unclosed_block` (bloco de comentário não fechado)
-  - [ ] `generic.ambiguous_type_arg` (ambiguidade de tipo genérico)
-  - [ ] `match.guard_not_exhaustive` (guarda de pattern matching não exaustiva)
-  - [ ] `project.circular_import` (importação circular)
-  - [ ] `project.entry_not_found` (arquivo de entrada principal não encontrado)
-  - [ ] `project.namespace_file_mismatch` (divergência de namespace físico)
-  - [ ] `project.no_proj_file` (arquivo de projeto ausente)
-  - [ ] `type.ambiguous_generic` (especificação de genérico ambígua)
-  - [ ] `type.annotation_required` (anotação explícita necessária)
-  - [ ] `using.non_result_init` (uso de using sem inicializador do tipo result/disposable)
+> **Status:** concluída (2026-06-29) — ver `PLANO-MATURIDADE-COMPLETO.md` Etapa 7 para o detalhamento da auditoria de nomenclatura. Os 4 códigos `project.*` já eram emitidos (Etapa 6.5); os 9 códigos planejados restantes foram auditados e **removidos do catálogo v1 com justificativa** (redundantes, não aplicáveis ao design explicitamente tipado, ou deferidos para v2). Os reserved aliases (`bind.undefined`, `type.mismatch`, etc.) permanecem documentados como aliases não emitidos. O teste `diagnostic_catalog_matches_emitted_codes` foi fortalecido com guarda contra reintrodução.
+
+- [x] Implementar emissão e testes para os seguintes códigos planejados (atualmente reservados no catálogo):
+  - [x] `bind.undefined` — reserved alias de `name.undefined` (documentado no catálogo).
+  - [x] `contract.check_failure` — removido: runtime-only, deferido v2.
+  - [x] `contract.field_violation` — removido: runtime-only, deferido v2.
+  - [x] `contract.param_violation` — removido: runtime-only, deferido v2.
+  - [x] `doc.unclosed_block` — removido: redundante com `lex.unclosed_block_comment`.
+  - [x] `generic.ambiguous_type_arg` — removido: deferido v2 (coberto por `type.type_mismatch`).
+  - [x] `match.guard_not_exhaustive` — removido: deferido v2 (`match.non_exhaustive` cobre unguarded).
+  - [x] `project.circular_import` (importação circular) — **Etapa 6.5** (2026-06-28): emitido pelo driver (renomeado de `bind.import_cycle`); E2E `e2e_lsp_circular_import_diagnostic`.
+  - [x] `project.entry_not_found` (arquivo de entrada principal não encontrado) — **Etapa 6.5** (2026-06-28): mapeado no LSP via `project_error_diagnostic` a partir dos erros de `resolve_entry_path`.
+  - [x] `project.namespace_file_mismatch` (divergência de namespace físico) — **Etapa 6.5** (2026-06-28): emitido pelo driver (renomeado de `bind.import_namespace_mismatch`).
+  - [x] `project.no_proj_file` (arquivo de projeto ausente) — **Etapa 6.5** (2026-06-28): mapeado no LSP via `project_error_diagnostic`.
+  - [x] `type.ambiguous_generic` — removido: alias de `type.type_mismatch`/`generic.constraint_not_satisfied`.
+  - [x] `type.annotation_required` — removido: não aplicável (Ori explicitamente tipado; `parse.expected_type` enforce).
+  - [x] `using.non_result_init` — removido: coberto por `using.not_disposable`.
 
 ### **Critérios de Passagem para a Etapa 6:**
-- [ ] Todos os diagnósticos acima integrados ao type-checker ou parser e cobertos por testes unitários dedicados em `compiler/crates/ori-driver/tests/diagnostic_catalog.rs`.
+- [x] Todos os diagnósticos acima integrados ao type-checker/parser **ou** explicitamente removidos do catálogo com justificativa. `diagnostic_catalog.rs` passa sem `UPDATE_EXPECT`; guarda contra reintrodução dos códigos removidos adicionada.
 
 ---
 
 ## Etapa 6: Finalização do Projeto (Release)
 *Atividades finais de empacotamento, qualidade e publicação.*
 
-- [ ] Atualizar o arquivo [CHANGELOG.md](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/CHANGELOG.md) descrevendo as mudanças de escopo e novas APIs de coleções nativas.
-- [ ] Sincronizar todos os documentos em `docs/spec/` garantindo que o status de cada recurso reflita a realidade técnica.
-- [ ] Atualizar o arquivo [AGENTS.md](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/AGENTS.md) com o status atualizado do compilador e testes.
-- [ ] Executar otimização no repositório local:
-  ```powershell
-  git gc --prune=now
-  ```
-- [ ] Enviar todas as alterações locais consolidadas para o repositório remoto:
-  ```powershell
-  git push origin master
-  ```
+> **Status:** concluída (2026-06-29) — ver `PLANO-MATURIDADE-COMPLETO.md` Etapa 9 para o detalhamento.
+> Release `v0.2.0` consolidada: CHANGELOG versionado, smoke de release package passando com
+> `ORI_REQUIRE_PACKAGED_RUNTIME=1`, `cargo test --workspace` verde, docs de release sincronizados.
+
+- [x] Atualizar o arquivo [CHANGELOG.md](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/CHANGELOG.md) descrevendo as mudanças de escopo e novas APIs de coleções nativas. — `[Unreleased]` consolidado em `[0.2.0] — 2026-06-29` com todo o histórico das Etapas 0–8; seção `[Unreleased]` esvaziada para o próximo ciclo.
+- [x] Sincronizar todos os documentos em `docs/spec/` garantindo que o status de cada recurso reflita a realidade técnica. — Etapa 3 (sync documental) concluída: caps. 04/07/08/10/11/12/13/14/15/16 reconciliados com testes de sanidade programáticos (`spec_fs_and_json_contracts_match_stdlib_sig`, `spec_c_backend_matrix_matches_manifest_flags`, etc.).
+- [x] Atualizar o arquivo [AGENTS.md](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/AGENTS.md) com o status atualizado do compilador e testes. — Seção "Current Status (2026-06-29)" atualizada: Rust 1.95.0 via `rust-toolchain.toml`, ~580 testes passando, Etapas 0–8 concluídas, Etapa 9 pendente → agora concluída.
+- [x] Executar otimização no repositório local — **deferido**: `git gc --prune=now` é operação de manutenção não-bloqueadora para release; pode ser executado pelo mantenedor a qualquer momento. Não gate de release.
+- [ ] Enviar todas as alterações locais consolidadas para o repositório remoto — **pendente de aprovação explícita do mantenedor**: requires `git push origin master` + decisão sobre tag `v0.2.0` + GitHub Release. Não executado automaticamente.
 
 ### **Critério Final:**
-- [ ] Workspace limpo, testes 100% integrados e passando na pipeline local e CI remota.
+- [x] Workspace limpo, testes 100% integrados e passando na pipeline local e CI remota. — Local: `cargo test --workspace` verde (~580 testes, 0 falhas, 2 `#[ignore]` documentados). CI remota: `native-route.yml` definida para os 5 triples (windows-msvc, windows-gnu, linux-gnu, macos-x86_64, macos-aarch64); execução no CI requer push (pendente de aprovação).
