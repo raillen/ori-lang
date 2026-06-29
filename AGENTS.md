@@ -97,13 +97,13 @@ cargo run -p ori-driver -- run <file.orl>
 | `ORI_RUNTIME_LIB` | Override path to runtime static library |
 | `ORI_NATIVE_LINKER` | Diagnose raw native linker route |
 | `ORI_USE_RUST_LLD=1` | Use rust-lld instead of system linker (still via `rustc` driver) |
-| `ORI_USE_BUNDLED_RUST_LLD=1` | Bypass `rustc` entirely — invoke `rust-lld` directly with compiler-side CRT discovery (v0.3 Phase 1: Windows MSVC via `vswhere.exe` + Linux GNU via `cc -print-file-name`; macOS deferred) |
+| `ORI_USE_BUNDLED_RUST_LLD=1` | Bypass `rustc` entirely — invoke `rust-lld` directly with compiler-side CRT discovery (Rust removal Phase 1: Windows MSVC via `vswhere.exe` + Linux GNU via `cc -print-file-name`; macOS deferred) |
 | `ORI_RUST_LLD` | Explicit path to `rust-lld[.exe]` for the bundled strategy (else discovered from `<ori.exe dir>` or `rustc` sysroot) |
 | `ORI_REQUIRE_PACKAGED_RUNTIME=1` | Validate release package uses only packaged runtime |
 | `UPDATE_EXPECT=1` | Update expected diagnostic outputs in tests |
 | `ORI_TEST_LEAK_CHECK=1` | When set, `ori.test.assert_no_leaks(label)` aborts with a stderr diagnostic if live ARC allocations remain after running the cycle collector. Use in E2E tests to fail fast on memory leaks. |
 | `ORI_COOPERATIVE_COLLECT_THRESHOLD=N` | Number of managed allocations between cooperative cycle collections in the async executor (default 256). Set to a small value in tests to force frequent collection. |
-| `ORI_STDLIB_ROOT` | Override path to the `stdlib/` directory containing `.orl` source modules (v0.3 Chunk 3). When unset, resolves to `CARGO_MANIFEST_DIR/../../../stdlib` (dev mode) or `<ori.exe dir>/stdlib` (release package). |
+| `ORI_STDLIB_ROOT` | Override path to the `stdlib/` directory containing `.orl` source modules (Stdlib Phase 0). When unset, resolves to `CARGO_MANIFEST_DIR/../../../stdlib` (dev mode) or `<ori.exe dir>/stdlib` (release package). |
 
 ## Compiler Pipeline
 
@@ -122,14 +122,38 @@ Source (.orl)
 ## Current Status (2026-06-29)
 
 - **Rust:** 1.95.0 (via `rust-toolchain.toml`)
-- **Version:** `0.2.0` (release consolidada — Etapas 0–9 do `PLANO-MATURIDADE-COMPLETO.md` concluídas); v0.3 em desenvolvimento (Rust removal Phase 1 + stdlib Phase 0)
+- **Version:** `0.2.0` (Etapas 0–9 do `PLANO-MATURIDADE-COMPLETO.md` concluídas). **Congelado em `0.2.x`** — ver "Versioning policy" abaixo. Marcos de desenvolvimento ativos (Rust removal Phase 1, Stdlib Phase 0) permanecem em `[Unreleased]` sem atribuir versão.
 - **cargo check --workspace:** PASSES cleanly
-- **cargo test --workspace:** PASSES cleanly (~580 tests, including advanced structural equality, file handles, cooperative task cancellation, async branching, Etapa 5 leak-check plumbing, Etapa 6 LSP cross-file semantics + `project.*` diagnostics, Etapa 7 diagnostic catalog audit, Etapa 8 monolith extractions, and Etapa 9 release smoke with `ORI_REQUIRE_PACKAGED_RUNTIME=1`, v0.3 BundledRustLld strategy + Windows MSVC CRT discovery regression tests)
+- **cargo test --workspace:** PASSES cleanly (~588 tests, including advanced structural equality, file handles, cooperative task cancellation, async branching, Etapa 5 leak-check plumbing, Etapa 6 LSP cross-file semantics + `project.*` diagnostics, Etapa 7 diagnostic catalog audit, Etapa 8 monolith extractions, Etapa 9 release smoke with `ORI_REQUIRE_PACKAGED_RUNTIME=1`, BundledRustLld strategy + Windows MSVC CRT discovery + Linux GNU CRT discovery regression tests, Stdlib Phase 0 prelude loading regression tests)
 - **Release smoke:** `tools/smoke_native_release.ps1 -SkipBuild` passes — `ori compile` + `ori test` validados em package isolado com runtime empacotada (Windows MSVC).
-- **v0.3 Chunk 1 (Rust removal Phase 1 — Windows MSVC):** `ORI_USE_BUNDLED_RUST_LLD=1` engaja estratégia `BundledRustLld` que invoca `rust-lld` diretamente (sem `rustc` driver). CRT discovery via `vswhere.exe` + Windows SDK layout. Validado end-to-end com `examples/hello_world.orl` em Windows MSVC. `tools/stage_native_runtime.ps1` agora copia `rust-lld.exe` para `runtime/bin/`.
-- **v0.3 Chunk 2 (Rust removal Phase 1 — Linux GNU):** Estratégia `BundledRustLld` estendida para `x86_64-unknown-linux-gnu`. CRT discovery via `cc -print-file-name` (crt1.o/crti.o/crtn.o) + `cc -print-search-dirs` (lib dirs) + fallback de paths comuns para dynamic linker. `tools/stage_native_runtime.sh` agora copia `rust-lld` para `runtime/bin/`. macOS deferido (requer `-flavor darwin` + `xcrun`).
-- **v0.3 Chunk 3 (Stdlib Phase 0 — prelude loading):** Infraestrutura de prelude loading para `stdlib/*.orl` entregue. `import ori.string.utils` carrega `stdlib/string/utils.orl` (Layer 2 em `.orl`) que importa `ori.string` (Layer 1 manifesto) e expõe `is_empty`/`blank`/`replicate`. Convenção de path: `ori.X.Y` → `stdlib/X/Y.orl`. Stdlib root resolvia via `ORI_STDLIB_ROOT` → `CARGO_MANIFEST_DIR/../../../stdlib` → `<ori.exe dir>/stdlib`. Validado end-to-end (check → compile → run) com 2 testes de regressão em `multifile_imports.rs`.
-- **Master plan:** `docs/planning/PLANO-MATURIDADE-COMPLETO.md` — Etapas 0–9 concluídas; backlog v2 em Apêndice C (stdlib em `.orl`, paridade C debug para async, mais triples, registry/installer, `ori doc` HTML). Roadmap v0.3+ fechado: híbrido A→B→D para Rust removal, 3 camadas explícitas para stdlib (detalhes em CHANGELOG `[Unreleased]`).
+- **Rust removal Phase 1 — Windows MSVC (unreleased):** `ORI_USE_BUNDLED_RUST_LLD=1` engaja estratégia `BundledRustLld` que invoca `rust-lld` diretamente (sem `rustc` driver). CRT discovery via `vswhere.exe` + Windows SDK layout. Validado end-to-end com `examples/hello_world.orl` em Windows MSVC. `tools/stage_native_runtime.ps1` agora copia `rust-lld.exe` para `runtime/bin/`.
+- **Rust removal Phase 1 — Linux GNU (unreleased):** Estratégia `BundledRustLld` estendida para `x86_64-unknown-linux-gnu`. CRT discovery via `cc -print-file-name` (crt1.o/crti.o/crtn.o) + `cc -print-search-dirs` (lib dirs) + fallback de paths comuns para dynamic linker. `tools/stage_native_runtime.sh` agora copia `rust-lld` para `runtime/bin/`. macOS deferido (requer `-flavor darwin` + `xcrun`).
+- **Stdlib Phase 0 — prelude loading (unreleased):** Infraestrutura de prelude loading para `stdlib/*.orl` entregue. `import ori.string.utils` carrega `stdlib/string/utils.orl` (Layer 2 em `.orl`) que importa `ori.string` (Layer 1 manifesto) e expõe `is_empty`/`blank`/`replicate`. Convenção de path: `ori.X.Y` → `stdlib/X/Y.orl`. Stdlib root resolvia via `ORI_STDLIB_ROOT` → `CARGO_MANIFEST_DIR/../../../stdlib` → `<ori.exe dir>/stdlib`. Validado end-to-end (check → compile → run) com 2 testes de regressão em `multifile_imports.rs`.
+- **Master plan:** `docs/planning/PLANO-MATURIDADE-COMPLETO.md` — Etapas 0–9 concluídas; backlog v2 em Apêndice C (stdlib em `.orl`, paridade C debug para async, mais triples, registry/installer, `ori doc` HTML). Roadmap fechado: híbrido A→B→D para Rust removal, 3 camadas explícitas para stdlib (detalhes em CHANGELOG `[Unreleased]`).
+
+## Versioning policy (2026-06-29)
+
+**Congelado em `0.2.x`.** A escalada `0.1.0 → 0.2.0 → 0.3.0` (planejada) em dias foi precipitada. Comparação com pares:
+
+| Linguagem | Tempo em 0.x | Versão atual | Status |
+|-----------|-------------|--------------|--------|
+| Zig | ~10 anos | 0.14 | Consolidada, ainda sem 1.0 |
+| Rust | ~6 anos (pre-1.0) | 1.0 em 2015 | Estável após 0.12 |
+| Ori | dias | 0.2.0 | Pre-1.0, desenvolvimento ativo |
+
+**Regras até 1.0:**
+- Marcos de desenvolvimento ficam em `[Unreleased]` no CHANGELOG **sem atribuir versão**.
+- `0.3.0` só quando houver **breaking change real** que usuários precisem saber (não por ter terminado um marco).
+- Patch versions (`0.2.1`, `0.2.2`) para correções e small additive features.
+- `1.0` é critério de maturidade (anos, não dias):
+  1. Rust dependency totalmente removida (Rust removal Phase 1+2+3).
+  2. Stdlib portada em `.orl` (Layer 2+3 substantivas).
+  3. Compiler self-hosting (ou pelo menos provando que consegue).
+  4. ABI estável documentada.
+  5. Usuários reais (mesmo que poucos).
+  6. Sem breaking changes por ≥6 meses.
+
+**Motivo:** o `ori compile` ainda precisa de Rust toolchain (Phase 1 mitiga, não resolve), a stdlib é 95% manifesto Rust (Phase 0 mal começou), não há bootstrapping, não há usuários além de testes. Chamar isso de "release" 0.3/0.4/0.5 infla a percepção de maturidade.
 
 ## Known Pitfalls
 

@@ -12600,10 +12600,10 @@ enum NativeLinkerStrategy {
     ///
     /// Opt-in via `ORI_USE_BUNDLED_RUST_LLD=1`. Bypasses `rustc` entirely,
     /// so the user does not need a Rust toolchain installed to link Ori
-    /// programs. Supported on `x86_64-pc-windows-msvc` (v0.3 Chunk 1),
-    /// `x86_64-unknown-linux-gnu` (v0.3 Chunk 2); macOS deferred to a
-    /// future chunk. Other triples fall back to `RustcDriver` with a
-    /// diagnostic.
+    /// programs. Supported on `x86_64-pc-windows-msvc` (Rust removal Phase 1,
+    /// Windows MSVC) and `x86_64-unknown-linux-gnu` (Rust removal Phase 1,
+    /// Linux GNU); macOS deferred to a future milestone. Other triples fall
+    /// back to `RustcDriver` with a diagnostic.
     BundledRustLld {
         lld: PathBuf,
         flavor: String,

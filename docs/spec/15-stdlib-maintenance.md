@@ -79,11 +79,11 @@ Spec parity:
 
 If one fails, fix the manifest instead of patching the failing backend locally.
 
-## `.orl` source modules (v0.3 Phase 0+)
+## `.orl` source modules (Stdlib Phase 0+)
 
-As of v0.3 Chunk 3, the stdlib supports `.orl` source modules (Layer 2) that
-sit alongside the Rust manifest (Layer 1). This is no longer a future item —
-the infrastructure is live.
+As of Stdlib Phase 0 (unreleased, `[Unreleased]` cycle), the stdlib supports
+`.orl` source modules (Layer 2) that sit alongside the Rust manifest (Layer 1).
+This is no longer a future item — the infrastructure is live.
 
 ### Architecture
 
@@ -94,7 +94,7 @@ the infrastructure is live.
   `import`. Cold compositional functions (e.g. `is_empty`, `blank`,
   `replicate`) go here.
 - **Layer 3 (`.orl` algorithms):** pure-Ori algorithms on top of Layer 1+2
-  (e.g. `ori.tree` traversals). Planned for v0.4+.
+  (e.g. `ori.tree` traversals). Planned for the future (long-term, no version assigned).
 
 ### Path convention
 

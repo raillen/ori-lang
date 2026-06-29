@@ -6,13 +6,16 @@ Ori is a reading-first, explicitly typed programming language designed for clari
 
 ## Status
 
-**v0.2.0** — feature-complete for v1 targets. Compiler written in Rust, native
-codegen via Cranelift, LSP with cross-file semantics, ~580 passing tests, 5 CI
-triples (Windows MSVC/GNU, Linux GNU, macOS x86_64/aarch64). Pre-1.0: breaking
-changes may still occur; two known limitations documented in
-`docs/planning/PLANO-MATURIDADE-COMPLETO.md` (await in nested loops, formatter
-quirk after `trait` declarations). See `CHANGELOG.md` for the full v0.2.0
-release notes.
+**v0.2.0** — pre-1.0, active development. Compiler written in Rust, native
+codegen via Cranelift, LSP with cross-file semantics, ~588 passing tests, 5 CI
+triples (Windows MSVC/GNU, Linux GNU, macOS x86_64/aarch64). The language is
+not yet self-hosting and `ori compile` still requires a Rust toolchain for
+linking (Rust removal Phase 1 in progress — see `CHANGELOG.md` `[Unreleased]`).
+Versioning is frozen at `0.2.x` until maturity criteria are met (see
+`AGENTS.md` "Versioning policy"). Pre-1.0: breaking changes may still occur;
+two known limitations documented in `docs/planning/PLANO-MATURIDADE-COMPLETO.md`
+(await in nested loops, formatter quirk after `trait` declarations). See
+`CHANGELOG.md` for the full history.
 
 ## Current CLI Contract
 

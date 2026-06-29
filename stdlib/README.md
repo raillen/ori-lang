@@ -3,7 +3,7 @@
 The stdlib has two layers: a Rust manifest + native runtime (Layer 1), and
 `.orl` source modules (Layer 2+). Spec contracts in `docs/spec/12-stdlib.md`.
 
-## Current architecture (v1.x + v0.3 Phase 0)
+## Current architecture (v1.x + Stdlib Phase 0)
 
 ### Layer 1 — Rust runtime (manifest-only, never ported to `.orl`)
 
@@ -23,7 +23,7 @@ the runtime.
   (`ori_io_print`, `ori_bytes_len`, etc.).
 - **Spec:** `docs/spec/12-stdlib.md` documents the public API contract.
 
-### Layer 2 — `.orl` safe wrappers (v0.3 Phase 0+)
+### Layer 2 — `.orl` safe wrappers (Stdlib Phase 0+)
 
 Higher-level functions implemented in `.orl` that call Layer 1 primitives via
 the normal `import` mechanism. These are loaded as a prelude by the compiler
@@ -38,7 +38,7 @@ when a user (or another `.orl` module) imports them.
   (release package).
 - **Visibility:** functions in `.orl` stdlib modules must be declared
   `public` to be callable from other namespaces (same rule as user code).
-- **First module (v0.3 Chunk 3):** `stdlib/string/utils.orl`
+- **First module (Stdlib Phase 0):** `stdlib/string/utils.orl`
   - `namespace ori.string.utils`
   - `import ori.string as str` (Layer 1)
   - `public func is_empty(s: string) -> bool` — uses `str.len`
@@ -47,7 +47,7 @@ when a user (or another `.orl` module) imports them.
   - `public func replicate(s: string, n: int) -> string` — `while` loop +
     `str.concat`
 
-### Layer 3 — `.orl` algorithms (v0.4+, planned)
+### Layer 3 — `.orl` algorithms (future, long-term)
 
 Pure-Ori algorithms and data structures on top of Layer 1+2 (e.g. `ori.tree`
 traversals). Not yet started.

@@ -21,7 +21,7 @@ A complete release package should keep this shape:
 ori.exe                         # or `ori` on Unix
 runtime/
   bin/
-    rust-lld[.exe]              # v0.3: bundled linker (optional, enables ORI_USE_BUNDLED_RUST_LLD=1)
+    rust-lld[.exe]              # bundled linker (optional, enables ORI_USE_BUNDLED_RUST_LLD=1)
   {target-triple}/
     {runtime-artifact}
     runtime-link.json
@@ -40,9 +40,10 @@ when `-SkipBundleLld`/`--skip-bundle-lld` is not set) lets users opt into the
 `ori compile` invokes `rust-lld` directly and performs CRT discovery itself,
 bypassing `rustc` entirely — so the end user does not need a Rust toolchain
 installed just to link Ori programs. Supported on `x86_64-pc-windows-msvc`
-(v0.3 Chunk 1, via `vswhere.exe` + Windows SDK layout) and
-`x86_64-unknown-linux-gnu` (v0.3 Chunk 2, via `cc -print-file-name`); macOS
-support is deferred to a future chunk (requires `-flavor darwin` + `xcrun`).
+(Rust removal Phase 1, Windows MSVC, via `vswhere.exe` + Windows SDK layout)
+and `x86_64-unknown-linux-gnu` (Rust removal Phase 1, Linux GNU, via
+`cc -print-file-name`); macOS support is deferred to a future milestone
+(requires `-flavor darwin` + `xcrun`).
 
 `ori-runtime` is the source of truth for native runtime semantics. The C backend
 is a debug/transpile route and must not be used as the semantic reference for
