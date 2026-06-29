@@ -8854,6 +8854,35 @@ end
 }
 
 #[test]
+fn compile_runs_stdlib_source_module_string_utils_layer2() {
+    let dir = TestDir::new("stdlib_source_string_utils_layer2");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.string.utils as su
+
+func main()
+    io.print(su.default("", "fb"))
+    io.print(su.default("x", "fb"))
+    io.print(string(su.equals_ignore_case("Hello", "hello")))
+    io.print(string(su.equals_ignore_case("ABC", "abd")))
+    io.print(su.center("hi", 6))
+    io.print(su.center("hello", 3))
+    io.print(string(su.count("ababab", "ab")))
+    io.print(string(su.count("aaa", "aa")))
+    io.print(string(su.count("hello", "x")))
+    io.print(string(su.count("hello", "")))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_string_utils_layer2");
+    assert_eq!(stdout, "fb\nx\ntrue\nfalse\n  hi  \nhello\n3\n1\n0\n0\n");
+}
+
+#[test]
 fn check_stdlib_source_module_unknown_still_reports_error() {
     let dir = TestDir::new("stdlib_source_unknown");
     dir.write(

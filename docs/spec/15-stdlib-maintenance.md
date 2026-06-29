@@ -91,8 +91,9 @@ This is no longer a future item — the infrastructure is live.
   Hot-path modules (collections, async, I/O, ARC, string primitives like
   `concat`/`slice` that allocate) stay here.
 - **Layer 2 (`.orl` wrappers):** `stdlib/**/*.orl`, call Layer 1 via normal
-  `import`. Cold compositional functions (e.g. `is_empty`, `blank`,
-  `replicate`) go here.
+  `import`. Cold compositional functions go here. Current surface in
+  `stdlib/string/utils.orl`: `is_empty`, `blank`, `replicate`, `default`,
+  `equals_ignore_case`, `center`, `count`.
 - **Layer 3 (`.orl` algorithms):** pure-Ori algorithms on top of Layer 1+2
   (e.g. `ori.tree` traversals). Planned for the future (long-term, no version assigned).
 
@@ -131,6 +132,12 @@ module).
 - [ ] Declare functions with `public func ...`.
 - [ ] Avoid Ori keywords as identifiers (`string`, `repeat`, `result`, etc.
   are reserved — use `str`, `replicate`, `acc` or similar alternatives).
+- [ ] Avoid local variable names that collide with runtime internal symbols.
+  The native backend declares `ori_len` (`ptr: *u8) -> i64` and inserts it
+  into `stdlib_ids` — a local variable named `len` gets mangled to `ori_len`
+  and conflicts with the runtime symbol, producing `undefined variable
+  'ori_len' in native codegen` at compile time. Use a qualified name like
+  `s_len`, `sub_len`, `total_len` instead.
 - [ ] Add a regression test in `multifile_imports.rs` that imports the module
       and validates behavior end-to-end (check -> compile -> run).
 

@@ -19,3 +19,49 @@ public func replicate(s: string, n: int) -> string
     end
     return acc
 end
+
+public func default(s: string, fallback: string) -> string
+    if is_empty(s)
+        return fallback
+    end
+    return s
+end
+
+public func equals_ignore_case(a: string, b: string) -> bool
+    return str.to_lower(a) == str.to_lower(b)
+end
+
+public func center(s: string, width: int) -> string
+    const s_len: int = str.len(s)
+    if s_len >= width
+        return s
+    end
+    const total: int = width - s_len
+    const left: int = total / 2
+    const right: int = total - left
+    const padded: string = str.pad_left(s, left + s_len, " ")
+    return str.pad_right(padded, right + str.len(padded), " ")
+end
+
+public func count(s: string, sub: string) -> int
+    const sub_len: int = str.len(sub)
+    if sub_len == 0
+        return 0
+    end
+    var n: int = 0
+    var pos: int = 0
+    loop
+        const remaining: int = str.len(s) - pos
+        if remaining < sub_len
+            break
+        end
+        const window: string = str.slice(s, pos, pos + sub_len)
+        if window == sub
+            n = n + 1
+            pos = pos + sub_len
+        else
+            pos = pos + 1
+        end
+    end
+    return n
+end
