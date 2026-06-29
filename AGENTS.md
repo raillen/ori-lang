@@ -103,6 +103,7 @@ cargo run -p ori-driver -- run <file.orl>
 | `UPDATE_EXPECT=1` | Update expected diagnostic outputs in tests |
 | `ORI_TEST_LEAK_CHECK=1` | When set, `ori.test.assert_no_leaks(label)` aborts with a stderr diagnostic if live ARC allocations remain after running the cycle collector. Use in E2E tests to fail fast on memory leaks. |
 | `ORI_COOPERATIVE_COLLECT_THRESHOLD=N` | Number of managed allocations between cooperative cycle collections in the async executor (default 256). Set to a small value in tests to force frequent collection. |
+| `ORI_STDLIB_ROOT` | Override path to the `stdlib/` directory containing `.orl` source modules (v0.3 Chunk 3). When unset, resolves to `CARGO_MANIFEST_DIR/../../../stdlib` (dev mode) or `<ori.exe dir>/stdlib` (release package). |
 
 ## Compiler Pipeline
 
@@ -127,6 +128,7 @@ Source (.orl)
 - **Release smoke:** `tools/smoke_native_release.ps1 -SkipBuild` passes — `ori compile` + `ori test` validados em package isolado com runtime empacotada (Windows MSVC).
 - **v0.3 Chunk 1 (Rust removal Phase 1 — Windows MSVC):** `ORI_USE_BUNDLED_RUST_LLD=1` engaja estratégia `BundledRustLld` que invoca `rust-lld` diretamente (sem `rustc` driver). CRT discovery via `vswhere.exe` + Windows SDK layout. Validado end-to-end com `examples/hello_world.orl` em Windows MSVC. `tools/stage_native_runtime.ps1` agora copia `rust-lld.exe` para `runtime/bin/`.
 - **v0.3 Chunk 2 (Rust removal Phase 1 — Linux GNU):** Estratégia `BundledRustLld` estendida para `x86_64-unknown-linux-gnu`. CRT discovery via `cc -print-file-name` (crt1.o/crti.o/crtn.o) + `cc -print-search-dirs` (lib dirs) + fallback de paths comuns para dynamic linker. `tools/stage_native_runtime.sh` agora copia `rust-lld` para `runtime/bin/`. macOS deferido (requer `-flavor darwin` + `xcrun`).
+- **v0.3 Chunk 3 (Stdlib Phase 0 — prelude loading):** Infraestrutura de prelude loading para `stdlib/*.orl` entregue. `import ori.string.utils` carrega `stdlib/string/utils.orl` (Layer 2 em `.orl`) que importa `ori.string` (Layer 1 manifesto) e expõe `is_empty`/`blank`/`replicate`. Convenção de path: `ori.X.Y` → `stdlib/X/Y.orl`. Stdlib root resolvia via `ORI_STDLIB_ROOT` → `CARGO_MANIFEST_DIR/../../../stdlib` → `<ori.exe dir>/stdlib`. Validado end-to-end (check → compile → run) com 2 testes de regressão em `multifile_imports.rs`.
 - **Master plan:** `docs/planning/PLANO-MATURIDADE-COMPLETO.md` — Etapas 0–9 concluídas; backlog v2 em Apêndice C (stdlib em `.orl`, paridade C debug para async, mais triples, registry/installer, `ori doc` HTML). Roadmap v0.3+ fechado: híbrido A→B→D para Rust removal, 3 camadas explícitas para stdlib (detalhes em CHANGELOG `[Unreleased]`).
 
 ## Known Pitfalls

@@ -8828,3 +8828,47 @@ end
         out.diagnostics
     );
 }
+
+#[test]
+fn compile_runs_stdlib_source_module_string_utils() {
+    let dir = TestDir::new("stdlib_source_string_utils");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.string.utils as su
+
+func main()
+    io.print(string(su.is_empty("")))
+    io.print(string(su.is_empty("hi")))
+    io.print(string(su.blank("   ")))
+    io.print(string(su.blank("x")))
+    io.print(su.replicate("ab", 3))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_string_utils");
+    assert_eq!(stdout, "true\nfalse\ntrue\nfalse\nababab\n");
+}
+
+#[test]
+fn check_stdlib_source_module_unknown_still_reports_error() {
+    let dir = TestDir::new("stdlib_source_unknown");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.string.nonexistent as sn
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"bind.stdlib_module_unknown"),
+        "{:?}",
+        out.diagnostics
+    );
+}

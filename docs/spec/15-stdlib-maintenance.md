@@ -79,14 +79,63 @@ Spec parity:
 
 If one fails, fix the manifest instead of patching the failing backend locally.
 
-## Future: `.orl` modules
+## `.orl` source modules (v0.3 Phase 0+)
 
-Migrating stdlib modules to `.orl` source is a v2 backlog item, not a v1
-release gate. Hot-path modules (collections, async, I/O, ARC) will remain
-runtime intrinsics; only cold compositional modules (e.g. `ori.format`
-helpers, `ori.iter` combinators) are candidates for `.orl` facades over
-intrinsics. See `docs/planning/PLANO-MATURIDADE-COMPLETO.md` Etapa 8.1
-and Apêndice C.
+As of v0.3 Chunk 3, the stdlib supports `.orl` source modules (Layer 2) that
+sit alongside the Rust manifest (Layer 1). This is no longer a future item —
+the infrastructure is live.
+
+### Architecture
+
+- **Layer 1 (Rust runtime):** manifest-only, `extern "C"` FFI — never ported.
+  Hot-path modules (collections, async, I/O, ARC, string primitives like
+  `concat`/`slice` that allocate) stay here.
+- **Layer 2 (`.orl` wrappers):** `stdlib/**/*.orl`, call Layer 1 via normal
+  `import`. Cold compositional functions (e.g. `is_empty`, `blank`,
+  `replicate`) go here.
+- **Layer 3 (`.orl` algorithms):** pure-Ori algorithms on top of Layer 1+2
+  (e.g. `ori.tree` traversals). Planned for v0.4+.
+
+### Path convention
+
+`ori.X.Y.Z` -> `stdlib/X/Y/Z.orl` (dots become directory separators, file
+extension is `.orl`). The file must declare `namespace ori.X.Y.Z` (enforced
+by `validate_import_namespace`).
+
+### Discovery
+
+`pipeline::classify_stdlib_import` checks for `.orl` source modules in
+`find_stdlib_source_module` before returning `Unknown`. If a file exists at
+the expected path, the import is classified as `StdlibSource(PathBuf)` and
+loaded via `load_source_recursive` — same cycle detection and namespace
+validation as user files.
+
+### Stdlib root resolution
+
+`find_stdlib_root` resolves in order:
+1. `ORI_STDLIB_ROOT` env var (override for tests/packaging)
+2. `CARGO_MANIFEST_DIR/../../../stdlib` (dev mode — workspace stdlib dir)
+3. `<ori.exe dir>/stdlib` (release package layout)
+
+### Visibility
+
+Functions in `.orl` stdlib modules must be declared `public` to be callable
+from other namespaces — same rule as user code. Private functions are only
+visible within the same namespace (useful for internal helpers in a stdlib
+module).
+
+### Adding a Layer 2 function
+
+- [ ] Create or extend `stdlib/<module path>.orl` matching the namespace.
+- [ ] `import ori.<layer1_module> as <alias>` to access Layer 1 primitives.
+- [ ] Declare functions with `public func ...`.
+- [ ] Avoid Ori keywords as identifiers (`string`, `repeat`, `result`, etc.
+  are reserved — use `str`, `replicate`, `acc` or similar alternatives).
+- [ ] Add a regression test in `multifile_imports.rs` that imports the module
+      and validates behavior end-to-end (check -> compile -> run).
+
+No manifest changes are needed — the compiler discovers Layer 2 modules by
+scanning `stdlib/` at compile time.
 
 ## Current cleanup left
 

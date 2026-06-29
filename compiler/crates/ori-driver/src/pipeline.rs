@@ -1179,6 +1179,42 @@ fn load_source_recursive(
     for (import, span) in imports {
         match classify_stdlib_import(&import) {
             StdlibImportStatus::Implemented => continue,
+            StdlibImportStatus::StdlibSource(source_path) => {
+                if active.contains(&source_path) {
+                    let cycle =
+                        import_cycle_description(active, loaded, &source_path, &import);
+                    sink.emit(
+                        Diagnostic::error(
+                            "project.circular_import",
+                            format!("import cycle detected: {}", cycle),
+                        )
+                        .with_label(Label::primary(file_id, span, "cyclic import here"))
+                        .with_action(
+                            "remove one import or move shared definitions into an acyclic module",
+                        ),
+                    );
+                    validate_import_namespace(
+                        loaded,
+                        &source_path,
+                        &import,
+                        file_id,
+                        span,
+                        sink,
+                    );
+                    continue;
+                }
+                load_source_recursive(
+                    &source_path,
+                    cache,
+                    sink,
+                    seen,
+                    active,
+                    loaded,
+                    entry_source,
+                )?;
+                validate_import_namespace(loaded, &source_path, &import, file_id, span, sink);
+                continue;
+            }
             StdlibImportStatus::Unknown => {
                 sink.emit(
                     Diagnostic::error(
@@ -1302,6 +1338,7 @@ fn namespace_of(file: &SourceFile) -> String {
 
 enum StdlibImportStatus {
     Implemented,
+    StdlibSource(PathBuf),
     Unknown,
     NotStdlib,
 }
@@ -1311,10 +1348,50 @@ fn classify_stdlib_import(import: &str) -> StdlibImportStatus {
         return StdlibImportStatus::NotStdlib;
     }
     if ori_types::stdlib::is_implemented_stdlib_module(import) {
-        StdlibImportStatus::Implemented
-    } else {
-        StdlibImportStatus::Unknown
+        return StdlibImportStatus::Implemented;
     }
+    if let Some(path) = find_stdlib_source_module(import) {
+        return StdlibImportStatus::StdlibSource(path);
+    }
+    StdlibImportStatus::Unknown
+}
+
+fn find_stdlib_source_module(import: &str) -> Option<PathBuf> {
+    let relative = import.strip_prefix("ori.")?;
+    let stdlib_root = find_stdlib_root()?;
+    let mut relative_path = PathBuf::new();
+    for segment in relative.split('.') {
+        relative_path.push(segment);
+    }
+    let candidate = stdlib_root.join(&relative_path).with_extension("orl");
+    if candidate.is_file() {
+        Some(candidate)
+    } else {
+        None
+    }
+}
+
+fn find_stdlib_root() -> Option<PathBuf> {
+    if let Ok(path) = std::env::var("ORI_STDLIB_ROOT") {
+        let path = PathBuf::from(path);
+        if path.is_dir() {
+            return Some(path);
+        }
+    }
+    let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let dev_candidate = manifest_root.join("../../../stdlib");
+    if dev_candidate.is_dir() {
+        return Some(dev_candidate);
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            let release_candidate = exe_dir.join("stdlib");
+            if release_candidate.is_dir() {
+                return Some(release_candidate);
+            }
+        }
+    }
+    None
 }
 
 enum ImportResolution {
