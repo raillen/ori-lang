@@ -46,6 +46,16 @@ installed just to link Ori programs. Supported on `x86_64-pc-windows-msvc`
 (Rust removal Phase 1, macOS, via `xcrun --show-sdk-path` + `-platform_version`).
 Phase 1 is now complete for all three desktop OSes.
 
+Users can also opt into the `SystemLinker` strategy via `ORI_USE_SYSTEM_LINKER=1`.
+When enabled, `ori compile` invokes the platform system linker directly
+(`link.exe` on Windows MSVC, `ld` on Linux GNU, `ld` via `xcrun` on macOS)
+with the same CRT discovery as `BundledRustLld`, bypassing both `rust-lld` and
+`rustc`. Override the linker path with `ORI_SYSTEM_LINKER`. Supported on
+`x86_64-pc-windows-msvc` (via `vswhere.exe` + MSVC `link.exe` discovery),
+`x86_64-unknown-linux-gnu` (via `cc -print-prog-name=ld`), and
+`x86_64-apple-darwin` / `aarch64-apple-darwin` (via `xcrun --find ld`).
+Phase 2 is now complete for all three desktop OSes.
+
 `ori-runtime` is the source of truth for native runtime semantics. The C backend
 is a debug/transpile route and must not be used as the semantic reference for
 `ori compile`, `ori test`, collections, ARC, or async/concurrency behavior.

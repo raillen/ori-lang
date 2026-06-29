@@ -1305,6 +1305,217 @@ fn bundled_rust_lld_strategy_falls_back_on_non_windows() {
     }
 }
 
+#[test]
+fn system_linker_strategy_engages_on_supported_os_or_reports_actionable_error() {
+    // On Windows MSVC, Linux GNU, and macOS, the system linker strategy should
+    // engage (or return an actionable error if the toolchain is missing).
+    // On other platforms, it must return a "not implemented" error.
+    match discover_system_linker() {
+        Ok(strategy) => {
+            match strategy {
+                NativeLinkerStrategy::SystemLinker {
+                    linker,
+                    lib_dirs,
+                    dynamic_linker,
+                    extra_args,
+                    ..
+                } => {
+                    assert!(linker.is_file(), "linker must exist: {}", linker.display());
+                    if cfg!(windows) {
+                        assert!(!lib_dirs.is_empty(), "lib_dirs must be populated");
+                        assert!(dynamic_linker.is_none(), "Windows has no dynamic linker");
+                        assert!(
+                            extra_args.iter().any(|a| a == "/NOLOGO"),
+                            "Windows extra_args must include /NOLOGO"
+                        );
+                        assert!(
+                            extra_args.iter().any(|a| a == "/SUBSYSTEM:CONSOLE"),
+                            "Windows extra_args must include /SUBSYSTEM:CONSOLE"
+                        );
+                    } else if cfg!(target_os = "linux") {
+                        assert!(!lib_dirs.is_empty(), "lib_dirs must be populated");
+                        assert!(dynamic_linker.is_some(), "Linux must have a dynamic linker");
+                        assert!(
+                            extra_args.iter().any(|a| a == "-no-pie"),
+                            "Linux extra_args must include -no-pie"
+                        );
+                    } else if cfg!(target_os = "macos") {
+                        assert!(
+                            extra_args.iter().any(|a| a == "-arch"),
+                            "macOS extra_args must include -arch"
+                        );
+                        assert!(
+                            extra_args.iter().any(|a| a == "-platform_version"),
+                            "macOS extra_args must include -platform_version"
+                        );
+                        assert!(
+                            extra_args.iter().any(|a| a == "-syslibroot"),
+                            "macOS extra_args must include -syslibroot"
+                        );
+                        assert!(dynamic_linker.is_none(), "macOS has no explicit dynamic linker");
+                    }
+                }
+                _ => panic!("discover_system_linker returned wrong strategy variant"),
+            }
+        }
+        Err(reason) => {
+            if cfg!(windows) {
+                assert!(
+                    reason.contains("vswhere")
+                        || reason.contains("Visual Studio")
+                        || reason.contains("Windows SDK")
+                        || reason.contains("MSVC")
+                        || reason.contains("link.exe")
+                        || reason.contains("ORI_SYSTEM_LINKER"),
+                    "Windows error should be actionable: {reason}"
+                );
+            } else if cfg!(target_os = "linux") {
+                assert!(
+                    reason.contains("cc")
+                        || reason.contains("libc")
+                        || reason.contains("ld")
+                        || reason.contains("dynamic linker")
+                        || reason.contains("ORI_SYSTEM_LINKER"),
+                    "Linux error should be actionable: {reason}"
+                );
+            } else if cfg!(target_os = "macos") {
+                assert!(
+                    reason.contains("xcrun")
+                        || reason.contains("SDK")
+                        || reason.contains("ld")
+                        || reason.contains("Command Line Tools")
+                        || reason.contains("ORI_SYSTEM_LINKER"),
+                    "macOS error should be actionable: {reason}"
+                );
+            } else {
+                assert!(
+                    reason.contains("not implemented"),
+                    "unsupported OS error should mention not-implemented: {reason}"
+                );
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_link_exe_discovery_resolves_existing_path() {
+    match discover_msvc_crt_lib_dirs() {
+        Ok(dirs) => {
+            assert!(!dirs.is_empty(), "MSVC CRT discovery should return lib dirs");
+            match find_windows_link_exe(&dirs[0]) {
+                Ok(linker) => {
+                    assert!(
+                        linker.is_file(),
+                        "link.exe path must exist: {}",
+                        linker.display()
+                    );
+                    assert!(
+                        linker
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .is_some_and(|n| n.eq_ignore_ascii_case("link.exe")),
+                        "discovered linker should be link.exe: {}",
+                        linker.display()
+                    );
+                }
+                Err(reason) => {
+                    assert!(
+                        reason.contains("link.exe")
+                            || reason.contains("ORI_SYSTEM_LINKER")
+                            || reason.contains("MSVC"),
+                        "link.exe discovery error should be actionable: {reason}"
+                    );
+                }
+            }
+        }
+        Err(reason) => {
+            assert!(
+                reason.contains("vswhere")
+                    || reason.contains("Visual Studio")
+                    || reason.contains("Windows SDK")
+                    || reason.contains("MSVC"),
+                "CRT discovery error should be actionable: {reason}"
+            );
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_system_linker_discovery_resolves_existing_paths() {
+    match discover_system_linker() {
+        Ok(strategy) => {
+            match strategy {
+                NativeLinkerStrategy::SystemLinker {
+                    linker,
+                    crt_pre,
+                    crt_post,
+                    dynamic_linker,
+                    ..
+                } => {
+                    assert!(linker.is_file(), "ld must exist: {}", linker.display());
+                    assert_eq!(crt_pre.len(), 2, "crt_pre should have crt1.o + crti.o");
+                    assert_eq!(crt_post.len(), 1, "crt_post should have crtn.o");
+                    for obj in crt_pre.iter().chain(crt_post.iter()) {
+                        assert!(obj.is_file(), "CRT object must exist: {}", obj.display());
+                    }
+                    assert!(
+                        dynamic_linker
+                            .as_ref()
+                            .is_some_and(|p| p.is_file()),
+                        "dynamic linker must exist"
+                    );
+                }
+                _ => panic!("discover_system_linker returned wrong strategy variant"),
+            }
+        }
+        Err(reason) => {
+            assert!(
+                reason.contains("cc")
+                    || reason.contains("libc")
+                    || reason.contains("ld")
+                    || reason.contains("dynamic linker")
+                    || reason.contains("ORI_SYSTEM_LINKER"),
+                "Linux system linker discovery error should be actionable: {reason}"
+            );
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_system_linker_discovery_resolves_existing_ld() {
+    match discover_system_linker() {
+        Ok(strategy) => {
+            match strategy {
+                NativeLinkerStrategy::SystemLinker { linker, extra_args, .. } => {
+                    assert!(linker.is_file(), "ld must exist: {}", linker.display());
+                    assert!(
+                        extra_args.iter().any(|a| a == "-arch"),
+                        "macOS extra_args must include -arch"
+                    );
+                    assert!(
+                        extra_args.iter().any(|a| a == "-syslibroot"),
+                        "macOS extra_args must include -syslibroot"
+                    );
+                }
+                _ => panic!("discover_system_linker returned wrong strategy variant"),
+            }
+        }
+        Err(reason) => {
+            assert!(
+                reason.contains("xcrun")
+                    || reason.contains("SDK")
+                    || reason.contains("ld")
+                    || reason.contains("Command Line Tools")
+                    || reason.contains("ORI_SYSTEM_LINKER"),
+                "macOS system linker discovery error should be actionable: {reason}"
+            );
+        }
+    }
+}
+
 #[cfg(target_os = "macos")]
 #[test]
 fn macos_crt_discovery_resolves_existing_sdk() {

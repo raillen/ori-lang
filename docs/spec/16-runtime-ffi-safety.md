@@ -101,3 +101,21 @@ The runtime ships a trial-deletion cycle collector accessible via
 Critical ARC and memory functions should keep local `# Safety` rustdoc near the
 function. For broad FFI families, this file is the current shared contract until
 runtime modules are split and each domain can own smaller rustdoc blocks.
+
+## Native link strategies
+
+The native backend (`ori-codegen::native_backend`) supports four link strategies,
+selected by `NativeLinker::discover()` in priority order:
+
+| Priority | Env var | Strategy | Linker | CRT discovery |
+|----------|---------|----------|--------|---------------|
+| 1 | `ORI_NATIVE_LINKER` | `RawNativeCommand` | User-specified path | None (escape hatch) |
+| 2 | `ORI_USE_BUNDLED_RUST_LLD=1` | `BundledRustLld` | `rust-lld` (bundled or sysroot) | Yes (Phase 1) |
+| 3 | `ORI_USE_SYSTEM_LINKER=1` | `SystemLinker` | `link.exe` / `ld` / `ld64` | Yes (Phase 2) |
+| 4 | (default) | `RustcDriver` | `rustc` as link driver | Delegated to rustc |
+
+Phase 1 (`BundledRustLld`) and Phase 2 (`SystemLinker`) both perform
+compiler-side CRT discovery without requiring `vcvarsall.bat` (Windows) or a Rust
+toolchain. Phase 2 eliminates the `rust-lld` dependency when the platform system
+linker is available. Override paths: `ORI_RUST_LLD` (Phase 1), `ORI_SYSTEM_LINKER`
+(Phase 2).

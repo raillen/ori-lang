@@ -12623,6 +12623,28 @@ enum NativeLinkerStrategy {
         /// Windows, `-no-pie` on Linux).
         extra_args: Vec<String>,
     },
+    /// Direct system linker invocation (`link.exe`/`ld`/`ld64`) with
+    /// compiler-side CRT discovery. No `rust-lld`, no `rustc`.
+    ///
+    /// Opt-in via `ORI_USE_SYSTEM_LINKER=1`. Linker path override via
+    /// `ORI_SYSTEM_LINKER`. Reuses the same CRT discovery as `BundledRustLld`.
+    SystemLinker {
+        linker: PathBuf,
+        lib_dirs: Vec<PathBuf>,
+        /// CRT object files that must precede the user object + libs
+        /// (e.g. `crt1.o`, `crti.o` on Linux GNU). Empty on Windows MSVC
+        /// where CRT init is driven by `/defaultlib:msvcrt`.
+        crt_pre: Vec<PathBuf>,
+        /// CRT object files that must follow the user object + libs
+        /// (e.g. `crtn.o` on Linux GNU). Empty on Windows MSVC.
+        crt_post: Vec<PathBuf>,
+        /// Dynamic linker path for ELF targets (e.g.
+        /// `/lib64/ld-linux-x86-64.so.2`). `None` on Windows and macOS.
+        dynamic_linker: Option<PathBuf>,
+        /// Platform-specific flags (e.g. `/NOLOGO`, `/SUBSYSTEM:CONSOLE` on
+        /// Windows, `-no-pie` on Linux, `-arch`/`-syslibroot` on macOS).
+        extra_args: Vec<String>,
+    },
 }
 
 impl NativeLinker {
@@ -12649,6 +12671,17 @@ impl NativeLinker {
                     // are trying to diagnose).
                     return Err(format!(
                         "{NATIVE_LINKER_MISSING}: ORI_USE_BUNDLED_RUST_LLD=1 was set but the bundled rust-lld strategy could not be engaged: {reason}"
+                    ));
+                }
+            }
+        }
+
+        if env_flag("ORI_USE_SYSTEM_LINKER") {
+            match discover_system_linker() {
+                Ok(strategy) => return Ok(Self { strategy }),
+                Err(reason) => {
+                    return Err(format!(
+                        "{NATIVE_LINKER_MISSING}: ORI_USE_SYSTEM_LINKER=1 was set but the system linker strategy could not be engaged: {reason}"
                     ));
                 }
             }
@@ -12699,6 +12732,25 @@ impl NativeLinker {
             } => link_with_bundled_rust_lld(
                 lld,
                 flavor,
+                lib_dirs,
+                crt_pre,
+                crt_post,
+                dynamic_linker.as_deref(),
+                extra_args,
+                obj_path,
+                exe_path,
+                extra_libs,
+                options,
+            ),
+            NativeLinkerStrategy::SystemLinker {
+                linker,
+                lib_dirs,
+                crt_pre,
+                crt_post,
+                dynamic_linker,
+                extra_args,
+            } => link_with_system_linker(
+                linker,
                 lib_dirs,
                 crt_pre,
                 crt_post,
@@ -12907,6 +12959,133 @@ fn discover_bundled_rust_lld() -> Result<NativeLinkerStrategy, String> {
             std::env::consts::OS
         ))
     }
+}
+
+/// Resolve the `SystemLinker` strategy: locate the platform native linker
+/// (`link.exe`/`ld`/`ld64`) and CRT library paths, without `rust-lld` or `rustc`.
+fn discover_system_linker() -> Result<NativeLinkerStrategy, String> {
+    if cfg!(target_os = "windows") {
+        let lib_dirs = discover_msvc_crt_lib_dirs()?;
+        let linker = find_windows_link_exe(&lib_dirs[0])?;
+        Ok(NativeLinkerStrategy::SystemLinker {
+            linker,
+            lib_dirs,
+            crt_pre: Vec::new(),
+            crt_post: Vec::new(),
+            dynamic_linker: None,
+            extra_args: vec!["/NOLOGO".to_string(), "/SUBSYSTEM:CONSOLE".to_string()],
+        })
+    } else if cfg!(target_os = "linux") {
+        let crt = discover_linux_gnu_crt()?;
+        let linker = find_linux_ld()?;
+        Ok(NativeLinkerStrategy::SystemLinker {
+            linker,
+            lib_dirs: crt.lib_dirs,
+            crt_pre: crt.crt_pre,
+            crt_post: crt.crt_post,
+            dynamic_linker: Some(crt.dynamic_linker),
+            extra_args: vec!["-no-pie".to_string()],
+        })
+    } else if cfg!(target_os = "macos") {
+        let crt = discover_macos_crt()?;
+        let linker = find_macos_ld()?;
+        Ok(NativeLinkerStrategy::SystemLinker {
+            linker,
+            lib_dirs: Vec::new(),
+            crt_pre: Vec::new(),
+            crt_post: Vec::new(),
+            dynamic_linker: None,
+            extra_args: vec![
+                "-arch".to_string(),
+                crt.arch,
+                "-platform_version".to_string(),
+                "macos".to_string(),
+                crt.deployment_target,
+                crt.sdk_version,
+                "-syslibroot".to_string(),
+                crt.sdk_path.display().to_string(),
+            ],
+        })
+    } else {
+        Err(format!(
+            "system linker strategy is not implemented for target os `{}`",
+            std::env::consts::OS
+        ))
+    }
+}
+
+/// Explicit system linker path from `ORI_SYSTEM_LINKER`, when set.
+fn find_system_linker_override() -> Result<Option<PathBuf>, String> {
+    if let Ok(path) = std::env::var("ORI_SYSTEM_LINKER") {
+        let path = path.trim();
+        if path.is_empty() {
+            return Err("ORI_SYSTEM_LINKER is set but empty".to_string());
+        }
+        let candidate = PathBuf::from(path);
+        if candidate.is_file() {
+            return Ok(Some(candidate));
+        }
+        return Err(format!(
+            "ORI_SYSTEM_LINKER points to `{}` which does not exist",
+            candidate.display()
+        ));
+    }
+    Ok(None)
+}
+
+/// Locate MSVC `link.exe` for the `SystemLinker` strategy.
+///
+/// Discovery order:
+/// 1. `ORI_SYSTEM_LINKER` — explicit path.
+/// 2. `<VS>\VC\Tools\MSVC\<ver>\bin\Hostx64\<arch>\link.exe` (or `Hostx86`).
+fn find_windows_link_exe(msvc_lib: &Path) -> Result<PathBuf, String> {
+    if let Some(path) = find_system_linker_override()? {
+        return Ok(path);
+    }
+    let arch = msvc_arch_dir();
+    let msvc_ver_dir = msvc_lib
+        .parent()
+        .and_then(|p| p.parent())
+        .ok_or_else(|| format!("cannot derive MSVC tools dir from `{}`", msvc_lib.display()))?;
+    for host in ["Hostx64", "Hostx86"] {
+        let candidate = msvc_ver_dir
+            .join("bin")
+            .join(host)
+            .join(arch)
+            .join("link.exe");
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+    Err(format!(
+        "could not find link.exe under MSVC tools dir `{}`; set ORI_SYSTEM_LINKER to override",
+        msvc_ver_dir.display()
+    ))
+}
+
+/// Locate GNU `ld` for the `SystemLinker` strategy on Linux.
+///
+/// Discovery order:
+/// 1. `ORI_SYSTEM_LINKER` — explicit path.
+/// 2. `{CC} -print-prog-name=ld` (default `CC=cc`).
+fn find_linux_ld() -> Result<PathBuf, String> {
+    if let Some(path) = find_system_linker_override()? {
+        return Ok(path);
+    }
+    let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
+    cc_print_prog_name(&cc, "ld")
+}
+
+/// Locate macOS `ld` for the `SystemLinker` strategy.
+///
+/// Discovery order:
+/// 1. `ORI_SYSTEM_LINKER` — explicit path.
+/// 2. `xcrun --find ld`.
+fn find_macos_ld() -> Result<PathBuf, String> {
+    if let Some(path) = find_system_linker_override()? {
+        return Ok(path);
+    }
+    xcrun_find_tool("ld")
 }
 
 /// Locate `rust-lld` (bundled with Ori, overridden via env, or borrowed from
@@ -13175,6 +13354,34 @@ fn cc_print_file_name(cc: &str, file: &str) -> Result<PathBuf, String> {
     Ok(candidate)
 }
 
+fn cc_print_prog_name(cc: &str, prog: &str) -> Result<PathBuf, String> {
+    let output = std::process::Command::new(cc)
+        .args(["-print-prog-name", prog])
+        .output()
+        .map_err(|e| format!("failed to invoke `{cc} -print-prog-name {prog}`: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "`{cc} -print-prog-name {prog}` exited with status {}",
+            output.status
+        ));
+    }
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if path.is_empty() || !path.contains(std::path::MAIN_SEPARATOR) {
+        return Err(format!(
+            "`{cc} -print-prog-name {prog}` returned `{path}` (not found); \
+             install binutils or set ORI_SYSTEM_LINKER"
+        ));
+    }
+    let candidate = PathBuf::from(path);
+    if !candidate.is_file() {
+        return Err(format!(
+            "`{cc} -print-prog-name {prog}` returned `{}` which does not exist",
+            candidate.display()
+        ));
+    }
+    Ok(candidate)
+}
+
 fn discover_linux_dynamic_linker(cc: &str) -> Result<PathBuf, String> {
     // `cc -print-file-name=ld-linux-x86-64.so.2` works on most distros.
     // Fall back to standard paths if `cc` does not know the interpreter.
@@ -13361,6 +13568,37 @@ fn xcrun_show_sdk_version() -> Result<String, String> {
     Ok(version.to_string())
 }
 
+fn xcrun_find_tool(tool: &str) -> Result<PathBuf, String> {
+    let output = std::process::Command::new("xcrun")
+        .args(["--find", tool])
+        .output()
+        .map_err(|e| {
+            format!(
+                "failed to invoke `xcrun --find {tool}`: {e}; \
+                 install Xcode Command Line Tools or set ORI_SYSTEM_LINKER"
+            )
+        })?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "`xcrun --find {tool}` exited with status {}: {}",
+            output.status, stderr.trim()
+        ));
+    }
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if path.is_empty() {
+        return Err(format!("`xcrun --find {tool}` returned an empty path"));
+    }
+    let candidate = PathBuf::from(path);
+    if !candidate.is_file() {
+        return Err(format!(
+            "`xcrun --find {tool}` returned `{}` which does not exist",
+            candidate.display()
+        ));
+    }
+    Ok(candidate)
+}
+
 /// Invoke `rust-lld` directly with the discovered CRT lib directories.
 ///
 /// On Windows MSVC, `rust-lld -flavor link` accepts `link.exe`-style args.
@@ -13440,6 +13678,77 @@ fn link_with_bundled_rust_lld(
         Err(format_native_link_failure(
             "bundled-rust-lld",
             lld,
+            output.status,
+            &output.stdout,
+            &output.stderr,
+            options,
+        ))
+    }
+}
+
+/// Invoke the platform system linker directly with discovered CRT paths.
+///
+/// On Windows MSVC, `link.exe` accepts `/OUT:`, `/LIBPATH:`, `/NOLOGO`, and
+/// `/SUBSYSTEM:CONSOLE`. On Linux GNU, `ld` accepts `-o`, `-dynamic-linker`,
+/// `-L`, CRT objects, and `-no-pie`. On macOS, `ld` accepts `-o`, `-arch`,
+/// `-platform_version`, and `-syslibroot`.
+fn link_with_system_linker(
+    linker: &Path,
+    lib_dirs: &[PathBuf],
+    crt_pre: &[PathBuf],
+    crt_post: &[PathBuf],
+    dynamic_linker: Option<&Path>,
+    extra_args: &[String],
+    obj_path: &Path,
+    exe_path: &Path,
+    extra_libs: &[PathBuf],
+    options: NativeLinkOptions,
+) -> Result<(), String> {
+    let mut cmd = std::process::Command::new(linker);
+    if cfg!(windows) {
+        cmd.arg(format!("/OUT:{}", exe_path.display()));
+    } else {
+        cmd.arg("-o").arg(exe_path);
+    }
+    if let Some(dl) = dynamic_linker {
+        cmd.arg("-dynamic-linker").arg(dl);
+    }
+    for arg in extra_args {
+        cmd.arg(arg);
+    }
+    for dir in lib_dirs {
+        if cfg!(windows) {
+            cmd.arg(format!("/LIBPATH:{}", dir.display()));
+        } else {
+            cmd.arg(format!("-L{}", dir.display()));
+        }
+    }
+    for crt in crt_pre {
+        cmd.arg(crt);
+    }
+    cmd.arg(obj_path);
+    for lib in extra_libs {
+        cmd.arg(lib);
+    }
+    if !cfg!(windows) {
+        cmd.arg("-lc");
+    }
+    for crt in crt_post {
+        cmd.arg(crt);
+    }
+
+    let output = cmd.output().map_err(|e| {
+        format!(
+            "{NATIVE_LINKER_MISSING}: could not invoke system linker `{}`: {e}",
+            linker.display()
+        )
+    })?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format_native_link_failure(
+            "system-linker",
+            linker,
             output.status,
             &output.stdout,
             &output.stderr,
