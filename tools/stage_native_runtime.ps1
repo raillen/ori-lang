@@ -4,7 +4,8 @@ param(
     [ValidateSet("debug", "release")]
     [string]$Profile = "debug",
     [string]$OutputRoot = "",
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$SkipBundleLld
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,6 +23,34 @@ function Get-HostTriple {
     }
 
     throw "Could not detect the Rust host target from rustc -vV."
+}
+
+function Get-RustLldPath {
+    # 1. Explicit override via env var.
+    if ($env:ORI_RUST_LLD -and (Test-Path -LiteralPath $env:ORI_RUST_LLD -PathType Leaf)) {
+        return (Resolve-Path -LiteralPath $env:ORI_RUST_LLD).Path
+    }
+
+    # 2. Borrow from the Rust toolchain sysroot: <sysroot>/lib/rustlib/<host>/bin/rust-lld[.exe]
+    $sysroot = (& rustc --print sysroot 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $sysroot) {
+        $sysroot = $sysroot.Trim()
+        $hostTriple = Get-HostTriple
+        $exe = if ($IsWindows -or $env:OS -eq "Windows_NT") { "rust-lld.exe" } else { "rust-lld" }
+        $candidate = Join-Path $sysroot (Join-Path "lib/rustlib/$hostTriple/bin" $exe)
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+
+    # 3. PATH lookup as a last resort.
+    $exe = if ($IsWindows -or $env:OS -eq "Windows_NT") { "rust-lld.exe" } else { "rust-lld" }
+    $found = Get-Command -Name $exe -ErrorAction SilentlyContinue
+    if ($found) {
+        return $found.Source
+    }
+
+    return $null
 }
 
 function Get-RuntimeArtifactName([string]$TargetTriple) {
@@ -189,6 +218,19 @@ try {
 
     Write-Host "staged runtime: $dest"
     Write-Host "metadata: $metadataPath"
+
+    if (-not $SkipBundleLld) {
+        $lldPath = Get-RustLldPath
+        if ($null -ne $lldPath) {
+            $binDir = Join-Path $stageRoot "bin"
+            New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+            $lldDest = Join-Path $binDir (Split-Path -Leaf $lldPath)
+            Copy-Item -LiteralPath $lldPath -Destination $lldDest -Force
+            Write-Host "staged rust-lld: $lldDest"
+        } else {
+            Write-Warning "rust-lld not found; ORI_USE_BUNDLED_RUST_LLD will require ORI_RUST_LLD or rustc sysroot at link time."
+        }
+    }
 } finally {
     Pop-Location
 }

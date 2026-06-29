@@ -20,6 +20,8 @@ A complete release package should keep this shape:
 ```text
 ori.exe                         # or `ori` on Unix
 runtime/
+  bin/
+    rust-lld[.exe]              # v0.3: bundled linker (optional, enables ORI_USE_BUNDLED_RUST_LLD=1)
   {target-triple}/
     {runtime-artifact}
     runtime-link.json
@@ -31,6 +33,14 @@ Each target directory should also contain `runtime-link.json`. That file records
 the system libraries required by the Rust `staticlib` when a raw native linker is
 used. It also records the Ori version and native ABI version used to stage the
 runtime, so the driver can reject stale or incompatible runtime packages early.
+
+The optional `runtime/bin/rust-lld[.exe]` (staged by `tools/stage_native_runtime.{ps1,sh}`
+when `-SkipBundleLld` is not set) lets users opt into the `BundledRustLld` link
+strategy via `ORI_USE_BUNDLED_RUST_LLD=1`. When enabled, `ori compile` invokes
+`rust-lld` directly and performs CRT discovery itself, bypassing `rustc` entirely
+— so the end user does not need a Rust toolchain installed just to link Ori
+programs. Currently supported on `x86_64-pc-windows-msvc`; Linux GNU and macOS
+will be supported in v0.3 Chunk 2.
 
 `ori-runtime` is the source of truth for native runtime semantics. The C backend
 is a debug/transpile route and must not be used as the semantic reference for

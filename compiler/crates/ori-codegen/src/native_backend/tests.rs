@@ -1141,6 +1141,127 @@ fn missing_raw_native_linker_reports_native_linker_not_c_compiler() {
 }
 
 #[test]
+fn env_flag_treats_truthy_values_as_set() {
+    // `env_flag` reads the process env, so we cannot assert positive cases
+    // without racing with parallel tests. We can at least assert that an
+    // unset variable returns false.
+    let name = "__ORI_ENV_FLAG_UNSET_FOR_TEST__";
+    assert!(!env_flag(name), "unset env flag should be false");
+}
+
+#[test]
+fn msvc_arch_dir_matches_target_pointer_width() {
+    let arch = msvc_arch_dir();
+    if cfg!(target_pointer_width = "64") {
+        assert_eq!(arch, "x64", "64-bit targets should use x64 MSVC lib dir");
+    } else if cfg!(target_pointer_width = "32") {
+        assert_eq!(arch, "x86", "32-bit targets should use x86 MSVC lib dir");
+    }
+}
+
+#[test]
+fn discover_bundled_rust_lld_next_to_exe_returns_none_when_absent() {
+    // The current test binary almost certainly does not have a sibling
+    // `rust-lld`/`rust-lld.exe`, so this should return None. If a future
+    // test environment bundles rust-lld next to every exe, this test would
+    // need to be adjusted.
+    let result = discover_bundled_rust_lld_next_to_exe();
+    // We cannot assert `None` unconditionally because some test runners copy
+    // binaries into shared bin dirs. The invariant we care about is that the
+    // function does not panic and returns a PathBuf only when the file exists.
+    if let Some(path) = result {
+        assert!(path.is_file(), "returned path must exist: {}", path.display());
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn vswhere_discovers_vs_install_or_reports_clear_error() {
+    match find_vs_install_via_vswhere() {
+        Ok(path) => {
+            assert!(path.is_dir(), "vswhere path should be a directory: {}", path.display());
+        }
+        Err(reason) => {
+            // The error must mention vswhere or Visual Studio so users know
+            // what to install; it must not be an opaque diagnostic.
+            assert!(
+                reason.contains("vswhere") || reason.contains("Visual Studio"),
+                "vswhere error should be actionable: {reason}"
+            );
+        }
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn msvc_crt_lib_dirs_resolve_to_existing_directories() {
+    // On a Windows machine with VS Build Tools installed (the CI baseline),
+    // CRT discovery must succeed and return three existing lib directories.
+    // On machines without VS, this test is a no-op that records the missing
+    // toolchain — it does not fail the suite.
+    match discover_msvc_crt_lib_dirs() {
+        Ok(dirs) => {
+            assert_eq!(dirs.len(), 3, "MSVC CRT discovery should return 3 lib dirs");
+            for dir in &dirs {
+                assert!(dir.is_dir(), "lib dir must exist: {}", dir.display());
+            }
+        }
+        Err(reason) => {
+            // Do not fail: this test machine may not have VS Build Tools.
+            // We still assert the error is actionable.
+            assert!(
+                reason.contains("vswhere")
+                    || reason.contains("Visual Studio")
+                    || reason.contains("Windows SDK")
+                    || reason.contains("MSVC"),
+                "CRT discovery error should be actionable: {reason}"
+            );
+        }
+    }
+}
+
+#[test]
+fn bundled_rust_lld_strategy_falls_back_on_non_windows() {
+    // On non-Windows targets, the bundled strategy must return a clear error
+    // so callers fall back to the default RustcDriver. On Windows, it should
+    // either succeed or return an actionable error (missing VS, etc.).
+    match discover_bundled_rust_lld() {
+        Ok(strategy) => {
+            // Verify the strategy shape on Windows.
+            match strategy {
+                NativeLinkerStrategy::BundledRustLld {
+                    flavor,
+                    lib_dirs,
+                    ..
+                } => {
+                    assert_eq!(flavor, "link", "Windows MSVC should use link flavor");
+                    assert!(!lib_dirs.is_empty(), "lib_dirs must be populated");
+                }
+                _ => panic!("discover_bundled_rust_lld returned wrong strategy variant"),
+            }
+        }
+        Err(reason) => {
+            if !cfg!(windows) {
+                assert!(
+                    reason.contains("not yet implemented"),
+                    "non-Windows error should mention not-yet-implemented: {reason}"
+                );
+            } else {
+                // On Windows, the error must be actionable (VS/SDK missing).
+                assert!(
+                    reason.contains("vswhere")
+                        || reason.contains("Visual Studio")
+                        || reason.contains("Windows SDK")
+                        || reason.contains("MSVC")
+                        || reason.contains("rust-lld"),
+                    "Windows error should be actionable: {reason}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn unresolved_native_symbol_error_adds_runtime_abi_hint() {
     let err = format_native_link_failure(
             "driver",

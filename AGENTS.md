@@ -96,7 +96,9 @@ cargo run -p ori-driver -- run <file.orl>
 |----------|---------|
 | `ORI_RUNTIME_LIB` | Override path to runtime static library |
 | `ORI_NATIVE_LINKER` | Diagnose raw native linker route |
-| `ORI_USE_RUST_LLD=1` | Use rust-lld instead of system linker |
+| `ORI_USE_RUST_LLD=1` | Use rust-lld instead of system linker (still via `rustc` driver) |
+| `ORI_USE_BUNDLED_RUST_LLD=1` | Bypass `rustc` entirely — invoke `rust-lld` directly with compiler-side CRT discovery (v0.3 Phase 1, Windows MSVC only; Linux/macOS defer to Chunk 2) |
+| `ORI_RUST_LLD` | Explicit path to `rust-lld[.exe]` for the bundled strategy (else discovered from `<ori.exe dir>` or `rustc` sysroot) |
 | `ORI_REQUIRE_PACKAGED_RUNTIME=1` | Validate release package uses only packaged runtime |
 | `UPDATE_EXPECT=1` | Update expected diagnostic outputs in tests |
 | `ORI_TEST_LEAK_CHECK=1` | When set, `ori.test.assert_no_leaks(label)` aborts with a stderr diagnostic if live ARC allocations remain after running the cycle collector. Use in E2E tests to fail fast on memory leaks. |
@@ -119,11 +121,12 @@ Source (.orl)
 ## Current Status (2026-06-29)
 
 - **Rust:** 1.95.0 (via `rust-toolchain.toml`)
-- **Version:** `0.2.0` (release consolidada — Etapas 0–9 do `PLANO-MATURIDADE-COMPLETO.md` concluídas)
+- **Version:** `0.2.0` (release consolidada — Etapas 0–9 do `PLANO-MATURIDADE-COMPLETO.md` concluídas); v0.3 em desenvolvimento (Rust removal Phase 1 + stdlib Phase 0)
 - **cargo check --workspace:** PASSES cleanly
-- **cargo test --workspace:** PASSES cleanly (~580 tests, including advanced structural equality, file handles, cooperative task cancellation, async branching, Etapa 5 leak-check plumbing, Etapa 6 LSP cross-file semantics + `project.*` diagnostics, Etapa 7 diagnostic catalog audit, Etapa 8 monolith extractions, and Etapa 9 release smoke with `ORI_REQUIRE_PACKAGED_RUNTIME=1`)
+- **cargo test --workspace:** PASSES cleanly (~580 tests, including advanced structural equality, file handles, cooperative task cancellation, async branching, Etapa 5 leak-check plumbing, Etapa 6 LSP cross-file semantics + `project.*` diagnostics, Etapa 7 diagnostic catalog audit, Etapa 8 monolith extractions, and Etapa 9 release smoke with `ORI_REQUIRE_PACKAGED_RUNTIME=1`, v0.3 BundledRustLld strategy + Windows MSVC CRT discovery regression tests)
 - **Release smoke:** `tools/smoke_native_release.ps1 -SkipBuild` passes — `ori compile` + `ori test` validados em package isolado com runtime empacotada (Windows MSVC).
-- **Master plan:** `docs/planning/PLANO-MATURIDADE-COMPLETO.md` — Etapas 0–9 concluídas; backlog v2 em Apêndice C (stdlib em `.orl`, paridade C debug para async, mais triples, registry/installer, `ori doc` HTML)
+- **v0.3 Chunk 1 (Rust removal Phase 1 — Windows MSVC):** `ORI_USE_BUNDLED_RUST_LLD=1` engaja estratégia `BundledRustLld` que invoca `rust-lld` diretamente (sem `rustc` driver). CRT discovery via `vswhere.exe` + Windows SDK layout. Validado end-to-end com `examples/hello_world.orl` em Windows MSVC. `tools/stage_native_runtime.ps1` agora copia `rust-lld.exe` para `runtime/bin/`. Linux GNU + macOS CRT discovery deferidos para Chunk 2.
+- **Master plan:** `docs/planning/PLANO-MATURIDADE-COMPLETO.md` — Etapas 0–9 concluídas; backlog v2 em Apêndice C (stdlib em `.orl`, paridade C debug para async, mais triples, registry/installer, `ori doc` HTML). Roadmap v0.3+ fechado: híbrido A→B→D para Rust removal, 3 camadas explícitas para stdlib (detalhes em CHANGELOG `[Unreleased]`).
 
 ## Known Pitfalls
 

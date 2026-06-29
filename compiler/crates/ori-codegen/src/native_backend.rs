@@ -12596,6 +12596,18 @@ enum NativeLinkerStrategy {
     RawNativeCommand {
         command: PathBuf,
     },
+    /// Direct `rust-lld` invocation with compiler-side CRT discovery.
+    ///
+    /// Opt-in via `ORI_USE_BUNDLED_RUST_LLD=1`. Bypasses `rustc` entirely,
+    /// so the user does not need a Rust toolchain installed to link Ori
+    /// programs. Currently supported on `x86_64-pc-windows-msvc`; other
+    /// triples fall back to `RustcDriver` with a diagnostic.
+    BundledRustLld {
+        lld: PathBuf,
+        flavor: String,
+        lib_dirs: Vec<PathBuf>,
+        extra_args: Vec<String>,
+    },
 }
 
 impl NativeLinker {
@@ -12610,6 +12622,21 @@ impl NativeLinker {
                     command: PathBuf::from(command),
                 },
             });
+        }
+
+        if env_flag("ORI_USE_BUNDLED_RUST_LLD") {
+            match discover_bundled_rust_lld() {
+                Ok(strategy) => return Ok(Self { strategy }),
+                Err(reason) => {
+                    // Opt-in failed: surface the error so users learn why the
+                    // bundled path did not engage, instead of silently falling
+                    // back to the Rustc driver (which would mask the bug they
+                    // are trying to diagnose).
+                    return Err(format!(
+                        "{NATIVE_LINKER_MISSING}: ORI_USE_BUNDLED_RUST_LLD=1 was set but the bundled rust-lld strategy could not be engaged: {reason}"
+                    ));
+                }
+            }
         }
 
         let command = std::env::var("ORI_RUSTC")
@@ -12646,6 +12673,21 @@ impl NativeLinker {
             NativeLinkerStrategy::RawNativeCommand { command } => {
                 link_with_raw_native_command(command, obj_path, exe_path, extra_libs, options)
             }
+            NativeLinkerStrategy::BundledRustLld {
+                lld,
+                flavor,
+                lib_dirs,
+                extra_args,
+            } => link_with_bundled_rust_lld(
+                lld,
+                flavor,
+                lib_dirs,
+                extra_args,
+                obj_path,
+                exe_path,
+                extra_libs,
+                options,
+            ),
         }
     }
 }
@@ -12782,6 +12824,293 @@ fn rustc_host_triple(rustc: &Path) -> Option<String> {
             line.strip_prefix("host:")
                 .map(|host| host.trim().to_string())
         })
+}
+
+/// Truthy env-var check: `1`, `true`, `yes`, `on` (case-insensitive) count as set.
+fn env_flag(name: &str) -> bool {
+    matches!(
+        std::env::var(name).ok().as_deref().map(str::to_ascii_lowercase).as_deref(),
+        Some("1" | "true" | "yes" | "on")
+    )
+}
+
+/// Resolve the `BundledRustLld` strategy: locate `rust-lld` and the platform
+/// CRT library directories, without invoking `rustc` as a link driver.
+fn discover_bundled_rust_lld() -> Result<NativeLinkerStrategy, String> {
+    let lld = find_bundled_rust_lld()?;
+    if cfg!(target_os = "windows") {
+        let lib_dirs = discover_msvc_crt_lib_dirs()?;
+        Ok(NativeLinkerStrategy::BundledRustLld {
+            lld,
+            flavor: "link".to_string(),
+            lib_dirs,
+            extra_args: vec!["-subsystem:console".to_string()],
+        })
+    } else if cfg!(target_os = "linux") {
+        // Linux GNU CRT discovery is Chunk 2 of v0.3 — until then, surface a
+        // clear error so callers fall back to the default `RustcDriver`.
+        Err("bundled rust-lld strategy is not yet implemented for Linux GNU; \
+             unset ORI_USE_BUNDLED_RUST_LLD to use the rustc driver"
+            .to_string())
+    } else if cfg!(target_os = "macos") {
+        Err("bundled rust-lld strategy is not yet implemented for macOS; \
+             unset ORI_USE_BUNDLED_RUST_LLD to use the rustc driver"
+            .to_string())
+    } else {
+        Err(format!(
+            "bundled rust-lld strategy is not implemented for target os `{}`",
+            std::env::consts::OS
+        ))
+    }
+}
+
+/// Locate `rust-lld` (bundled with Ori, overridden via env, or borrowed from
+/// the Rust toolchain as a bootstrap). Discovery order:
+///
+/// 1. `ORI_RUST_LLD` — explicit path.
+/// 2. `<ori exe dir>/rust-lld[.exe]` — packaged alongside the compiler.
+/// 3. `<rustc sysroot>/lib/rustlib/<host>/bin/rust-lld[.exe]` — Rust toolchain.
+fn find_bundled_rust_lld() -> Result<PathBuf, String> {
+    if let Ok(path) = std::env::var("ORI_RUST_LLD") {
+        let path = path.trim();
+        if path.is_empty() {
+            return Err("ORI_RUST_LLD is set but empty".to_string());
+        }
+        let candidate = PathBuf::from(path);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+        return Err(format!(
+            "ORI_RUST_LLD points to `{}` which does not exist",
+            candidate.display()
+        ));
+    }
+
+    if let Some(bundled) = discover_bundled_rust_lld_next_to_exe() {
+        return Ok(bundled);
+    }
+
+    if let Some(sysroot_lld) = discover_rust_lld_from_rustc(Path::new("rustc")) {
+        return Ok(sysroot_lld);
+    }
+
+    Err("could not locate rust-lld; set ORI_RUST_LLD or install Rust toolchain".to_string())
+}
+
+fn discover_bundled_rust_lld_next_to_exe() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let name = if cfg!(windows) { "rust-lld.exe" } else { "rust-lld" };
+    let candidate = dir.join(name);
+    candidate.is_file().then_some(candidate)
+}
+
+/// Discover Windows MSVC CRT library directories using `vswhere.exe` and the
+/// Windows SDK layout. Does not require `vcvarsall.bat` to be loaded.
+///
+/// Returns the three lib directories needed to link a `mainCRTStartup`-style
+/// console binary against the dynamic CRT (`msvcrt`):
+/// - `<VS>\VC\Tools\MSVC\<ver>\lib\<arch>`
+/// - `<WindowsKits>\Lib\<sdk>\um\<arch>`
+/// - `<WindowsKits>\Lib\<sdk>\ucrt\<arch>`
+fn discover_msvc_crt_lib_dirs() -> Result<Vec<PathBuf>, String> {
+    let arch = msvc_arch_dir().to_string();
+    let vs_install = find_vs_install_via_vswhere()?;
+    let msvc_lib = find_latest_msvc_tools_lib(&vs_install, &arch)?;
+    let windows_kits = find_windows_kits_root()?;
+    let sdk_version = pick_latest_windows_sdk_version(&windows_kits)?;
+    let um_lib = windows_kits
+        .join("Lib")
+        .join(&sdk_version)
+        .join("um")
+        .join(&arch);
+    let ucrt_lib = windows_kits
+        .join("Lib")
+        .join(&sdk_version)
+        .join("ucrt")
+        .join(&arch);
+    for dir in [&msvc_lib, &um_lib, &ucrt_lib] {
+        if !dir.is_dir() {
+            return Err(format!(
+                "MSVC CRT discovery expected lib directory `{}` but it does not exist",
+                dir.display()
+            ));
+        }
+    }
+    Ok(vec![msvc_lib, um_lib, ucrt_lib])
+}
+
+fn msvc_arch_dir() -> &'static str {
+    if cfg!(target_pointer_width = "64") {
+        "x64"
+    } else if cfg!(target_pointer_width = "32") {
+        "x86"
+    } else if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else {
+        "x64"
+    }
+}
+
+fn find_vs_install_via_vswhere() -> Result<PathBuf, String> {
+    let vswhere = PathBuf::from(r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe");
+    if !vswhere.is_file() {
+        return Err(
+            "vswhere.exe not found at the standard install location; install Visual Studio Build Tools"
+                .to_string(),
+        );
+    }
+    let output = std::process::Command::new(&vswhere)
+        .args([
+            "-latest",
+            "-products",
+            "*",
+            "-requires",
+            "Microsoft.VisualStudio.Component.VC.Tools.x86.x64",
+            "-property",
+            "installationPath",
+        ])
+        .output()
+        .map_err(|e| format!("failed to invoke vswhere `{}`: {e}", vswhere.display()))?;
+    if !output.status.success() {
+        return Err(format!(
+            "vswhere exited with status {} while locating Visual Studio install",
+            output.status
+        ));
+    }
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if path.is_empty() {
+        return Err(
+            "vswhere did not report any Visual Studio install with MSVC tools; install Visual Studio Build Tools"
+                .to_string(),
+        );
+    }
+    let install = PathBuf::from(path);
+    if !install.is_dir() {
+        return Err(format!(
+            "vswhere reported install path `{}` which does not exist",
+            install.display()
+        ));
+    }
+    Ok(install)
+}
+
+fn find_latest_msvc_tools_lib(vs_install: &Path, arch: &str) -> Result<PathBuf, String> {
+    let tools_dir = vs_install.join("VC").join("Tools").join("MSVC");
+    let mut versions: Vec<_> = std::fs::read_dir(&tools_dir)
+        .map_err(|e| format!("cannot read MSVC tools dir `{}`: {e}", tools_dir.display()))?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .map(|entry| entry.file_name().to_string_lossy().to_string())
+        .collect();
+    versions.sort();
+    // Try newest first; pick the first one whose `lib/<arch>` exists.
+    for version in versions.iter().rev() {
+        let lib = tools_dir.join(version).join("lib").join(arch);
+        if lib.is_dir() {
+            return Ok(lib);
+        }
+    }
+    Err(format!(
+        "no MSVC tools version under `{}` has a `lib/{arch}` directory",
+        tools_dir.display()
+    ))
+}
+
+fn find_windows_kits_root() -> Result<PathBuf, String> {
+    if let Ok(kits) = std::env::var("WindowsSdkDir") {
+        let kits = kits.trim().trim_end_matches('\\').trim_end_matches('/');
+        if !kits.is_empty() {
+            let candidate = PathBuf::from(kits);
+            if candidate.is_dir() {
+                return Ok(candidate);
+            }
+        }
+    }
+    let default = PathBuf::from(r"C:\Program Files (x86)\Windows Kits\10");
+    if default.is_dir() {
+        return Ok(default);
+    }
+    Err("Windows SDK root not found; set WindowsSdkDir or install Windows SDK".to_string())
+}
+
+fn pick_latest_windows_sdk_version(kits_root: &Path) -> Result<String, String> {
+    let lib_dir = kits_root.join("Lib");
+    let mut versions: Vec<_> = std::fs::read_dir(&lib_dir)
+        .map_err(|e| format!("cannot read Windows SDK Lib dir `{}`: {e}", lib_dir.display()))?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .map(|entry| entry.file_name().to_string_lossy().to_string())
+        .collect();
+    versions.sort();
+    // Prefer the newest one that has `um/<arch>` and `ucrt/<arch>`.
+    let arch = msvc_arch_dir();
+    for version in versions.iter().rev() {
+        let um = lib_dir.join(version).join("um").join(arch);
+        let ucrt = lib_dir.join(version).join("ucrt").join(arch);
+        if um.is_dir() && ucrt.is_dir() {
+            return Ok(version.clone());
+        }
+    }
+    Err(format!(
+        "no Windows SDK version under `{}` has both `um/{arch}` and `ucrt/{arch}`",
+        lib_dir.display()
+    ))
+}
+
+/// Invoke `rust-lld` directly with the discovered CRT lib directories.
+///
+/// On Windows MSVC, `rust-lld -flavor link` accepts `link.exe`-style args.
+/// `extra_libs` already contains the runtime static lib plus the
+/// `native_static_libs` list (e.g. `kernel32.lib`, `/defaultlib:msvcrt`)
+/// coming from `runtime-link.json`, so we only need to add the lib search
+/// paths and the subsystem flag.
+fn link_with_bundled_rust_lld(
+    lld: &Path,
+    flavor: &str,
+    lib_dirs: &[PathBuf],
+    extra_args: &[String],
+    obj_path: &Path,
+    exe_path: &Path,
+    extra_libs: &[PathBuf],
+    options: NativeLinkOptions,
+) -> Result<(), String> {
+    let mut cmd = std::process::Command::new(lld);
+    cmd.arg("-flavor").arg(flavor);
+    if cfg!(windows) {
+        cmd.arg(format!("-OUT:{}", exe_path.display()));
+    } else {
+        cmd.arg("-o").arg(exe_path);
+    }
+    for arg in extra_args {
+        cmd.arg(arg);
+    }
+    for dir in lib_dirs {
+        cmd.arg(format!("-libpath:{}", dir.display()));
+    }
+    cmd.arg(obj_path);
+    for lib in extra_libs {
+        cmd.arg(lib);
+    }
+
+    let output = cmd.output().map_err(|e| {
+        format!(
+            "{NATIVE_LINKER_MISSING}: could not invoke bundled rust-lld `{}`: {e}",
+            lld.display()
+        )
+    })?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format_native_link_failure(
+            "bundled-rust-lld",
+            lld,
+            output.status,
+            &output.stdout,
+            &output.stderr,
+            options,
+        ))
+    }
 }
 
 fn link_with_raw_native_command(
