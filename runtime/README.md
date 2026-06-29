@@ -35,12 +35,14 @@ used. It also records the Ori version and native ABI version used to stage the
 runtime, so the driver can reject stale or incompatible runtime packages early.
 
 The optional `runtime/bin/rust-lld[.exe]` (staged by `tools/stage_native_runtime.{ps1,sh}`
-when `-SkipBundleLld` is not set) lets users opt into the `BundledRustLld` link
-strategy via `ORI_USE_BUNDLED_RUST_LLD=1`. When enabled, `ori compile` invokes
-`rust-lld` directly and performs CRT discovery itself, bypassing `rustc` entirely
-— so the end user does not need a Rust toolchain installed just to link Ori
-programs. Currently supported on `x86_64-pc-windows-msvc`; Linux GNU and macOS
-will be supported in v0.3 Chunk 2.
+when `-SkipBundleLld`/`--skip-bundle-lld` is not set) lets users opt into the
+`BundledRustLld` link strategy via `ORI_USE_BUNDLED_RUST_LLD=1`. When enabled,
+`ori compile` invokes `rust-lld` directly and performs CRT discovery itself,
+bypassing `rustc` entirely — so the end user does not need a Rust toolchain
+installed just to link Ori programs. Supported on `x86_64-pc-windows-msvc`
+(v0.3 Chunk 1, via `vswhere.exe` + Windows SDK layout) and
+`x86_64-unknown-linux-gnu` (v0.3 Chunk 2, via `cc -print-file-name`); macOS
+support is deferred to a future chunk (requires `-flavor darwin` + `xcrun`).
 
 `ori-runtime` is the source of truth for native runtime semantics. The C backend
 is a debug/transpile route and must not be used as the semantic reference for

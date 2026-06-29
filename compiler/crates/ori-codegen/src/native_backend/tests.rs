@@ -1222,31 +1222,39 @@ fn msvc_crt_lib_dirs_resolve_to_existing_directories() {
 
 #[test]
 fn bundled_rust_lld_strategy_falls_back_on_non_windows() {
-    // On non-Windows targets, the bundled strategy must return a clear error
-    // so callers fall back to the default RustcDriver. On Windows, it should
-    // either succeed or return an actionable error (missing VS, etc.).
+    // On Windows MSVC and Linux GNU, the bundled strategy should engage (or
+    // return an actionable error if the toolchain is missing). On macOS and
+    // other platforms, it must return a "not yet implemented" error so
+    // callers fall back to the default RustcDriver.
     match discover_bundled_rust_lld() {
         Ok(strategy) => {
-            // Verify the strategy shape on Windows.
             match strategy {
                 NativeLinkerStrategy::BundledRustLld {
                     flavor,
                     lib_dirs,
+                    dynamic_linker,
                     ..
                 } => {
-                    assert_eq!(flavor, "link", "Windows MSVC should use link flavor");
-                    assert!(!lib_dirs.is_empty(), "lib_dirs must be populated");
+                    if cfg!(windows) {
+                        assert_eq!(flavor, "link", "Windows MSVC should use link flavor");
+                        assert!(!lib_dirs.is_empty(), "lib_dirs must be populated");
+                        assert!(dynamic_linker.is_none(), "Windows has no dynamic linker");
+                    } else if cfg!(target_os = "linux") {
+                        assert_eq!(flavor, "gnu", "Linux GNU should use gnu flavor");
+                        assert!(!lib_dirs.is_empty(), "lib_dirs must be populated");
+                        assert!(dynamic_linker.is_some(), "Linux must have a dynamic linker");
+                    }
                 }
                 _ => panic!("discover_bundled_rust_lld returned wrong strategy variant"),
             }
         }
         Err(reason) => {
-            if !cfg!(windows) {
+            if cfg!(target_os = "macos") {
                 assert!(
                     reason.contains("not yet implemented"),
-                    "non-Windows error should mention not-yet-implemented: {reason}"
+                    "macOS error should mention not-yet-implemented: {reason}"
                 );
-            } else {
+            } else if cfg!(windows) {
                 // On Windows, the error must be actionable (VS/SDK missing).
                 assert!(
                     reason.contains("vswhere")
@@ -1256,7 +1264,54 @@ fn bundled_rust_lld_strategy_falls_back_on_non_windows() {
                         || reason.contains("rust-lld"),
                     "Windows error should be actionable: {reason}"
                 );
+            } else if cfg!(target_os = "linux") {
+                // On Linux, the error must mention cc or libc or rust-lld.
+                assert!(
+                    reason.contains("cc")
+                        || reason.contains("libc")
+                        || reason.contains("rust-lld")
+                        || reason.contains("dynamic linker"),
+                    "Linux error should be actionable: {reason}"
+                );
+            } else {
+                assert!(
+                    reason.contains("not implemented"),
+                    "unsupported OS error should mention not-implemented: {reason}"
+                );
             }
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_gnu_crt_discovery_resolves_existing_paths() {
+    // On a Linux machine with `cc` and libc6-dev installed (the CI baseline),
+    // CRT discovery must succeed and return existing crt1.o/crti.o/crtn.o
+    // paths plus a dynamic linker. On minimal containers without `cc`, this
+    // test records the missing toolchain — it does not fail the suite.
+    match discover_linux_gnu_crt() {
+        Ok(crt) => {
+            assert!(
+                !crt.lib_dirs.is_empty(),
+                "Linux CRT discovery should return lib dirs"
+            );
+            assert_eq!(crt.crt_pre.len(), 2, "crt_pre should have crt1.o + crti.o");
+            assert_eq!(crt.crt_post.len(), 1, "crt_post should have crtn.o");
+            for obj in crt.crt_pre.iter().chain(crt.crt_post.iter()) {
+                assert!(obj.is_file(), "CRT object must exist: {}", obj.display());
+            }
+            assert!(
+                crt.dynamic_linker.is_file(),
+                "dynamic linker must exist: {}",
+                crt.dynamic_linker.display()
+            );
+        }
+        Err(reason) => {
+            assert!(
+                reason.contains("cc") || reason.contains("libc"),
+                "Linux CRT discovery error should be actionable: {reason}"
+            );
         }
     }
 }

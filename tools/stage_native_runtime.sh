@@ -5,16 +5,18 @@ target=""
 profile="debug"
 output_root=""
 skip_build=0
+skip_bundle_lld=0
 
 usage() {
     cat <<'USAGE'
-Usage: tools/stage_native_runtime.sh [--target TRIPLE] [--profile debug|release] [--output-root DIR] [--skip-build]
+Usage: tools/stage_native_runtime.sh [--target TRIPLE] [--profile debug|release] [--output-root DIR] [--skip-build] [--skip-bundle-lld]
 
 Stages the Rust ori-runtime static library into:
 
   runtime/{target-triple}/{runtime-artifact}
 
-and writes runtime-link.json next to it.
+and writes runtime-link.json next to it. Also copies rust-lld into
+runtime/bin/ unless --skip-bundle-lld is given.
 USAGE
 }
 
@@ -34,6 +36,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --skip-build)
             skip_build=1
+            shift
+            ;;
+        --skip-bundle-lld)
+            skip_bundle_lld=1
             shift
             ;;
         -h|--help)
@@ -58,6 +64,29 @@ repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 
 host_triple() {
     rustc -vV | awk -F': ' '/^host:/ { print $2; exit }'
+}
+
+# Locate rust-lld: ORI_RUST_LLD env -> rustc sysroot -> PATH.
+find_rust_lld() {
+    if [ -n "${ORI_RUST_LLD:-}" ] && [ -f "$ORI_RUST_LLD" ]; then
+        printf '%s\n' "$ORI_RUST_LLD"
+        return 0
+    fi
+    sysroot=$(rustc --print sysroot 2>/dev/null || true)
+    if [ -n "$sysroot" ]; then
+        host=$(host_triple)
+        candidate="$sysroot/lib/rustlib/$host/bin/rust-lld"
+        if [ -f "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    fi
+    found=$(command -v rust-lld 2>/dev/null || true)
+    if [ -n "$found" ]; then
+        printf '%s\n' "$found"
+        return 0
+    fi
+    return 1
 }
 
 workspace_version() {
@@ -195,3 +224,15 @@ JSON
 
 printf 'staged runtime: %s\n' "$dest"
 printf 'metadata: %s\n' "$metadata_path"
+
+if [ "$skip_bundle_lld" -eq 0 ]; then
+    if lld_path=$(find_rust_lld); then
+        bin_dir="$stage_root/bin"
+        mkdir -p "$bin_dir"
+        lld_dest="$bin_dir/$(basename "$lld_path")"
+        cp "$lld_path" "$lld_dest"
+        printf 'staged rust-lld: %s\n' "$lld_dest"
+    else
+        echo "warning: rust-lld not found; ORI_USE_BUNDLED_RUST_LLD will require ORI_RUST_LLD or rustc sysroot at link time." >&2
+    fi
+fi

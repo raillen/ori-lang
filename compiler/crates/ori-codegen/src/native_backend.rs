@@ -12600,12 +12600,26 @@ enum NativeLinkerStrategy {
     ///
     /// Opt-in via `ORI_USE_BUNDLED_RUST_LLD=1`. Bypasses `rustc` entirely,
     /// so the user does not need a Rust toolchain installed to link Ori
-    /// programs. Currently supported on `x86_64-pc-windows-msvc`; other
-    /// triples fall back to `RustcDriver` with a diagnostic.
+    /// programs. Supported on `x86_64-pc-windows-msvc` (v0.3 Chunk 1),
+    /// `x86_64-unknown-linux-gnu` (v0.3 Chunk 2); macOS deferred to a
+    /// future chunk. Other triples fall back to `RustcDriver` with a
+    /// diagnostic.
     BundledRustLld {
         lld: PathBuf,
         flavor: String,
         lib_dirs: Vec<PathBuf>,
+        /// CRT object files that must precede the user object + libs
+        /// (e.g. `crt1.o`, `crti.o` on Linux GNU). Empty on Windows MSVC
+        /// where CRT init is driven by `/defaultlib:msvcrt`.
+        crt_pre: Vec<PathBuf>,
+        /// CRT object files that must follow the user object + libs
+        /// (e.g. `crtn.o` on Linux GNU). Empty on Windows MSVC.
+        crt_post: Vec<PathBuf>,
+        /// Dynamic linker path for ELF targets (e.g.
+        /// `/lib64/ld-linux-x86-64.so.2`). `None` on Windows.
+        dynamic_linker: Option<PathBuf>,
+        /// Extra flavor-specific flags (e.g. `-subsystem:console` on
+        /// Windows, `-no-pie` on Linux).
         extra_args: Vec<String>,
     },
 }
@@ -12677,11 +12691,17 @@ impl NativeLinker {
                 lld,
                 flavor,
                 lib_dirs,
+                crt_pre,
+                crt_post,
+                dynamic_linker,
                 extra_args,
             } => link_with_bundled_rust_lld(
                 lld,
                 flavor,
                 lib_dirs,
+                crt_pre,
+                crt_post,
+                dynamic_linker.as_deref(),
                 extra_args,
                 obj_path,
                 exe_path,
@@ -12844,15 +12864,25 @@ fn discover_bundled_rust_lld() -> Result<NativeLinkerStrategy, String> {
             lld,
             flavor: "link".to_string(),
             lib_dirs,
+            crt_pre: Vec::new(),
+            crt_post: Vec::new(),
+            dynamic_linker: None,
             extra_args: vec!["-subsystem:console".to_string()],
         })
     } else if cfg!(target_os = "linux") {
-        // Linux GNU CRT discovery is Chunk 2 of v0.3 — until then, surface a
-        // clear error so callers fall back to the default `RustcDriver`.
-        Err("bundled rust-lld strategy is not yet implemented for Linux GNU; \
-             unset ORI_USE_BUNDLED_RUST_LLD to use the rustc driver"
-            .to_string())
+        let crt = discover_linux_gnu_crt()?;
+        Ok(NativeLinkerStrategy::BundledRustLld {
+            lld,
+            flavor: "gnu".to_string(),
+            lib_dirs: crt.lib_dirs,
+            crt_pre: crt.crt_pre,
+            crt_post: crt.crt_post,
+            dynamic_linker: Some(crt.dynamic_linker),
+            extra_args: vec!["-no-pie".to_string()],
+        })
     } else if cfg!(target_os = "macos") {
+        // macOS CRT discovery is deferred — uses `xcrun --show-sdk-path` +
+        // `-platform_version` flag, which is a different flavor (`darwin`).
         Err("bundled rust-lld strategy is not yet implemented for macOS; \
              unset ORI_USE_BUNDLED_RUST_LLD to use the rustc driver"
             .to_string())
@@ -13058,6 +13088,167 @@ fn pick_latest_windows_sdk_version(kits_root: &Path) -> Result<String, String> {
     ))
 }
 
+/// Linux GNU CRT discovery result.
+///
+/// `crt_pre` holds the CRT objects that must precede the user object + libs
+/// (`crt1.o`, `crti.o`); `crt_post` holds the ones that must follow them
+/// (`crtn.o`). `dynamic_linker` is the ELF interpreter path
+/// (`ld-linux-x86-64.so.2`).
+struct LinuxGnuCrt {
+    lib_dirs: Vec<PathBuf>,
+    crt_pre: Vec<PathBuf>,
+    crt_post: Vec<PathBuf>,
+    dynamic_linker: PathBuf,
+}
+
+/// Discover Linux GNU CRT components using `cc -print-file-name` and
+/// `cc -print-search-dirs`. Does not require a Rust toolchain.
+///
+/// The C compiler driver (`cc`) is used only as a discovery tool — the
+/// actual link is performed by `rust-lld` directly. If `cc` is not
+/// installed, this strategy cannot engage and the caller should fall back
+/// to `RustcDriver`.
+fn discover_linux_gnu_crt() -> Result<LinuxGnuCrt, String> {
+    let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
+    let crt1 = cc_print_file_name(&cc, "crt1.o")?;
+    let crti = cc_print_file_name(&cc, "crti.o")?;
+    let crtn = cc_print_file_name(&cc, "crtn.o")?;
+    let dynamic_linker = discover_linux_dynamic_linker(&cc)?;
+    let lib_dirs = cc_print_search_dirs_libpaths(&cc)?;
+    Ok(LinuxGnuCrt {
+        lib_dirs,
+        crt_pre: vec![crt1, crti],
+        crt_post: vec![crtn],
+        dynamic_linker,
+    })
+}
+
+fn cc_print_file_name(cc: &str, file: &str) -> Result<PathBuf, String> {
+    let output = std::process::Command::new(cc)
+        .args(["-print-file-name", file])
+        .output()
+        .map_err(|e| format!("failed to invoke `{cc} -print-file-name {file}`: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "`{cc} -print-file-name {file}` exited with status {}",
+            output.status
+        ));
+    }
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    // `cc` echoes the bare filename when the file is not found; a real path
+    // contains a separator.
+    if path.is_empty() || !path.contains(std::path::MAIN_SEPARATOR) {
+        return Err(format!(
+            "`{cc} -print-file-name {file}` returned `{path}` (not found); \
+             install the C runtime development files (e.g. libc6-dev)"
+        ));
+    }
+    let candidate = PathBuf::from(path);
+    if !candidate.is_file() {
+        return Err(format!(
+            "`{cc} -print-file-name {file}` returned `{}` which does not exist",
+            candidate.display()
+        ));
+    }
+    Ok(candidate)
+}
+
+fn discover_linux_dynamic_linker(cc: &str) -> Result<PathBuf, String> {
+    // `cc -print-file-name=ld-linux-x86-64.so.2` works on most distros.
+    // Fall back to standard paths if `cc` does not know the interpreter.
+    let candidates = [
+        "ld-linux-x86-64.so.2",
+        "ld-linux.so.2",
+        "ld-linux-aarch64.so.1",
+    ];
+    for &name in &candidates {
+        let output = std::process::Command::new(cc)
+            .args(["-print-file-name", name])
+            .output()
+            .map_err(|e| format!("failed to invoke `{cc} -print-file-name {name}`: {e}"))?;
+        if !output.status.success() {
+            continue;
+        }
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if path.contains(std::path::MAIN_SEPARATOR) {
+            let candidate = PathBuf::from(&path);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+    // Last-resort: hard-coded common paths.
+    let fallbacks = [
+        "/lib64/ld-linux-x86-64.so.2",
+        "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+        "/lib/ld-linux-aarch64.so.1",
+    ];
+    for &path in &fallbacks {
+        let candidate = PathBuf::from(path);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+    Err("could not locate the Linux dynamic linker (ld-linux*.so); \
+         set CC to a C compiler that knows its target triple"
+        .to_string())
+}
+
+fn cc_print_search_dirs_libpaths(cc: &str) -> Result<Vec<PathBuf>, String> {
+    let output = std::process::Command::new(cc)
+        .args(["-print-search-dirs"])
+        .output()
+        .map_err(|e| format!("failed to invoke `{cc} -print-search-dirs`: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "`{cc} -print-search-dirs` exited with status {}",
+            output.status
+        ));
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut dirs = Vec::new();
+    for line in text.lines() {
+        // Lines look like `libraries: =/usr/lib/gcc/x86_64-linux-gnu/11/:/usr/lib/...`
+        if let Some(rest) = line.strip_prefix("libraries:") {
+            let rest = rest.trim().trim_start_matches('=');
+            for part in rest.split(':') {
+                let part = part.trim();
+                if part.is_empty() {
+                    continue;
+                }
+                let candidate = PathBuf::from(part);
+                if candidate.is_dir() && !dirs.contains(&candidate) {
+                    dirs.push(candidate);
+                }
+            }
+        }
+    }
+    if dirs.is_empty() {
+        // Fall back to common system lib dirs.
+        let fallbacks = [
+            "/usr/lib/x86_64-linux-gnu",
+            "/usr/lib64",
+            "/usr/lib",
+            "/lib/x86_64-linux-gnu",
+            "/lib64",
+            "/lib",
+        ];
+        for &path in &fallbacks {
+            let candidate = PathBuf::from(path);
+            if candidate.is_dir() {
+                dirs.push(candidate);
+            }
+        }
+    }
+    if dirs.is_empty() {
+        return Err(format!(
+            "`{cc} -print-search-dirs` did not expose any library directories \
+             and no fallback paths exist"
+        ));
+    }
+    Ok(dirs)
+}
+
 /// Invoke `rust-lld` directly with the discovered CRT lib directories.
 ///
 /// On Windows MSVC, `rust-lld -flavor link` accepts `link.exe`-style args.
@@ -13065,10 +13256,17 @@ fn pick_latest_windows_sdk_version(kits_root: &Path) -> Result<String, String> {
 /// `native_static_libs` list (e.g. `kernel32.lib`, `/defaultlib:msvcrt`)
 /// coming from `runtime-link.json`, so we only need to add the lib search
 /// paths and the subsystem flag.
+///
+/// On Linux GNU, `rust-lld -flavor gnu` accepts `ld`-style args. We pass
+/// the CRT objects (`crt1.o`, `crti.o`) before the user object + libs and
+/// `crtn.o` after them, plus the dynamic linker path and `-no-pie`.
 fn link_with_bundled_rust_lld(
     lld: &Path,
     flavor: &str,
     lib_dirs: &[PathBuf],
+    crt_pre: &[PathBuf],
+    crt_post: &[PathBuf],
+    dynamic_linker: Option<&Path>,
     extra_args: &[String],
     obj_path: &Path,
     exe_path: &Path,
@@ -13082,15 +13280,34 @@ fn link_with_bundled_rust_lld(
     } else {
         cmd.arg("-o").arg(exe_path);
     }
+    if let Some(linker) = dynamic_linker {
+        cmd.arg("-dynamic-linker").arg(linker);
+    }
     for arg in extra_args {
         cmd.arg(arg);
     }
     for dir in lib_dirs {
-        cmd.arg(format!("-libpath:{}", dir.display()));
+        if cfg!(windows) {
+            cmd.arg(format!("-libpath:{}", dir.display()));
+        } else {
+            cmd.arg(format!("-L{}", dir.display()));
+        }
+    }
+    // CRT objects that must precede the user object (Linux GNU: crt1.o, crti.o)
+    for crt in crt_pre {
+        cmd.arg(crt);
     }
     cmd.arg(obj_path);
     for lib in extra_libs {
         cmd.arg(lib);
+    }
+    // Ensure libc is linked on Linux (Windows pulls it via /defaultlib:msvcrt)
+    if !cfg!(windows) {
+        cmd.arg("-lc");
+    }
+    // CRT objects that must follow the libs (Linux GNU: crtn.o)
+    for crt in crt_post {
+        cmd.arg(crt);
     }
 
     let output = cmd.output().map_err(|e| {
