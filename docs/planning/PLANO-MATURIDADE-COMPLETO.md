@@ -621,6 +621,8 @@ Checklist detalhado com gates de teste: [`PENDENTES.md`](PENDENTES.md) § **Back
 - [ ] `ori repl` — REPL interativo
 - [ ] `if then else` como expressão
 - [ ] `ori summary` — visão de projeto (entry, namespaces, imports)
+- [ ] Unificação de namespaces stdlib (Opção C) — fundir utils e algorithms em `ori.*` (ex: `ori.string`)
+
 
 ### I/O e rede avançados (baixa)
 

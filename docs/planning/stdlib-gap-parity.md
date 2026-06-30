@@ -147,6 +147,11 @@ Fechar gaps funcionais entre a stdlib de referência (módulos `std.io`, `std.te
 - E2E por módulo novo: `compiler/crates/ori-driver/tests/multifile_imports.rs`
 - Smoke: `check_accepts_stdlib_gap_parity_imports`, `compile_runs_stdlib_layer2_remaining_utils`, `compile_runs_stdlib_layer3_algorithms_extensions`
 
+## Mudança Arquitetural Futura: Unificação de Namespaces (Opção C)
+
+Como proposta de melhoria ergonômica, há um plano de unificar os submódulos da stdlib (`ori.string.utils`, `ori.string.algorithms`) diretamente sob o namespace pai (`ori.string`), criando namespaces híbridos que expõem simultaneamente primitivas do runtime Rust/C (Layer 1) e helpers/algoritmos puros em Ori (Layer 2/3).
+Para mais detalhes sobre essa decisão e a estratégia de migração, consulte a especificação em [`docs/spec/15-stdlib-maintenance.md`](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/spec/15-stdlib-maintenance.md) na seção **"Future: namespace flattening (Opção C)"**.
+
 ## Referências
 
 - `docs/spec/12-stdlib.md` — contratos públicos

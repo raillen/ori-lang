@@ -1552,6 +1552,23 @@ pub fn find_stdlib_root() -> Option<PathBuf> {
             }
         }
     }
+    if let Ok(cwd) = std::env::current_dir() {
+        let mut dir = cwd;
+        for _ in 0..8 {
+            let candidate = dir.join("stdlib");
+            if candidate.is_dir()
+                && candidate.join("string").is_dir()
+                && candidate.join("list").is_dir()
+            {
+                return Some(candidate);
+            }
+            if let Some(parent) = dir.parent() {
+                dir = parent.to_owned();
+            } else {
+                break;
+            }
+        }
+    }
     None
 }
 

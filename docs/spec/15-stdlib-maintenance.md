@@ -162,3 +162,25 @@ scanning `stdlib/` at compile time.
 - Reduce old fallback helpers in `compiler/crates/ori-types/src/check.rs`.
 - Keep compatibility aliases only when a test or public doc needs them.
 - Prefer one shared table over duplicating signatures in typecheck, HIR and codegen.
+
+## Future: namespace flattening (Opção C)
+
+For usability and ergonomics, a future architectural change may merge Layer 2 (compositional) and Layer 3 (algorithms) helpers directly into the parent Layer 1 module namespace.
+For example, instead of importing:
+```ori
+import ori.string as str
+import ori.string.utils as su
+import ori.string.algorithms as sa
+```
+The user would import only the unified root namespace:
+```ori
+import ori.string as str
+```
+All utils and algorithms (`is_empty`, `join_non_empty`, etc.) would be exposed directly via the unified module prefix (e.g. `str.is_empty`).
+
+### Implementation Strategy for Namespace Flattening:
+1. **Source modules priority in discovery**: Modify `classify_stdlib_import` in `pipeline.rs` to look for a matching `.orl` file (e.g., `stdlib/string.orl`) before fallback checking the static runtime functions list (`is_implemented_stdlib_module`). This allows a hybrid namespace where `.orl` files can complement native runtime symbols.
+2. **Unified file layout**: Create a parent source module `stdlib/string.orl` containing all compositional wrappers and algorithms.
+3. **Rust runtime FFI visibility**: Ensure that `lower.rs` continues to map calls like `ori.string.len` to native runtime symbols (`ori_string_len`) even if a `stdlib/string.orl` file is loaded. This is already supported as the compiler checks `stdlib_c_name` first and then searches the loaded `DefMap` for symbols.
+4. **Transition path**: Deprecate submodules like `ori.string.utils` and `ori.string.algorithms` via compiler warnings or documentation before fully removing them in a major release (e.g. `0.3.0`).
+

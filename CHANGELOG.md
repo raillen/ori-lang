@@ -12,6 +12,9 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 > **Política de versionamento (2026-06-29):** Congelado em `0.2.x`. Os marcos abaixo permanecem em `[Unreleased]` sem atribuir versão — `0.3.0` só quando houver breaking change real que usuários precisem saber. Patch versions (`0.2.1`, `0.2.2`) para correções e small additive features. `1.0` é critério de maturidade (Rust dependency removida, stdlib portada em `.orl`, self-hosting, ABI estável, usuários reais, sem breaking changes por ≥6 meses) — longo prazo, anos não dias. Ver comparação com pares (Zig 0.14 após ~10 anos, Rust 0.12 pre-1.0 após ~6 anos) em `AGENTS.md` "Versioning policy".
 
+### Corrigido
+- **Driver/Pipeline (bugfix):** corrigido fallback de descoberta da stdlib root em `find_stdlib_root()` com varredura ascendente a partir do CWD, garantindo que `ori check/run` consiga resolver módulos `.orl` da stdlib (Layer 2/3) mesmo fora do diretório do workspace de desenvolvimento. Teste de regressão adicionado em `multifile_imports.rs`.
+
 ### Adicionado
 - **Stdlib Layer 1 — uniformização FS/IO (backlog v2, breaking):** Funções FS que retornavam `bool` agora retornam `result<void, string>` (mutações: `append_text`, `delete`, `create_dir`, `create_dir_all`, `copy`, `rename`) ou `result<bool, string>` (queries: `exists`, `is_file`, `is_dir`). **`io.read_line`** agora retorna `optional<string>` (`none` em EOF). Runtime FFI migrado; Layer 2 `fs/utils.orl` e `io/utils.orl` simplificados para pass-through. Testes E2E + `spec_fs_and_json_contracts_match_stdlib_sig` estendido.
 - **Ergonomia — `if then else` expressão (backlog v2):** Feature fechada — sintaxe `if cond then expr else expr`; HIR lowering corrigido para ramo `never`; `expr_accepts_inline_if_expression` inclui compile+run.

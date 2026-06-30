@@ -210,6 +210,7 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 - [ ] **`ori repl`** — REPL interativo (parse → check → eval parcial ou JIT de expressões/top-level); mínimo: literais, chamadas stdlib, bindings `const`/`var`. Gate: teste de integração que envia 3 comandos via stdin e valida stdout.
 - [x] **`if then else` como expressão** — sintaxe `if cond then expr else expr` (sem `end` trailing); checker infere tipo unificado dos ramos (incl. `never`). Gate: `expr_accepts_inline_if_expression` + `expr_rejects_inline_if_*` em `ori_spec.rs` (check + compile+run).
 - [x] **`ori summary [path]`** — visão do projeto: entry file, namespaces descobertos, grafo de imports (texto ou JSON). Gate: teste com fixture multi-arquivo em `summary.rs`.
+- [ ] **Unificação de namespaces stdlib (Opção C)** — fundir utils e algorithms diretamente no namespace pai (ex: `ori.string` em vez de `ori.string.utils`/`ori.string.algorithms`), criando namespaces híbridos que combinam runtime e source modules. Gate: `docs/spec/15-stdlib-maintenance.md` § namespace flattening atualizado, compilador preferindo arquivos `.orl` em `classify_stdlib_import`, e regressões stdlib atualizadas.
 
 ### 4. Stdlib e I/O avançado (baixa prioridade)
 
