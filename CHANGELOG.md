@@ -12,6 +12,9 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 > **Política de versionamento (2026-06-29):** Congelado em `0.2.x`. Os marcos abaixo permanecem em `[Unreleased]` sem atribuir versão — `0.3.0` só quando houver breaking change real que usuários precisem saber. Patch versions (`0.2.1`, `0.2.2`) para correções e small additive features. `1.0` é critério de maturidade (Rust dependency removida, stdlib portada em `.orl`, self-hosting, ABI estável, usuários reais, sem breaking changes por ≥6 meses) — longo prazo, anos não dias. Ver comparação com pares (Zig 0.14 após ~10 anos, Rust 0.12 pre-1.0 após ~6 anos) em `AGENTS.md` "Versioning policy".
 
+### Documentação
+- **README:** reescrito o README principal em inglês com menu, overview completo, quick start, CLI, arquitetura, stdlib, tooling, release layout, limitações e roadmap; adicionadas traduções completas em português (`README.pt-BR.md`) e japonês (`README.ja.md`).
+
 ### Corrigido
 - **Driver/Pipeline (bugfix):** corrigido fallback de descoberta da stdlib root em `find_stdlib_root()` com varredura ascendente a partir do CWD, garantindo que `ori check/run` consiga resolver módulos `.orl` da stdlib (Layer 2/3) mesmo fora do diretório do workspace de desenvolvimento. Teste de regressão adicionado em `multifile_imports.rs`.
 
