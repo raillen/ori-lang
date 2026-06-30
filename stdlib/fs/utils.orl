@@ -16,27 +16,18 @@ public func write_text_result(path: string, content: string) -> result<string, s
     return fs.write_text(path, content)
 end
 
-public func create_dir_all(path: string) -> result<bool, string>
-    if fs.create_dir_all(path)
-        return success(true)
-    end
-    return error("create_dir_all failed")
+public func create_dir_all(path: string) -> result<void, string>
+    return fs.create_dir_all(path)
 end
 
 public func exists_result(path: string) -> result<bool, string>
-    return success(fs.exists(path))
+    return fs.exists(path)
 end
 
-public func remove_file(path: string) -> result<bool, string>
-    if fs.delete(path)
-        return success(true)
-    end
-    return error("remove failed")
+public func remove_file(path: string) -> result<void, string>
+    return fs.delete(path)
 end
 
-public func move_path(from: string, to: string) -> result<bool, string>
-    if fs.rename(from, to)
-        return success(true)
-    end
-    return error("move failed")
+public func move_path(from: string, to: string) -> result<void, string>
+    return fs.rename(from, to)
 end

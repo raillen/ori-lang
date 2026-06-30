@@ -1,0 +1,33 @@
+namespace ori.set.algorithms
+
+import ori.set as sets
+
+public func union_string(a: set<string>, b: set<string>) -> set<string>
+    return sets.union(a, b)
+end
+
+public func intersection_string(a: set<string>, b: set<string>) -> set<string>
+    return sets.intersection(a, b)
+end
+
+public func difference_string(a: set<string>, b: set<string>) -> set<string>
+    return sets.difference(a, b)
+end
+
+public func intersection_size_string(a: set<string>, b: set<string>) -> int
+    const inter: set<string> = sets.intersection(a, b)
+    return sets.len(inter)
+end
+
+public func is_disjoint_string(a: set<string>, b: set<string>) -> bool
+    const inter: set<string> = sets.intersection(a, b)
+    return sets.is_empty(inter)
+end
+
+public func union_int(a: set<int>, b: set<int>) -> set<int>
+    return sets.union(a, b)
+end
+
+public func intersection_int(a: set<int>, b: set<int>) -> set<int>
+    return sets.intersection(a, b)
+end

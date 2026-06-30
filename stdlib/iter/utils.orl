@@ -1,0 +1,37 @@
+namespace ori.iter.utils
+
+import ori.iter as iter
+import ori.list as lists
+
+public func count<T>(items: list<T>) -> int
+    return lists.len(items)
+end
+
+public func is_empty<T>(items: list<T>) -> bool
+    return lists.len(items) == 0
+end
+
+public func first<T>(items: list<T>) -> optional<T>
+    return lists.try_get(items, 0)
+end
+
+public func sum_int(items: list<int>) -> int
+    return iter.reduce(items, 0, do(acc: int, x: int) => acc + x)
+end
+
+public func contains_int(items: list<int>, target: int) -> bool
+    return iter.any(items, do(x: int) => x == target)
+end
+
+public func all_equal_int(items: list<int>, expected: int) -> bool
+    return iter.all(items, do(x: int) => x == expected)
+end
+
+public func unique_count_int(items: list<int>) -> int
+    const unique: list<int> = iter.unique(items)
+    return lists.len(unique)
+end
+
+public func reversed_copy<T>(items: list<T>) -> list<T>
+    return iter.reverse(items)
+end

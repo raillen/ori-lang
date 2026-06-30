@@ -35,6 +35,7 @@ ori-lang/
 ├── _reversa_sdd/              # Historical audit documents (reverse engineering)
 ├── branding/                  # Logo and brand assets
 ├── examples/                  # Example Ori programs
+├── extensions/vscode-orl/       # VS Code extension (LanguageClient → ori-lsp)
 ├── tools/                     # Auxiliary tools
 └── (vendor/ — reserved for future vendored deps; not created yet)
 ```
@@ -109,6 +110,7 @@ cargo run -p ori-driver -- run <file.orl>
 | `ORI_TEST_LEAK_CHECK=1` | When set, `ori.test.assert_no_leaks(label)` aborts with a stderr diagnostic if live ARC allocations remain after running the cycle collector. Use in E2E tests to fail fast on memory leaks. |
 | `ORI_COOPERATIVE_COLLECT_THRESHOLD=N` | Number of managed allocations between cooperative cycle collections in the async executor (default 256). Set to a small value in tests to force frequent collection. |
 | `ORI_STDLIB_ROOT` | Override path to the `stdlib/` directory containing `.orl` source modules (Stdlib Phase 0). When unset, resolves to `CARGO_MANIFEST_DIR/../../../stdlib` (dev mode) or `<ori.exe dir>/stdlib` (release package). |
+| `ori.lsp.path` / `ori.compiler.path` / `ori.stdlib.root` | VS Code extension settings (`extensions/vscode-orl/`) — forwarded to `ORI_*` env vars when spawning `ori-lsp`. |
 
 ## Compiler Pipeline
 
@@ -136,7 +138,9 @@ Source (.orl)
 - **Rust removal Phase 1 — macOS (unreleased):** Estratégia `BundledRustLld` estendida para `x86_64-apple-darwin` e `aarch64-apple-darwin`. CRT/SDK discovery via `xcrun --show-sdk-path` + `xcrun --show-sdk-version` (requer Xcode Command Line Tools). Link line `rust-lld -flavor darwin` com `-arch`, `-platform_version macos <min> <sdk>`, `-syslibroot`. Deployment target default `10.12` (x86_64) / `11.0` (arm64), override via `MACOSX_DEPLOYMENT_TARGET`. **Phase 1 completa para todos os 3 desktop OSes** (Windows MSVC, Linux GNU, macOS).
 - **Rust removal Phase 2 — SystemLinker (unreleased):** Nova estratégia `SystemLinker` que invoca o linker nativo do sistema (`link.exe`/`ld`) diretamente, sem `rust-lld` nem `rustc`. Opt-in via `ORI_USE_SYSTEM_LINKER=1`, override via `ORI_SYSTEM_LINKER`. Reutiliza CRT discovery da Phase 1. Discovery: Windows — `link.exe` derivado do MSVC tools dir; Linux — `cc -print-prog-name=ld`; macOS — `xcrun --find ld`. Prioridade: `ORI_NATIVE_LINKER` (raw) → `ORI_USE_BUNDLED_RUST_LLD` → `ORI_USE_SYSTEM_LINKER` → `RustcDriver`. **Phase 2 completa para todos os 3 desktop OSes**. 4 testes de regressão em `native_backend/tests.rs`.
 - **Rust removal Phase 3 — JIT Cranelift (unreleased):** `ori run` usa JIT por default quando cdylib disponível; `ORI_USE_JIT=1` força JIT; `ORI_USE_AOT=1` força AOT. Código Cranelift executado in-process via `JITModule` com símbolos `ori_*` resolvidos on-demand da cdylib do runtime através de `libloading`. Sem `.o` temporário, sem linker, sem subprocesso. `ori-runtime` builda 3 artefatos (`staticlib` + `rlib` + `cdylib`); stage scripts copiam cdylib para `runtime/<triple>/`; smoke release valida cdylib staged + `ori run` JIT no package isolado. `ori compile` e `ori test` permanecem AOT. **Híbrido A→B→D completo** para `ori run`.
-- **Stdlib Phase 0 + Gap parity (unreleased):** Prelude loading + Layer 2/3 em `.orl` + paridade funcional com `std.*` de referência (`docs/planning/stdlib-gap-parity.md`). **Layer 2:** módulos utils existentes + `ori.validate`, `ori.path`, `ori.json.utils`, `ori.io.utils`, `ori.fs.utils`, `ori.time.utils`, `ori.test.utils`, `ori.process.utils`, `ori.concurrent.utils`. **Layer 1 extensões:** metadados FS, `os.current_dir`, `random.seed`, `process.*`, `net.*` (TCP), `test.skip`, `lazy.is_consumed`, `bytes.from_list`/`to_list`, math estendido. **Driver:** `ori test` reconhece skip (exit 77). ~29 testes stdlib E2E em `multifile_imports.rs`.
+- **Stdlib Phase 0 + Gap parity (unreleased):** Prelude loading + **Layer 2/3 `.orl` fechados** para paridade `std.*` v1 (`docs/planning/stdlib-gap-parity.md`): 28 utils + 8 algorithms + `validate`/`path`; Layer 1 hot path Rust (FS metadados, `os.current_dir`, `process.*`, `net.*`, `lazy.is_consumed`, …). Lowering `ori.net.Connection` para módulos `.orl`. ~32 testes stdlib E2E em `multifile_imports.rs`.
+- **LSP/VS Code (unreleased):** Catálogo stdlib Layer 1+2, hover/goto stdlib, sync incremental, dot-complete via aliases, `ori doctor`, extensão `extensions/vscode-orl/`.
+- **Docs website (unreleased):** Site Starlight em [github.com/raillen/ori-website](https://github.com/raillen/ori-website) — i18n en/pt/es/ja, Pagefind + busca ⌘K, referência gerada via `ori doc export`. Deploy Vercel-ready (`vercel.json`).
 - **Master plan:** `docs/planning/PLANO-MATURIDADE-COMPLETO.md` — Etapas 0–9 concluídas; backlog v2 em Apêndice C (stdlib em `.orl`, paridade C debug para async, mais triples, registry/installer, `ori doc` HTML). Roadmap fechado: híbrido A→B→D para Rust removal (Phase 3 completa), 3 camadas explícitas para stdlib (detalhes em CHANGELOG `[Unreleased]`).
 
 ## Versioning policy (2026-06-29)

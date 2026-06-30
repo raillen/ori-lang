@@ -1,0 +1,45 @@
+namespace ori.queue.utils
+
+import ori.list as lists
+import ori.queue as queue
+
+public func from_list_int(items: list<int>) -> queue.Queue<int>
+    var q: queue.Queue<int> = queue.new()
+    var i: int = 0
+    const n: int = lists.len(items)
+    while i < n
+        if some(item) = lists.try_get(items, i)
+            queue.enqueue(q, item)
+        end
+        i = i + 1
+    end
+    return q
+end
+
+public func from_list_string(items: list<string>) -> queue.Queue<string>
+    var q: queue.Queue<string> = queue.new()
+    var i: int = 0
+    const n: int = lists.len(items)
+    while i < n
+        if some(item) = lists.try_get(items, i)
+            queue.enqueue(q, item)
+        end
+        i = i + 1
+    end
+    return q
+end
+
+public func to_list_int(q: queue.Queue<int>) -> list<int>
+    return queue.to_list(q)
+end
+
+public func peek_or_int(q: queue.Queue<int>, fallback: int) -> int
+    if some(value) = queue.peek(q)
+        return value
+    end
+    return fallback
+end
+
+public func drain_count_int(q: queue.Queue<int>) -> int
+    return queue.len(q)
+end

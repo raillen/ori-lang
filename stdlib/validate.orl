@@ -86,3 +86,39 @@ public func length_between(value: string, min_val: int, max_val: int) -> bool
     end
     return value_len <= max_val
 end
+
+public func even(value: int) -> bool
+    return value % 2 == 0
+end
+
+public func odd(value: int) -> bool
+    return value % 2 != 0
+end
+
+public func in_range(value: int, min_val: int, max_val: int) -> bool
+    return between(value, min_val, max_val)
+end
+
+public func blank(value: string) -> bool
+    return su.blank(value)
+end
+
+public func length_equal(value: string, expected: int) -> bool
+    return str.len(value) == expected
+end
+
+public func all_digits(value: string) -> bool
+    return su.is_digits(value)
+end
+
+public func matches_length(value: string, exact: int) -> bool
+    return length_equal(value, exact)
+end
+
+public func int_in_range(value: int, min_val: int, max_val: int) -> bool
+    return between(value, min_val, max_val)
+end
+
+public func string_not_blank(value: string) -> bool
+    return not blank(value)
+end

@@ -1,0 +1,43 @@
+namespace ori.net.utils
+
+import ori.net as net
+import ori.string as str
+
+public func connect(host: string, port: int, timeout_ms: int) -> result<net.Connection, string>
+    return net.connect(host, port, timeout_ms)
+end
+
+public func read_text(conn: net.Connection, max_bytes: int) -> result<string, string>
+    match net.read_some(conn, max_bytes)
+        case success(payload):
+            match str.from_bytes(payload)
+                case success(text):
+                    return success(text)
+                case error(msg):
+                    return error(msg)
+            end
+        case error(msg):
+            return error(msg)
+    end
+    return error("read failed")
+end
+
+public func write_text(conn: net.Connection, text: string) -> result<void, string>
+    return net.write_all(conn, str.to_bytes(text))
+end
+
+public func close(conn: net.Connection)
+    net.close(conn)
+end
+
+public func is_open(conn: net.Connection) -> bool
+    return not net.is_closed(conn)
+end
+
+public func read_bytes(conn: net.Connection, max_bytes: int) -> result<bytes, string>
+    return net.read_some(conn, max_bytes)
+end
+
+public func write_bytes(conn: net.Connection, payload: bytes) -> result<void, string>
+    return net.write_all(conn, payload)
+end

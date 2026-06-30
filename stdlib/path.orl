@@ -155,6 +155,62 @@ public func absolute(value: string, base: string) -> string
     return join([base, value])
 end
 
+func split_segments(value: string) -> list<string>
+    const raw: list<string> = str.split(value, "/")
+    var out: list<string> = []
+    var i: int = 0
+    const n: int = lists.len(raw)
+    while i < n
+        if some(part) = lists.try_get(raw, i)
+            if not su.is_empty(part)
+                lists.push(out, part)
+            end
+        end
+        i = i + 1
+    end
+    return out
+end
+
 public func relative(value: string, from: string) -> string
-    return normalize(value)
+    const target: string = normalize(value)
+    const base: string = normalize(from)
+    const target_parts: list<string> = split_segments(target)
+    const base_parts: list<string> = split_segments(base)
+    const target_count: int = lists.len(target_parts)
+    const base_count: int = lists.len(base_parts)
+    var common: int = 0
+    while common < target_count
+        if common >= base_count
+            break
+        end
+        if some(t) = lists.try_get(target_parts, common)
+            if some(b) = lists.try_get(base_parts, common)
+                if t != b
+                    break
+                end
+            else
+                break
+            end
+        else
+            break
+        end
+        common = common + 1
+    end
+    var parts: list<string> = []
+    var i: int = common
+    while i < base_count
+        lists.push(parts, "..")
+        i = i + 1
+    end
+    i = common
+    while i < target_count
+        if some(seg) = lists.try_get(target_parts, i)
+            lists.push(parts, seg)
+        end
+        i = i + 1
+    end
+    if lists.len(parts) == 0
+        return "."
+    end
+    return join(parts)
 end

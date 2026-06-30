@@ -1,0 +1,46 @@
+namespace ori.random.utils
+
+import ori.list as lists
+import ori.random as rnd
+
+public func int_range(min_val: int, max_val: int) -> int
+    return rnd.int(min_val, max_val)
+end
+
+public func float_range(min_val: float, max_val: float) -> float
+    return rnd.float(min_val, max_val)
+end
+
+public func coin() -> bool
+    return rnd.bool()
+end
+
+public func pick_string(items: list<string>) -> optional<string>
+    return rnd.choice(items)
+end
+
+public func pick_int(items: list<int>) -> optional<int>
+    return rnd.choice(items)
+end
+
+public func shuffle_strings(items: list<string>) -> list<string>
+    return rnd.shuffle(items)
+end
+
+public func shuffle_ints(items: list<int>) -> list<int>
+    return rnd.shuffle(items)
+end
+
+public func seeded_int(seed: int, min_val: int, max_val: int) -> int
+    rnd.seed(seed)
+    return rnd.int(min_val, max_val)
+end
+
+public func seeded_pick_string(seed: int, items: list<string>) -> optional<string>
+    rnd.seed(seed)
+    return rnd.choice(items)
+end
+
+public func is_empty_choice(items: list<string>) -> bool
+    return lists.len(items) == 0
+end

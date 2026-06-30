@@ -1,5 +1,7 @@
 use tower_lsp::lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 
+use crate::stdlib_catalog::stdlib_catalog;
+
 /// Hover text for built-in Ori types.
 pub fn builtin_type_hover(symbol: &str) -> Option<String> {
     let text = match symbol {
@@ -35,4 +37,9 @@ pub fn markdown_hover(content: String) -> Hover {
         }),
         range: None,
     }
+}
+
+/// Rich hover for stdlib symbols (Layer 1 runtime + Layer 2 `.orl`).
+pub fn stdlib_hover(path: &str) -> Option<String> {
+    stdlib_catalog().hover_markdown(path)
 }

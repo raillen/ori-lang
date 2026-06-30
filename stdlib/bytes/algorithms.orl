@@ -1,0 +1,40 @@
+namespace ori.bytes.algorithms
+
+import ori.bytes.utils as bu
+import ori.list as lists
+
+public func compare_lex(a: bytes, b: bytes) -> int
+    const av: list<int> = bu.to_list(a)
+    const bv: list<int> = bu.to_list(b)
+    const a_len: int = lists.len(av)
+    const b_len: int = lists.len(bv)
+    var min_len: int = a_len
+    if b_len < min_len
+        min_len = b_len
+    end
+    var i: int = 0
+    while i < min_len
+        if some(x) = lists.try_get(av, i)
+            if some(y) = lists.try_get(bv, i)
+                if x < y
+                    return -1
+                end
+                if x > y
+                    return 1
+                end
+            end
+        end
+        i = i + 1
+    end
+    if a_len == b_len
+        return 0
+    end
+    if a_len < b_len
+        return -1
+    end
+    return 1
+end
+
+public func is_prefix_of(prefix: bytes, value: bytes) -> bool
+    return bu.starts_with(value, prefix)
+end

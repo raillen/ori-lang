@@ -921,6 +921,14 @@ end
     );
     let check = run_check(&dir.path("main.orl")).unwrap();
     assert!(!check.has_errors, "{:?}", check.diagnostics);
+
+    let exe = exe_path(&dir, "inline_if");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.replace("\r\n", "\n"), "pass\n");
 }
 
 #[test]

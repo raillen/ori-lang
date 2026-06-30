@@ -1248,8 +1248,12 @@ fn compile_runs_io_read_line() {
 import ori.io as io
 
 func main()
-    const line: string = io.read_line()
-    io.print(line)
+    match io.read_line()
+        case some(line):
+            io.print(line)
+        case none:
+            io.print("")
+    end
 end
 "#,
     );
@@ -7562,8 +7566,19 @@ func main()
             io.print("read failed: " + e)
     end
 
-    io.print(if fs.exists(input_path) then "exists" else "missing")
-    io.print(if files.exists(input_path) then "compat" else "no compat")
+    match fs.exists(input_path)
+        case success(exists):
+            io.print(if exists then "exists" else "missing")
+        case error(_):
+            io.print("missing")
+    end
+
+    match files.exists(input_path)
+        case success(exists):
+            io.print(if exists then "compat" else "no compat")
+        case error(_):
+            io.print("no compat")
+    end
 
     match fs.read_text(output_path)
         case success(_):
@@ -9315,6 +9330,7 @@ func main()
     io.print(string(path.is_relative("tmp/x")))
     io.print(path.join(["a", "b", "c"]))
     io.print(path.change_extension("dir/file.orl", "txt"))
+    io.print(path.relative("a/b/c", "a/b"))
 end
 "#,
     );
@@ -9322,7 +9338,7 @@ end
     let stdout = compile_and_run(&dir, "stdlib_source_path");
     assert_eq!(
         stdout,
-        "baz.txt\ntxt\nbaz\ntrue\ntrue\na/b/c\ndir/file.txt\n"
+        "baz.txt\ntxt\nbaz\ntrue\ntrue\na/b/c\ndir/file.txt\nc\n"
     );
 }
 
@@ -9662,6 +9678,23 @@ import ori.time.utils as time_utils
 import ori.test.utils as test_utils
 import ori.process.utils as process_utils
 import ori.concurrent.utils as concurrent_utils
+import ori.format.utils as format_utils
+import ori.iter.utils as iter_utils
+import ori.net.utils as net_utils
+import ori.os.utils as os_utils
+import ori.random.utils as random_utils
+import ori.queue.utils as queue_utils
+import ori.stack.utils as stack_utils
+import ori.deque.utils as deque_utils
+import ori.heap.utils as heap_utils
+import ori.hash_table.utils as hash_table_utils
+import ori.linked_list.utils as linked_list_utils
+import ori.doubly_linked_list.utils as doubly_linked_list_utils
+import ori.map.algorithms as map_algorithms
+import ori.set.algorithms as set_algorithms
+import ori.string.algorithms as string_algorithms
+import ori.bytes.algorithms as bytes_algorithms
+import ori.math.algorithms as math_algorithms
 
 func main()
 end
@@ -9690,4 +9723,101 @@ import ori.string.nonexistent as sn
         "{:?}",
         out.diagnostics
     );
+}
+
+#[test]
+fn compile_runs_stdlib_layer2_remaining_utils() {
+    let dir = TestDir::new("stdlib_layer2_remaining");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.deque as deque
+import ori.deque.utils as deque_utils
+import ori.format.utils as format_utils
+import ori.hash_table as hash_table
+import ori.hash_table.utils as hash_table_utils
+import ori.heap as heap
+import ori.heap.utils as heap_utils
+import ori.io as io
+import ori.iter.utils as iter_utils
+import ori.linked_list as linked_list
+import ori.linked_list.utils as linked_list_utils
+import ori.os.utils as os_utils
+import ori.path as path
+import ori.queue as queue
+import ori.queue.utils as queue_utils
+import ori.random.utils as random_utils
+import ori.stack as stack
+import ori.stack.utils as stack_utils
+import ori.validate as validate
+
+func main()
+    io.print(format_utils.hex(255))
+    io.print(format_utils.number_int(42))
+    io.print(string(iter_utils.sum_int([1, 2, 3])))
+    io.print(string(iter_utils.contains_int([1, 2, 3], 2)))
+    io.print(string(os_utils.pid() > 0))
+    io.print(string(random_utils.seeded_int(7, 1, 3) >= 1))
+    const q: queue.Queue<int> = queue_utils.from_list_int([10, 20])
+    io.print(string(queue_utils.peek_or_int(q, -1)))
+    const s: stack.Stack<int> = stack_utils.from_list_int([5, 6])
+    io.print(string(stack_utils.peek_or_int(s, -1)))
+    const d: deque.Deque<int> = deque_utils.from_list_int([1, 2, 3])
+    io.print(string(deque_utils.front_or_int(d, -1)))
+    const h: heap.Heap<int> = heap_utils.from_list_int([30, 10, 20])
+    io.print(string(heap_utils.peek_or_int(h, -1)))
+    const ll: linked_list.LinkedList<int> = linked_list_utils.from_list_int([9, 8])
+    io.print(string(linked_list_utils.front_or_int(ll, -1)))
+    var table: hash_table.HashTable<string, int> = hash_table.new()
+    hash_table.set(table, "a", 1)
+    io.print(string(hash_table_utils.get_or_string_int(table, "a", 0)))
+    io.print(path.relative("a/b/c", "a/b"))
+    io.print(string(validate.even(4)))
+    io.print(string(validate.blank("   ")))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_layer2_remaining");
+    assert_eq!(
+        stdout,
+        "ff\n42\n6\ntrue\ntrue\ntrue\n10\n6\n1\n10\n9\n1\nc\ntrue\ntrue\n"
+    );
+}
+
+#[test]
+fn compile_runs_stdlib_layer3_algorithms_extensions() {
+    let dir = TestDir::new("stdlib_layer3_extensions");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.bytes.algorithms as bytes_algorithms
+import ori.io as io
+import ori.map as maps
+import ori.map.algorithms as map_algorithms
+import ori.math.algorithms as math_algorithms
+import ori.set.algorithms as set_algorithms
+import ori.set as sets
+import ori.string as str
+import ori.string.algorithms as string_algorithms
+
+func main()
+    var base: map<string, int> = maps.new()
+    maps.set(base, "a", 1)
+    var overlay: map<string, int> = maps.new()
+    maps.set(overlay, "b", 2)
+    const merged: map<string, int> = map_algorithms.merge_string_int(base, overlay)
+    io.print(string(map_algorithms.key_count_string_int(merged)))
+    io.print(string(set_algorithms.intersection_size_string(sets.from_list(["x", "y"]), sets.from_list(["y", "z"]))))
+    io.print(string(string_algorithms.equals_any("ok", ["no", "ok"])))
+    io.print(string(bytes_algorithms.is_prefix_of(str.to_bytes("he"), str.to_bytes("hello"))))
+    io.print(string(math_algorithms.is_approx_zero(0.000001)))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_layer3_extensions");
+    assert_eq!(stdout, "2\n1\ntrue\ntrue\ntrue\n");
 }

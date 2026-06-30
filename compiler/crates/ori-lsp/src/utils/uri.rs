@@ -37,6 +37,51 @@ pub fn word_at_position(source: &str, position: tower_lsp::lsp_types::Position) 
     Some(source[start..end].to_string())
 }
 
+/// Extract a qualified identifier (`io.print`, `ori.string.utils.is_empty`) at `position`.
+pub fn qualified_ident_at_position(
+    source: &str,
+    position: tower_lsp::lsp_types::Position,
+) -> Option<String> {
+    let offset = super::position::byte_offset_for_position(source, position);
+    if offset > source.len() {
+        return None;
+    }
+    let bytes = source.as_bytes();
+
+    let mut end = offset;
+    while end < bytes.len() && is_ident_byte(bytes[end]) {
+        end += 1;
+    }
+    if end == offset && end > 0 && bytes[end - 1] == b'.' {
+        end -= 1;
+    }
+    if end == 0 {
+        return None;
+    }
+
+    let mut start = end;
+    loop {
+        while start > 0 && is_ident_byte(bytes[start - 1]) {
+            start -= 1;
+        }
+        if start > 0 && bytes[start - 1] == b'.' {
+            start -= 1;
+            continue;
+        }
+        break;
+    }
+
+    if start >= end {
+        return None;
+    }
+    let ident = &source[start..end];
+    if ident.contains('.') || word_at_position(source, position).is_some() {
+        Some(ident.to_string())
+    } else {
+        None
+    }
+}
+
 fn is_ident_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }

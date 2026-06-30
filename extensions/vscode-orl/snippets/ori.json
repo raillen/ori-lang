@@ -1,0 +1,30 @@
+{
+  "func main": {
+    "prefix": "main",
+    "body": [
+      "namespace ${1:app.main}",
+      "",
+      "import ori.io as io",
+      "",
+      "func main() -> void",
+      "    ${0}",
+      "end"
+    ],
+    "description": "Main entry point"
+  },
+  "func": {
+    "prefix": "func",
+    "body": "func ${1:name}(${2:params}) -> ${3:void}\n    ${0}\nend",
+    "description": "Function declaration"
+  },
+  "struct": {
+    "prefix": "struct",
+    "body": "struct ${1:Name}\n    ${0}\nend",
+    "description": "Struct declaration"
+  },
+  "import stdlib": {
+    "prefix": "import",
+    "body": "import ${1:ori.module} as ${2:alias}",
+    "description": "Import stdlib module"
+  }
+}

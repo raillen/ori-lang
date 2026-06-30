@@ -917,3 +917,129 @@ fn e2e_lsp_cross_file_find_references() {
     lsp.stdin.take();
     let _ = wait_with_timeout(&mut lsp.child, Duration::from_secs(5));
 }
+
+fn stdlib_root() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../stdlib")
+}
+
+/// Stdlib Layer 2: hover on `su.is_empty` includes signature text.
+#[test]
+fn e2e_lsp_stdlib_layer2_hover() {
+    std::env::set_var("ORI_STDLIB_ROOT", stdlib_root());
+    let dir = tempfile_dir();
+    let root_uri = uri_for(&dir, "");
+    let src = "namespace app.main\nimport ori.string.utils as su\nfunc main() -> void\n    su.is_empty(\"x\")\nend\n";
+    let main_uri = uri_for(&dir, "stdlib_hover.orl");
+
+    let mut lsp = LspClient::new().expect("spawn ori-lsp");
+    let init_id = lsp.request(
+        "initialize",
+        json!({"processId": null, "rootUri": root_uri, "capabilities": {}}),
+    );
+    let _ = lsp.read_response(init_id, DEFAULT_TIMEOUT_MS);
+    lsp.notify("initialized", json!({}));
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": main_uri,
+                "languageId": "ori",
+                "version": 1,
+                "text": src,
+            },
+        }),
+    );
+    let _ = drain_diagnostics(&mut lsp, &main_uri, 8000);
+
+    // Cursor on `is_empty` in `su.is_empty("x")` — line 3, inside identifier.
+    let hover_id = lsp.request(
+        "textDocument/hover",
+        json!({
+            "textDocument": {"uri": main_uri},
+            "position": {"line": 3, "character": 7},
+        }),
+    );
+    let hover_resp = lsp.read_response(hover_id, DEFAULT_TIMEOUT_MS);
+    let hover_text = hover_resp["result"]["contents"]["value"]
+        .as_str()
+        .or_else(|| hover_resp["result"]["contents"].as_str())
+        .unwrap_or("");
+    assert!(
+        hover_text.contains("is_empty") || hover_text.contains("string.utils"),
+        "stdlib hover must describe is_empty: {hover_resp}"
+    );
+
+    let shutdown_id = lsp.request_no_params("shutdown");
+    let _ = lsp.read_response(shutdown_id, DEFAULT_TIMEOUT_MS);
+    lsp.notify("exit", json!(null));
+    lsp.stdin.take();
+    let _ = wait_with_timeout(&mut lsp.child, Duration::from_secs(5));
+}
+
+/// Incremental sync: a ranged edit keeps the document parseable for completion.
+#[test]
+fn e2e_lsp_incremental_edit_completion() {
+    let dir = tempfile_dir();
+    let root_uri = uri_for(&dir, "");
+    let initial = "namespace app.main\nimport ori.io as io\nfunc main() -> void\n    io.\nend\n";
+    let main_uri = uri_for(&dir, "incr.orl");
+
+    let mut lsp = LspClient::new().expect("spawn ori-lsp");
+    let init_id = lsp.request(
+        "initialize",
+        json!({"processId": null, "rootUri": root_uri, "capabilities": {}}),
+    );
+    let _ = lsp.read_response(init_id, DEFAULT_TIMEOUT_MS);
+    lsp.notify("initialized", json!({}));
+
+    lsp.notify(
+        "textDocument/didOpen",
+        json!({
+            "textDocument": {
+                "uri": main_uri,
+                "languageId": "ori",
+                "version": 1,
+                "text": initial,
+            },
+        }),
+    );
+    let _ = drain_diagnostics(&mut lsp, &main_uri, 6000);
+
+    // Replace `io.` line body with `io.print("")` via incremental edit on line 3.
+    lsp.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": {"uri": main_uri, "version": 2},
+            "contentChanges": [{
+                "range": {
+                    "start": {"line": 3, "character": 4},
+                    "end": {"line": 3, "character": 5},
+                },
+                "text": "print(\"\")",
+            }],
+        }),
+    );
+    let _ = drain_diagnostics(&mut lsp, &main_uri, 6000);
+
+    let comp_id = lsp.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": {"uri": main_uri},
+            "position": {"line": 3, "character": 6},
+        }),
+    );
+    let comp_resp = lsp.read_response(comp_id, DEFAULT_TIMEOUT_MS);
+    let items = comp_resp["result"]
+        .as_array()
+        .or_else(|| comp_resp["result"]["items"].as_array());
+    assert!(
+        items.is_some_and(|a| !a.is_empty()),
+        "completion after incremental edit must return items: {comp_resp}"
+    );
+
+    let shutdown_id = lsp.request_no_params("shutdown");
+    let _ = lsp.read_response(shutdown_id, DEFAULT_TIMEOUT_MS);
+    lsp.notify("exit", json!(null));
+    lsp.stdin.take();
+    let _ = wait_with_timeout(&mut lsp.child, Duration::from_secs(5));
+}

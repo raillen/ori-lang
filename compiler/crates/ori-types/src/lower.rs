@@ -267,6 +267,10 @@ fn lower_builtin_concurrency_type(path: &str, args: &[Ty]) -> Option<Ty> {
             kind: OpaqueTy::CancelToken,
             args: vec![],
         }),
+        "ori.net.Connection" => Some(Ty::Opaque {
+            kind: OpaqueTy::Connection,
+            args: vec![],
+        }),
         _ => None,
     }
 }

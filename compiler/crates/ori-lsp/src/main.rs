@@ -1,10 +1,12 @@
 mod handlers;
 mod index;
+mod stdlib_catalog;
 mod utils;
 
 use index::project::ProjectManager;
 use index::project_semantic::ProjectSemanticIndex;
 use index::semantic::{CompletionContext, SemanticIndex, SemanticSymbol};
+use stdlib_catalog::{import_alias_map, stdlib_catalog};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -263,11 +265,16 @@ impl LanguageServer for Backend {
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri.clone();
-        if let Some(change) = params.content_changes.into_iter().last() {
-            self.project
-                .write()
-                .await
-                .upsert_document(uri.clone(), change.text, 0);
+        let version = params.text_document.version;
+        {
+            let mut project = self.project.write().await;
+            for change in params.content_changes {
+                if let Some(range) = change.range {
+                    project.apply_change(&uri, range, &change.text, version);
+                } else {
+                    project.upsert_document(uri.clone(), change.text, version);
+                }
+            }
         }
         self.schedule_debounced_validate(uri).await;
     }
@@ -290,9 +297,22 @@ impl LanguageServer for Backend {
         let Some((source, index)) = self.get_source_and_index(&uri).await else {
             return Ok(None);
         };
+
+        if let Some(qualified) = utils::uri::qualified_ident_at_position(&source, position) {
+            if let Some(hover_text) = handlers::hover::stdlib_hover(&qualified) {
+                return Ok(Some(handlers::hover::markdown_hover(hover_text)));
+            }
+            if let Some(hover_text) = resolve_stdlib_qualified_hover(&source, &qualified) {
+                return Ok(Some(handlers::hover::markdown_hover(hover_text)));
+            }
+        }
+
         let Some(symbol) = utils::uri::word_at_position(&source, position) else {
             return Ok(None);
         };
+        if let Some(hover_text) = handlers::hover::stdlib_hover(&symbol) {
+            return Ok(Some(handlers::hover::markdown_hover(hover_text)));
+        }
         if let Some(hover_text) = handlers::hover::builtin_type_hover(&symbol) {
             return Ok(Some(handlers::hover::markdown_hover(hover_text)));
         }
@@ -326,6 +346,17 @@ impl LanguageServer for Backend {
         let Some((source, index)) = self.get_source_and_index(&uri).await else {
             return Ok(None);
         };
+
+        if let Some(qualified) = utils::uri::qualified_ident_at_position(&source, position) {
+            if let Some((path, range)) = resolve_stdlib_definition(&source, &qualified) {
+                if let Ok(target_uri) = Url::from_file_path(&path) {
+                    return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
+                        target_uri, range,
+                    ))));
+                }
+            }
+        }
+
         let Some(symbol) = utils::uri::word_at_position(&source, position) else {
             return Ok(None);
         };
@@ -422,14 +453,18 @@ impl LanguageServer for Backend {
             CompletionContext::Default
         };
 
+        let source_for_stdlib = self
+            .get_source_and_index(&uri)
+            .await
+            .map(|(s, _)| s)
+            .unwrap_or_default();
+
         match context {
             CompletionContext::AfterDot { receiver } => {
-                items.extend(handlers::completion::stdlib_completion_items());
-                // Etapa 6.2: type-aware dot completion. Resolve the
-                // receiver's declared type from the active source and list
-                // the type's fields / variants / methods from the resolved
-                // signatures. Falls back gracefully to stdlib-only when the
-                // receiver type cannot be inferred.
+                items.extend(handlers::completion::stdlib_dot_completion_items(
+                    &receiver,
+                    &source_for_stdlib,
+                ));
                 if let Some((source, _)) = self.get_source_and_index(&uri).await {
                     if let Some(psi) = self.get_semantic_index(&uri).await {
                         items.extend(psi.complete_after_dot(&receiver, &source));
@@ -437,7 +472,8 @@ impl LanguageServer for Backend {
                 }
             }
             CompletionContext::Import => {
-                items.extend(handlers::completion::stdlib_completion_items());
+                let prefix = import_prefix_at_position(&source_for_stdlib, position);
+                items.extend(handlers::completion::stdlib_import_completion_items(&prefix));
                 items.extend(handlers::completion::keyword_completion_items());
             }
             CompletionContext::Default => {
@@ -462,7 +498,7 @@ impl LanguageServer for Backend {
         }
 
         items.sort_by(|a, b| a.label.cmp(&b.label));
-        items.dedup_by(|a, b| a.label == b.label);
+        handlers::completion::dedupe_completion_items(&mut items);
         Ok(Some(CompletionResponse::Array(items)))
     }
 
@@ -908,6 +944,38 @@ impl LanguageServer for Backend {
                 None => return Ok(None),
             };
 
+        let import_map = import_alias_map(&source);
+        if let Some(sig) = stdlib_catalog().signature_for_call(&func_name, &import_map) {
+            let param_slice = sig
+                .find('(')
+                .map(|i| &sig[i..])
+                .unwrap_or("()");
+            let params = parse_params_from_signature(param_slice);
+            let active_param = count_commas_before(&source, open_paren_pos, position);
+            let max_param = params.len().saturating_sub(1) as u32;
+            let active = (active_param as u32).min(max_param);
+            return Ok(Some(SignatureHelp {
+                signatures: vec![SignatureInformation {
+                    label: sig.clone(),
+                    documentation: Some(tower_lsp::lsp_types::Documentation::String(
+                        "Ori standard library".into(),
+                    )),
+                    parameters: Some(
+                        params
+                            .iter()
+                            .map(|p| tower_lsp::lsp_types::ParameterInformation {
+                                label: tower_lsp::lsp_types::ParameterLabel::Simple(p.clone()),
+                                documentation: None,
+                            })
+                            .collect(),
+                    ),
+                    active_parameter: None,
+                }],
+                active_signature: Some(0),
+                active_parameter: Some(active),
+            }));
+        }
+
         let func_sym = match index
             .all_symbols()
             .find(|s| s.name == func_name && s.kind == index::semantic::SymbolKind::Function)
@@ -1082,6 +1150,23 @@ impl LanguageServer for Backend {
                 }
                 Ok(None)
             }
+            "ori.doctor" => {
+                let report = ori_driver::pipeline::run_doctor();
+                for check in &report.checks {
+                    let (level, label) = match check.status {
+                        ori_driver::pipeline::DoctorStatus::Ok => (MessageType::INFO, "OK"),
+                        ori_driver::pipeline::DoctorStatus::Warn => (MessageType::WARNING, "WARN"),
+                        ori_driver::pipeline::DoctorStatus::Fail => (MessageType::ERROR, "FAIL"),
+                    };
+                    self.client
+                        .log_message(
+                            level,
+                            format!("[{label}] {} — {}", check.name, check.detail),
+                        )
+                        .await;
+                }
+                Ok(None)
+            }
             _ => {
                 self.client
                     .log_message(
@@ -1116,6 +1201,42 @@ impl Backend {
 }
 
 // ── Helper functions ────────────────────────────────────────────────────────
+
+fn resolve_stdlib_qualified_path(source: &str, qualified: &str) -> Option<String> {
+    if stdlib_catalog().lookup(qualified).is_some() {
+        return Some(qualified.to_string());
+    }
+    if let Some((receiver, name)) = qualified.rsplit_once('.') {
+        let import_map = import_alias_map(source);
+        if let Some(module) = import_map.get(receiver) {
+            let full = format!("{module}.{name}");
+            if stdlib_catalog().lookup(&full).is_some() {
+                return Some(full);
+            }
+        }
+    }
+    None
+}
+
+fn resolve_stdlib_qualified_hover(source: &str, qualified: &str) -> Option<String> {
+    let path = resolve_stdlib_qualified_path(source, qualified)?;
+    stdlib_catalog().hover_markdown(&path)
+}
+
+fn resolve_stdlib_definition(source: &str, qualified: &str) -> Option<(std::path::PathBuf, Range)> {
+    let path = resolve_stdlib_qualified_path(source, qualified)?;
+    let entry = stdlib_catalog().lookup(&path)?;
+    Some((entry.source_path.clone()?, entry.name_range?))
+}
+
+fn import_prefix_at_position(source: &str, position: Position) -> String {
+    let offset = utils::position::byte_offset_for_position(source, position);
+    let before = &source[..offset.min(source.len())];
+    let Some(import_pos) = before.rfind("import ") else {
+        return String::new();
+    };
+    before[import_pos + 7..].trim().to_string()
+}
 
 fn symbol_kind_to_cik(kind: &index::semantic::SymbolKind) -> CompletionItemKind {
     match kind {
@@ -1346,7 +1467,7 @@ fn server_capabilities() -> ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Options(
             TextDocumentSyncOptions {
                 open_close: Some(true),
-                change: Some(TextDocumentSyncKind::FULL),
+                change: Some(TextDocumentSyncKind::INCREMENTAL),
                 will_save: Some(false),
                 will_save_wait_until: Some(false),
                 save: Some(TextDocumentSyncSaveOptions::SaveOptions(SaveOptions {
@@ -1391,7 +1512,7 @@ fn server_capabilities() -> ServerCapabilities {
         document_formatting_provider: Some(OneOf::Left(true)),
         document_range_formatting_provider: Some(OneOf::Left(true)),
         execute_command_provider: Some(tower_lsp::lsp_types::ExecuteCommandOptions {
-            commands: vec!["ori.runTests".to_string()],
+            commands: vec!["ori.runTests".to_string(), "ori.doctor".to_string()],
             work_done_progress_options: WorkDoneProgressOptions {
                 work_done_progress: None,
             },

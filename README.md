@@ -24,6 +24,14 @@ two known limitations documented in `docs/planning/PLANO-MATURIDADE-COMPLETO.md`
 - `ori test file.orl`: runs concrete functions marked with `@test`.
 - `ori run file.orl`: compiles to a temporary native binary, runs it, and
   returns the program exit code.
+- `ori doctor`: reports stdlib root, native runtime, linker strategy, and JIT
+  availability.
+- `ori explain <code>`: explains a diagnostic code (see `docs/spec/13-error-catalog.md`).
+- `ori summary [path]`: lists entry file, namespaces, and import graph.
+- `ori doc file <path>`: extracts documentation comments from a source file
+  (Markdown or `--format html`).
+- `ori doc export [--out path]`: exports stdlib symbols, error catalog, and
+  keywords as JSON for the [documentation website](https://github.com/raillen/ori-website).
 - `ori build file.orl`: emits C from a debug backend. This backend has partial
   feature parity and may reject features that the native backend supports.
 - `ori compile file.orl`: emits a native binary with Cranelift, then uses the
@@ -61,10 +69,13 @@ package that must use only the packaged `runtime/` directory.
   cross-file find-references, and circular-import diagnostics
   (`cargo test -p ori-lsp --test e2e`).
 - `ori fmt` formats Ori source and is idempotent on async/concurrency
-  constructs; `ori doc` extracts documentation.
+  constructs; `ori doc file` extracts documentation; `ori doc export` feeds the
+  Starlight docs site ([ori-website](https://github.com/raillen/ori-website)).
 - `ori check file.orl` remains the shortest CLI path for CI diagnostics.
 
 See `docs/planning/PLANO-MATURIDADE-COMPLETO.md` for the full maturity roadmap.
+
+Pedagogical guide: [`docs/guides/errors-null-void.md`](docs/guides/errors-null-void.md) (void, optional, result, check).
 
 ## Release Layout
 

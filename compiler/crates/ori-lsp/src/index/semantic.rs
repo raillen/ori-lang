@@ -200,6 +200,27 @@ impl SemanticIndex {
         for item_with_attrs in &source_file.items {
             self.index_item(&item_with_attrs.item, source);
         }
+
+        for import in &source_file.imports {
+            let namespace = import.path.to_string();
+            let alias = import
+                .alias
+                .as_ref()
+                .map(|n| n.text.to_string())
+                .unwrap_or_else(|| {
+                    namespace
+                        .rsplit('.')
+                        .next()
+                        .unwrap_or(&namespace)
+                        .to_string()
+                });
+            let file_path = ori_driver::pipeline::stdlib_source_path(&namespace);
+            self.imports.push(ResolvedImport {
+                alias,
+                namespace,
+                file_path,
+            });
+        }
     }
 
     fn index_item(&mut self, item: &ori_ast::item::Item, source: &str) {

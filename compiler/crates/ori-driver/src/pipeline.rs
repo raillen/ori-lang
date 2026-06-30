@@ -1511,6 +1511,11 @@ fn classify_stdlib_import(import: &str) -> StdlibImportStatus {
     StdlibImportStatus::Unknown
 }
 
+/// Resolve a stdlib module import (`ori.string.utils`) to its `.orl` source path.
+pub fn stdlib_source_path(import: &str) -> Option<PathBuf> {
+    find_stdlib_source_module(import)
+}
+
 fn find_stdlib_source_module(import: &str) -> Option<PathBuf> {
     let relative = import.strip_prefix("ori.")?;
     let stdlib_root = find_stdlib_root()?;
@@ -1526,7 +1531,8 @@ fn find_stdlib_source_module(import: &str) -> Option<PathBuf> {
     }
 }
 
-fn find_stdlib_root() -> Option<PathBuf> {
+/// Resolve the stdlib root directory (`ORI_STDLIB_ROOT` → dev layout → release package).
+pub fn find_stdlib_root() -> Option<PathBuf> {
     if let Ok(path) = std::env::var("ORI_STDLIB_ROOT") {
         let path = PathBuf::from(path);
         if path.is_dir() {
@@ -2554,6 +2560,245 @@ const COLLECTION_STDLIB_DOC_SIGNATURES: &[StdlibDocSignature] = &[
         signature: "sets.difference<T>(a: set<T>, b: set<T>) -> set<T> where T is Hashable and T is Equatable",
     },
 ];
+
+/// Lookup a human-readable stdlib signature for hover/docs (Layer 1 collections + ops).
+pub fn stdlib_doc_signature(canonical_path: &str) -> Option<&'static str> {
+    let (module, func_name) = canonical_path.rsplit_once('.')?;
+    COLLECTION_STDLIB_DOC_SIGNATURES
+        .iter()
+        .find(|entry| {
+            entry.module == module
+                && entry
+                    .signature
+                    .split('(')
+                    .next()
+                    .and_then(|prefix| prefix.rsplit('.').next())
+                    == Some(func_name)
+        })
+        .map(|entry| entry.signature)
+}
+
+// ── Doctor ────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DoctorStatus {
+    Ok,
+    Warn,
+    Fail,
+}
+
+#[derive(Debug, Clone)]
+pub struct DoctorCheck {
+    pub name: &'static str,
+    pub status: DoctorStatus,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct DoctorReport {
+    pub checks: Vec<DoctorCheck>,
+}
+
+impl DoctorReport {
+    pub fn has_failures(&self) -> bool {
+        self.checks
+            .iter()
+            .any(|c| c.status == DoctorStatus::Fail)
+    }
+}
+
+/// Environment and toolchain sanity checks for the Ori native pipeline.
+pub fn run_doctor() -> DoctorReport {
+    let mut checks = Vec::new();
+
+    match find_stdlib_root() {
+        Some(path) => {
+            let orl_count = count_orl_files(&path);
+            checks.push(DoctorCheck {
+                name: "stdlib root",
+                status: DoctorStatus::Ok,
+                detail: format!("{} ({} `.orl` modules)", path.display(), orl_count),
+            });
+        }
+        None => checks.push(DoctorCheck {
+            name: "stdlib root",
+            status: DoctorStatus::Fail,
+            detail: "not found — set ORI_STDLIB_ROOT or install the packaged stdlib/ layout"
+                .into(),
+        }),
+    }
+
+    let target = native_target_triple();
+    checks.push(DoctorCheck {
+        name: "target triple",
+        status: DoctorStatus::Ok,
+        detail: target.clone(),
+    });
+
+    match find_native_runtime_link() {
+        Ok(link) => checks.push(DoctorCheck {
+            name: "native runtime (AOT)",
+            status: DoctorStatus::Ok,
+            detail: link.runtime_lib.display().to_string(),
+        }),
+        Err(err) => checks.push(DoctorCheck {
+            name: "native runtime (AOT)",
+            status: DoctorStatus::Fail,
+            detail: err,
+        }),
+    }
+
+    match find_native_runtime_cdylib() {
+        Ok(path) => checks.push(DoctorCheck {
+            name: "native runtime (JIT cdylib)",
+            status: DoctorStatus::Ok,
+            detail: path.display().to_string(),
+        }),
+        Err(err) => checks.push(DoctorCheck {
+            name: "native runtime (JIT cdylib)",
+            status: DoctorStatus::Warn,
+            detail: format!("{err} (ori run falls back to AOT when unset)"),
+        }),
+    }
+
+    let linker = if env_flag("ORI_NATIVE_LINKER") {
+        "Raw (ORI_NATIVE_LINKER)"
+    } else if env_flag("ORI_USE_BUNDLED_RUST_LLD") {
+        "BundledRustLld (ORI_USE_BUNDLED_RUST_LLD=1)"
+    } else if env_flag("ORI_USE_SYSTEM_LINKER") {
+        "SystemLinker (ORI_USE_SYSTEM_LINKER=1)"
+    } else if env_flag("ORI_USE_RUST_LLD") {
+        "RustcDriver + rust-lld (ORI_USE_RUST_LLD=1)"
+    } else {
+        "RustcDriver (default)"
+    };
+    checks.push(DoctorCheck {
+        name: "linker strategy",
+        status: DoctorStatus::Ok,
+        detail: linker.into(),
+    });
+
+    let run_mode = if should_use_jit_for_run() {
+        "JIT (in-process Cranelift)"
+    } else {
+        "AOT compile + link"
+    };
+    checks.push(DoctorCheck {
+        name: "ori run mode",
+        status: DoctorStatus::Ok,
+        detail: run_mode.into(),
+    });
+
+    if env_flag("ORI_REQUIRE_PACKAGED_RUNTIME") {
+        checks.push(DoctorCheck {
+            name: "packaged runtime gate",
+            status: DoctorStatus::Ok,
+            detail: "ORI_REQUIRE_PACKAGED_RUNTIME=1 (release smoke mode)".into(),
+        });
+    }
+
+    DoctorReport { checks }
+}
+
+// ── Project summary ───────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone)]
+pub struct SummaryImport {
+    pub path: String,
+    pub alias: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SummaryModule {
+    pub path: PathBuf,
+    pub namespace: String,
+    pub imports: Vec<SummaryImport>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SummaryOutput {
+    pub entry: PathBuf,
+    pub modules: Vec<SummaryModule>,
+    pub diagnostic_count: usize,
+}
+
+/// Build a lightweight project overview: entry file, namespaces, import graph.
+pub fn run_summary(path: &Path) -> Result<SummaryOutput, String> {
+    let output = run_check(path)?;
+    let entry = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let mut modules = Vec::new();
+
+    for file in output.cache.all_files() {
+        let mut sink = DiagnosticSink::default();
+        let tokens = ori_lexer::lex(&file.content, file.id, &mut sink);
+        let ast = ori_parser::parse(&tokens, &file.content, file.id, &mut sink);
+        let imports = ast
+            .imports
+            .iter()
+            .map(|import| SummaryImport {
+                path: import.path.to_string(),
+                alias: import.alias.as_ref().map(|a| a.text.to_string()),
+            })
+            .collect();
+        modules.push(SummaryModule {
+            path: file.path.clone(),
+            namespace: ast.namespace.name.to_string(),
+            imports,
+        });
+    }
+
+    modules.sort_by(|a, b| a.path.cmp(&b.path));
+
+    Ok(SummaryOutput {
+        entry,
+        modules,
+        diagnostic_count: output.diagnostics.len(),
+    })
+}
+
+pub fn format_summary_text(summary: &SummaryOutput) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("entry: {}\n", summary.entry.display()));
+    out.push_str(&format!(
+        "modules: {} ({} diagnostic(s) from last check)\n\n",
+        summary.modules.len(),
+        summary.diagnostic_count
+    ));
+    for module in &summary.modules {
+        out.push_str(&format!(
+            "- {} → namespace {}\n",
+            module.path.display(),
+            module.namespace
+        ));
+        for import in &module.imports {
+            if let Some(alias) = &import.alias {
+                out.push_str(&format!("    import {} as {}\n", import.path, alias));
+            } else {
+                out.push_str(&format!("    import {}\n", import.path));
+            }
+        }
+    }
+    out
+}
+
+fn count_orl_files(root: &std::path::Path) -> usize {
+    fn walk(dir: &std::path::Path, count: &mut usize) {
+        let Ok(read) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in read.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, count);
+            } else if path.extension().is_some_and(|e| e == "orl") {
+                *count += 1;
+            }
+        }
+    }
+    let mut count = 0;
+    walk(root, &mut count);
+    count
+}
 
 fn render_documentation_markdown(loaded: &[LoadedSource]) -> String {
     let mut out = String::from("# Ori API Documentation\n\n");

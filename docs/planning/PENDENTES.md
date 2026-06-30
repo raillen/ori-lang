@@ -184,29 +184,32 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 
 ## Backlog v2 — Paridade de referência e DX (pós-0.2.0)
 
+> **Stdlib Layer 2/3 `.orl`:** fechados em 2026-06-29 — ver [`stdlib-gap-parity.md`](stdlib-gap-parity.md). O backlog abaixo cobre **toolchain pedagógica**, **uniformização Layer 1** e **I/O avançado** (não mais módulos utils/algorithms faltantes).
+
 > Inspirado na comparação Ori × linguagem de referência (`std.*`): fechar gaps de **consistência de API**, **toolchain pedagógica** e **documentação do modelo mental** (optional / result / void / check).  
 > Detalhamento espelhado em [`PLANO-MATURIDADE-COMPLETO.md`](PLANO-MATURIDADE-COMPLETO.md) Apêndice C.  
 > **Fora de escopo deste backlog:** alias ou rename de `string` → `text`.
 
 ### 1. Toolchain pedagógica (alta prioridade)
 
-- [ ] **`ori explain <code>`** — comando CLI que imprime descrição, causa provável e sugestão de correção para um código do catálogo (`docs/spec/13-error-catalog.md`); espelhar `zt explain`. Gate: teste de integração em `ori-driver` cobrindo ≥3 códigos (`name.undefined`, `project.circular_import`, `type.type_mismatch`).
-- [ ] **`ori doctor`** — verifica ambiente de desenvolvimento: runtime empacotada/cdylib resolvível, linker disponível (`ORI_USE_BUNDLED_RUST_LLD` / `ORI_USE_SYSTEM_LINKER`), `ORI_STDLIB_ROOT`, triple suportado, versão do compilador. Gate: teste smoke que executa `ori doctor` e valida exit code 0 em ambiente dev.
-- [ ] **Guia pedagógico “Errors, Null, Void”** — documento único (`docs/spec/` ou `docs/guides/errors-null-void.md`) com mapa mental dos quatro conceitos + tabela comparativa + exemplos mínimos; linkado do `README.md`. Gate: revisão cruzada com caps. 04 e 09 da spec (sem contradição).
+- [x] **`ori explain <code>`** — comando CLI que imprime descrição, causa provável e sugestão de correção para um código do catálogo (`docs/spec/13-error-catalog.md`); espelhar `zt explain`. Gate: teste de integração em `ori-driver` cobrindo ≥3 códigos (`name.undefined`, `project.circular_import`, `type.type_mismatch`).
+- [x] **`ori doctor`** — verifica ambiente de desenvolvimento: runtime empacotada/cdylib resolvível, linker disponível (`ORI_USE_BUNDLED_RUST_LLD` / `ORI_USE_SYSTEM_LINKER`), `ORI_STDLIB_ROOT`, triple suportado, modo `ori run`. Gate: `compiler/crates/ori-driver/tests/doctor.rs` (2 testes, exit 0 em dev layout).
+- [x] **Extensão VS Code (`extensions/vscode-orl/`)** — LanguageClient → `ori-lsp`, settings `ori.*`, grammar/snippets, comandos Check/Run/Test/Doctor/Format/Summary. Completion Layer 2 stdlib + goto/hover stdlib integrados via catálogo LSP. v0.2.2: doctor no Output Channel, `ori.summaryProject`, auto-discovery de paths do workspace.
+- [x] **Guia pedagógico “Errors, Null, Void”** — documento único (`docs/guides/errors-null-void.md`) com mapa mental dos quatro conceitos + tabela comparativa + exemplos mínimos; linkado do `README.md`. Gate: revisão cruzada com caps. 04 e 09 da spec (sem contradição).
 
 ### 2. Uniformização de APIs stdlib (alta prioridade)
 
-- [ ] **`ori.io.read_line` → `optional<string>`** — Layer 1 retorna `none` em EOF; manter compat via deprecação ou wrapper `read_line_legacy` se necessário. Atualizar `stdlib/io/utils.orl` (`try_read_line` pode virar alias fino). Gate: regressão em `multifile_imports.rs` + exemplo `error_handling.orl` se aplicável.
-- [ ] **Layer 1 FS: `bool` → `result<void, string>` / `result<T, string>`** — migrar `write_text`, `create_dir`, `delete`, etc.; Layer 2 (`stdlib/fs/utils.orl`) mantém aliases de transição durante deprecação. Gate: teste E2E por função migrada; matriz cap. 14 atualizada.
-- [ ] **Contratos cap. 12 sincronizados** — `stdlib_func_sig`, manifesto `stdlib.rs` e docs normativos refletem assinaturas pós-migração. Gate: `spec_fs_and_json_contracts_match_stdlib_sig` verde.
+- [x] **`ori.io.read_line` → `optional<string>`** — Layer 1 retorna `none` em EOF; `stdlib/io/utils.orl` `try_read_line` virou alias fino. Gate: `compile_runs_io_read_line` em `multifile_imports.rs`.
+- [x] **Layer 1 FS: `bool` → `result<void, string>` / `result<bool, string>`** — migrados `append_text`, `exists`, `is_file`, `is_dir`, `delete`, `create_dir`, `create_dir_all`, `copy`, `rename`; Layer 2 (`stdlib/fs/utils.orl`) pass-through direto. Gate: `compile_runs_fs_stdlib_canonical_and_compat_aliases`, `compile_runs_stdlib_source_module_fs_utils`, `spec_fs_and_json_contracts_match_stdlib_sig`.
+- [x] **Contratos cap. 12 sincronizados** — `stdlib_func_sig`, manifesto `stdlib.rs`, ABI nativa e teste `spec_fs_and_json_contracts_match_stdlib_sig` refletem assinaturas pós-migração.
 
 > Rastreabilidade: ver também [`stdlib-gap-parity.md`](stdlib-gap-parity.md) § Lacunas remanescentes (“Uniformizar todos os bool FS → result”).
 
 ### 3. Ergonomia de linguagem e CLI (média prioridade)
 
 - [ ] **`ori repl`** — REPL interativo (parse → check → eval parcial ou JIT de expressões/top-level); mínimo: literais, chamadas stdlib, bindings `const`/`var`. Gate: teste de integração que envia 3 comandos via stdin e valida stdout.
-- [ ] **`if then else` como expressão** — sintaxe `if cond then expr else expr end` (ou forma canônica documentada); checker infere tipo unificado dos ramos. Gate: testes em `ori_spec.rs` (tipos compatíveis + erro em ramos incompatíveis).
-- [ ] **`ori summary [path]`** — visão do projeto: entry file, namespaces descobertos, grafo de imports (texto ou JSON). Gate: teste com fixture multi-arquivo em `multifile_imports.rs`.
+- [x] **`if then else` como expressão** — sintaxe `if cond then expr else expr` (sem `end` trailing); checker infere tipo unificado dos ramos (incl. `never`). Gate: `expr_accepts_inline_if_expression` + `expr_rejects_inline_if_*` em `ori_spec.rs` (check + compile+run).
+- [x] **`ori summary [path]`** — visão do projeto: entry file, namespaces descobertos, grafo de imports (texto ou JSON). Gate: teste com fixture multi-arquivo em `summary.rs`.
 
 ### 4. Stdlib e I/O avançado (baixa prioridade)
 
@@ -216,6 +219,7 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 
 ### **Critérios de passagem (Backlog v2 — lote DX)**
 
-- [ ] Itens §1 e §2 (alta prioridade) entregues com gates verdes.
-- [ ] Pelo menos 1 item de §3 entregue (`repl` ou `summary` recomendado primeiro).
-- [ ] `CHANGELOG.md` `[Unreleased]` atualizado; sem breaking change silencioso (migrações FS/IO documentadas).
+- [x] Itens §1 (toolchain pedagógica) entregues com gates verdes — exceto publicação Marketplace.
+- [x] Itens §2 (uniformização FS/IO) entregues com gates verdes.
+- [x] Pelo menos 1 item de §3 entregue (`ori summary`).
+- [x] `CHANGELOG.md` `[Unreleased]` atualizado; sem breaking change silencioso (migrações FS/IO documentadas quando aplicável).

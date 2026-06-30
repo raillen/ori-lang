@@ -1,0 +1,183 @@
+{
+  "name": "vscode-orl",
+  "displayName": "Ori Language",
+  "description": "Language support for Ori (.orl) — LSP, stdlib completion, doctor, and tooling",
+  "version": "0.2.2",
+  "publisher": "ori-lang",
+  "license": "MIT OR Apache-2.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "ori",
+    "orl"
+  ],
+  "activationEvents": [
+    "onLanguage:ori",
+    "onCommand:ori.runDoctor",
+    "onCommand:ori.checkFile",
+    "onCommand:ori.runFile",
+    "onCommand:ori.testFile",
+    "onCommand:ori.formatFile",
+    "onCommand:ori.summaryProject"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "ori",
+        "aliases": [
+          "Ori",
+          "orl"
+        ],
+        "extensions": [
+          ".orl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ori",
+        "scopeName": "source.ori",
+        "path": "./syntaxes/ori.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "ori",
+        "path": "./snippets/ori.json"
+      }
+    ],
+    "configuration": {
+      "title": "Ori",
+      "properties": {
+        "ori.lsp.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the `ori-lsp` binary. When empty, searches PATH and the packaged layout next to `ori`."
+        },
+        "ori.compiler.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the `ori` compiler CLI."
+        },
+        "ori.stdlib.root": {
+          "type": "string",
+          "default": "",
+          "description": "Override stdlib root (maps to ORI_STDLIB_ROOT)."
+        },
+        "ori.runtime.lib": {
+          "type": "string",
+          "default": "",
+          "description": "Override native runtime static library (ORI_RUNTIME_LIB)."
+        },
+        "ori.runtime.cdylib": {
+          "type": "string",
+          "default": "",
+          "description": "Override JIT runtime cdylib (ORI_RUNTIME_CDYLIB)."
+        },
+        "ori.useJit": {
+          "type": "boolean",
+          "default": false,
+          "description": "Set ORI_USE_JIT=1 for `ori run` tasks spawned by the extension."
+        },
+        "ori.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "LSP communication trace level."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "ori.runDoctor",
+        "title": "Run Doctor",
+        "category": "Ori"
+      },
+      {
+        "command": "ori.checkFile",
+        "title": "Check Current File",
+        "category": "Ori"
+      },
+      {
+        "command": "ori.runFile",
+        "title": "Run Current File",
+        "category": "Ori"
+      },
+      {
+        "command": "ori.testFile",
+        "title": "Test Current File",
+        "category": "Ori"
+      },
+      {
+        "command": "ori.formatFile",
+        "title": "Format Document",
+        "category": "Ori"
+      },
+      {
+        "command": "ori.summaryProject",
+        "title": "Project Summary",
+        "category": "Ori"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "ori.runDoctor"
+        },
+        {
+          "command": "ori.checkFile",
+          "when": "editorLangId == ori"
+        },
+        {
+          "command": "ori.runFile",
+          "when": "editorLangId == ori"
+        },
+        {
+          "command": "ori.testFile",
+          "when": "editorLangId == ori"
+        },
+        {
+          "command": "ori.formatFile",
+          "when": "editorLangId == ori"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "ori.runFile",
+          "when": "editorLangId == ori",
+          "group": "navigation@99"
+        },
+        {
+          "command": "ori.checkFile",
+          "when": "editorLangId == ori",
+          "group": "navigation@98"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npm run compile && npx @vscode/vsce package --allow-missing-repository",
+    "install:cursor": "cursor --install-extension vscode-orl-0.2.1.vsix --force"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.1",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
-use ori_driver::{emit, pipeline};
-use std::path::PathBuf;
+use ori_driver::{emit, explain, pipeline};
+use std::path::{Path, PathBuf};
 use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -29,14 +29,8 @@ enum Commands {
     },
     /// Extract documentation comments as Markdown or static HTML.
     Doc {
-        /// Path to the `.orl` source file or project manifest.
-        file: PathBuf,
-        /// Output format (`markdown` default, or `html` for a static page).
-        #[arg(long, value_enum, default_value_t = DocFormatCli::Markdown)]
-        format: DocFormatCli,
-        /// Write output to this file instead of stdout.
-        #[arg(short, long)]
-        out: Option<PathBuf>,
+        #[command(subcommand)]
+        action: DocAction,
     },
     /// Install an Ori package from the registry (not yet available).
     Install {
@@ -95,6 +89,40 @@ enum Commands {
         #[arg(short, long)]
         out: Option<PathBuf>,
     },
+    /// Report environment, stdlib, and native runtime health.
+    Doctor,
+    /// Explain a diagnostic code from the error catalog.
+    Explain {
+        /// Diagnostic code (e.g. `name.undefined`).
+        code: String,
+    },
+    /// Print project overview: entry, namespaces, imports.
+    Summary {
+        /// Path to the `.orl` entry file or project root.
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum DocAction {
+    /// Extract documentation from a source file (Markdown or HTML).
+    File {
+        /// Path to the `.orl` source file or project manifest.
+        file: PathBuf,
+        /// Output format (`markdown` default, or `html` for a static page).
+        #[arg(long, value_enum, default_value_t = DocFormatCli::Markdown)]
+        format: DocFormatCli,
+        /// Write output to this file instead of stdout.
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
+    /// Export stdlib + error catalog JSON for the documentation website.
+    Export {
+        /// Output JSON path (default: stdout).
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
 }
 
 #[derive(Clone, Copy, clap::ValueEnum)]
@@ -122,40 +150,62 @@ fn main() {
             }
         },
 
-        Commands::Doc { file, format, out } => {
-            let doc_format = match format {
-                DocFormatCli::Markdown => pipeline::DocFormat::Markdown,
-                DocFormatCli::Html => pipeline::DocFormat::Html,
-            };
-            match pipeline::run_doc_with_options(file, pipeline::DocOptions { format: doc_format })
-            {
-                Err(e) => {
-                    eprintln!("ori: {}", e);
-                    process::exit(2);
-                }
-                Ok(doc) => {
-                    let errors = doc.diagnostics.iter().filter(|d| d.is_error()).count();
-                    let warnings = doc.diagnostics.len() - errors;
-                    emit::render_all(&doc.cache, &doc.diagnostics, color);
-                    emit::print_summary(errors, warnings, color);
-                    if !doc.has_errors {
-                        let content = match doc_format {
-                            pipeline::DocFormat::Html => &doc.html,
-                            pipeline::DocFormat::Markdown => &doc.markdown,
-                        };
-                        if let Some(path) = out {
-                            std::fs::write(path, content).unwrap_or_else(|e| {
-                                eprintln!("ori: {}", e);
-                                process::exit(2);
-                            });
-                        } else {
-                            print!("{content}");
-                        }
+        Commands::Doc { action } => match action {
+            DocAction::File { file, format, out } => {
+                let doc_format = match format {
+                    DocFormatCli::Markdown => pipeline::DocFormat::Markdown,
+                    DocFormatCli::Html => pipeline::DocFormat::Html,
+                };
+                match pipeline::run_doc_with_options(
+                    file,
+                    pipeline::DocOptions { format: doc_format },
+                ) {
+                    Err(e) => {
+                        eprintln!("ori: {}", e);
+                        process::exit(2);
                     }
-                    process::exit(if doc.has_errors { 1 } else { 0 });
+                    Ok(doc) => {
+                        let errors = doc.diagnostics.iter().filter(|d| d.is_error()).count();
+                        let warnings = doc.diagnostics.len() - errors;
+                        emit::render_all(&doc.cache, &doc.diagnostics, color);
+                        emit::print_summary(errors, warnings, color);
+                        if !doc.has_errors {
+                            let content = match doc_format {
+                                pipeline::DocFormat::Html => &doc.html,
+                                pipeline::DocFormat::Markdown => &doc.markdown,
+                            };
+                            if let Some(path) = out {
+                                std::fs::write(path, content).unwrap_or_else(|e| {
+                                    eprintln!("ori: {}", e);
+                                    process::exit(2);
+                                });
+                            } else {
+                                print!("{content}");
+                            }
+                        }
+                        process::exit(if doc.has_errors { 1 } else { 0 });
+                    }
                 }
             }
-        }
+            DocAction::Export { out } => {
+                use ori_driver::doc_export;
+                match out {
+                    Some(path) => {
+                        if let Err(e) = doc_export::write_doc_export(path) {
+                            eprintln!("ori: {}", e);
+                            process::exit(2);
+                        }
+                    }
+                    None => match doc_export::export_doc_json() {
+                        Err(e) => {
+                            eprintln!("ori: {}", e);
+                            process::exit(2);
+                        }
+                        Ok(json) => print!("{json}"),
+                    },
+                }
+            }
+        },
 
         Commands::Install { name } => {
             eprintln!(
@@ -371,6 +421,69 @@ fn main() {
                 process::exit(if build.has_errors { 1 } else { 0 });
             }
         },
+
+        Commands::Doctor => {
+            let report = pipeline::run_doctor();
+            for check in &report.checks {
+                let (icon, label) = match check.status {
+                    pipeline::DoctorStatus::Ok => ("ok", "OK"),
+                    pipeline::DoctorStatus::Warn => ("warn", "WARN"),
+                    pipeline::DoctorStatus::Fail => ("fail", "FAIL"),
+                };
+                if color {
+                    let color_code = match check.status {
+                        pipeline::DoctorStatus::Ok => "\x1b[32m",
+                        pipeline::DoctorStatus::Warn => "\x1b[33m",
+                        pipeline::DoctorStatus::Fail => "\x1b[31m",
+                    };
+                    eprintln!(
+                        "{color_code}[{label}]\x1b[0m {} — {}",
+                        check.name, check.detail
+                    );
+                } else {
+                    eprintln!("[{icon}] {} — {}", check.name, check.detail);
+                }
+            }
+            process::exit(if report.has_failures() { 1 } else { 0 });
+        }
+
+        Commands::Explain { code } => {
+            match explain::explain_code(&code) {
+                Some(entry) => {
+                    print!("{}", explain::format_explanation(entry));
+                }
+                None => {
+                    eprintln!("ori: unknown diagnostic code `{code}`");
+                    eprintln!("ori: see docs/spec/13-error-catalog.md for the full catalog");
+                    process::exit(2);
+                }
+            }
+        }
+
+        Commands::Summary { path } => {
+            let target = if path.as_os_str().is_empty() || path.as_path() == Path::new(".") {
+                std::env::current_dir().unwrap_or_else(|e| {
+                    eprintln!("ori: {}", e);
+                    process::exit(2);
+                })
+            } else {
+                path.clone()
+            };
+            let entry = if target.is_dir() {
+                target.join("main.orl")
+            } else {
+                target
+            };
+            match pipeline::run_summary(&entry) {
+                Err(e) => {
+                    eprintln!("ori: {}", e);
+                    process::exit(2);
+                }
+                Ok(summary) => {
+                    print!("{}", pipeline::format_summary_text(&summary));
+                }
+            }
+        }
 
         Commands::Parse { file } => match pipeline::run_parse(file) {
             Err(e) => {

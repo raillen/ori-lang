@@ -1,0 +1,45 @@
+namespace ori.stack.utils
+
+import ori.list as lists
+import ori.stack as stack
+
+public func from_list_int(items: list<int>) -> stack.Stack<int>
+    var s: stack.Stack<int> = stack.new()
+    var i: int = 0
+    const n: int = lists.len(items)
+    while i < n
+        if some(item) = lists.try_get(items, i)
+            stack.push(s, item)
+        end
+        i = i + 1
+    end
+    return s
+end
+
+public func from_list_string(items: list<string>) -> stack.Stack<string>
+    var s: stack.Stack<string> = stack.new()
+    var i: int = 0
+    const n: int = lists.len(items)
+    while i < n
+        if some(item) = lists.try_get(items, i)
+            stack.push(s, item)
+        end
+        i = i + 1
+    end
+    return s
+end
+
+public func to_list_int(s: stack.Stack<int>) -> list<int>
+    return stack.to_list(s)
+end
+
+public func peek_or_int(s: stack.Stack<int>, fallback: int) -> int
+    if some(value) = stack.peek(s)
+        return value
+    end
+    return fallback
+end
+
+public func is_singleton_int(s: stack.Stack<int>) -> bool
+    return stack.len(s) == 1
+end

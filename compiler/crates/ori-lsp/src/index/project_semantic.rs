@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use ori_ast::expr::Expr;
 use ori_ast::item::Item;
 use ori_ast::stmt::{Block, MatchCase, Stmt};
 use ori_ast::ty::Type;
@@ -26,6 +27,7 @@ use ori_types::resolve::ResolvedModule;
 use ori_types::{Def, Ty};
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind, Range};
 
+use crate::stdlib_catalog::stdlib_catalog;
 use crate::utils::position;
 
 /// A snapshot of the driver's resolved project state, keyed to a single
@@ -117,10 +119,16 @@ impl ProjectSemanticIndex {
     /// bindings without annotations fall back to "no completions" rather than
     /// guessing.
     pub fn complete_after_dot(&self, receiver: &str, source: &str) -> Vec<CompletionItem> {
-        let Some(type_name) = self.infer_receiver_type_name(receiver, source) else {
-            return Vec::new();
-        };
         let mut items = Vec::new();
+
+        let type_name = self
+            .infer_receiver_type_name(receiver, source)
+            .or_else(|| self.infer_receiver_from_value_sig(receiver))
+            .or_else(|| self.infer_receiver_from_opaque_name(receiver, source));
+
+        let Some(type_name) = type_name else {
+            return items;
+        };
 
         if let Some(s) = self.find_struct_by_name(&type_name) {
             for (name, ty) in &s.fields {
@@ -165,6 +173,8 @@ impl ProjectSemanticIndex {
                 }
             }
         }
+
+        items.extend(self.complete_opaque_methods(&type_name));
 
         items
     }
@@ -227,6 +237,48 @@ impl ProjectSemanticIndex {
     fn find_value_by_name(&self, name: &str) -> Option<&ori_types::resolve::ValueSig> {
         let def = self.find_def_by_name(name)?;
         self.resolved.value_sigs.iter().find(|v| v.def_id == def.id)
+    }
+
+    fn infer_receiver_from_value_sig(&self, receiver: &str) -> Option<String> {
+        let value = self.find_value_by_name(receiver)?;
+        ty_simple_name(&value.ty, &self.resolved)
+    }
+
+    /// Match opaque stdlib types like `deque.Deque` from a binding annotation.
+    fn infer_receiver_from_opaque_name(&self, receiver: &str, source: &str) -> Option<String> {
+        let file_id = ori_diagnostics::FileId(0);
+        let mut sink = ori_diagnostics::DiagnosticSink::default();
+        let tokens = ori_lexer::lex(source, file_id, &mut sink);
+        let source_file = ori_parser::parse(&tokens, source, file_id, &mut sink);
+
+        for item in &source_file.items {
+            if let Item::Var(v) = &item.item {
+                if v.name.text == receiver {
+                    if let Type::Named(qn) = &v.ty {
+                        return Some(qn.to_string());
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn complete_opaque_methods(&self, type_name: &str) -> Vec<CompletionItem> {
+        let prefix = if type_name.contains('.') {
+            type_name.to_string()
+        } else {
+            format!("ori.{type_name}")
+        };
+        stdlib_catalog()
+            .entries_for_module(&prefix)
+            .into_iter()
+            .map(|entry| CompletionItem {
+                label: entry.name.clone(),
+                kind: Some(CompletionItemKind::METHOD),
+                detail: Some(entry.signature.clone()),
+                ..Default::default()
+            })
+            .collect()
     }
 
     // ── helpers: span → location ───────────────────────────────────────────
@@ -322,6 +374,8 @@ impl ProjectSemanticIndex {
             Stmt::Var(v) => {
                 if let Some(tn) = named_type_simple_name(&v.ty) {
                     out.insert(v.name.text.to_string(), tn);
+                } else if let Some(tn) = infer_type_from_expr(&v.value) {
+                    out.insert(v.name.text.to_string(), tn);
                 }
             }
             Stmt::Using(u) => {
@@ -372,7 +426,43 @@ impl ProjectSemanticIndex {
 /// for primitives and generic wrappers, which cannot be completed via dot.
 fn named_type_simple_name(ty: &Type) -> Option<String> {
     match ty {
-        Type::Named(qn) => Some(qn.last().text.to_string()),
+        Type::Named(qn) => Some(qn.to_string()),
+        _ => None,
+    }
+}
+
+/// Best-effort type name from a binding initializer (struct lit, enum, stdlib ctor).
+fn infer_type_from_expr(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::StructLit { ty, .. } => Some(ty.to_string()),
+        Expr::EnumVariantUnit { ty: Some(qn), .. } | Expr::EnumVariantNamed { ty: Some(qn), .. } => {
+            Some(qn.to_string())
+        }
+        Expr::Call { callee, .. } => infer_type_from_call_callee(callee),
+        _ => None,
+    }
+}
+
+fn infer_type_from_call_callee(callee: &Expr) -> Option<String> {
+    match callee {
+        Expr::QualifiedIdent(qn) => {
+            let path = qn.to_string();
+            if path.ends_with(".new") {
+                let module = path.strip_suffix(".new")?;
+                Some(format!("{module}.Deque"))
+            } else {
+                None
+            }
+        }
+        Expr::Ident(name) if name.text == "new" => None,
+        _ => None,
+    }
+}
+
+fn ty_simple_name(ty: &Ty, resolved: &ResolvedModule) -> Option<String> {
+    match ty {
+        Ty::Named(def_id, _) => Some(resolved.def_map.get(*def_id).name.to_string()),
+        Ty::Opaque { kind, .. } => Some(kind.display_name().into()),
         _ => None,
     }
 }

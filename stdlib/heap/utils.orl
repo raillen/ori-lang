@@ -1,0 +1,29 @@
+namespace ori.heap.utils
+
+import ori.heap as heap
+
+public func from_list_int(items: list<int>) -> heap.Heap<int>
+    return heap.from_list(items)
+end
+
+public func peek_or_int(h: heap.Heap<int>, fallback: int) -> int
+    if some(value) = heap.peek(h)
+        return value
+    end
+    return fallback
+end
+
+public func pop_or_int(h: heap.Heap<int>, fallback: int) -> int
+    if some(value) = heap.pop(h)
+        return value
+    end
+    return fallback
+end
+
+public func into_sorted_int(h: heap.Heap<int>) -> list<int>
+    return heap.into_sorted_list(h)
+end
+
+public func is_singleton_int(h: heap.Heap<int>) -> bool
+    return heap.len(h) == 1
+end

@@ -1,34 +1,22 @@
 use std::collections::BTreeSet;
 use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind};
 
-/// Generate completion items for the Ori standard library.
+use crate::stdlib_catalog::{import_alias_map, stdlib_catalog};
+
+/// Generate completion items for the Ori standard library (Layer 1 + Layer 2).
 pub fn stdlib_completion_items() -> Vec<CompletionItem> {
-    let mut modules = BTreeSet::new();
-    let mut items = Vec::new();
+    stdlib_catalog().completion_items()
+}
 
-    for entry in ori_types::stdlib::stdlib_runtime_functions() {
-        if let Some((module, _)) = entry.canonical_path.rsplit_once('.') {
-            modules.insert(module.to_string());
-        }
-        items.push(CompletionItem {
-            label: entry.canonical_path.to_string(),
-            kind: Some(CompletionItemKind::FUNCTION),
-            detail: Some("Ori standard library function".to_string()),
-            ..CompletionItem::default()
-        });
-    }
+/// Completion items when the cursor is inside an `import` statement.
+pub fn stdlib_import_completion_items(prefix: &str) -> Vec<CompletionItem> {
+    stdlib_catalog().module_completion_items(prefix)
+}
 
-    for module in modules {
-        items.push(CompletionItem {
-            label: module,
-            kind: Some(CompletionItemKind::MODULE),
-            detail: Some("Ori standard library module".to_string()),
-            ..CompletionItem::default()
-        });
-    }
-
-    items.sort_by(|a, b| a.label.cmp(&b.label));
-    items
+/// Dot-completion items for a stdlib import alias or module prefix.
+pub fn stdlib_dot_completion_items(receiver: &str, source: &str) -> Vec<CompletionItem> {
+    let import_map = import_alias_map(source);
+    stdlib_catalog().dot_completion_items(receiver, &import_map)
 }
 
 /// Keyword completions for the Ori language.
@@ -74,6 +62,7 @@ pub fn snippet_completion_items() -> Vec<CompletionItem> {
         snippet("match", "match ${1:value}\ncase ${2:pattern}:\n    ${0}\nend"),
         snippet("using", "using ${1:name}: ${2:Type} = ${3:expr}\n    ${0}\nend"),
         snippet("check", "check ${1:condition}, \"${2:message}\""),
+        snippet("import", "import ${1:ori.module} as ${2:alias}"),
     ]
 }
 
@@ -86,4 +75,10 @@ fn snippet(label: &str, body: &str) -> CompletionItem {
         insert_text_format: Some(tower_lsp::lsp_types::InsertTextFormat::SNIPPET),
         ..CompletionItem::default()
     }
+}
+
+/// Deduplicate completion items by label while preserving order.
+pub fn dedupe_completion_items(items: &mut Vec<CompletionItem>) {
+    let mut seen = BTreeSet::new();
+    items.retain(|item| seen.insert(item.label.clone()));
 }

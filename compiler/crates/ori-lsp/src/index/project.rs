@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tower_lsp::lsp_types::Url;
+use tower_lsp::lsp_types::{Range, Url};
 
 use super::project_semantic::ProjectSemanticIndex;
 use super::semantic::SemanticIndex;
-use crate::utils::uri;
+use crate::utils::{position, uri};
 
 /// Manages the workspace: open documents, parse cache, and project root.
 pub struct ProjectManager {
@@ -60,6 +60,20 @@ impl ProjectManager {
                 index,
             },
         );
+    }
+
+    /// Apply an incremental LSP text edit to an open document.
+    pub fn apply_change(&mut self, uri: &Url, range: Range, text: &str, version: i32) {
+        let Some(state) = self.open_documents.get_mut(uri) else {
+            return;
+        };
+        let start = position::byte_offset_for_position(&state.content, range.start);
+        let end = position::byte_offset_for_position(&state.content, range.end);
+        if start <= end && end <= state.content.len() {
+            state.content.replace_range(start..end, text);
+            state.version = version;
+            state.index = Some(SemanticIndex::build(&state.content));
+        }
     }
 
     /// Store the project-wide semantic index produced for `uri` by

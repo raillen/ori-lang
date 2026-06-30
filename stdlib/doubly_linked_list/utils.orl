@@ -1,0 +1,39 @@
+namespace ori.doubly_linked_list.utils
+
+import ori.doubly_linked_list as doubly_linked_list
+import ori.list as lists
+
+public func from_list_int(items: list<int>) -> doubly_linked_list.DoublyLinkedList<int>
+    var node: doubly_linked_list.DoublyLinkedList<int> = doubly_linked_list.new()
+    var i: int = 0
+    const n: int = lists.len(items)
+    while i < n
+        if some(item) = lists.try_get(items, i)
+            doubly_linked_list.push_back(node, item)
+        end
+        i = i + 1
+    end
+    return node
+end
+
+public func to_list_int(node: doubly_linked_list.DoublyLinkedList<int>) -> list<int>
+    return doubly_linked_list.to_list(node)
+end
+
+public func front_or_int(node: doubly_linked_list.DoublyLinkedList<int>, fallback: int) -> int
+    if some(value) = doubly_linked_list.front(node)
+        return value
+    end
+    return fallback
+end
+
+public func back_or_int(node: doubly_linked_list.DoublyLinkedList<int>, fallback: int) -> int
+    if some(value) = doubly_linked_list.back(node)
+        return value
+    end
+    return fallback
+end
+
+public func len_int(node: doubly_linked_list.DoublyLinkedList<int>) -> int
+    return doubly_linked_list.len(node)
+end

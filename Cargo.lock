@@ -882,6 +882,8 @@ dependencies = [
  "ori-parser",
  "ori-runtime",
  "ori-types",
+ "serde",
+ "serde_json",
  "smol_str",
 ]
 

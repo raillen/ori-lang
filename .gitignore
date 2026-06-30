@@ -9,6 +9,9 @@ dist/
 build/
 runtime/**/ori_runtime.lib
 runtime/**/libori_runtime.a
+runtime/**/ori_runtime.dll
+runtime/**/libori_runtime.so
+runtime/**/libori_runtime.dylib
 runtime/**/rust-lld
 runtime/**/rust-lld.exe
 

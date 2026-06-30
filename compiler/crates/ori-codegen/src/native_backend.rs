@@ -3856,13 +3856,13 @@ impl<M: Module> NativeBackend<M> {
             "ori_files_append_text",
             &[pt, pt],
             vec![Ty::String, Ty::String],
-            Some(types::I8),
+            Some(pt),
         )?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_files_append_text"), id);
-        let id = decl("ori_files_exists", &[pt], vec![Ty::String], Some(types::I8))?;
+        let id = decl("ori_files_exists", &[pt], vec![Ty::String], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_files_exists"), id);
-        let id = decl("ori_files_delete", &[pt], vec![Ty::String], Some(types::I8))?;
+        let id = decl("ori_files_delete", &[pt], vec![Ty::String], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_files_delete"), id);
         let id = decl("ori_files_list_dir", &[pt], vec![Ty::String], Some(pt))?;
         self.stdlib_ids
@@ -3871,7 +3871,7 @@ impl<M: Module> NativeBackend<M> {
             "ori_files_create_dir",
             &[pt],
             vec![Ty::String],
-            Some(types::I8),
+            Some(pt),
         )?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_files_create_dir"), id);
@@ -3879,24 +3879,24 @@ impl<M: Module> NativeBackend<M> {
             "ori_files_is_file",
             &[pt],
             vec![Ty::String],
-            Some(types::I8),
+            Some(pt),
         )?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_files_is_file"), id);
-        let id = decl("ori_files_is_dir", &[pt], vec![Ty::String], Some(types::I8))?;
+        let id = decl("ori_files_is_dir", &[pt], vec![Ty::String], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_files_is_dir"), id);
         let id = decl(
             "ori_files_copy",
             &[pt, pt],
             vec![Ty::String, Ty::String],
-            Some(types::I8),
+            Some(pt),
         )?;
         self.stdlib_ids.insert(SmolStr::new("ori_files_copy"), id);
         let id = decl(
             "ori_files_rename",
             &[pt, pt],
             vec![Ty::String, Ty::String],
-            Some(types::I8),
+            Some(pt),
         )?;
         self.stdlib_ids.insert(SmolStr::new("ori_files_rename"), id);
         let id = decl("ori_arc_retain", &[pt], vec![], None)?;

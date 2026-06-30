@@ -39,3 +39,15 @@ end
 public func copy_set_string(value: set<string>) -> set<string>
     return sets.clone(value)
 end
+
+public func transfer_int(value: int) -> int
+    return copy_int(value)
+end
+
+public func transfer_string(value: string) -> string
+    return copy_string(value)
+end
+
+public func transfer_list_string(value: list<string>) -> list<string>
+    return copy_list_string(value)
+end

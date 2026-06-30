@@ -1657,16 +1657,19 @@ pub unsafe extern "C" fn ori_io_eprint(ptr: *const u8, len: i64) {
 #[no_mangle]
 pub unsafe extern "C" fn ori_io_read_line() -> *mut u8 {
     let mut line = String::new();
-    if std::io::stdin().read_line(&mut line).is_err() {
-        return cstring_from_str("");
-    }
-    if line.ends_with('\n') {
-        line.pop();
-        if line.ends_with('\r') {
-            line.pop();
+    match std::io::stdin().read_line(&mut line) {
+        Ok(0) => new_optional_ptr(false, std::ptr::null_mut()),
+        Ok(_) => {
+            if line.ends_with('\n') {
+                line.pop();
+                if line.ends_with('\r') {
+                    line.pop();
+                }
+            }
+            new_optional_ptr(true, cstring_from_str(&line))
         }
+        Err(_) => new_optional_ptr(false, std::ptr::null_mut()),
     }
-    cstring_from_str(&line)
 }
 
 // ── ori.string ────────────────────────────────────────────────────────────────
@@ -7065,6 +7068,23 @@ unsafe fn new_result_f64_ok(value: f64) -> *mut u8 {
     ptr
 }
 
+unsafe fn new_result_bool_ok(value: bool) -> *mut u8 {
+    let ptr_size = std::mem::size_of::<*mut u8>();
+    let total = ptr_size * 2;
+    let ptr = libc::malloc(total) as *mut u8;
+    if ptr.is_null() {
+        return ptr;
+    }
+    std::ptr::write_bytes(ptr, 0, total);
+    *ptr = 1;
+    *ptr.add(ptr_size) = u8::from(value);
+    ptr
+}
+
+unsafe fn new_result_void_ok() -> *mut u8 {
+    new_result(true, std::ptr::null_mut())
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn ori_string_parse_int(s: *const u8) -> *mut u8 {
     match cstr_str(s).trim().parse::<i64>() {
@@ -7180,32 +7200,38 @@ pub unsafe extern "C" fn ori_files_write_text_async(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_files_append_text(path: *const u8, content: *const u8) -> c_uchar {
+pub unsafe extern "C" fn ori_files_append_text(path: *const u8, content: *const u8) -> *mut u8 {
     use std::io::Write;
     let path_str = cstr_str(path);
     let content_str = cstr_str(content);
-    let result = std::fs::OpenOptions::new()
+    match std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path_str)
-        .and_then(|mut f| f.write_all(content_str.as_bytes()));
-    u8::from(result.is_ok()) as c_uchar
+        .and_then(|mut f| f.write_all(content_str.as_bytes()))
+    {
+        Ok(()) => new_result_void_ok(),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_files_exists(path: *const u8) -> c_uchar {
-    u8::from(std::path::Path::new(cstr_str(path)).exists()) as c_uchar
+pub unsafe extern "C" fn ori_files_exists(path: *const u8) -> *mut u8 {
+    new_result_bool_ok(std::path::Path::new(cstr_str(path)).exists())
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_files_delete(path: *const u8) -> c_uchar {
+pub unsafe extern "C" fn ori_files_delete(path: *const u8) -> *mut u8 {
     let p = std::path::Path::new(cstr_str(path));
     let result = if p.is_dir() {
         std::fs::remove_dir_all(p)
     } else {
         std::fs::remove_file(p)
     };
-    u8::from(result.is_ok()) as c_uchar
+    match result {
+        Ok(()) => new_result_void_ok(),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
 }
 
 #[no_mangle]
@@ -7225,28 +7251,37 @@ pub unsafe extern "C" fn ori_files_list_dir(path: *const u8) -> *mut u8 {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_files_create_dir(path: *const u8) -> c_uchar {
-    u8::from(std::fs::create_dir_all(cstr_str(path)).is_ok()) as c_uchar
+pub unsafe extern "C" fn ori_files_create_dir(path: *const u8) -> *mut u8 {
+    match std::fs::create_dir_all(cstr_str(path)) {
+        Ok(()) => new_result_void_ok(),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_files_is_file(path: *const u8) -> c_uchar {
-    u8::from(std::path::Path::new(cstr_str(path)).is_file()) as c_uchar
+pub unsafe extern "C" fn ori_files_is_file(path: *const u8) -> *mut u8 {
+    new_result_bool_ok(std::path::Path::new(cstr_str(path)).is_file())
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_files_is_dir(path: *const u8) -> c_uchar {
-    u8::from(std::path::Path::new(cstr_str(path)).is_dir()) as c_uchar
+pub unsafe extern "C" fn ori_files_is_dir(path: *const u8) -> *mut u8 {
+    new_result_bool_ok(std::path::Path::new(cstr_str(path)).is_dir())
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_files_copy(src: *const u8, dst: *const u8) -> c_uchar {
-    u8::from(std::fs::copy(cstr_str(src), cstr_str(dst)).is_ok()) as c_uchar
+pub unsafe extern "C" fn ori_files_copy(src: *const u8, dst: *const u8) -> *mut u8 {
+    match std::fs::copy(cstr_str(src), cstr_str(dst)) {
+        Ok(_) => new_result_void_ok(),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_files_rename(src: *const u8, dst: *const u8) -> c_uchar {
-    u8::from(std::fs::rename(cstr_str(src), cstr_str(dst)).is_ok()) as c_uchar
+pub unsafe extern "C" fn ori_files_rename(src: *const u8, dst: *const u8) -> *mut u8 {
+    match std::fs::rename(cstr_str(src), cstr_str(dst)) {
+        Ok(()) => new_result_void_ok(),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
 }
 
 struct RuntimeFile {

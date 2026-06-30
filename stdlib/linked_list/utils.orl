@@ -1,0 +1,36 @@
+namespace ori.linked_list.utils
+
+import ori.linked_list as linked_list
+import ori.list as lists
+
+public func from_list_int(items: list<int>) -> linked_list.LinkedList<int>
+    var node: linked_list.LinkedList<int> = linked_list.new()
+    var i: int = 0
+    const n: int = lists.len(items)
+    while i < n
+        if some(item) = lists.try_get(items, i)
+            linked_list.push_back(node, item)
+        end
+        i = i + 1
+    end
+    return node
+end
+
+public func to_list_int(node: linked_list.LinkedList<int>) -> list<int>
+    return linked_list.to_list(node)
+end
+
+public func front_or_int(node: linked_list.LinkedList<int>, fallback: int) -> int
+    if some(value) = linked_list.front(node)
+        return value
+    end
+    return fallback
+end
+
+public func len_int(node: linked_list.LinkedList<int>) -> int
+    return linked_list.len(node)
+end
+
+public func is_empty_int(node: linked_list.LinkedList<int>) -> bool
+    return linked_list.is_empty(node)
+end

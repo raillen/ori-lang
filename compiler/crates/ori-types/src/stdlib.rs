@@ -716,7 +716,7 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.io.print" | "ori.io.println" | "ori.io.eprint" | "ori.io.eprintln" => {
             (vec![Ty::String], Ty::Void)
         }
-        "ori.io.read_line" => (vec![], Ty::String),
+        "ori.io.read_line" => (vec![], Ty::Optional(Box::new(Ty::String))),
         "ori.string.len" => (vec![Ty::String], Ty::Int),
         "ori.string.concat" => (vec![Ty::String, Ty::String], Ty::String),
         "ori.string.split" => (vec![Ty::String, Ty::String], Ty::List(Box::new(Ty::String))),
@@ -1458,9 +1458,22 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             vec![Ty::String],
             Ty::Result(Box::new(Ty::String), Box::new(Ty::String)),
         ),
-        "ori.fs.append_text" => (vec![Ty::String, Ty::String], Ty::Bool),
-        "ori.fs.exists" | "ori.fs.is_file" | "ori.fs.is_dir" | "ori.fs.delete"
-        | "ori.fs.create_dir" => (vec![Ty::String], Ty::Bool),
+        "ori.fs.append_text" => (
+            vec![Ty::String, Ty::String],
+            Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
+        ),
+        "ori.fs.exists" | "ori.fs.is_file" | "ori.fs.is_dir" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(Ty::Bool), Box::new(Ty::String)),
+        ),
+        "ori.fs.delete" | "ori.fs.create_dir" | "ori.fs.create_dir_all" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
+        ),
+        "ori.fs.copy" | "ori.fs.rename" => (
+            vec![Ty::String, Ty::String],
+            Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
+        ),
         "ori.fs.list_dir" => (
             vec![Ty::String],
             Ty::Result(
@@ -1468,7 +1481,6 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
                 Box::new(Ty::String),
             ),
         ),
-        "ori.fs.copy" | "ori.fs.rename" => (vec![Ty::String, Ty::String], Ty::Bool),
         "ori.fs.open_read" | "ori.fs.open_write" => (
             vec![Ty::String],
             Ty::Result(Box::new(file_ty()), Box::new(Ty::String)),
@@ -1482,7 +1494,6 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             Ty::Result(Box::new(Ty::Int), Box::new(Ty::String)),
         ),
         "ori.fs.close" => (vec![file_ty()], Ty::Void),
-        "ori.fs.create_dir_all" => (vec![Ty::String], Ty::Bool),
         "ori.fs.file_size" | "ori.fs.modified_at" => (
             vec![Ty::String],
             Ty::Result(Box::new(Ty::Int), Box::new(Ty::String)),
@@ -1847,13 +1858,14 @@ pub fn stdlib_native_abi(
         "ori_files_write_text" | "ori_files_write_text_async" | "ori_files_write_bytes" => {
             (vec![Ptr, Ptr], Some(Ptr))
         }
-        "ori_files_append_text" => (vec![Ptr, Ptr], Some(I8)),
+        "ori_files_append_text" | "ori_files_copy" | "ori_files_rename" => {
+            (vec![Ptr, Ptr], Some(Ptr))
+        }
         "ori_files_exists"
         | "ori_files_delete"
         | "ori_files_create_dir"
         | "ori_files_is_file"
-        | "ori_files_is_dir" => (vec![Ptr], Some(I8)),
-        "ori_files_copy" | "ori_files_rename" => (vec![Ptr, Ptr], Some(I8)),
+        | "ori_files_is_dir" => (vec![Ptr], Some(Ptr)),
         "ori_files_open_read" | "ori_files_open_write" => (vec![Ptr], Some(Ptr)),
         "ori_files_read" => (vec![Ptr, I64], Some(Ptr)),
         "ori_files_write" => (vec![Ptr, Ptr], Some(Ptr)),
@@ -2074,6 +2086,31 @@ mod tests {
         let (params, ret) = stdlib_func_sig("ori.fs.close").expect("fs.close sig");
         assert_eq!(params, vec![file_ty()], "fs.close params");
         assert_eq!(ret, Ty::Void, "fs.close return");
+
+        // fs.exists / fs.delete: result-based Layer 1 (post-migration)
+        let (params, ret) = stdlib_func_sig("ori.fs.exists").expect("fs.exists sig");
+        assert_eq!(params, vec![Ty::String], "fs.exists params");
+        assert_eq!(
+            ret,
+            Ty::Result(Box::new(Ty::Bool), Box::new(Ty::String)),
+            "fs.exists return"
+        );
+        let (params, ret) = stdlib_func_sig("ori.fs.delete").expect("fs.delete sig");
+        assert_eq!(params, vec![Ty::String], "fs.delete params");
+        assert_eq!(
+            ret,
+            Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
+            "fs.delete return"
+        );
+
+        // io.read_line: () -> optional<string>
+        let (params, ret) = stdlib_func_sig("ori.io.read_line").expect("io.read_line sig");
+        assert_eq!(params, Vec::<Ty>::new(), "io.read_line params");
+        assert_eq!(
+            ret,
+            Ty::Optional(Box::new(Ty::String)),
+            "io.read_line return"
+        );
 
         // json.parse: (string) -> result<Value, string>
         let json_value = Ty::Named(JSON_VALUE_PLACEHOLDER, Vec::new());

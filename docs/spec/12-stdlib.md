@@ -212,7 +212,7 @@ io.print(value: string)                              -> void
 io.println(value: string)                            -> void
 io.eprint(value: string)                             -> void
 io.eprintln(value: string)                           -> void
-io.read_line()                                       -> string
+io.read_line()                                       -> optional<string>
 
 -- Standard writers
 ori.io.stdout: ori.io.Writer
@@ -233,15 +233,16 @@ fs.write_text_async(path: string, content: string) -> future<result<string, stri
 fs.read_bytes(path: string)            -> result<bytes, string>
 fs.write_bytes(path: string, content: bytes) -> result<string, string>
 fs.read_all(path: string)              -> result<string, string>
-fs.append_text(path: string, content: string) -> bool
-fs.exists(path: string)                -> bool
-fs.delete(path: string)                -> bool
+fs.append_text(path: string, content: string) -> result<void, string>
+fs.exists(path: string)                -> result<bool, string>
+fs.delete(path: string)                -> result<void, string>
 fs.list_dir(path: string)              -> result<list<string>, string>
-fs.create_dir(path: string)            -> bool
-fs.is_file(path: string)               -> bool
-fs.is_dir(path: string)                -> bool
-fs.copy(from: string, to: string)      -> bool
-fs.rename(from: string, to: string)    -> bool
+fs.create_dir(path: string)            -> result<void, string>
+fs.create_dir_all(path: string)        -> result<void, string>
+fs.is_file(path: string)               -> result<bool, string>
+fs.is_dir(path: string)                -> result<bool, string>
+fs.copy(from: string, to: string)      -> result<void, string>
+fs.rename(from: string, to: string)    -> result<void, string>
 
 `ori.fs` is the canonical module name. `ori.files` is accepted as a
 compatibility alias for the same functions.

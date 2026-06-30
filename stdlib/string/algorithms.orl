@@ -1,0 +1,46 @@
+namespace ori.string.algorithms
+
+import ori.list as lists
+import ori.string as str
+import ori.string.utils as su
+
+public func join_non_empty(parts: list<string>, separator: string) -> string
+    var out: string = ""
+    var i: int = 0
+    const n: int = lists.len(parts)
+    while i < n
+        if some(part) = lists.try_get(parts, i)
+            if not su.is_empty(part)
+                if su.is_empty(out)
+                    out = part
+                else
+                    out = str.concat(str.concat(out, separator), part)
+                end
+            end
+        end
+        i = i + 1
+    end
+    return out
+end
+
+public func repeated(s: string, times: int) -> string
+    return su.replicate(s, times)
+end
+
+public func equals_any(value: string, candidates: list<string>) -> bool
+    var i: int = 0
+    const n: int = lists.len(candidates)
+    while i < n
+        if some(item) = lists.try_get(candidates, i)
+            if value == item
+                return true
+            end
+        end
+        i = i + 1
+    end
+    return false
+end
+
+public func truncate(s: string, max_len: int) -> string
+    return su.limit(s, max_len)
+end

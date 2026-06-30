@@ -165,7 +165,7 @@ fn stdlib_c_func_ty_raw(c_name: &str) -> Ty {
     }
     let (params, ret) = match c_name {
         "ori_io_print" | "ori_io_eprint" => (vec![Ty::String], Ty::Void),
-        "ori_io_read_line" => (vec![], Ty::String),
+        "ori_io_read_line" => (vec![], Ty::Optional(Box::new(Ty::String))),
         "ori_string_len" | "ori_len" => (vec![Ty::String], Ty::Int),
         "ori_string_concat" => (vec![Ty::String, Ty::String], Ty::String),
         "ori_string_split" => (vec![Ty::String, Ty::String], Ty::List(Box::new(Ty::String))),
@@ -413,11 +413,18 @@ fn stdlib_c_func_ty_raw(c_name: &str) -> Ty {
                 Box::new(Ty::String),
             ))),
         ),
-        "ori_files_append_text" => (vec![Ty::String, Ty::String], Ty::Bool),
-        "ori_files_exists" | "ori_files_is_file" | "ori_files_is_dir" => {
-            (vec![Ty::String], Ty::Bool)
-        }
-        "ori_files_delete" | "ori_files_create_dir" => (vec![Ty::String], Ty::Bool),
+        "ori_files_append_text" => (
+            vec![Ty::String, Ty::String],
+            Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
+        ),
+        "ori_files_exists" | "ori_files_is_file" | "ori_files_is_dir" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(Ty::Bool), Box::new(Ty::String)),
+        ),
+        "ori_files_delete" | "ori_files_create_dir" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
+        ),
         "ori_files_list_dir" => (
             vec![Ty::String],
             Ty::Result(
@@ -425,7 +432,10 @@ fn stdlib_c_func_ty_raw(c_name: &str) -> Ty {
                 Box::new(Ty::String),
             ),
         ),
-        "ori_files_copy" | "ori_files_rename" => (vec![Ty::String, Ty::String], Ty::Bool),
+        "ori_files_copy" | "ori_files_rename" => (
+            vec![Ty::String, Ty::String],
+            Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
+        ),
         _ => return Ty::Infer(0),
     };
     Ty::Func {
@@ -3664,7 +3674,13 @@ impl<'a> Lowerer<'a> {
                 let cond = self.lower_expr(condition, tp);
                 let then = self.lower_expr(then_expr, tp);
                 let else_ = self.lower_expr(else_expr, tp);
-                let ty = then.ty.clone();
+                let ty = if then.ty.is_never() {
+                    else_.ty.clone()
+                } else if else_.ty.is_never() {
+                    then.ty.clone()
+                } else {
+                    then.ty.clone()
+                };
                 HirExpr {
                     kind: HirExprKind::IfExpr {
                         cond: Box::new(cond),
