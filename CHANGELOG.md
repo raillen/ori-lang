@@ -14,6 +14,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Documentação
 - **README:** reescrito o README principal em inglês com menu, overview completo, quick start, CLI, arquitetura, stdlib, tooling, release layout, limitações e roadmap; adicionadas traduções completas em português (`README.pt-BR.md`) e japonês (`README.ja.md`).
+- **README:** removido o bloco de logo do topo das versões em inglês, português e japonês para evitar associação visual incorreta.
 
 ### Corrigido
 - **Driver/Pipeline (bugfix):** corrigido fallback de descoberta da stdlib root em `find_stdlib_root()` com varredura ascendente a partir do CWD, garantindo que `ori check/run` consiga resolver módulos `.orl` da stdlib (Layer 2/3) mesmo fora do diretório do workspace de desenvolvimento. Teste de regressão adicionado em `multifile_imports.rs`.

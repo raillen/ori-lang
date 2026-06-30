@@ -1,9 +1,5 @@
 # Ori
 
-<p align="center">
-  <img src="branding/logo-with-text.svg" alt="Ori Language" width="360">
-</p>
-
 Ori is a reading-first, explicitly typed programming language compiled to native
 code. Its compiler is written in Rust and is built around a direct goal: make
 programs easier to read, inspect, diagnose, and maintain.

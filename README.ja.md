@@ -1,9 +1,5 @@
 # Ori
 
-<p align="center">
-  <img src="branding/logo-with-text.svg" alt="Ori Language" width="360">
-</p>
-
 Ori は、読みやすさを最優先にした、明示的な型を持つネイティブコンパイル言語です。
 コンパイラは Rust で書かれており、プログラムを読み、調べ、診断し、保守しやすくする
 ことを目的にしています。

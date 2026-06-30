@@ -1,9 +1,5 @@
 # Ori
 
-<p align="center">
-  <img src="branding/logo-with-text.svg" alt="Ori Language" width="360">
-</p>
-
 Ori é uma linguagem de programação compilada para código nativo, com tipagem
 explícita e foco em leitura. O compilador é escrito em Rust e foi criado com um
 objetivo direto: tornar programas mais fáceis de ler, inspecionar, diagnosticar
