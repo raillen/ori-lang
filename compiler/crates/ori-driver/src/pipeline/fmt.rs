@@ -8,8 +8,11 @@
 pub fn format_source_text(source: &str) -> String {
     let mut indent = 0usize;
     let mut out = String::new();
+    let normalized = source.replace("\r\n", "\n").replace('\r', "\n");
+    let lines: Vec<&str> = normalized.lines().collect();
+    let mut block_stack = Vec::new();
 
-    for raw_line in source.replace("\r\n", "\n").replace('\r', "\n").lines() {
+    for (index, raw_line) in lines.iter().enumerate() {
         let line = raw_line.trim();
         if line.is_empty() {
             out.push('\n');
@@ -18,13 +21,18 @@ pub fn format_source_text(source: &str) -> String {
 
         if should_dedent_before(line) {
             indent = indent.saturating_sub(1);
+            if closes_current_block_before_opening(line) {
+                block_stack.pop();
+            }
         }
 
         out.push_str(&"    ".repeat(indent));
         out.push_str(line);
         out.push('\n');
 
-        if opens_block_after(line) {
+        let next_line = next_significant_line(&lines, index + 1);
+        if opens_block_after(line, next_line, &block_stack) {
+            block_stack.push(block_kind_for(line));
             indent += 1;
         }
     }
@@ -32,11 +40,21 @@ pub fn format_source_text(source: &str) -> String {
     out
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BlockKind {
+    Trait,
+    Other,
+}
+
 fn should_dedent_before(line: &str) -> bool {
     line == "end" || line == "else" || line.starts_with("else if ") || line.starts_with("case ")
 }
 
-fn opens_block_after(line: &str) -> bool {
+fn closes_current_block_before_opening(line: &str) -> bool {
+    line == "end" || line == "else" || line.starts_with("else if ") || line.starts_with("case ")
+}
+
+fn opens_block_after(line: &str, next_line: Option<&str>, block_stack: &[BlockKind]) -> bool {
     if is_comment_line(line) || line == "end" || line.starts_with("@") {
         return false;
     }
@@ -50,10 +68,10 @@ fn opens_block_after(line: &str) -> bool {
         || line.starts_with("for ")
         || line.starts_with("repeat ")
         || line.starts_with("match ")
-        || declaration_opens_block(line)
+        || declaration_opens_block(line, next_line, block_stack)
 }
 
-fn declaration_opens_block(line: &str) -> bool {
+fn declaration_opens_block(line: &str, next_line: Option<&str>, block_stack: &[BlockKind]) -> bool {
     let mut line = line;
     loop {
         let next = line
@@ -65,7 +83,11 @@ fn declaration_opens_block(line: &str) -> bool {
         };
         line = next;
     }
-    line.starts_with("func ")
+    let is_function = line.starts_with("func ");
+    if is_function && inside_trait(block_stack) {
+        return trait_function_has_body(next_line);
+    }
+    is_function
         || line.starts_with("struct ")
         || line.starts_with("enum ")
         || line.starts_with("trait ")
@@ -73,8 +95,54 @@ fn declaration_opens_block(line: &str) -> bool {
         || line.starts_with("extern ")
 }
 
+fn inside_trait(block_stack: &[BlockKind]) -> bool {
+    block_stack.contains(&BlockKind::Trait)
+}
+
+fn trait_function_has_body(next_line: Option<&str>) -> bool {
+    let Some(next_line) = next_line else {
+        return false;
+    };
+    let next_member = declaration_line_without_modifiers(next_line);
+    !(next_line == "end"
+        || next_line == "mut"
+        || next_line == "public"
+        || next_line == "async"
+        || next_member.starts_with("func ")
+        || next_member.starts_with("type "))
+}
+
+fn block_kind_for(line: &str) -> BlockKind {
+    if declaration_line_without_modifiers(line).starts_with("trait ") {
+        BlockKind::Trait
+    } else {
+        BlockKind::Other
+    }
+}
+
+fn declaration_line_without_modifiers(mut line: &str) -> &str {
+    loop {
+        let next = line
+            .strip_prefix("public ")
+            .or_else(|| line.strip_prefix("async "))
+            .or_else(|| line.strip_prefix("mut "));
+        let Some(next) = next else {
+            return line;
+        };
+        line = next;
+    }
+}
+
 fn is_comment_line(line: &str) -> bool {
     line.starts_with("--") || line.starts_with("|--")
+}
+
+fn next_significant_line<'a>(lines: &'a [&str], start: usize) -> Option<&'a str> {
+    lines
+        .iter()
+        .skip(start)
+        .map(|line| line.trim())
+        .find(|line| !line.is_empty() && !is_comment_line(line) && !line.starts_with("@"))
 }
 
 #[cfg(test)]
@@ -99,5 +167,51 @@ mod tests {
         assert!(out.contains("    return 2\n"));
         assert!(out.contains("    end\n"));
         assert!(out.contains("func f()\n"));
+    }
+
+    #[test]
+    fn fmt_keeps_required_trait_methods_unopened() {
+        let src = "namespace app.main\ntrait Drawable\nfunc draw()\nfunc area() -> int\nend\n";
+        let out = format_source_text(src);
+        assert_eq!(
+            out,
+            "namespace app.main\ntrait Drawable\n    func draw()\n    func area() -> int\nend\n"
+        );
+        assert_eq!(format_source_text(&out), out);
+    }
+
+    #[test]
+    fn fmt_indents_default_trait_methods() {
+        let src = "namespace app.main\ntrait Displayable\nfunc display() -> string\nfunc print()\nio.print(display())\nend\nend\n";
+        let out = format_source_text(src);
+        assert_eq!(
+            out,
+            "namespace app.main\ntrait Displayable\n    func display() -> string\n    func print()\n        io.print(display())\n    end\nend\n"
+        );
+        assert_eq!(format_source_text(&out), out);
+    }
+
+    #[test]
+    fn fmt_keeps_stack_aligned_after_branch_blocks() {
+        let src = "namespace app.main\ntrait Displayable\nfunc display() -> string\nfunc print(value: int)\nif value > 0\nio.print(display())\nelse\nio.print(\"empty\")\nend\nend\nend\nfunc outside()\nio.print(\"done\")\nend\n";
+        let out = format_source_text(src);
+        assert_eq!(
+            out,
+            "namespace app.main\ntrait Displayable\n    func display() -> string\n    func print(value: int)\n        if value > 0\n            io.print(display())\n        else\n            io.print(\"empty\")\n        end\n    end\nend\nfunc outside()\n    io.print(\"done\")\nend\n"
+        );
+        assert_eq!(format_source_text(&out), out);
+    }
+
+    #[test]
+    fn fmt_is_idempotent_for_real_use_constructs() {
+        let src = "namespace app.main\nimport ori.string only (trim as trim_text)\nimport ori.task as task\n\nstruct Book\nid: int\ntitle: string\nend\n\ntrait Displayable\nfunc display() -> string\nfunc debug()\nio.print(display())\nend\nend\n\nasync func load<T>(value: T) -> T\nawait task.sleep(1)\nreturn value\nend\n\nfunc main()\nconst book: Book = Book(id: 1, title: trim_text(\" Ori \"))\nmatch book.id\ncase 0:\nio.print(\"zero\")\ncase 1:\nio.print(book.title)\nelse\nio.print(\"many\")\nend\nend\n";
+        let once = format_source_text(src);
+        let twice = format_source_text(&once);
+        assert_eq!(once, twice);
+        assert!(once.contains("import ori.string only (trim as trim_text)\n"));
+        assert!(once.contains("async func load<T>(value: T) -> T\n"));
+        assert!(once.contains("    match book.id\n"));
+        assert!(once.contains("    case 1:\n"));
+        assert!(once.contains("const book: Book = Book(id: 1, title: trim_text(\" Ori \"))"));
     }
 }

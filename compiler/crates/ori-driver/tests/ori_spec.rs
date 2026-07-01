@@ -5,7 +5,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use ori_driver::pipeline::{run_build, run_check, run_compile, run_doc, run_fmt, CheckOutput};
+use ori_driver::package::{run_install_package, InstallPackageOptions};
+use ori_driver::pipeline::{
+    run_build, run_check, run_compile, run_doc, run_fmt, run_new_project, CheckOutput,
+    NewProjectKind, NewProjectOptions,
+};
 
 static NEXT_DIR_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -523,6 +527,44 @@ end
 }
 
 #[test]
+fn type_accepts_contextual_enum_variant_call_shorthand() {
+    let dir = TestDir::new("type_enum_variant_call_shorthand");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+enum Shape
+    Circle(radius: float)
+    Rectangle(width: float, height: float)
+end
+func main()
+    const c: Shape = .Circle(radius: 1.0)
+    const r: Shape = .Rectangle(width: 2.0, height: 3.0)
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn type_rejects_braced_enum_variant_shorthand() {
+    let dir = TestDir::new("type_enum_variant_braced_shorthand");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+enum Shape
+    Rectangle(width: float, height: float)
+end
+func main()
+    const r: Shape = .Rectangle{width: 2.0, height: 3.0}
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
 fn type_accepts_tuple() {
     let dir = TestDir::new("type_tuple");
     dir.write(
@@ -881,6 +923,71 @@ end
     assert!(out.has_errors);
     assert!(
         diagnostic_codes(&out).contains(&"type.propagate_err_mismatch"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn expr_accepts_try_prefix_for_result_propagation() {
+    let dir = TestDir::new("expr_try_result_propagation");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+func produce() -> result<int, string>
+    return success(1)
+end
+func wrapped() -> result<int, string>
+    const x: int = try produce()
+    return success(x + 1)
+end
+func main()
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn expr_accepts_try_prefix_for_optional_propagation() {
+    let dir = TestDir::new("expr_try_optional_propagation");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+func maybe() -> optional<int>
+    return some(1)
+end
+func wrapped() -> optional<int>
+    const x: int = try maybe()
+    return some(x + 1)
+end
+func main()
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn expr_rejects_try_prefix_on_non_result_or_optional() {
+    let dir = TestDir::new("expr_try_non_result");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+func wrapped() -> result<int, string>
+    const x: int = try 1
+    return success(x)
+end
+func main()
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"type.propagate_not_result_or_optional"),
         "{:?}",
         out.diagnostics
     );
@@ -2668,6 +2775,273 @@ end
 }
 
 #[test]
+fn tooling_new_project_creates_checkable_app_skeleton() {
+    let dir = TestDir::new("tooling_new_project");
+    let root = dir.path("demo");
+    let out = run_new_project(
+        &root,
+        NewProjectOptions {
+            name: Some("demo".to_string()),
+            kind: NewProjectKind::App,
+        },
+    )
+    .unwrap();
+
+    assert!(out.manifest.is_file());
+    assert!(out.entry.is_file());
+    assert!(root.join("docs/api").is_dir());
+
+    let check = run_check(&out.manifest).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+}
+
+#[test]
+fn tooling_new_project_refuses_non_empty_directory() {
+    let dir = TestDir::new("tooling_new_project_non_empty");
+    dir.write("demo/existing.txt", "keep me");
+
+    let err = run_new_project(
+        &dir.path("demo"),
+        NewProjectOptions {
+            name: None,
+            kind: NewProjectKind::App,
+        },
+    )
+    .expect_err("non-empty directory must be rejected");
+
+    assert!(err.contains("project.new_exists"), "{err}");
+}
+
+#[test]
+fn package_install_caches_local_package_and_path_dependency() {
+    let dir = TestDir::new("package_install_path_dependency");
+    dir.write(
+        "local_math/ori.pkg.toml",
+        r#"[package]
+name = "demo.math"
+version = "0.1.0"
+entry = "src/lib.orl"
+ori_version = "0.2.0"
+description = "Local math helpers"
+"#,
+    );
+    dir.write(
+        "local_math/src/lib.orl",
+        r#"namespace demo.math
+
+public func one() -> int
+    return 1
+end
+"#,
+    );
+    dir.write(
+        "app/ori.pkg.toml",
+        r#"[package]
+name = "demo.app"
+version = "0.1.0"
+entry = "src/main.orl"
+ori_version = "0.2.0"
+
+[dependencies]
+demo.math = { path = "../local_math", version = "0.1.0" }
+"#,
+    );
+    dir.write(
+        "app/src/main.orl",
+        r#"namespace demo.app
+
+import demo.math only (one)
+import ori.io as io
+
+func main()
+    io.print(string(one()))
+end
+"#,
+    );
+
+    let cache = dir.path("cache");
+    let out = run_install_package(InstallPackageOptions {
+        name: "demo.app".to_string(),
+        source: Some(dir.path("app")),
+        cache_root: Some(cache.clone()),
+    })
+    .unwrap();
+
+    assert_eq!(out.packages.len(), 2);
+    assert!(cache.join("demo.math/0.1.0/ori.pkg.toml").is_file());
+    assert!(cache.join("demo.app/0.1.0/src/main.orl").is_file());
+}
+
+#[test]
+fn package_path_dependency_resolves_during_check_from_package_manifest() {
+    let dir = TestDir::new("package_path_dependency_check");
+    dir.write(
+        "local_math/ori.pkg.toml",
+        r#"[package]
+name = "demo.math"
+version = "0.1.0"
+entry = "src/lib.orl"
+ori_version = "0.2.0"
+"#,
+    );
+    dir.write(
+        "local_math/src/lib.orl",
+        r#"namespace demo.math
+
+public func one() -> int
+    return 1
+end
+"#,
+    );
+    dir.write(
+        "app/ori.pkg.toml",
+        r#"[package]
+name = "demo.app"
+version = "0.1.0"
+entry = "src/main.orl"
+ori_version = "0.2.0"
+
+[dependencies]
+demo.math = { path = "../local_math", version = "0.1.0" }
+"#,
+    );
+    dir.write(
+        "app/src/main.orl",
+        r#"namespace demo.app
+
+import demo.math only (one)
+
+func main()
+    const value: int = one()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("app/ori.pkg.toml")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn project_path_dependency_resolves_during_check_from_ori_proj() {
+    let dir = TestDir::new("project_path_dependency_check");
+    dir.write(
+        "math/ori.proj",
+        r#"manifest = 1
+name = "demo.math"
+version = "0.1.0"
+kind = "lib"
+entry = "src/lib.orl"
+
+[source]
+root = "src"
+root_namespace = "demo.math"
+"#,
+    );
+    dir.write(
+        "math/src/lib.orl",
+        r#"namespace demo.math
+
+public func two() -> int
+    return 2
+end
+"#,
+    );
+    dir.write(
+        "app/ori.proj",
+        r#"manifest = 1
+name = "demo.app"
+version = "0.1.0"
+kind = "app"
+entry = "src/main.orl"
+
+[source]
+root = "src"
+root_namespace = "demo.app"
+
+[dependencies]
+demo.math = { path = "../math", version = "0.1.0" }
+"#,
+    );
+    dir.write(
+        "app/src/main.orl",
+        r#"namespace demo.app
+
+import demo.math only (two)
+
+func main()
+    const value: int = two()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("app/ori.proj")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn package_install_rejects_remote_dependency_until_registry_exists() {
+    let dir = TestDir::new("package_install_remote_dependency");
+    dir.write(
+        "app/ori.pkg.toml",
+        r#"[package]
+name = "demo.app"
+version = "0.1.0"
+entry = "src/main.orl"
+ori_version = "0.2.0"
+
+[dependencies]
+other.lib = "1.0.0"
+"#,
+    );
+    dir.write(
+        "app/src/main.orl",
+        r#"namespace demo.app
+
+func main()
+end
+"#,
+    );
+
+    let err = run_install_package(InstallPackageOptions {
+        name: "demo.app".to_string(),
+        source: Some(dir.path("app")),
+        cache_root: Some(dir.path("cache")),
+    })
+    .expect_err("remote dependency should fail before registry support");
+
+    assert!(err.contains("package.registry_unavailable"), "{err}");
+}
+
+#[test]
+fn stdlib_real_project_helpers_typecheck() {
+    let dir = TestDir::new("stdlib_real_project_helpers");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+import ori.args as args
+import ori.config as config
+import ori.log as log
+import ori.time only (Instant, Duration, add, between, duration_seconds, duration_to_millis, instant_from_unix_ms)
+
+func main()
+    const start: Instant = instant_from_unix_ms(1000)
+    const duration: Duration = duration_seconds(2)
+    const finish: Instant = add(start, duration)
+    const elapsed: Duration = between(start, finish)
+    const elapsed_ms: int = duration_to_millis(elapsed)
+    const program: string = args.program_name_or("ori")
+    const text: string = config.read_text_or("missing.json", "{}")
+    log.info(ori.string.concat(program, text))
+    log.debug(string(elapsed_ms))
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
 fn crosscut_build_generates_c_source_with_entry_point() {
     let dir = TestDir::new("crosscut_build_c");
     dir.write(
@@ -2760,7 +3134,10 @@ fn check_accepts_enum_with_unique_variants() {
 #[test]
 fn fs_file_handle_native() {
     let dir = TestDir::new("fs_file_handle_native");
-    let test_file = dir.path("test_file.txt").to_string_lossy().replace('\\', "/");
+    let test_file = dir
+        .path("test_file.txt")
+        .to_string_lossy()
+        .replace('\\', "/");
     dir.write(
         "main.orl",
         &format!(
@@ -2859,7 +3236,14 @@ end
     assert!(output.status.success(), "{:?}", output);
     let stdout = String::from_utf8(output.stdout).unwrap();
     let lines = stdout.lines().collect::<Vec<_>>();
-    assert_eq!(lines, ["worker started", "cancelling worker", "job joined successfully"]);
+    assert_eq!(
+        lines,
+        [
+            "worker started",
+            "cancelling worker",
+            "job joined successfully"
+        ]
+    );
 }
 
 #[test]
@@ -2924,7 +3308,10 @@ end
     assert!(output.status.success(), "{:?}", output);
     let stdout = String::from_utf8(output.stdout).unwrap();
     let lines = stdout.lines().collect::<Vec<_>>();
-    assert_eq!(lines, ["true", "true", "true", "true", "true", "true", "false"]);
+    assert_eq!(
+        lines,
+        ["true", "true", "true", "true", "true", "true", "false"]
+    );
 }
 
 #[test]
@@ -2951,9 +3338,5 @@ end
 
     let out = run_build(&dir.path("main.orl")).unwrap();
     assert!(!out.has_errors, "{:?}", out.diagnostics);
-    assert!(
-        out.c_source.contains("ori_string_eq"),
-        "{}",
-        out.c_source
-    );
+    assert!(out.c_source.contains("ori_string_eq"), "{}", out.c_source);
 }

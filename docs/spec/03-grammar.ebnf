@@ -31,7 +31,12 @@ namespace_decl
     ;
 
 import_decl
-    = [ "public" ] "import" qualified_name [ "as" IDENT ]
+    = [ "public" ] "import" qualified_name
+      [ "as" IDENT | "only" "(" import_item { "," import_item } [ "," ] ")" ]
+    ;
+
+import_item
+    = IDENT [ "as" IDENT ]
     ;
 
 qualified_name
@@ -521,6 +526,7 @@ mul_op
 unary_expr
     = "-" unary_expr
     | "not" unary_expr
+    | "try" unary_expr                       (* readable propagation *)
     | postfix_expr
     ;
 
@@ -533,7 +539,7 @@ postfix_op
     | "." INTEGER                         (* tuple index access: pair.0, pair.1 *)
     | "(" [ arg_list ] ")"               (* call *)
     | "[" index_expr "]"                 (* index or slice *)
-    | "?"                                (* error propagation *)
+    | "?"                                (* compact propagation *)
     | "|>" expression                    (* pipe *)
     ;
 
@@ -628,10 +634,8 @@ field_init
     ;
 
 enum_variant_expr
-    = type_ref "." IDENT [ "(" [ expression { "," expression } ] ")" ]      (* full: Shape.Circle(r: 5.0) *)
-    | type_ref "." IDENT "{" [ field_init { "," field_init } ] "}"          (* full struct variant *)
-    | "." IDENT [ "(" [ expression { "," expression } ] ")" ]               (* shorthand: .Circle(r: 5.0) *)
-    | "." IDENT "{" [ field_init { "," field_init } ] "}"                   (* shorthand struct variant: .Circle{r: 5.0} *)
+    = type_ref "." IDENT [ "(" [ field_init { "," field_init } [ "," ] ] ")" ]  (* full: Shape.Circle(radius: 5.0) *)
+    | "." IDENT [ "(" [ field_init { "," field_init } [ "," ] ] ")" ]           (* shorthand: .Circle(radius: 5.0) *)
     ;
 
 

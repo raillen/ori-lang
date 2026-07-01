@@ -1,0 +1,55 @@
+namespace examples.file_organizer
+
+import ori.io as io
+import ori.list as lists
+import ori.log as log
+import ori.path as path
+
+struct PlannedMove
+    from: string
+    to: string
+end
+
+func folder_for(file_path: string) -> string
+    const ext: string = path.extension(file_path)
+    if ext == "jpg" or ext == "png"
+        return "images"
+    end
+    if ext == "md" or ext == "txt"
+        return "text"
+    end
+    if ext == "json"
+        return "data"
+    end
+    return "other"
+end
+
+func destination_for(file_path: string, output_root: string) -> string
+    return path.join([output_root, folder_for(file_path), path.base_name(file_path)])
+end
+
+func plan_moves(files: list<string>, output_root: string) -> list<PlannedMove>
+    var moves: list<PlannedMove> = []
+    for file_path in files
+        lists.push(moves, PlannedMove(
+            from: file_path,
+            to: destination_for(file_path, output_root),
+        ))
+    end
+    return moves
+end
+
+func main()
+    const files: list<string> = [
+        "downloads/photo.jpg",
+        "downloads/readme.md",
+        "downloads/settings.json",
+        "downloads/archive.zip",
+    ]
+    const moves: list<PlannedMove> = plan_moves(files, "organized")
+
+    log.info("planned file moves")
+    for planned in moves
+        io.print(planned.from + " -> " + planned.to)
+    end
+end

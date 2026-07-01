@@ -31,7 +31,7 @@ Legend:
 | `bytes` with internal NUL | yes | yes | partial | `string` still rejects internal NUL at conversion boundary. |
 | Unicode `string.len`, `slice`, `index_of` | yes | yes | partial | Indices are Unicode scalar indices, not byte offsets. |
 | Async functions and `await` | yes | partial | no | Native supports the subset below. C/debug rejects async. |
-| `using` resource cleanup | yes | yes | partial | Sync and async `using` supported; async dispose on normal return, `?`, cancel, fail, and `break`. |
+| `using` resource cleanup | yes | yes | partial | Sync and async `using` supported; async dispose on normal return, `try`/`?`, cancel, fail, and `break`. |
 | `lazy.once` / `lazy.force` | yes | yes | partial | Native uses inline Cranelift codegen; C backend has dedicated lowering. |
 | LSP diagnostics positions | yes | yes | n/a | LSP uses UTF-16 columns and handles CRLF. |
 
@@ -40,18 +40,19 @@ Legend:
 Supported today (covered by `concurrency_async.rs`):
 
 - `await` inside `if`, `else`, `match`, `while`, `for`, and other control-flow bodies (branching state machine).
+- Nested loop bodies with `await`, including `for { while { await ... } }`.
 - `await future` as a top-level expression statement.
 - `const x: T = await future`.
 - `return await future`.
-- `const x: T = (await future)?`.
+- `const x: T = try await future` and `const x: T = (await future)?`.
 - `await` inside top-level return expressions, call arguments, and operators.
 - `await` inside top-level statement conditions, such as `if await flag()`.
-- `using` inside `async func` with `dispose()` on scope exit, cancellation, failure, propagate (`?`), and `break`.
+- `using` inside `async func` with `dispose()` on scope exit, cancellation, failure, propagation (`try`/`?`), and `break`.
 - Multiple awaits in the same async function with preserved ARC locals across suspensions.
 
 Still blocked or limited:
 
-- Async functions whose `await` shapes cannot be lowered to the simple or general state machine (nested awaits not lifted).
+- Async functions whose `await` shapes cannot be lowered to the simple or general state machine.
 - `for` over iterable types without native iterator ABI (`int`, raw ranges, unsupported opaques).
 - Indexed assignment on unsupported managed bases.
 
@@ -152,9 +153,9 @@ The native Cranelift backend is the reference implementation for `async func`,
 Current C/debug behaviour (unchanged until v2):
 
 - `async func` / `await` in user code: rejected at C codegen with an actionable
-  message (`backend.c_unsupported` via `ori build`).
+  message (`backend.c_unsupported` via `ori emit c`).
 - Stdlib async/concurrency symbols: rejected at C codegen (same route).
-- Sync subset (`ori build` on non-async programs): supported per the matrix above.
+- Sync subset (`ori emit c` on non-async programs): supported per the matrix above.
 
 Rationale: async on native uses a dedicated state machine, ARC frame edges, and
 runtime executor hooks that would duplicate a large fraction of `ori-runtime`

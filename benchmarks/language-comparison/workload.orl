@@ -1,0 +1,72 @@
+namespace benchmarks.language_comparison
+
+import ori.io as io
+import ori.list as lists
+
+func fib(n: int) -> int
+    if n <= 1
+        return n
+    end
+
+    var a: int = 0
+    var b: int = 1
+    var i: int = 2
+    while i <= n
+        const next: int = a + b
+        a = b
+        b = next
+        i = i + 1
+    end
+    return b
+end
+
+func fib_work(n: int, repeat_count: int) -> int
+    var total: int = 0
+    var i: int = 0
+    while i < repeat_count
+        total = total + fib(n)
+        i = i + 1
+    end
+    return total
+end
+
+func sum_squares(n: int) -> int
+    var total: int = 0
+    var i: int = 1
+    while i <= n
+        total = total + (i * i)
+        i = i + 1
+    end
+    return total
+end
+
+func list_push_sum(n: int) -> int
+    const values: list<int> = lists.new()
+    var i: int = 0
+    while i < n
+        lists.push(values, i * 3 + 7)
+        i = i + 1
+    end
+
+    var total: int = 0
+    var j: int = 0
+    while j < lists.len(values)
+        if some(value) = lists.try_get(values, j)
+            total = total + value
+        end
+        j = j + 1
+    end
+    return total
+end
+
+func main()
+    const fib_acc: int = fib_work(32, 80000)
+    const sum_acc: int = sum_squares(200000)
+    const list_acc: int = list_push_sum(80000)
+    const score: int = fib_acc + sum_acc + list_acc
+
+    io.print("fib_acc=" + string(fib_acc))
+    io.print("sum_squares=" + string(sum_acc))
+    io.print("list_push_sum=" + string(list_acc))
+    io.print("score=" + string(score))
+end

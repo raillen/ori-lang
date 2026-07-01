@@ -8,9 +8,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Get-HostTriple {
-    $rustcVersion = & rustc -vV
+    $rustcVersion = & rustc -Vv
     if ($LASTEXITCODE -ne 0) {
-        throw "rustc -vV failed; install Rust before running the native release smoke test."
+        throw "rustc -Vv failed; install Rust before running the native release smoke test."
     }
 
     foreach ($line in $rustcVersion) {
@@ -19,7 +19,7 @@ function Get-HostTriple {
         }
     }
 
-    throw "Could not detect the Rust host target from rustc -vV."
+    throw "Could not detect the Rust host target from rustc -Vv."
 }
 
 function Get-OriExeName {
@@ -28,6 +28,14 @@ function Get-OriExeName {
     }
 
     return "ori"
+}
+
+function Get-LspExeName {
+    if ($IsWindows -or $env:OS -eq "Windows_NT") {
+        return "ori-lsp.exe"
+    }
+
+    return "ori-lsp"
 }
 
 function Get-OutputExeName([string]$Name) {
@@ -61,19 +69,26 @@ if ([string]::IsNullOrWhiteSpace($PackageRoot)) {
 
 $packageRootPath = $PackageRoot
 $oriExeName = Get-OriExeName
+$lspExeName = Get-LspExeName
 $sourceOri = Join-Path $targetRoot (Join-Path "release" $oriExeName)
+$sourceLsp = Join-Path $targetRoot (Join-Path "release" $lspExeName)
 $packageOri = Join-Path $packageRootPath $oriExeName
+$packageLsp = Join-Path $packageRootPath $lspExeName
 $examplesDir = Join-Path $packageRootPath "examples"
 $runtimeDir = Join-Path $packageRootPath "runtime"
+$stdlibDir = Join-Path $packageRootPath "stdlib"
 
 Push-Location $repoRoot
 try {
     if (-not $SkipBuild) {
-        Invoke-Checked { cargo build -p ori-driver --release } "cargo build -p ori-driver --release"
+        Invoke-Checked { cargo build -p ori-driver -p ori-lsp --release } "cargo build -p ori-driver -p ori-lsp --release"
     }
 
     if (-not (Test-Path -LiteralPath $sourceOri -PathType Leaf)) {
         throw "Release compiler was not found at $sourceOri."
+    }
+    if (-not (Test-Path -LiteralPath $sourceLsp -PathType Leaf)) {
+        throw "Release LSP server was not found at $sourceLsp."
     }
 
     if (Test-Path -LiteralPath $packageRootPath) {
@@ -83,6 +98,8 @@ try {
     New-Item -ItemType Directory -Force -Path $examplesDir | Out-Null
 
     Copy-Item -LiteralPath $sourceOri -Destination $packageOri -Force
+    Copy-Item -LiteralPath $sourceLsp -Destination $packageLsp -Force
+    Copy-Item -LiteralPath (Join-Path $repoRoot "stdlib") -Destination $stdlibDir -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $repoRoot "examples/hello_world.orl") -Destination (Join-Path $examplesDir "hello_world.orl") -Force
     Copy-Item -LiteralPath (Join-Path $repoRoot "examples/async_demo.orl") -Destination (Join-Path $examplesDir "async_demo.orl") -Force
 
@@ -117,10 +134,30 @@ end
     $testPath = Join-Path $examplesDir "package_smoke_test.orl"
     Set-Content -LiteralPath $testPath -Value $testSource -Encoding ASCII
 
+    $stdlibSmokeSource = @'
+namespace app.stdlib_package_smoke
+
+import ori.io as io
+import ori.string only (trim_all)
+
+func main()
+    io.print(trim_all("hello   packaged   stdlib"))
+end
+'@
+    $stdlibSmokePath = Join-Path $examplesDir "stdlib_package_smoke.orl"
+    Set-Content -LiteralPath $stdlibSmokePath -Value $stdlibSmokeSource -Encoding ASCII
+
     $previousRequirePackagedRuntime = $env:ORI_REQUIRE_PACKAGED_RUNTIME
     $env:ORI_REQUIRE_PACKAGED_RUNTIME = "1"
     Push-Location $packageRootPath
     try {
+        if (-not (Test-Path -LiteralPath $packageLsp -PathType Leaf)) {
+            throw "packaged LSP server was not copied to $packageLsp."
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $stdlibDir "string.orl") -PathType Leaf)) {
+            throw "packaged stdlib was not copied to $stdlibDir."
+        }
+
         $helloExe = Join-Path $packageRootPath (Get-OutputExeName "hello_world")
         Invoke-Checked { & $packageOri compile (Join-Path "examples" "hello_world.orl") --out $helloExe } "ori compile in packaged release folder"
         $helloOutput = & $helloExe
@@ -139,6 +176,16 @@ end
         }
         if (($asyncOutput -join "`n") -notmatch "^42$") {
             throw "compiled async_demo executable did not print the expected async answer."
+        }
+
+        $stdlibExe = Join-Path $packageRootPath (Get-OutputExeName "stdlib_package_smoke")
+        Invoke-Checked { & $packageOri compile (Join-Path "examples" "stdlib_package_smoke.orl") --out $stdlibExe } "ori compile stdlib source module in packaged release folder"
+        $stdlibOutput = & $stdlibExe
+        if ($LASTEXITCODE -ne 0) {
+            throw "compiled stdlib_package_smoke executable failed with exit code $LASTEXITCODE."
+        }
+        if (($stdlibOutput -join "`n") -notmatch "hello packaged stdlib") {
+            throw "compiled stdlib_package_smoke executable did not use the packaged stdlib."
         }
 
         Invoke-Checked { & $packageOri test (Join-Path "examples" "package_smoke_test.orl") } "ori test in packaged release folder"

@@ -27,6 +27,7 @@ pub struct StdlibEntry {
     pub layer: StdlibLayer,
     pub source_path: Option<PathBuf>,
     pub name_range: Option<Range>,
+    pub documentation: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -54,7 +55,10 @@ fn build_catalog() -> StdlibCatalog {
 
         let signature = ori_driver::pipeline::stdlib_doc_signature(&canonical)
             .map(str::to_string)
+            .or_else(|| format_ty_sig(&canonical))
             .unwrap_or_else(|| format!("{name}(...)"));
+
+        let doc = stdlib_documentation(&canonical);
 
         catalog.insert(StdlibEntry {
             qualified: canonical.clone(),
@@ -64,6 +68,7 @@ fn build_catalog() -> StdlibCatalog {
             layer: StdlibLayer::Runtime,
             source_path: None,
             name_range: None,
+            documentation: doc,
         });
 
         for alias in entry.aliases {
@@ -102,6 +107,7 @@ impl StdlibCatalog {
                 layer: base.layer,
                 source_path: base.source_path,
                 name_range: base.name_range,
+                documentation: base.documentation,
             });
         }
     }
@@ -125,7 +131,11 @@ impl StdlibCatalog {
             .unwrap_or_default()
     }
 
-    pub fn members_for_receiver(&self, receiver: &str, import_map: &HashMap<String, String>) -> Vec<&StdlibEntry> {
+    pub fn members_for_receiver(
+        &self,
+        receiver: &str,
+        import_map: &HashMap<String, String>,
+    ) -> Vec<&StdlibEntry> {
         if let Some(module) = import_map.get(receiver) {
             return self.entries_for_module(module);
         }
@@ -162,6 +172,14 @@ impl StdlibCatalog {
                 label: entry.qualified.clone(),
                 kind: Some(CompletionItemKind::FUNCTION),
                 detail: Some(format!("{layer}: {}", entry.signature)),
+                documentation: entry.documentation.as_ref().map(|d| {
+                    tower_lsp::lsp_types::Documentation::MarkupContent(
+                        tower_lsp::lsp_types::MarkupContent {
+                            kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+                            value: d.clone(),
+                        },
+                    )
+                }),
                 ..CompletionItem::default()
             });
         }
@@ -181,13 +199,25 @@ impl StdlibCatalog {
             .collect()
     }
 
-    pub fn dot_completion_items(&self, receiver: &str, import_map: &HashMap<String, String>) -> Vec<CompletionItem> {
+    pub fn dot_completion_items(
+        &self,
+        receiver: &str,
+        import_map: &HashMap<String, String>,
+    ) -> Vec<CompletionItem> {
         self.members_for_receiver(receiver, import_map)
             .into_iter()
             .map(|entry| CompletionItem {
                 label: entry.name.clone(),
                 kind: Some(CompletionItemKind::FUNCTION),
                 detail: Some(entry.signature.clone()),
+                documentation: entry.documentation.as_ref().map(|d| {
+                    tower_lsp::lsp_types::Documentation::MarkupContent(
+                        tower_lsp::lsp_types::MarkupContent {
+                            kind: tower_lsp::lsp_types::MarkupKind::Markdown,
+                            value: d.clone(),
+                        },
+                    )
+                }),
                 ..CompletionItem::default()
             })
             .collect()
@@ -210,18 +240,172 @@ impl StdlibCatalog {
     }
 
     /// Resolve a function reference (`print`, `io.print`, `ori.io.print`) to its signature.
-    pub fn signature_for_call(&self, func_ref: &str, import_map: &HashMap<String, String>) -> Option<String> {
+    pub fn signature_for_call(
+        &self,
+        func_ref: &str,
+        import_map: &HashMap<String, String>,
+    ) -> Option<String> {
         if let Some(entry) = self.lookup(func_ref) {
             return Some(entry.signature.clone());
         }
         if let Some((receiver, method)) = func_ref.rsplit_once('.') {
-            let module = import_map.get(receiver).cloned().unwrap_or_else(|| format!("ori.{receiver}"));
+            let module = import_map
+                .get(receiver)
+                .cloned()
+                .unwrap_or_else(|| format!("ori.{receiver}"));
             let qualified = format!("{module}.{method}");
             if let Some(entry) = self.lookup(&qualified) {
                 return Some(entry.signature.clone());
             }
         }
         None
+    }
+}
+
+fn format_ty_sig(path: &str) -> Option<String> {
+    let (params, ret) = ori_types::stdlib::stdlib_func_sig(path)?;
+    let params_str = if params.is_empty() {
+        String::new()
+    } else {
+        params
+            .iter()
+            .enumerate()
+            .map(|(i, ty)| {
+                let name = match path {
+                    "ori.io.print" | "ori.io.println" | "ori.io.eprint" | "ori.io.eprintln" => "s",
+                    "ori.process.exit" => "code",
+                    _ => "arg",
+                };
+                if name == "arg" {
+                    format!("arg{i}: {}", ty.display())
+                } else {
+                    format!("{name}: {}", ty.display())
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let name = path.rsplit('.').next().unwrap_or(path);
+    Some(format!("func {name}({params_str}) -> {}", ret.display()))
+}
+
+fn stdlib_documentation(path: &str) -> Option<String> {
+    let desc = match path {
+        // io
+        "ori.io.print" => "Escreve o valor especificado na saída padrão (stdout).",
+        "ori.io.println" => "Escreve o valor especificado na saída padrão (stdout), seguido por uma quebra de linha.",
+        "ori.io.eprint" => "Escreve o valor especificado na saída de erro padrão (stderr).",
+        "ori.io.eprintln" => "Escreve o valor especificado na saída de erro padrão (stderr), seguido por uma quebra de linha.",
+        "ori.io.read_line" => "Lê uma linha de texto a partir da entrada padrão (stdin).\n\nRetorna `some(string)` se for bem-sucedido ou `none` se atingir o fim do arquivo (EOF).",
+
+        // fs
+        "ori.fs.exists" => "Verifica se o caminho especificado existe no sistema de arquivos.\n\nRetorna `result<bool, string>`.",
+        "ori.fs.is_file" => "Verifica se o caminho especificado aponta para um arquivo.\n\nRetorna `result<bool, string>`.",
+        "ori.fs.is_dir" => "Verifica se o caminho especificado aponta para um diretório.\n\nRetorna `result<bool, string>`.",
+        "ori.fs.read_text" => "Lê todo o conteúdo de um arquivo de texto e o retorna como string.\n\nRetorna `result<string, string>`.",
+        "ori.fs.write_text" => "Escreve o texto fornecido em um arquivo no caminho especificado.\n\nRetorna `result<void, string>`.",
+        "ori.fs.append_text" => "Adiciona o texto fornecido ao final do arquivo especificado.\n\nRetorna `result<void, string>`.",
+        "ori.fs.delete" => "Remove um arquivo do sistema de arquivos.\n\nRetorna `result<void, string>`.",
+        "ori.fs.create_dir" => "Cria um novo diretório no caminho especificado.\n\nRetorna `result<void, string>`.",
+        "ori.fs.create_dir_all" => "Cria um diretório e todos os diretórios pais necessários no caminho especificado.\n\nRetorna `result<void, string>`.",
+
+        // process
+        "ori.process.exit" => "Encerra a execução do programa atual imediatamente com o código de saída especificado.",
+        "ori.process.args" => "Retorna a lista de argumentos de linha de comando passados para o programa.",
+
+        // time
+        "ori.time.sleep" => "Bloqueia a execução do fluxo de controle atual pelo número especificado de milissegundos.",
+
+        // random
+        "ori.random.seed" => "Inicializa o gerador de números pseudo-aleatórios com uma semente numérica.",
+        "ori.random.next_int" => "Gera um número inteiro pseudo-aleatório no intervalo especificado.",
+        "ori.random.next_float" => "Gera um número de ponto flutuante pseudo-aleatório entre `0.0` e `1.0`.",
+
+        // string utils (Layer 2)
+        "ori.string.utils.is_empty" => "Verifica se a string fornecida está vazia (comprimento zero).",
+        "ori.string.utils.blank" => "Verifica se a string fornecida está vazia ou contém apenas caracteres de espaço em branco.",
+        "ori.string.utils.replicate" => "Cria uma nova string repetindo a string original `n` vezes.",
+        "ori.string.utils.default" => "Retorna a string original se não estiver vazia, ou a string de fallback caso esteja.",
+        "ori.string.utils.equals_ignore_case" => "Verifica se duas strings são iguais, ignorando a diferença entre maiúsculas e minúsculas.",
+        "ori.string.utils.center" => "Centraliza a string dentro de um espaço de largura especificada, preenchendo as laterais com espaços.",
+        "ori.string.utils.count" => "Conta o número de ocorrências não sobrepostas de uma substring dentro da string.",
+        "ori.string.utils.reverse" => "Retorna uma nova string com a ordem dos caracteres invertida.",
+        "ori.string.utils.capitalize" => "Retorna uma cópia da string com a primeira letra maiúscula e as restantes minúsculas.",
+        "ori.string.utils.title" => "Retorna a string com a primeira letra de cada palavra em maiúscula.",
+        "ori.string.utils.trim_all" => "Remove todos os espaços em branco extras do início, do fim e entre as palavras da string.",
+        "ori.string.utils.left" => "Retorna os primeiros `n` caracteres da string.",
+        "ori.string.utils.right" => "Retorna os últimos `n` caracteres da string.",
+        "ori.string.utils.limit" => "Limita o tamanho da string, cortando-a se exceder `max_len`.",
+        "ori.string.utils.lines" => "Divide a string em uma lista de linhas.",
+        "ori.string.utils.words" => "Divide a string em uma lista de palavras (separadas por espaços).",
+        "ori.string.utils.replace_all" => "Substitui todas as ocorrências de uma substring por outra string de substituição.",
+
+        // list utils
+        "ori.list.utils.first_or" => "Retorna o primeiro elemento da lista, ou um valor padrão caso a lista esteja vazia.",
+        "ori.list.utils.last_or" => "Retorna o último elemento da lista, ou um valor padrão caso a lista esteja vazia.",
+        "ori.list.utils.get_or" => "Retorna o elemento no índice especificado, ou um valor padrão caso o índice esteja fora dos limites.",
+        "ori.list.utils.singleton" => "Cria uma nova lista contendo apenas um único elemento.",
+
+        // math utils
+        "ori.math.utils.sign" => "Retorna o sinal do número: `1` para positivo, `-1` para negativo e `0` para zero.",
+        "ori.math.utils.clamp_int" => "Limita o valor inteiro dentro de um intervalo mínimo e máximo especificado.",
+        "ori.math.utils.lerp" => "Realiza a interpolação linear entre dois valores com base em um fator `t`.",
+        "ori.math.utils.approx_eq" => "Verifica se dois valores de ponto flutuante são aproximadamente iguais dentro de uma tolerância.",
+
+        // map utils
+        "ori.map.utils.get_or" => "Retorna o valor associado à chave no mapa, ou um valor padrão caso a chave não exista.",
+        "ori.map.utils.contains_key" => "Verifica se o mapa contém a chave especificada.",
+
+        // validate
+        "ori.validate.even" => "Verifica se um número é par.",
+        "ori.validate.odd" => "Verifica se um número é ímpar.",
+        "ori.validate.in_range" => "Verifica se um valor está dentro do intervalo especificado.",
+
+        _ => return None,
+    };
+    Some(desc.to_string())
+}
+
+fn extract_doc_comments(source: &str, start_offset: usize) -> Option<String> {
+    let mut lines = Vec::new();
+    let before = &source[..start_offset];
+    let mut lines_rev = before.lines().rev();
+
+    // Ignora a linha atual em que a declaração se inicia
+    let _ = lines_rev.next();
+
+    let mut in_block = false;
+    for line in lines_rev {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            if in_block {
+                lines.push("".to_string());
+                continue;
+            }
+            break;
+        }
+
+        if trimmed.starts_with("--|") || trimmed.ends_with("|--") {
+            let clean = trimmed
+                .trim_start_matches("--|")
+                .trim_end_matches("|--")
+                .trim()
+                .to_string();
+            lines.push(clean);
+            in_block = true;
+        } else if trimmed.starts_with("--") {
+            let clean = trimmed.trim_start_matches("--").trim().to_string();
+            lines.push(clean);
+        } else {
+            break;
+        }
+    }
+
+    if lines.is_empty() {
+        None
+    } else {
+        lines.reverse();
+        Some(lines.join("\n"))
     }
 }
 
@@ -256,6 +440,8 @@ fn scan_stdlib_orl(path: &Path, content: &str, catalog: &mut StdlibCatalog) {
             let qualified = format!("{}.{}", namespace, func.name.text);
             let signature = func_signature(func);
             let name_range = name_span_to_range(content, func);
+            let doc = stdlib_documentation(&qualified)
+                .or_else(|| extract_doc_comments(content, func.span.start as usize));
             catalog.insert(StdlibEntry {
                 qualified: qualified.clone(),
                 module: namespace.clone(),
@@ -264,6 +450,7 @@ fn scan_stdlib_orl(path: &Path, content: &str, catalog: &mut StdlibCatalog) {
                 layer: StdlibLayer::Orl,
                 source_path: Some(path.to_path_buf()),
                 name_range: Some(name_range),
+                documentation: doc,
             });
         }
     }
@@ -320,18 +507,23 @@ pub fn import_alias_map(source: &str) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for import in &source_file.imports {
         let module = import.path.to_string();
-        let alias = import
-            .alias
-            .as_ref()
-            .map(|n| n.text.to_string())
-            .unwrap_or_else(|| {
-                module
-                    .rsplit('.')
-                    .next()
-                    .unwrap_or(&module)
-                    .to_string()
-            });
-        map.insert(alias, module);
+        if import.selected.is_empty() {
+            let alias = import
+                .alias
+                .as_ref()
+                .map(|n| n.text.to_string())
+                .unwrap_or_else(|| module.rsplit('.').next().unwrap_or(&module).to_string());
+            map.insert(alias, module);
+        } else {
+            for item in &import.selected {
+                let alias = item
+                    .alias
+                    .as_ref()
+                    .map(|n| n.text.to_string())
+                    .unwrap_or_else(|| item.name.text.to_string());
+                map.insert(alias, format!("{}.{}", module, item.name.text));
+            }
+        }
     }
     map
 }

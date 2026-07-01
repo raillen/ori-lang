@@ -26,6 +26,14 @@ pub struct ImportDecl {
     pub visibility: Visibility,
     pub path: QualifiedName,
     pub alias: Option<Name>,
+    pub selected: Vec<ImportItem>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportItem {
+    pub name: Name,
+    pub alias: Option<Name>,
     pub span: Span,
 }
 

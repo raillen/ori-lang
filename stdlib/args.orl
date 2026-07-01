@@ -1,0 +1,22 @@
+namespace ori.args
+
+import ori.os as os
+
+public func all() -> list<string>
+    return os.args()
+end
+
+public func count() -> int
+    return ori.list.len(os.args())
+end
+
+public func get_or(index: int, fallback: string) -> string
+    if some(value) = ori.list.try_get(os.args(), index)
+        return value
+    end
+    return fallback
+end
+
+public func program_name_or(fallback: string) -> string
+    return get_or(0, fallback)
+end

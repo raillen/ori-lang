@@ -502,8 +502,7 @@ end\n";
     );
     let fmt2 = lsp.read_response(fmt2_id, DEFAULT_TIMEOUT_MS);
     let result2 = &fmt2["result"];
-    let idempotent = result2.is_null()
-        || result2.as_array().is_some_and(|e| e.is_empty());
+    let idempotent = result2.is_null() || result2.as_array().is_some_and(|e| e.is_empty());
     assert!(
         idempotent,
         "second formatting of already-formatted source must produce no edits (idempotent), got: {fmt2}"
@@ -567,7 +566,11 @@ fn lsp_exe() -> std::path::PathBuf {
         return std::path::PathBuf::from(p);
     }
     let manifest = env!("CARGO_MANIFEST_DIR");
-    let exe_name = if cfg!(windows) { "ori-lsp.exe" } else { "ori-lsp" };
+    let exe_name = if cfg!(windows) {
+        "ori-lsp.exe"
+    } else {
+        "ori-lsp"
+    };
     std::path::Path::new(manifest)
         .join("../../../target/debug")
         .join(exe_name)
@@ -674,8 +677,16 @@ fn drain_diagnostics(lsp: &mut LspClient, uri: &str, timeout_ms: u64) -> Vec<Val
 fn e2e_lsp_circular_import_diagnostic() {
     let dir = tempfile_dir();
     let root_uri = uri_for(&dir, "");
-    write_file(&dir, "cyc_a.orl", "namespace app.cyc_a\nimport app.cyc_b\nfunc f()\nend\n");
-    write_file(&dir, "cyc_b.orl", "namespace app.cyc_b\nimport app.cyc_a\nfunc g()\nend\n");
+    write_file(
+        &dir,
+        "cyc_a.orl",
+        "namespace app.cyc_a\nimport app.cyc_b\nfunc f()\nend\n",
+    );
+    write_file(
+        &dir,
+        "cyc_b.orl",
+        "namespace app.cyc_b\nimport app.cyc_a\nfunc g()\nend\n",
+    );
     let a_uri = uri_for(&dir, "cyc_a.orl");
 
     let mut lsp = LspClient::new().expect("spawn ori-lsp");
@@ -770,7 +781,9 @@ fn e2e_lsp_cross_file_goto_definition() {
         .or_else(|| {
             // Scalar form is {uri, range}; array form is a list.
             result.as_array().and_then(|arr| {
-                arr.first().and_then(|loc| loc.get("uri")).and_then(|u| u.as_str())
+                arr.first()
+                    .and_then(|loc| loc.get("uri"))
+                    .and_then(|u| u.as_str())
             })
         })
         .unwrap_or("");
@@ -904,7 +917,11 @@ fn e2e_lsp_cross_file_find_references() {
         .unwrap_or_else(|| panic!("references must return an array: {ref_resp}"));
     let in_main: Vec<&Value> = locations
         .iter()
-        .filter(|loc| loc["uri"].as_str().is_some_and(|u| u.ends_with("findref_main.orl")))
+        .filter(|loc| {
+            loc["uri"]
+                .as_str()
+                .is_some_and(|u| u.ends_with("findref_main.orl"))
+        })
         .collect();
     assert!(
         !in_main.is_empty(),

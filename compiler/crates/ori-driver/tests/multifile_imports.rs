@@ -4,8 +4,9 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use ori_driver::pipeline::{
-    run_build, run_check, run_compile, run_compile_with_options, run_doc, run_doc_with_options,
-    run_fmt, run_test, CheckOutput, CompileOptions, DocFormat, DocOptions,
+    run_build, run_check, run_compile, run_compile_with_options, run_doc, run_doc_check,
+    run_doc_with_options, run_fmt, run_test, run_test_with_options, CheckOutput, CompileOptions,
+    DocCheckOutput, DocFormat, DocOptions, TestOptions,
 };
 
 static NEXT_DIR_ID: AtomicU64 = AtomicU64::new(0);
@@ -48,6 +49,10 @@ impl Drop for TestDir {
 }
 
 fn diagnostic_codes(out: &CheckOutput) -> Vec<&'static str> {
+    out.diagnostics.iter().map(|d| d.code).collect()
+}
+
+fn doc_diagnostic_codes(out: &DocCheckOutput) -> Vec<&'static str> {
     out.diagnostics.iter().map(|d| d.code).collect()
 }
 
@@ -6867,6 +6872,214 @@ version = "0.1.0"
 }
 
 #[test]
+fn doc_file_includes_oridoc_sidecar() {
+    let dir = TestDir::new("oridoc_sidecar_doc_file");
+    dir.write(
+        "ori.proj",
+        r#"manifest = 1
+name = "demo"
+version = "0.1.0"
+kind = "lib"
+entry = "src/main.orl"
+
+[source]
+root = "src"
+root_namespace = "app"
+
+[docs]
+paths = ["docs/api"]
+mode = "sidecar-first"
+require_public = "off"
+"#,
+    );
+    dir.write(
+        "src/main.orl",
+        r#"namespace app.main
+
+public func add(left: int, right: int) -> int
+    return left + right
+end
+"#,
+    );
+    dir.write(
+        "src/main.oridoc",
+        r#"oridoc 1
+
+namespace app.main
+
+doc func add
+    summary:
+        Soma dois valores.
+    param left:
+        Primeiro valor.
+    param right:
+        Segundo valor.
+    returns:
+        Soma dos valores.
+end
+"#,
+    );
+
+    let out = run_doc(&dir.path("ori.proj")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(out.markdown.contains("## app.main.add"));
+    assert!(out.markdown.contains("Soma dois valores."));
+    assert!(out.markdown.contains("- `left`: Primeiro valor."));
+    assert!(out.markdown.contains("Returns: Soma dos valores."));
+}
+
+#[test]
+fn doc_check_reports_unknown_oridoc_symbol() {
+    let dir = TestDir::new("oridoc_unknown_symbol");
+    dir.write(
+        "ori.proj",
+        r#"name = "demo"
+version = "0.1.0"
+entry = "src/main.orl"
+"#,
+    );
+    dir.write(
+        "src/main.orl",
+        r#"namespace app.main
+
+public func add(left: int, right: int) -> int
+    return left + right
+end
+"#,
+    );
+    dir.write(
+        "src/main.oridoc",
+        r#"oridoc 1
+
+namespace app.main
+
+doc func missing
+    summary:
+        Esta funcao nao existe.
+end
+"#,
+    );
+
+    let out = run_doc_check(&dir.path("ori.proj")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        doc_diagnostic_codes(&out).contains(&"doc.symbol_not_found"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn doc_check_warns_on_oridoc_param_mismatch() {
+    let dir = TestDir::new("oridoc_param_mismatch");
+    dir.write(
+        "ori.proj",
+        r#"name = "demo"
+version = "0.1.0"
+entry = "src/main.orl"
+"#,
+    );
+    dir.write(
+        "src/main.orl",
+        r#"namespace app.main
+
+public func add(left: int, right: int) -> int
+    return left + right
+end
+"#,
+    );
+    dir.write(
+        "src/main.oridoc",
+        r#"oridoc 1
+
+namespace app.main
+
+doc func add
+    summary:
+        Soma dois valores.
+    param wrong:
+        Nome incorreto.
+    returns:
+        Soma dos valores.
+end
+"#,
+    );
+
+    let out = run_doc_check(&dir.path("ori.proj")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        doc_diagnostic_codes(&out).contains(&"doc.param_name_mismatch"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn doc_check_enforces_public_docs_when_configured() {
+    let dir = TestDir::new("oridoc_require_public");
+    dir.write(
+        "ori.proj",
+        r#"name = "demo"
+version = "0.1.0"
+entry = "src/main.orl"
+
+[docs]
+require_public = "error"
+"#,
+    );
+    dir.write(
+        "src/main.orl",
+        r#"namespace app.main
+
+public func add(left: int, right: int) -> int
+    return left + right
+end
+"#,
+    );
+
+    let out = run_doc_check(&dir.path("ori.proj")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        doc_diagnostic_codes(&out).contains(&"doc.missing_public"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn oridoc_hover_reads_sidecar_for_local_symbol() {
+    let dir = TestDir::new("oridoc_hover");
+    let source = r#"namespace app.main
+
+public func add(left: int, right: int) -> int
+    return left + right
+end
+"#;
+    dir.write("src/main.orl", source);
+    dir.write(
+        "src/main.oridoc",
+        r#"oridoc 1
+
+namespace app.main
+
+doc func add
+    summary:
+        Soma dois valores.
+    returns:
+        Soma dos valores.
+end
+"#,
+    );
+
+    let hover =
+        ori_driver::pipeline::oridoc_hover_for_symbol(&dir.path("src/main.orl"), source, "add")
+            .expect("sidecar hover");
+    assert!(hover.contains("app.main.add"));
+    assert!(hover.contains("Soma dois valores."));
+    assert!(hover.contains("Returns: Soma dos valores."));
+}
+
+#[test]
 fn compile_project_tree_with_imported_structs_and_enums() {
     let dir = TestDir::new("project_tree_struct_enum_run");
     dir.write(
@@ -7353,8 +7566,6 @@ end
         "range endpoint errors should use the dedicated diagnostic: {codes:?}"
     );
 }
-
-
 
 #[test]
 fn check_reports_success_void_mismatch() {
@@ -7872,7 +8083,6 @@ fn check_reports_exception_words_as_plain_missing_names() {
 func main()
     throw("bad")
     catch("bad")
-    try("bad")
 end
 "#,
     );
@@ -7890,7 +8100,7 @@ end
             .iter()
             .filter(|code| **code == "name.undefined")
             .count()
-            >= 3,
+            >= 2,
         "{:?}",
         out.diagnostics
     );
@@ -8026,6 +8236,11 @@ fn check_official_examples() {
         "examples/bytes_usage.orl",
         "examples/collections_demo.orl",
         "examples/logic_and_matching.orl",
+        "examples/file_organizer.orl",
+        "examples/json_validator.orl",
+        "examples/log_analyzer.orl",
+        "examples/task_cli.orl",
+        "examples/process_runner.orl",
     ];
 
     for example in examples {
@@ -8586,6 +8801,44 @@ end
             .map(|result| (&result.name, result.passed, &result.stderr))
             .collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn test_runner_filters_by_test_name() {
+    let dir = TestDir::new("test_runner_filter");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+func add(left: int, right: int) -> int
+    return left + right
+end
+
+@test
+func test_addition()
+    check add(1, 2) == 3
+end
+
+@test
+func test_second_case()
+    check add(2, 2) == 4
+end
+"#,
+    );
+
+    let out = run_test_with_options(
+        &dir.path("main.orl"),
+        TestOptions {
+            filter: Some("second".to_string()),
+        },
+    )
+    .unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert_eq!(out.discovered, 2);
+    assert_eq!(out.selected, 1);
+    assert_eq!(out.results.len(), 1);
+    assert_eq!(out.results[0].name, "app.main.test_second_case");
+    assert!(out.results[0].passed, "{:#?}", out.results[0].stderr);
 }
 
 #[test]
@@ -9820,4 +10073,174 @@ end
 
     let stdout = compile_and_run(&dir, "stdlib_layer3_extensions");
     assert_eq!(stdout, "2\n1\ntrue\ntrue\ntrue\n");
+}
+
+#[test]
+fn check_accepts_selective_imports_with_aliases() {
+    let dir = TestDir::new("selective_imports_aliases");
+    dir.write(
+        "app/math.orl",
+        r#"namespace app.math
+
+public func add(a: int, b: int) -> int
+    return a + b
+end
+"#,
+    );
+    dir.write(
+        "app/model.orl",
+        r#"namespace app.model
+
+public struct User
+    name: string
+end
+"#,
+    );
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import app.math only (add as plus)
+import app.model only (User)
+
+func main()
+    const total: int = plus(1, 2)
+    const user: User = User(name: "Ori")
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        !diagnostic_codes(&out).contains(&"bind.unused_import"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_reports_duplicate_selective_import_names() {
+    let dir = TestDir::new("selective_import_duplicate");
+    dir.write(
+        "app/a.orl",
+        r#"namespace app.a
+
+public func value() -> int
+    return 1
+end
+"#,
+    );
+    dir.write(
+        "app/b.orl",
+        r#"namespace app.b
+
+public func value() -> int
+    return 2
+end
+"#,
+    );
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import app.a only (value)
+import app.b only (value)
+
+func main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"bind.duplicate_alias"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_reports_unknown_selective_import_member() {
+    let dir = TestDir::new("selective_import_unknown_member");
+    dir.write(
+        "app/math.orl",
+        r#"namespace app.math
+
+public func add(a: int, b: int) -> int
+    return a + b
+end
+"#,
+    );
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import app.math only (missing)
+
+func main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"bind.import_member_unknown"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_accepts_flattened_stdlib_selective_imports() {
+    let dir = TestDir::new("flattened_stdlib_selective");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.fs only (read_text_or)
+import ori.list only (singleton, sum_int)
+import ori.string only (is_empty, truncate as cut)
+
+func main()
+    const empty: bool = is_empty("")
+    const text: string = cut("abcdef", 3)
+    const one: list<int> = singleton(3)
+    const total: int = sum_int(one)
+    const fallback: string = read_text_or("missing.txt", "fallback")
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn check_keeps_legacy_stdlib_submodule_paths_compatible() {
+    let dir = TestDir::new("legacy_stdlib_submodule_compat");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.fs.utils as fu
+import ori.list.algorithms as la
+import ori.list.utils as lu
+import ori.string.algorithms as sa
+import ori.string.utils as su
+
+func main()
+    const empty: bool = su.is_empty("")
+    const text: string = sa.truncate("abcdef", 3)
+    const one: list<int> = lu.singleton(3)
+    const total: int = la.sum_int(one)
+    const fallback: string = fu.read_text_or("missing.txt", "fallback")
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
 }

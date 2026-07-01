@@ -146,7 +146,7 @@ Continues as long as `next_line()` returns `some(v)`. Stops on `none`.
 
 ```ori
 loop
-    const input: string = console.read_line()?
+    const input: string = try console.read_line()
     if input == "quit"
         break
     end
@@ -296,8 +296,8 @@ end
 ## `using` — Resource Cleanup
 
 ```ori
-using file: ori.fs.File = ori.fs.open_read(path)?
-const content: string = ori.fs.read_all(file)?
+using file: ori.fs.File = try ori.fs.open_read(path)
+const content: string = try ori.fs.read_all(file)
 return success(content)
 ```
 
@@ -306,7 +306,7 @@ the binding goes out of scope, regardless of how the scope exits:
 
 - Normal `end` of block
 - `return`
-- `?` propagation
+- `try`/`?` propagation
 - `break` or `continue`
 - Panic
 
@@ -374,8 +374,8 @@ counter.increment()
 list.push(item)
 ```
 
-If a function returns `result<T, E>` and the result is discarded without `?`,
-the compiler emits a warning: `unused result`.
+If a function returns `result<T, E>` and the result is discarded without
+propagation or handling, the compiler emits a warning: `unused result`.
 
 ---
 

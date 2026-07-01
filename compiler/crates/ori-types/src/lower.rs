@@ -77,11 +77,15 @@ pub fn lower_type_with_local_aliases(
     }
     match ast_ty {
         // Check local type aliases (e.g. associated types in implement blocks)
-        AstType::Named(name) if name.is_single() && local_aliases.contains_key(name.last().as_str()) => {
+        AstType::Named(name)
+            if name.is_single() && local_aliases.contains_key(name.last().as_str()) =>
+        {
             let target_ast_ty = &local_aliases[name.last().as_str()];
             rec!(target_ast_ty)
         }
-        AstType::Generic { name, .. } if name.is_single() && local_aliases.contains_key(name.last().as_str()) => {
+        AstType::Generic { name, .. }
+            if name.is_single() && local_aliases.contains_key(name.last().as_str()) =>
+        {
             let target_ast_ty = &local_aliases[name.last().as_str()];
             rec!(target_ast_ty)
         }
@@ -298,7 +302,10 @@ fn resolve_name(
     // Return a dummy DefId for numeric and boolean constants so they resolve without error
     if name.is_single() {
         let text = name.last().as_str();
-        if text.chars().next().map_or(false, |c| c.is_ascii_digit() || c == '-')
+        if text
+            .chars()
+            .next()
+            .map_or(false, |c| c.is_ascii_digit() || c == '-')
             || text == "true"
             || text == "false"
         {

@@ -12,8 +12,8 @@ end
 func calculate(numerator: int, denominator: int) -> result<int, string>
     io.print(f"Calculating {numerator} / {denominator}...")
     
-    -- Using the ? operator for early return on error
-    const val: int = divide(numerator, denominator)?
+    -- Using try for early return on error
+    const val: int = try divide(numerator, denominator)
     
     -- If we get here, the division succeeded
     return success(val * 2)

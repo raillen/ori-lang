@@ -6,8 +6,8 @@ use ori_ast::stmt::{Block, MatchCase, Stmt};
 use ori_diagnostics::{DiagnosticSink, FileId, Span};
 use ori_types::literal::{parse_float_literal, parse_int_literal};
 use ori_types::{
-    expand_ty_aliases, DefId, DefKind, DefMap, EnumSig, FuncSig, ImplSig,
-    OpaqueTy, ReExport, StructSig, TraitSig, Ty, TypeAliasSig, ValueSig,
+    expand_ty_aliases, DefId, DefKind, DefMap, EnumSig, FuncSig, ImplSig, OpaqueTy, ReExport,
+    StructSig, TraitSig, Ty, TypeAliasSig, ValueSig,
 };
 use smol_str::SmolStr;
 use std::collections::{HashMap, HashSet};
@@ -114,7 +114,10 @@ fn replace_json_placeholder_in_ty(ty: Ty, def_map: &DefMap) -> Ty {
                 }
             }
             Ty::Named(id, args) => {
-                let new_args = args.into_iter().map(|arg| recurse(arg, json_val_def_id)).collect();
+                let new_args = args
+                    .into_iter()
+                    .map(|arg| recurse(arg, json_val_def_id))
+                    .collect();
                 Ty::Named(id, new_args)
             }
             Ty::Optional(inner) => Ty::Optional(Box::new(recurse(*inner, json_val_def_id))),
@@ -130,10 +133,16 @@ fn replace_json_placeholder_in_ty(ty: Ty, def_map: &DefMap) -> Ty {
             Ty::Set(inner) => Ty::Set(Box::new(recurse(*inner, json_val_def_id))),
             Ty::Range(inner) => Ty::Range(Box::new(recurse(*inner, json_val_def_id))),
             Ty::Tuple(elems) => Ty::Tuple(
-                elems.into_iter().map(|e| recurse(e, json_val_def_id)).collect()
+                elems
+                    .into_iter()
+                    .map(|e| recurse(e, json_val_def_id))
+                    .collect(),
             ),
             Ty::Func { params, ret } => Ty::Func {
-                params: params.into_iter().map(|p| recurse(p, json_val_def_id)).collect(),
+                params: params
+                    .into_iter()
+                    .map(|p| recurse(p, json_val_def_id))
+                    .collect(),
                 ret: Box::new(recurse(*ret, json_val_def_id)),
             },
             _ => t,
@@ -1806,7 +1815,11 @@ pub fn lower(
                     .map(|def_id| Ty::Named(def_id, Vec::new()))
                     .unwrap_or(Ty::Infer(0));
                 let tp: Vec<SmolStr> = i.type_params.iter().map(|p| p.name.text.clone()).collect();
-                l.local_type_aliases = i.associated_types.iter().map(|(name, ty)| (name.text.clone(), ty.clone())).collect();
+                l.local_type_aliases = i
+                    .associated_types
+                    .iter()
+                    .map(|(name, ty)| (name.text.clone(), ty.clone()))
+                    .collect();
                 for m in &i.methods {
                     let mut all_tp = tp.clone();
                     all_tp.extend(m.type_params.iter().map(|p| p.name.text.clone()));
@@ -1857,7 +1870,8 @@ pub fn lower(
                     .lookup(&trait_path)
                     .map(|def_id| Ty::Named(def_id, Vec::new()))
                     .unwrap_or(Ty::Infer(0));
-                let mut tp: Vec<SmolStr> = t.type_params.iter().map(|p| p.name.text.clone()).collect();
+                let mut tp: Vec<SmolStr> =
+                    t.type_params.iter().map(|p| p.name.text.clone()).collect();
                 for m in &t.members {
                     if let ori_ast::item::TraitMember::Type(name) = m {
                         tp.push(name.text.clone());
@@ -3040,7 +3054,7 @@ impl<'a> Lowerer<'a> {
                         return lower_result_or_wrap(obj, context_val, *span);
                     }
                     if field.text.as_str() == "or_return" && args.is_empty() {
-                        // Desugar .or_return() to the `?` operator (Propagate)
+                        // Desugar .or_return() to propagation (`try` / compact `?`).
                         let obj = self.lower_expr(object, tp);
                         let inner_ty = match &obj.ty {
                             Ty::Optional(t) => *t.clone(),
@@ -3102,7 +3116,8 @@ impl<'a> Lowerer<'a> {
                             } else {
                                 Ty::Infer(0)
                             };
-                            let ret_ty = specialized_stdlib_call_ret_ty(c_name, &args_h, fallback_ret_ty);
+                            let ret_ty =
+                                specialized_stdlib_call_ret_ty(c_name, &args_h, fallback_ret_ty);
                             return HirExpr {
                                 kind: HirExprKind::Call {
                                     callee: Box::new(HirExpr {
@@ -4345,9 +4360,10 @@ fn lower_pattern(
             if let Ty::Named(def_id, _) = scr_ty {
                 resolved_def_id = Some(*def_id);
             } else if let Ty::Infer(_) = scr_ty {
-                if let Some(sig) = enum_sigs.iter().find(|sig| {
-                    sig.variants.iter().any(|variant| variant.name == name.text)
-                }) {
+                if let Some(sig) = enum_sigs
+                    .iter()
+                    .find(|sig| sig.variants.iter().any(|variant| variant.name == name.text))
+                {
                     resolved_def_id = Some(sig.def_id);
                 }
             }
@@ -4367,9 +4383,10 @@ fn lower_pattern(
             if let Ty::Named(def_id, _) = scr_ty {
                 resolved_def_id = Some(*def_id);
             } else if let Ty::Infer(_) = scr_ty {
-                if let Some(sig) = enum_sigs.iter().find(|sig| {
-                    sig.variants.iter().any(|variant| variant.name == name.text)
-                }) {
+                if let Some(sig) = enum_sigs
+                    .iter()
+                    .find(|sig| sig.variants.iter().any(|variant| variant.name == name.text))
+                {
                     resolved_def_id = Some(sig.def_id);
                 }
             }
@@ -4737,7 +4754,10 @@ mod tests {
                 assert_eq!(stdlib_c_name(alias), Some(entry.runtime_symbol), "{alias}");
             }
             assert!(
-                matches!(stdlib_c_func_ty(entry.runtime_symbol, None), Ty::Func { .. }),
+                matches!(
+                    stdlib_c_func_ty(entry.runtime_symbol, None),
+                    Ty::Func { .. }
+                ),
                 "{} -> {} has no HIR stdlib function type",
                 entry.canonical_path,
                 entry.runtime_symbol

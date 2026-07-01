@@ -104,9 +104,9 @@ when the compiler starts producing it.
 | `type.numeric_literal_out_of_range` | error | Numeric literal does not fit its target type |
 | `type.pattern_mismatch` | error | Pattern is incompatible with the matched value type |
 | `type.positional_after_named_arg` | error | Positional argument appears after a named argument |
-| `type.propagate_err_mismatch` | error | `?` would propagate an incompatible result error type |
-| `type.propagate_not_result_or_optional` | error | `?` was used on a value that is not `result` or `optional` |
-| `type.propagate_return_mismatch` | error | `?` was used in a function with an incompatible return type |
+| `type.propagate_err_mismatch` | error | `try`/`?` would propagate an incompatible result error type |
+| `type.propagate_not_result_or_optional` | error | `try`/`?` was used on a value that is not `result` or `optional` |
+| `type.propagate_return_mismatch` | error | `try`/`?` was used in a function with an incompatible return type |
 | `type.repeat_count_not_int` | error | `repeat` count must be an `int` |
 | `type.return_mismatch` | error | Returned value type does not match function return type |
 | `type.spread_non_list` | error | Spread argument is not a list |
@@ -175,6 +175,7 @@ when the compiler starts producing it.
 | `bind.duplicate_param` | error | Function, method, or signature parameter is declared more than once |
 | `bind.duplicate_variant` | error | Enum variant is declared more than once |
 | `bind.import_ambiguous` | error | Import path matches more than one file |
+| `bind.import_member_unknown` | error | Selective import names a member that the source module does not export |
 | `bind.import_not_found` | error | Imported namespace could not be resolved to a file |
 | `bind.self_outside_method` | error | `self` is used outside method scope |
 | `bind.shadowing` | error | Binding shadows another binding in the same scope |
@@ -197,8 +198,11 @@ when the compiler starts producing it.
 
 | Code | Severity | Description |
 |---|---|---|
+| `doc.missing_public` | warning/error | Public symbol is undocumented while `docs.require_public` is configured as `warn` or `error` |
 | `doc.missing_return` | warning | Documentation for a non-void function is missing `@return` or `@returns` |
 | `doc.param_name_mismatch` | warning | Documentation `@param` tag names a parameter that does not exist on the documented function |
+| `doc.symbol_not_found` | error | `.oridoc` entry targets a symbol that does not exist in the loaded project |
+| `doc.syntax` | error | `.oridoc` file is malformed |
 
 ### `name`
 

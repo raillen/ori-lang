@@ -2,8 +2,8 @@ use crate::parser::Parser;
 use ori_ast::common::{Attr, AttrArg, Visibility};
 use ori_ast::item::{
     AbiLabel, AliasDecl, EnumDecl, EnumVariant, ExternBlock, ExternMember, FuncDecl, FuncSignature,
-    ImplementDecl, ImportDecl, Item, ItemWithAttrs, NamedField, NamespaceDecl, Param, ParamKind,
-    SourceFile, StructDecl, StructField, TopConst, TopVar, TraitDecl, TraitMember,
+    ImplementDecl, ImportDecl, ImportItem, Item, ItemWithAttrs, NamedField, NamespaceDecl, Param,
+    ParamKind, SourceFile, StructDecl, StructField, TopConst, TopVar, TraitDecl, TraitMember,
 };
 use ori_diagnostics::Span;
 use ori_lexer::TokenKind;
@@ -93,9 +93,11 @@ impl<'src> Parser<'src> {
         };
         self.expect(&TokenKind::Import)?;
         let path = self.parse_qualified_name()?;
-        let alias = if self.eat(&TokenKind::As) {
+        let (alias, selected) = if self.eat_contextual("only") {
+            (None, self.parse_import_selection()?)
+        } else if self.eat(&TokenKind::As) {
             match self.parse_name() {
-                Some(alias) => Some(alias),
+                Some(alias) => (Some(alias), Vec::new()),
                 None => {
                     if !self.at_eof() && !is_import_alias_recovery_boundary(self.peek_kind()) {
                         self.advance();
@@ -104,15 +106,44 @@ impl<'src> Parser<'src> {
                 }
             }
         } else {
-            None
+            (None, Vec::new())
         };
-        let end = alias.as_ref().map(|a| a.span).unwrap_or(path.span);
+        let end = selected
+            .last()
+            .map(|item| item.span)
+            .or_else(|| alias.as_ref().map(|a| a.span))
+            .unwrap_or(path.span);
         Some(ImportDecl {
             visibility,
             path,
             alias,
+            selected,
             span: start.cover(end),
         })
+    }
+
+    fn parse_import_selection(&mut self) -> Option<Vec<ImportItem>> {
+        self.expect(&TokenKind::LParen)?;
+        let mut selected = Vec::new();
+        while !self.at(&TokenKind::RParen) && !self.at_eof() {
+            let name = self.parse_name()?;
+            let alias = if self.eat(&TokenKind::As) {
+                Some(self.parse_name()?)
+            } else {
+                None
+            };
+            let end = alias.as_ref().map(|a| a.span).unwrap_or(name.span);
+            selected.push(ImportItem {
+                span: name.span.cover(end),
+                name,
+                alias,
+            });
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        self.expect(&TokenKind::RParen)?;
+        Some(selected)
     }
 
     fn parse_item_with_attrs(&mut self) -> Option<ItemWithAttrs> {

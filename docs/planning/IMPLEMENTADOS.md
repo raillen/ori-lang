@@ -173,7 +173,7 @@ Snapshot completo do que entra na release `v0.2.0` (Etapa 9 do `PLANO-MATURIDADE
 ### Validação de release
 
 - **Smoke de package:** `tools/smoke_native_release.ps1 -SkipBuild` passa com `ORI_REQUIRE_PACKAGED_RUNTIME=1` — `ori compile` (hello_world.orl + async_demo.orl) e `ori test` (package_smoke_test.orl com `@test` sync + async) validados em package isolado.
-- **Testes workspace:** `cargo test --workspace` verde — ~580 testes, 0 falhas, 2 `#[ignore]` documentados (await em loops aninhados, cycle stress 10k).
+- **Testes workspace:** `cargo test --workspace` verde no snapshot de release. Em `[Unreleased]`, o ignore de `await` em loops aninhados foi removido; permanecem apenas probes pesados intencionais (`cycle_stress` e `performance_guard` estrito).
 - **Catálogo de diagnósticos:** `cargo test -p ori-driver --test diagnostic_catalog` verde (consistência bidirecional emitted×catalog + guarda contra reintrodução de códigos removidos).
 - **LSP E2E:** `cargo test -p ori-lsp` verde — 8 testes E2E + testes unitários (cross-file goto-def, type-aware dot completion, cross-file find-references, circular import diagnostic, formatting idempotency).
 
@@ -183,8 +183,8 @@ Snapshot completo do que entra na release `v0.2.0` (Etapa 9 do `PLANO-MATURIDADE
 
 ### Known Issues (não bloqueadoras, documentadas)
 
-1. **Async em loops aninhados:** `await` no corpo interno de `for { while { await } }` aciona o general async path que produz IR Cranelift inválido (verifier error: SSA dominance). Loops single-level com await funcionam. Teste `compile_runs_async_await_in_deeply_nested_bodies_native` marcado `#[ignore]` documenta o caso.
-2. **Formatter:** `trait` declarations quebram indentação de itens top-level subsequentes (consome `end` do trait como `end` de método). Constructs async/concurrency não são afetados (formatter idempotente para eles).
+1. **Async em loops aninhados:** resolvido em `[Unreleased]`; `compile_runs_async_await_in_deeply_nested_bodies_native` roda na suite normal.
+2. **Formatter:** bug de `trait` corrigido em `[Unreleased]`; assinaturas obrigatórias não abrem corpo e métodos default continuam indentados.
 
 ### Backlog v2 (não entra nesta release)
 

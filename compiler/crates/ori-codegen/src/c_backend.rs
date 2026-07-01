@@ -1,6 +1,6 @@
 use ori_ast::expr::{BinaryOp, UnaryOp};
 use ori_hir::hir::*;
-use ori_types::{substitute_ty_params, DefId, Ty, OpaqueTy};
+use ori_types::{substitute_ty_params, DefId, OpaqueTy, Ty};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as FmtWrite;
 
@@ -1628,12 +1628,36 @@ impl CCodegen {
 
     fn type_supports_equality(&self, ty: &Ty, visiting: &mut Vec<DefId>) -> bool {
         match ty {
-            Ty::Void | Ty::Never | Ty::Bool | Ty::Int | Ty::Float | Ty::Float32 | Ty::Float64 | Ty::U8 | Ty::U16 | Ty::U32 | Ty::U64 | Ty::Int8 | Ty::Int16 | Ty::Int32 | Ty::Int64 | Ty::String | Ty::Bytes | Ty::Any(_) => true,
+            Ty::Void
+            | Ty::Never
+            | Ty::Bool
+            | Ty::Int
+            | Ty::Float
+            | Ty::Float32
+            | Ty::Float64
+            | Ty::U8
+            | Ty::U16
+            | Ty::U32
+            | Ty::U64
+            | Ty::Int8
+            | Ty::Int16
+            | Ty::Int32
+            | Ty::Int64
+            | Ty::String
+            | Ty::Bytes
+            | Ty::Any(_) => true,
             Ty::Optional(inner) => self.type_supports_equality(inner, visiting),
-            Ty::Result(ok, err) => self.type_supports_equality(ok, visiting) && self.type_supports_equality(err, visiting),
-            Ty::Tuple(elements) => elements.iter().all(|e| self.type_supports_equality(e, visiting)),
+            Ty::Result(ok, err) => {
+                self.type_supports_equality(ok, visiting)
+                    && self.type_supports_equality(err, visiting)
+            }
+            Ty::Tuple(elements) => elements
+                .iter()
+                .all(|e| self.type_supports_equality(e, visiting)),
             Ty::List(inner) | Ty::Set(inner) => self.type_supports_equality(inner, visiting),
-            Ty::Map(k, v) => self.type_supports_equality(k, visiting) && self.type_supports_equality(v, visiting),
+            Ty::Map(k, v) => {
+                self.type_supports_equality(k, visiting) && self.type_supports_equality(v, visiting)
+            }
             Ty::Named(def_id, args) => {
                 if visiting.contains(def_id) {
                     return true;
@@ -1784,7 +1808,12 @@ impl CCodegen {
             let name = format!("__eq_helper_struct_{}", s.def_id.0);
             if self.type_supports_equality(&Ty::Named(s.def_id, Vec::new()), &mut Vec::new()) {
                 let ty_c = def_c_name(s.def_id);
-                let expr = self.struct_equality_to_c("(*left)".to_string(), "(*right)".to_string(), s.def_id, &[]);
+                let expr = self.struct_equality_to_c(
+                    "(*left)".to_string(),
+                    "(*right)".to_string(),
+                    s.def_id,
+                    &[],
+                );
                 self.line(&format!(
                     "static inline bool {}(void* left_ptr, void* right_ptr) {{\n    if (!left_ptr || !right_ptr) return left_ptr == right_ptr;\n    const {}* left = (const {}*)left_ptr;\n    const {}* right = (const {}*)right_ptr;\n    return {};\n}}",
                     name, ty_c, ty_c, ty_c, ty_c, expr
@@ -2283,17 +2312,27 @@ impl CCodegen {
                         self.line("{");
                         self.push();
                         let (list_ptr_decl, list_ptr_name) = match &iterable.kind {
-                            HirExprKind::Var(n) if !self.func_names.contains(n.as_str()) => {
-                                (format!("ori_list_t* {} = &{};", list_tmp, mangle(n)), list_tmp.clone())
-                            }
+                            HirExprKind::Var(n) if !self.func_names.contains(n.as_str()) => (
+                                format!("ori_list_t* {} = &{};", list_tmp, mangle(n)),
+                                list_tmp.clone(),
+                            ),
                             _ => {
                                 let val_tmp = self.fresh_tmp();
-                                (format!("ori_list_t {} = {};\n    ori_list_t* {} = &{};", val_tmp, list_s, list_tmp, val_tmp), list_tmp.clone())
+                                (
+                                    format!(
+                                        "ori_list_t {} = {};\n    ori_list_t* {} = &{};",
+                                        val_tmp, list_s, list_tmp, val_tmp
+                                    ),
+                                    list_tmp.clone(),
+                                )
                             }
                         };
                         self.line(&list_ptr_decl);
                         self.line(&format!("size_t {} = {}->version;", ver_tmp, list_ptr_name));
-                        self.line(&format!("int64_t {} = (int64_t){}->len;", len_tmp, list_ptr_name));
+                        self.line(&format!(
+                            "int64_t {} = (int64_t){}->len;",
+                            len_tmp, list_ptr_name
+                        ));
                         self.line(&format!(
                             "for (int64_t {} = 0; {} < {}; {}++) {{",
                             idx_tmp, idx_tmp, len_tmp, idx_tmp
@@ -2336,7 +2375,10 @@ impl CCodegen {
                         self.line("{");
                         self.push();
                         self.line(&format!("ori_set_t* {} = {};", set_tmp, set_s));
-                        self.line(&format!("size_t {} = {} ? {}->version : 0;", ver_tmp, set_tmp, set_tmp));
+                        self.line(&format!(
+                            "size_t {} = {} ? {}->version : 0;",
+                            ver_tmp, set_tmp, set_tmp
+                        ));
                         self.line(&format!("int64_t {} = ori_set_len({});", len_tmp, set_tmp));
                         self.line(&format!(
                             "for (int64_t {} = 0; {} < {}; {}++) {{",
@@ -2423,7 +2465,10 @@ impl CCodegen {
                         self.line("{");
                         self.push();
                         self.line(&format!("ori_map_t* {} = {};", map_tmp, map_s));
-                        self.line(&format!("size_t {} = {} ? {}->version : 0;", ver_tmp, map_tmp, map_tmp));
+                        self.line(&format!(
+                            "size_t {} = {} ? {}->version : 0;",
+                            ver_tmp, map_tmp, map_tmp
+                        ));
                         self.line(&format!("int64_t {} = ori_map_len({});", len_tmp, map_tmp));
                         self.line(&format!(
                             "for (int64_t {} = 0; {} < {}; {}++) {{",
@@ -2458,8 +2503,11 @@ impl CCodegen {
                         self.pop();
                         self.line("}");
                     }
-                    _ if matches!(&iterable.ty, Ty::Opaque { kind, .. } if kind.is_list_backed_collection() || matches!(kind, OpaqueTy::Heap | OpaqueTy::Graph)) => {
-                        let Ty::Opaque { kind, .. } = &iterable.ty else { unreachable!() };
+                    _ if matches!(&iterable.ty, Ty::Opaque { kind, .. } if kind.is_list_backed_collection() || matches!(kind, OpaqueTy::Heap | OpaqueTy::Graph)) =>
+                    {
+                        let Ty::Opaque { kind, .. } = &iterable.ty else {
+                            unreachable!()
+                        };
                         let prefix = match kind {
                             OpaqueTy::Deque => "ori_deque_iterator",
                             OpaqueTy::Queue => "ori_queue_iterator",
@@ -2477,17 +2525,31 @@ impl CCodegen {
                         let elem_ptr_tmp = self.fresh_tmp();
                         self.line("{");
                         self.push();
-                        self.line(&format!("void* {} = {}_{}({});", iter_tmp, prefix, "new", col_s));
-                        let iter_ty = Ty::Opaque { kind: *kind, args: vec![] };
+                        self.line(&format!(
+                            "void* {} = {}_{}({});",
+                            iter_tmp, prefix, "new", col_s
+                        ));
+                        let iter_ty = Ty::Opaque {
+                            kind: *kind,
+                            args: vec![],
+                        };
                         self.managed_stack.push((iter_tmp.clone(), iter_ty.clone()));
                         if index_binding.is_some() {
                             self.line(&format!("int64_t {} = 0;", idx_tmp));
                         }
                         self.line("for (;;) {");
                         self.push();
-                        self.line(&format!("{}* {} = {}_{}({});", c_elem, elem_ptr_tmp, prefix, "next", iter_tmp));
+                        self.line(&format!(
+                            "{}* {} = {}_{}({});",
+                            c_elem, elem_ptr_tmp, prefix, "next", iter_tmp
+                        ));
                         self.line(&format!("if (!{}) break;", elem_ptr_tmp));
-                        self.line(&format!("{} {} = *{};", c_elem, mangle(binding), elem_ptr_tmp));
+                        self.line(&format!(
+                            "{} {} = *{};",
+                            c_elem,
+                            mangle(binding),
+                            elem_ptr_tmp
+                        ));
                         if let Some(ib) = index_binding {
                             self.line(&format!("int64_t {} = {};", mangle(ib), idx_tmp));
                         }
@@ -3455,9 +3517,9 @@ impl CCodegen {
         let l_list = self.fresh_tmp();
         let r_list = self.fresh_tmp();
         let res_tmp = self.fresh_tmp();
-        
+
         let list_eq = self.list_equality_to_c(l_list.clone(), r_list.clone(), elem_ty);
-        
+
         format!(
             "({{ void* {l_tmp} = {left}; void* {r_tmp} = {right}; \
              void* {l_list} = {to_list_fn}({l_tmp}); \

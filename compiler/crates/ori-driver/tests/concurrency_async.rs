@@ -1660,7 +1660,10 @@ end
 #[test]
 fn compile_runs_async_file_using_dispose_on_cancel() {
     let dir = TestDir::new("compile_async_file_using_dispose_on_cancel");
-    let test_file = dir.path("async_file.txt").to_string_lossy().replace('\\', "/");
+    let test_file = dir
+        .path("async_file.txt")
+        .to_string_lossy()
+        .replace('\\', "/");
     dir.write(
         "main.orl",
         &format!(
@@ -1809,30 +1812,12 @@ end
     assert_eq!(stdout.trim(), "30");
 }
 
-/// Etapa 4.3 regression (KNOWN LIMITATION — `#[ignore]`): deeply nested await
-/// bodies. The async state machine's *general* path (`emit_general_async_step`)
-/// produces invalid Cranelift IR (verifier error: SSA dominance across step
-/// boundaries) when an `await` sits inside a loop that is itself nested inside
-/// another loop — e.g. `for { while { await ... } }`.
+/// Regression: deeply nested await bodies must emit valid Cranelift SSA.
 ///
-/// The *simple* path (`simple_async_lift_stmt_awaits`) correctly bails out on
-/// this shape (it returns `None` for `While` and for `For` whose body contains
-/// an await), so the general path is taken. The general collector
-/// (`GeneralAsyncCollector`) does register loop-state locals
-/// (`.__loop_idx_*`, `.__loop_list_*`, etc.) so they survive across suspension
-/// points, but the emission of the nested loop bodies across poll blocks does
-/// not thread every live SSA value correctly, and `define_function` fails with
-/// "Compilation error: Verifier errors".
-///
-/// Single-level loops with await (`for { await }`, `while { await }`) work —
-/// covered by `compile_runs_async_await_in_for_loop_native` and
-/// `compile_runs_async_await_in_loop_and_branch_native`. The gap is specifically
-/// *loop nesting* with await in the inner body.
-///
-/// This test is kept as a regression marker: un-ignore when the general async
-/// state machine emits valid SSA for nested loops with await.
+/// This covers `for { while { await ... } }`, where values used across the
+/// suspension point must be reloaded from the async frame instead of reused from
+/// a non-dominating pre-await block.
 #[test]
-#[ignore = "Etapa 4.3: await in nested loops (for→while) triggers Cranelift verifier error in general async path — known limitation"]
 fn compile_runs_async_await_in_deeply_nested_bodies_native() {
     let dir = TestDir::new("compile_async_await_deeply_nested_native");
     dir.write(
@@ -1939,12 +1924,18 @@ end
     dir.write("main.orl", source);
 
     let out = run_fmt(&dir.path("main.orl")).unwrap();
-    assert!(!out.has_errors, "fmt must parse without errors: {:?}", out.diagnostics);
+    assert!(
+        !out.has_errors,
+        "fmt must parse without errors: {:?}",
+        out.diagnostics
+    );
     let once = out.formatted.clone();
 
     // Audit: async func + await + return at one indent level inside the func.
     assert!(
-        once.contains("async func work(n: int) -> int\n    await task.sleep(1)\n    return n * 2\nend\n"),
+        once.contains(
+            "async func work(n: int) -> int\n    await task.sleep(1)\n    return n * 2\nend\n"
+        ),
         "async func + await indentation: {once}"
     );
     // task.spawn with closure at 4-space indent inside main.
@@ -1969,7 +1960,11 @@ end
     // Idempotency: formatting the already-formatted output must be a no-op.
     dir.write("main.orl", &once);
     let out2 = run_fmt(&dir.path("main.orl")).unwrap();
-    assert!(!out2.has_errors, "second fmt must parse: {:?}", out2.diagnostics);
+    assert!(
+        !out2.has_errors,
+        "second fmt must parse: {:?}",
+        out2.diagnostics
+    );
     assert_eq!(
         once, out2.formatted,
         "formatter must be idempotent (format(format(x)) == format(x))"

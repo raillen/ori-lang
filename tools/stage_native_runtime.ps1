@@ -11,9 +11,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Get-HostTriple {
-    $rustcVersion = & rustc -vV
+    $rustcVersion = & rustc -Vv
     if ($LASTEXITCODE -ne 0) {
-        throw "rustc -vV failed; install Rust or set -Target explicitly."
+        throw "rustc -Vv failed; install Rust or set -Target explicitly."
     }
 
     foreach ($line in $rustcVersion) {
@@ -22,7 +22,7 @@ function Get-HostTriple {
         }
     }
 
-    throw "Could not detect the Rust host target from rustc -vV."
+    throw "Could not detect the Rust host target from rustc -Vv."
 }
 
 function Get-RustLldPath {
@@ -118,7 +118,7 @@ function Get-FallbackNativeStaticLibs([string]$TargetTriple) {
     }
 
     if ($TargetTriple -like "*linux*") {
-        return @("pthread", "dl", "m")
+        return @("-lpthread", "-ldl", "-lm", "-no-pie")
     }
 
     return @()
@@ -155,6 +155,15 @@ function Get-NativeStaticLibs([string]$TargetTriple, [string]$ProfileName) {
     }
 
     return Get-FallbackNativeStaticLibs $TargetTriple
+}
+
+function Add-RequiredNativeLinkArgs([string]$TargetTriple, [string[]]$Libs) {
+    $result = @($Libs)
+    if ($TargetTriple -like "*linux*" -and -not ($result -contains "-no-pie")) {
+        $result += "-no-pie"
+    }
+
+    return $result
 }
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
@@ -236,7 +245,7 @@ try {
         Write-Warning "runtime cdylib $cdylibArtifact was not found after build; JIT mode (ORI_USE_JIT=1) will not be available."
     }
 
-    $nativeStaticLibs = Get-NativeStaticLibs $Target $Profile
+    $nativeStaticLibs = Add-RequiredNativeLinkArgs $Target (Get-NativeStaticLibs $Target $Profile)
     $metadata = [ordered]@{
         target = $Target
         runtime = $artifact

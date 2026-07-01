@@ -152,13 +152,15 @@ Supported operations:
 ```ori
 value.or(fallback)         -- unwrap or use fallback
 value.or_return()          -- unwrap or propagate from enclosing function
+try value                  -- unwrap or propagate from enclosing function
+value?                     -- compact form of try value
 ```
 
 Current status: `.or(fallback)` is accepted for `optional<T>` and
 `result<T, E>` in the checker, native backend, and C backend. The fallback is
 evaluated only when the receiver is `none` or `error(_)`. `.or_return()` is
-accepted as shorthand for `?`. The older `.or_return(expr)` form is not
-implemented.
+accepted as shorthand for propagation. The older `.or_return(expr)` form is
+not implemented.
 
 Pattern matching over `optional<T>`:
 
@@ -198,13 +200,15 @@ Supported operations:
 value.or(fallback)                   -- unwrap success or use fallback
 value.or_return()                    -- unwrap success or propagate error
 value.or_wrap("context message")    -- keep success, add context to error
+try value                            -- unwrap success or propagate error
+value?                               -- compact form of try value
 ```
 
 Current status: `.or(fallback)` and `.or_return()` are accepted. `.or_wrap(...)`
 is accepted for `result<T, string>` and returns `success(v)` unchanged or
 `error(context + ": " + e)` for `error(e)`. The context expression is evaluated
-only on the error path. Use `?` or `match` when explicit error handling is
-clearer.
+only on the error path. Use `try`, `?`, or `match` when explicit error handling
+is clearer.
 
 Pattern matching:
 
@@ -318,12 +322,12 @@ When a function returns `result<void, E>`, `success()` with no arguments is vali
 
 ```ori
 func ping() -> result<void, string>
-    send_packet()?
+    try send_packet()
     return success()
 end
 
 func start() -> result<void, string>
-    ping()?
+    try ping()
     return success()
 end
 ```

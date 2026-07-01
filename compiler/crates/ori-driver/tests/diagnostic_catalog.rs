@@ -73,7 +73,10 @@ fn diagnostic_catalog_matches_emitted_codes() {
     .iter()
     .map(|s| s.to_string())
     .collect();
-    let reintroduced: Vec<_> = catalog_planned.intersection(&removed_in_audit).cloned().collect();
+    let reintroduced: Vec<_> = catalog_planned
+        .intersection(&removed_in_audit)
+        .cloned()
+        .collect();
     assert!(
         reintroduced.is_empty(),
         "diagnostic codes removed in Etapa 7 audit reappeared as planned: {reintroduced:#?}"

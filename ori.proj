@@ -3,7 +3,18 @@
 
 name = "my-project"
 version = "0.1.0"
-entry = "src/main.orl"
+manifest = 1
+kind = "app"
+entry = "examples/hello_world.orl"
+
+[source]
+root = "examples"
+root_namespace = "app"
+
+[docs]
+paths = ["docs/api"]
+mode = "sidecar-first"
+require_public = "off"
 
 [dependencies]
 -- ori add <package> to add dependencies

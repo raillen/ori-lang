@@ -22,11 +22,7 @@ pub fn render_static_html(markdown: &str) -> String {
             if in_code {
                 body.push_str("<pre><code");
                 if !code_lang.is_empty() {
-                    let _ = write!(
-                        body,
-                        " class=\"language-{}\"",
-                        html_escape_attr(&code_lang)
-                    );
+                    let _ = write!(body, " class=\"language-{}\"", html_escape_attr(&code_lang));
                 }
                 body.push('>');
                 body.push_str(&html_escape_text(&code_lines.join("\n")));
@@ -83,7 +79,9 @@ pub fn render_static_html(markdown: &str) -> String {
                 list_open = true;
             }
             body.push_str("<li>");
-            body.push_str(&render_inline_markdown(line.trim_start_matches("- ").trim()));
+            body.push_str(&render_inline_markdown(
+                line.trim_start_matches("- ").trim(),
+            ));
             body.push_str("</li>\n");
             continue;
         }

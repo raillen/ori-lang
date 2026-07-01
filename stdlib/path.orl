@@ -197,17 +197,17 @@ public func relative(value: string, from: string) -> string
         common = common + 1
     end
     var parts: list<string> = []
-    var i: int = common
-    while i < base_count
+    var up_i: int = common
+    while up_i < base_count
         lists.push(parts, "..")
-        i = i + 1
+        up_i = up_i + 1
     end
-    i = common
-    while i < target_count
-        if some(seg) = lists.try_get(target_parts, i)
+    var target_i: int = common
+    while target_i < target_count
+        if some(seg) = lists.try_get(target_parts, target_i)
             lists.push(parts, seg)
         end
-        i = i + 1
+        target_i = target_i + 1
     end
     if lists.len(parts) == 0
         return "."

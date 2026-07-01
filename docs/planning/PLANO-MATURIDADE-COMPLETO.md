@@ -167,22 +167,17 @@ flowchart LR
 
 ## Etapa 4 — Dívida Técnica do Compilador
 
-✅ Concluída (com limitação documentada) — `using` async dispose completo, lazy codegen inline, matriz async/C×stdlib documentada e testada, refatoração avaliada. Residual: `await` em loops aninhados (`for→while`) ainda falha no general async path (verifier error); teste de regressão `#[ignore]` adicionado.
+✅ Concluída — `using` async dispose completo, lazy codegen inline, matriz async/C×stdlib documentada e testada, refatoração avaliada. Residual histórico resolvido em `[Unreleased]`: `await` em loops aninhados (`for { while { await } }`) agora passa no backend nativo; o teste de regressão foi ativado.
 
 *Correções e features parciais identificadas na análise, fora do escopo das Etapas 1–2.*
 
 ### ⚠️ Known Issues — Etapa 4
 
-**`await` em loops aninhados — general async path.** O *general* async state machine
-(`emit_general_async_step` em `native_backend.rs`) produz IR Cranelift inválido
-(verifier error: SSA dominance) quando um `await` está no corpo de um loop aninhado
-em outro loop (ex: `for { while { await } }`). O *simple* path desiste corretamente
-deste shape e delega ao general path, mas a emissão dos corpos aninhados através dos
-poll blocks não threading todos os SSA values vivos (iteradores/counters de ambos os
-loops). Loops single-level com await funcionam. Teste de regressão
-`compile_runs_async_await_in_deeply_nested_bodies_native` em `concurrency_async.rs`
-marcado `#[ignore]` documenta o caso exato. Não bloqueia Etapa 6 (LSP não depende de
-async aninhado), mas deve ser corrigido antes de promoção a uso geral de async.
+**`await` em loops aninhados — general async path.** Resolvido em `[Unreleased]`.
+O caso `for { while { await } }` agora emite SSA válida: o backend recarrega
+valores vivos do frame async depois da retomada e reavalia lados esquerdos
+puros de binários quando o lado direito contém `await`. O teste
+`compile_runs_async_await_in_deeply_nested_bodies_native` deixou de ser ignorado.
 
 ### 4.1 `using` em async — dispose completo
 
@@ -204,7 +199,7 @@ async aninhado), mas deve ser corrigido antes de promoção a uso geral de async
 
 - [x] Inventariar todos os pontos que emitem `backend.native_unsupported` para async/await (cap. 14).
 - [x] Para cada gap: implementar **ou** documentar como limitação v1 permanente (cap. 14).
-- [x] Prioridade alta: `await` em corpos aninhados ainda bloqueados — avaliar se Etapa 1 cobriu 100% ou restam casos. — **Avaliação concluída (2026-06-28):** Etapa 1 NÃO cobriu 100%. Loops aninhados com `await` no corpo interno (`for { while { await } }`) acionam o *general* path (`emit_general_async_step`) que produz IR Cranelift inválido (verifier error: SSA dominance across step boundaries). O *simple* path desiste corretamente (`simple_async_lift_stmt_awaits` retorna `None` para `While` e `For` com await no corpo), delegando ao general path; o general collector registra locals de loop-state mas a emissão dos corpos aninhados através dos poll blocks não threading todos os SSA values vivos. Loops single-level com await funcionam (`compile_runs_async_await_in_for_loop_native`, `compile_runs_async_await_in_loop_and_branch_native`). Teste de regressão `compile_runs_async_await_in_deeply_nested_bodies_native` adicionado como `#[ignore]` com nota documentando o bug; un-ignorar quando o general async state machine emitir SSA válido para loops aninhados com await.
+- [x] Prioridade alta: `await` em corpos aninhados ainda bloqueados — avaliar se Etapa 1 cobriu 100% ou restam casos. — **Avaliação concluída (2026-06-28), correção aplicada em `[Unreleased]`:** loops aninhados com `await` no corpo interno (`for { while { await } }`) agora passam. O general async path recarrega valores do frame após retomada e evita usar temporários de blocos não-dominantes em binários como `total + await compute(value)`.
 - [x] **Teste:** `compile_runs_async_await_in_match_native` — await em braços de `match` async.
 - [x] Atualizar matriz em spec cap. 14 após fechamento.
 
@@ -304,16 +299,12 @@ concluído por avaliação (no-op); `native_backend/tests.rs` permanece verde.
 
 *Reconcilia entregas parciais (Sprints 1–5 no CHANGELOG) com o que foi finalizado.*
 
-### ⚠️ Known Issues — Etapa 6
+### Etapa 6 — Issue resolvida em `[Unreleased]`
 
-**Formatter: `trait` declarations quebra a indentação de itens top-level subsequentes.** O
-formatter consome o `end` de um `trait` como se fosse o `end` de um método (assumindo que
-assinaturas de método em traits abrem blocos), deixando o trait "aberto" e sobre-indentando
-todos os itens top-level após ele em +4 espaços. Constructs async/concurrency NÃO são afetados
-(o formatter é idempotente para eles — coberto por `fmt_preserves_async_spawn_nested_using_and_multiline_match_idempotent`).
-O bug é ortogonal ao async e pré-existente; detectado na auditoria 6.4 e isolado do teste de
-audit para não mascarar o resultado async. Correção futura: o formatter deve reconhecer que
-assinaturas de método em `trait` (sem corpo) não abrem blocos.
+**Formatter: `trait` declarations.** O bug que fazia assinaturas obrigatórias de
+traits abrirem blocos foi corrigido em `[Unreleased]`. O formatter agora mantém
+assinaturas sem corpo no nível correto, preserva métodos default e segue
+idempotente para constructs async/concurrency.
 
 ### 6.1 Índice semântico cross-module (workspace)
 
@@ -522,7 +513,7 @@ Para **cada** código abaixo: implementar emissão → adicionar teste dedicado 
 ### 9.3 CI e qualidade final
 
 - [x] Pipeline `native-route.yml` verde em todos os jobs. — **Definição validada, execução remota pendente de push**: o workflow `native-route.yml` define jobs para os 5 triples (windows-msvc, windows-gnu, linux-gnu, macos-x86_64, macos-aarch64). Execução no CI remoto requer push para o repositório GitHub (pendente de aprovação explícita). Equivalente local (smoke + cargo test --workspace) verde.
-- [x] `cargo test --workspace` verde. — Executado em 2026-06-29 após bump para v0.2.0 e re-staging da runtime: ~580 testes, 0 falhas, 2 `#[ignore]` documentados (await em loops aninhados, cycle stress 10k). Exit code 0.
+- [x] `cargo test --workspace` verde. — Executado em 2026-06-29 após bump para v0.2.0 e re-staging da runtime: ~580 testes, 0 falhas. Nota `[Unreleased]`: o ignore de `await` em loops aninhados foi removido; permanecem apenas probes pesados intencionais (`cycle_stress` e `performance_guard` estrito).
 - [x] `cargo test -p ori-driver --test diagnostic_catalog` verde. — Incluído na execução do workspace: `diagnostic_catalog` 1 teste passado (consistência bidirecional emitted×catalog + guarda contra reintrodução dos códigos removidos na Etapa 7).
 - [x] `cargo test -p ori-lsp` verde (incluindo E2E da Etapa 6). — Incluído na execução do workspace: 8 testes E2E + testes unitários LSP passando (cross-file goto-def, type-aware dot completion, cross-file find-references, circular import diagnostic, formatting idempotency, document symbols, diagnostics, 8-scenario session).
 
@@ -591,6 +582,12 @@ sh tools/smoke_native_release.sh
 | Apêndice C (backlog v2) | Backlog v2 — Paridade de referência e DX |
 
 ## Apêndice C — Backlog pós-release (v2, não bloqueia Etapa 9)
+
+> **Atualização 2026-07-01:** o backlog ativo para levar Ori a 100% de
+> usabilidade em projetos pequenos e médios foi movido para
+> [`uso-real-pequeno-medio.md`](uso-real-pequeno-medio.md). A lista abaixo fica
+> como histórico do backlog pós-`0.2.0` e rastreabilidade das decisões já
+> fechadas.
 
 Checklist detalhado com gates de teste: [`PENDENTES.md`](PENDENTES.md) § **Backlog v2 — Paridade de referência e DX**.
 

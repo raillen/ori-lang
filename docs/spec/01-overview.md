@@ -100,6 +100,8 @@ Current compiler behavior:
 - Every source file starts with one `namespace` declaration.
 - `import app.util` creates the local alias `util`.
 - `import app.util as tools` creates the local alias `tools`.
+- `import app.util only (parse, render as draw)` brings only those exported
+  members into the local file, preserving the origin in the import line.
 - `public import app.util as tools` re-exports that alias through the current
   namespace.
 - Imports are resolved from namespace-like paths to matching `.orl` files near
@@ -110,6 +112,22 @@ Current compiler behavior:
 - Known but unfinished standard-library modules are rejected with
   `bind.stdlib_module_unavailable`.
 - Unknown `ori.*` modules are rejected with `bind.stdlib_module_unknown`.
+
+Selective imports are intended for files that need only a few names from a
+long module path:
+
+```ori
+import ori.string only (is_empty, truncate as cut)
+
+func main()
+    const empty: bool = is_empty("")
+    const label: string = cut("abcdef", 3)
+end
+```
+
+If two imports introduce the same local name, the compiler emits
+`bind.duplicate_alias`. If a selected member does not exist, the compiler emits
+`bind.import_member_unknown`.
 
 ### Visibility
 
@@ -162,7 +180,7 @@ func load_user(id: int) -> result<User, string>
 end
 
 func main() -> result<void, string>
-    const user: User = load_user(1)?
+    const user: User = try load_user(1)
     io.print(string(user))
     return success()
 end

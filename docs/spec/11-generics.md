@@ -139,19 +139,58 @@ const empty: optional<int> = first<int>([])
 
 ## Monomorphization
 
-The compiler generates a concrete function/type for each unique combination
+The compiler generates a concrete function or type for each unique combination
 of type arguments used in the program.
 
+Think of a generic declaration as a mold. Each concrete type used with that mold
+gets its own generated implementation.
+
 ```ori
-identity(42)          -- generates identity_int
-identity("hello")     -- generates identity_str
-first([1, 2, 3])      -- generates first_list_int
+identity(42)          -- may generate identity_int
+identity("hello")     -- may generate identity_string
+first([1, 2, 3])      -- may generate first_list_int
 ```
 
 This means:
 - Generic code has zero runtime overhead compared to hand-written typed code.
-- Large programs with many generic instantiations may have larger binaries.
+- The backend can optimize each concrete type separately.
+- Large programs with many generic instantiations may have larger binaries
+  because each concrete combination can produce another copy of the code.
+- Compile time may increase when a generic API is used with many types.
 - Circular generic instantiations are a compile error.
+
+Example:
+
+```ori
+func wrap<T>(value: T) -> optional<T>
+    return some(value)
+end
+
+const a: optional<int> = wrap(1)
+const b: optional<string> = wrap("ori")
+```
+
+The compiler can lower this as if the program had two concrete functions:
+
+```text
+wrap_int(value: int) -> optional<int>
+wrap_string(value: string) -> optional<string>
+```
+
+### Future direction
+
+Monomorphization remains the default strategy for v1 because it is fast at
+runtime and simple for native code generation.
+
+Future work should reduce binary-size surprises without making normal code more
+complex:
+
+- report generic instantiation counts in `ori summary`;
+- add compiler warnings for very large instantiation sets;
+- deduplicate identical generated code when it is safe;
+- study optional type erasure through `any<Trait>` for cold APIs, plugin
+  boundaries, and package boundaries;
+- keep monomorphization for hot paths and small programs.
 
 ---
 

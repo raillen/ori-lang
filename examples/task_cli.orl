@@ -1,0 +1,47 @@
+namespace examples.task_cli
+
+import ori.args as args
+import ori.io as io
+import ori.list as lists
+
+struct Task
+    title: string
+    done: bool
+end
+
+func marker(task: Task) -> string
+    if task.done
+        return "[x]"
+    end
+    return "[ ]"
+end
+
+func done_count(tasks: list<Task>) -> int
+    var total: int = 0
+    for task in tasks
+        if task.done
+            total = total + 1
+        end
+    end
+    return total
+end
+
+func print_tasks(tasks: list<Task>)
+    for task in tasks
+        io.print(marker(task) + " " + task.title)
+    end
+end
+
+func main()
+    var tasks: list<Task> = []
+    lists.push(tasks, Task(title: "write example", done: true))
+    lists.push(tasks, Task(title: "run tests", done: false))
+    lists.push(tasks, Task(title: "update docs", done: false))
+
+    const command: string = args.get_or(1, "list")
+    if command == "stats"
+        io.print(f"{done_count(tasks)} of {lists.len(tasks)} done")
+    else
+        print_tasks(tasks)
+    end
+end

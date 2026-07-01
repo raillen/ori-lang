@@ -9,10 +9,7 @@ fn ori_exe() -> PathBuf {
 
 #[test]
 fn doc_export_cli_writes_valid_json() {
-    let out = std::env::temp_dir().join(format!(
-        "ori_doc_export_test_{}.json",
-        std::process::id()
-    ));
+    let out = std::env::temp_dir().join(format!("ori_doc_export_test_{}.json", std::process::id()));
     let _ = std::fs::remove_file(&out);
 
     let output = Command::new(ori_exe())

@@ -1,9 +1,26 @@
 # Recursos Pendentes e Plano de Correções — Ori Language
 
-> **Plano mestre:** para o roadmap completo com gates de teste por etapa, use [`PLANO-MATURIDADE-COMPLETO.md`](PLANO-MATURIDADE-COMPLETO.md).  
+> **Plano ativo:** para a próxima fase de uso real, use [`uso-real-pequeno-medio.md`](uso-real-pequeno-medio.md).
+> **Plano histórico:** para o ciclo de maturidade até `0.2.0`, use [`PLANO-MATURIDADE-COMPLETO.md`](PLANO-MATURIDADE-COMPLETO.md).
 > Este arquivo mantém o backlog resumido das Etapas 1–6 originais **e o Backlog v2 pós-0.2.0** (paridade de referência + DX).
 
 Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhorias necessárias para a maturidade da linguagem Ori.
+
+---
+
+## Plano ativo atual
+
+O plano ativo para chegar a **100% de usabilidade em projetos pequenos e médios**
+está em [`uso-real-pequeno-medio.md`](uso-real-pequeno-medio.md).
+
+Use este arquivo como backlog resumido e histórico operacional:
+
+- Etapas 1–6: histórico da estabilização até `0.2.0`;
+- Backlog v2: itens remanescentes de DX, stdlib e I/O;
+- Plano de uso real: fonte de verdade para a próxima sequência de implementação.
+
+Quando uma tarefa nova afetar sintaxe, runtime, stdlib, tooling ou distribuição,
+adicione o detalhe no plano de uso real e mantenha aqui apenas o resumo.
 
 ---
 
@@ -178,7 +195,7 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 - [ ] Enviar todas as alterações locais consolidadas para o repositório remoto — **pendente de aprovação explícita do mantenedor**: requires `git push origin master` + decisão sobre tag `v0.2.0` + GitHub Release. Não executado automaticamente.
 
 ### **Critério Final:**
-- [x] Workspace limpo, testes 100% integrados e passando na pipeline local e CI remota. — Local: `cargo test --workspace` verde (~580 testes, 0 falhas, 2 `#[ignore]` documentados). CI remota: `native-route.yml` definida para os 5 triples (windows-msvc, windows-gnu, linux-gnu, macos-x86_64, macos-aarch64); execução no CI requer push (pendente de aprovação).
+- [x] Workspace limpo, testes 100% integrados e passando na pipeline local e CI remota. — Local: `cargo test --workspace` verde no snapshot de release; em `[Unreleased]`, o ignore de `await` em loops aninhados foi removido. CI remota: `native-route.yml` definida para os 5 triples (windows-msvc, windows-gnu, linux-gnu, macos-x86_64, macos-aarch64); execução no CI requer push (pendente de aprovação).
 
 ---
 
@@ -207,14 +224,14 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 
 ### 3. Ergonomia de linguagem e CLI (média prioridade)
 
-- [ ] **`ori repl`** — REPL interativo (parse → check → eval parcial ou JIT de expressões/top-level); mínimo: literais, chamadas stdlib, bindings `const`/`var`. Gate: teste de integração que envia 3 comandos via stdin e valida stdout.
+- [x] **`ori repl`** — REPL interativo inicial apoiado no JIT para literais, chamadas stdlib, bindings `const`/`var` e expressões curtas. Gate: CLI exposto em `ori-driver`; cobertura documentada no plano ativo de uso real.
 - [x] **`if then else` como expressão** — sintaxe `if cond then expr else expr` (sem `end` trailing); checker infere tipo unificado dos ramos (incl. `never`). Gate: `expr_accepts_inline_if_expression` + `expr_rejects_inline_if_*` em `ori_spec.rs` (check + compile+run).
 - [x] **`ori summary [path]`** — visão do projeto: entry file, namespaces descobertos, grafo de imports (texto ou JSON). Gate: teste com fixture multi-arquivo em `summary.rs`.
-- [ ] **Unificação de namespaces stdlib (Opção C)** — fundir utils e algorithms diretamente no namespace pai (ex: `ori.string` em vez de `ori.string.utils`/`ori.string.algorithms`), criando namespaces híbridos que combinam runtime e source modules. Gate: `docs/spec/15-stdlib-maintenance.md` § namespace flattening atualizado, compilador preferindo arquivos `.orl` em `classify_stdlib_import`, e regressões stdlib atualizadas.
+- [x] **Unificação de namespaces stdlib (Opção C, recorte inicial)** — `ori.string`, `ori.list` e `ori.fs` agora carregam módulos pai `.orl` com helpers achatados, mantendo os paths antigos como compatibilidade. Gate fechado: `docs/spec/15-stdlib-maintenance.md` atualizado, `classify_stdlib_import` prefere arquivos `.orl` antes do manifesto runtime, e regressões stdlib cobrem imports novos e antigos.
 
 ### 4. Stdlib e I/O avançado (baixa prioridade)
 
-- [ ] **`time.Instant` / `Duration` tipados** — evolução de `ori.time` v2; substituir ou complementar ms `int` cru. Gate: testes de conversão e aritmética de duração.
+- [x] **`time.Instant` / `Duration` tipados** — `ori.time` possui `Instant`, `Duration`, conversões e medição no recorte inicial de uso real.
 - [ ] **Streams `io.Input` / `io.Output`** — redesign de I/O (leitura/escrita incremental); spec futura cap. 12. Gate: spike documentado antes de implementação.
 - [ ] **Rede: TLS, UDP, async** — fora do escopo v1 (`ori.net` permanece TCP síncrono). Gate: entrada explícita em backlog v2 sem gate de release.
 

@@ -65,9 +65,11 @@ async function startLanguageClient(context: vscode.ExtensionContext): Promise<vo
   client.setTrace(trace === "verbose" ? Trace.Verbose : trace === "messages" ? Trace.Messages : Trace.Off);
 
   context.subscriptions.push(
-    config().onDidChange(() => {
-      const t = config().get<string>("trace.server") ?? "off";
-      client?.setTrace(t === "verbose" ? Trace.Verbose : t === "messages" ? Trace.Messages : Trace.Off);
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("ori.trace.server")) {
+        const t = config().get<string>("trace.server") ?? "off";
+        client?.setTrace(t === "verbose" ? Trace.Verbose : t === "messages" ? Trace.Messages : Trace.Off);
+      }
     })
   );
 

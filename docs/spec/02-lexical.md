@@ -54,10 +54,12 @@ Current implementation status:
 
 - The lexer emits `--| ... |--` as `BlockComment` trivia.
 - The parser skips this trivia for normal compilation.
-- `ori doc <file>` extracts immediately leading documentation comments as
+- `ori doc file <file>` extracts immediately leading documentation comments as
   Markdown.
 - `@param` tags are validated against documented function parameters and emit
   `doc.param_name_mismatch` when a tag names a missing parameter.
+- Long-form documentation can live in `.oridoc`; see
+  `docs/spec/17-project-and-docs.md`.
 
 A block comment placed immediately before a declaration is treated as a
 **documentation comment** for `ori doc`:
@@ -117,10 +119,12 @@ be used as identifiers elsewhere:
 
 | Word | Position |
 |---|---|
+| `only` | After `import module`, starts a selective import list |
 | `c` | After `extern`, names the C ABI: `extern c` |
 | `host` | After `extern`, names the host ABI |
 | `it` | Inside an `if` value contract on a field or parameter — refers to the value being checked |
 | `times` | After `repeat expression` — optional readability word: `repeat 5 times` |
+| `try` | Before an expression — readable propagation form: `try read_config(path)` |
 
 ---
 
@@ -285,7 +289,8 @@ yield a range of exactly one element. Current ranges use `int` endpoints only.
 The `..` token is the range operator and slice operator.
 The `->` token separates parameter lists from return types.
 The `=>` token separates closure parameters from expression bodies.
-The `?` token is the error propagation operator.
+The `?` token is the compact propagation operator. The readable form is the
+contextual keyword `try` before an expression.
 The `|>` token is the pipe operator.
 The `@` token is the attribute prefix: `@test`, `@deprecated("message")`.
 The `--|` / `|--` tokens delimit block and documentation comments.
@@ -355,7 +360,7 @@ Operators bind in the following order (highest to lowest):
 |---|---|---|
 | 1 | `.field`  `call()`  `[index]` | Left |
 | 2 | `?` | Postfix |
-| 3 | `-` (unary)  `not` | Prefix |
+| 3 | `-` (unary)  `not`  `try` | Prefix |
 | 4 | `*`  `/`  `%` | Left |
 | 5 | `+`  `-` | Left |
 | 6 | `==`  `!=`  `<`  `<=`  `>`  `>=` | Non-chainable* |

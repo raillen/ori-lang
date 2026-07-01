@@ -6,10 +6,10 @@ mod utils;
 use index::project::ProjectManager;
 use index::project_semantic::ProjectSemanticIndex;
 use index::semantic::{CompletionContext, SemanticIndex, SemanticSymbol};
-use stdlib_catalog::{import_alias_map, stdlib_catalog};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use stdlib_catalog::{import_alias_map, stdlib_catalog};
 use tokio::sync::RwLock;
 use tokio::time::Instant;
 use tower_lsp::jsonrpc::Result;
@@ -18,16 +18,14 @@ use tower_lsp::lsp_types::{
     CodeLens, CodeLensOptions, CodeLensParams, Command, CompletionItem, CompletionItemKind,
     CompletionOptions, CompletionParams, CompletionResponse, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, DidSaveTextDocumentParams,
-    DocumentFormattingParams, DocumentRangeFormattingParams,
-    DocumentSymbol, DocumentSymbolParams, DocumentSymbolResponse, ExecuteCommandParams,
-    GotoDefinitionParams,
-    GotoDefinitionResponse, Hover, HoverParams, InlayHint, InlayHintKind, InlayHintLabel,
-    InlayHintParams, InitializeParams, InitializeResult, InitializedParams, Location,
-    MessageType, OneOf, Position, PrepareRenameResponse, Range, ReferenceParams, RenameParams,
-    SaveOptions, SemanticToken, SemanticTokens, SemanticTokensFullOptions,
-    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams,
-    SemanticTokensResult, SemanticTokenType, SemanticTokenModifier, ServerCapabilities,
-    ServerInfo, SignatureHelp, SignatureHelpOptions, SignatureHelpParams,
+    DocumentFormattingParams, DocumentRangeFormattingParams, DocumentSymbol, DocumentSymbolParams,
+    DocumentSymbolResponse, ExecuteCommandParams, GotoDefinitionParams, GotoDefinitionResponse,
+    Hover, HoverParams, InitializeParams, InitializeResult, InitializedParams, InlayHint,
+    InlayHintKind, InlayHintLabel, InlayHintParams, Location, MessageType, OneOf, Position,
+    PrepareRenameResponse, Range, ReferenceParams, RenameParams, SaveOptions, SemanticToken,
+    SemanticTokenModifier, SemanticTokenType, SemanticTokens, SemanticTokensFullOptions,
+    SemanticTokensLegend, SemanticTokensOptions, SemanticTokensParams, SemanticTokensResult,
+    ServerCapabilities, ServerInfo, SignatureHelp, SignatureHelpOptions, SignatureHelpParams,
     SignatureInformation, SymbolInformation, SymbolKind, TextDocumentPositionParams,
     TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
     TextDocumentSyncSaveOptions, TextEdit, Url, WorkDoneProgressOptions, WorkspaceEdit,
@@ -65,7 +63,9 @@ impl Backend {
             Ok(output) => {
                 let diags = if let Some(target) = &path {
                     let mut d = handlers::diagnostics::diagnostics_for_path(
-                        &output.cache, &output.diagnostics, target,
+                        &output.cache,
+                        &output.diagnostics,
+                        target,
                     );
                     // Etapa 6.5: surface project-level diagnostics (e.g.
                     // circular imports) whose label sits on another file so
@@ -87,11 +87,8 @@ impl Backend {
                 if let Some(target) = &path {
                     let active_path =
                         std::fs::canonicalize(target).unwrap_or_else(|_| target.to_owned());
-                    let index = ProjectSemanticIndex::new(
-                        output.resolved,
-                        output.cache,
-                        active_path,
-                    );
+                    let index =
+                        ProjectSemanticIndex::new(output.resolved, output.cache, active_path);
                     self.project
                         .write()
                         .await
@@ -148,9 +145,7 @@ impl Backend {
             };
             let path = utils::uri::document_path_from_uri(&uri);
             let result = match (path.as_deref(), source) {
-                (Some(path), Some(source)) => {
-                    ori_driver::pipeline::run_check_source(path, source)
-                }
+                (Some(path), Some(source)) => ori_driver::pipeline::run_check_source(path, source),
                 (Some(path), None) => ori_driver::pipeline::run_check(path),
                 _ => return,
             };
@@ -158,7 +153,9 @@ impl Backend {
                 Ok(output) => {
                     let diags = if let Some(target) = &path {
                         let mut d = handlers::diagnostics::diagnostics_for_path(
-                            &output.cache, &output.diagnostics, target,
+                            &output.cache,
+                            &output.diagnostics,
+                            target,
                         );
                         d.extend(handlers::diagnostics::project_diagnostics_for_path(
                             &output.cache,
@@ -173,11 +170,8 @@ impl Backend {
                     if let Some(target) = &path {
                         let active_path =
                             std::fs::canonicalize(target).unwrap_or_else(|_| target.to_owned());
-                        let index = ProjectSemanticIndex::new(
-                            output.resolved,
-                            output.cache,
-                            active_path,
-                        );
+                        let index =
+                            ProjectSemanticIndex::new(output.resolved, output.cache, active_path);
                         project
                             .write()
                             .await
@@ -187,18 +181,14 @@ impl Backend {
                 }
                 Err(message) => {
                     // Etapa 6.5: map known project failures to `project.*`.
-                    if let Some(diag) =
-                        handlers::diagnostics::project_error_diagnostic(&message)
-                    {
+                    if let Some(diag) = handlers::diagnostics::project_error_diagnostic(&message) {
                         vec![diag]
                     } else {
                         vec![handlers::diagnostics::file_error_diagnostic(message)]
                     }
                 }
             };
-            client
-                .publish_diagnostics(uri, diagnostics, None)
-                .await;
+            client.publish_diagnostics(uri, diagnostics, None).await;
         });
     }
 
@@ -318,8 +308,19 @@ impl LanguageServer for Backend {
         }
         if symbol == "it" && source.contains(" if it") {
             return Ok(Some(handlers::hover::markdown_hover(
-                "`it`\n\nCurrent value checked by a contract on a field or parameter."
-                    .into(),
+                "`it`\n\nCurrent value checked by a contract on a field or parameter.".into(),
+            )));
+        }
+        if let Some(path) = utils::uri::document_path_from_uri(&uri) {
+            if let Some(hover_text) =
+                ori_driver::pipeline::oridoc_hover_for_symbol(&path, &source, &symbol)
+            {
+                return Ok(Some(handlers::hover::markdown_hover(hover_text)));
+            }
+        }
+        if let Some(local_symbol) = index.symbol_at(&source, position) {
+            return Ok(Some(handlers::hover::markdown_hover(
+                local_symbol.hover.clone(),
             )));
         }
         if let Some(hover_text) = index.hover(&symbol) {
@@ -361,7 +362,9 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
         if let Some(range) = index.definition(&symbol) {
-            return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(uri, range))));
+            return Ok(Some(GotoDefinitionResponse::Scalar(Location::new(
+                uri, range,
+            ))));
         }
         if let Some(target_uri) = self.resolve_import_target(&index, &symbol).await {
             if let Some((target_source, _)) = self.get_source_and_index(&target_uri).await {
@@ -390,10 +393,7 @@ impl LanguageServer for Backend {
 
     // ── Find references ──────────────────────────────────────────────────────
 
-    async fn references(
-        &self,
-        params: ReferenceParams,
-    ) -> Result<Option<Vec<Location>>> {
+    async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
         let uri = params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
         let Some((source, index)) = self.get_source_and_index(&uri).await else {
@@ -439,10 +439,7 @@ impl LanguageServer for Backend {
 
     // ── Completions ──────────────────────────────────────────────────────────
 
-    async fn completion(
-        &self,
-        params: CompletionParams,
-    ) -> Result<Option<CompletionResponse>> {
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
         let mut items: Vec<CompletionItem> = Vec::new();
@@ -473,7 +470,9 @@ impl LanguageServer for Backend {
             }
             CompletionContext::Import => {
                 let prefix = import_prefix_at_position(&source_for_stdlib, position);
-                items.extend(handlers::completion::stdlib_import_completion_items(&prefix));
+                items.extend(handlers::completion::stdlib_import_completion_items(
+                    &prefix,
+                ));
                 items.extend(handlers::completion::keyword_completion_items());
             }
             CompletionContext::Default => {
@@ -481,8 +480,25 @@ impl LanguageServer for Backend {
                 items.extend(handlers::completion::keyword_completion_items());
                 items.extend(handlers::completion::snippet_completion_items());
                 if let Some((source, index)) = self.get_source_and_index(&uri).await {
-                    let partial = utils::uri::word_at_position(&source, position)
-                        .unwrap_or_default();
+                    let partial =
+                        utils::uri::word_at_position(&source, position).unwrap_or_default();
+                    for import in index.imports() {
+                        if import.alias.starts_with(&partial) || partial.is_empty() {
+                            let detail = import
+                                .file_path
+                                .as_ref()
+                                .map(|path| {
+                                    format!("import {} ({})", import.namespace, path.display())
+                                })
+                                .unwrap_or_else(|| format!("import {}", import.namespace));
+                            items.push(CompletionItem {
+                                label: import.alias.clone(),
+                                kind: Some(CompletionItemKind::MODULE),
+                                detail: Some(detail),
+                                ..CompletionItem::default()
+                            });
+                        }
+                    }
                     for sym in index.all_symbols() {
                         if sym.name.starts_with(&partial) || partial.is_empty() {
                             items.push(CompletionItem {
@@ -504,6 +520,7 @@ impl LanguageServer for Backend {
 
     // ── Document Symbols ─────────────────────────────────────────────────────
 
+    #[allow(deprecated)]
     async fn document_symbol(
         &self,
         params: DocumentSymbolParams,
@@ -571,10 +588,7 @@ impl LanguageServer for Backend {
 
     // ── Code Actions ─────────────────────────────────────────────────────────
 
-    async fn code_action(
-        &self,
-        params: CodeActionParams,
-    ) -> Result<Option<CodeActionResponse>> {
+    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
         let mut actions: Vec<CodeActionOrCommand> = Vec::new();
 
         for diag in &params.context.diagnostics {
@@ -652,25 +666,24 @@ impl LanguageServer for Backend {
 
     // ── Inlay Hints ──────────────────────────────────────────────────────────
 
-    async fn inlay_hint(
-        &self,
-        params: InlayHintParams,
-    ) -> Result<Option<Vec<InlayHint>>> {
+    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let uri = params.text_document.uri;
-        let Some((source, index)) = self.get_source_and_index(&uri).await else {
+        let Some((_source, index)) = self.get_source_and_index(&uri).await else {
             return Ok(None);
         };
-        let range = params.range;
+        let requested_range = params.range;
         let mut hints: Vec<InlayHint> = Vec::new();
 
         for sym in index.all_symbols() {
             match sym.kind {
-                index::semantic::SymbolKind::Variable
-                | index::semantic::SymbolKind::Parameter => {
+                index::semantic::SymbolKind::Variable | index::semantic::SymbolKind::Parameter => {
                     let hint_pos = Position {
                         line: sym.range.end.line,
                         character: sym.range.end.character,
                     };
+                    if !position_in_range(hint_pos, &requested_range) {
+                        continue;
+                    }
                     hints.push(InlayHint {
                         position: hint_pos,
                         label: InlayHintLabel::String(format!(": {}", sym.summary)),
@@ -721,9 +734,10 @@ impl LanguageServer for Backend {
             while let Some(pos) = source[search_start..].find(kw) {
                 let abs_pos = search_start + pos;
                 let before = abs_pos == 0
-                    || source.as_bytes().get(abs_pos - 1).map_or(true, |b| {
-                        !b.is_ascii_alphanumeric() && *b != b'_'
-                    });
+                    || source
+                        .as_bytes()
+                        .get(abs_pos - 1)
+                        .map_or(true, |b| !b.is_ascii_alphanumeric() && *b != b'_');
                 let after = source
                     .as_bytes()
                     .get(abs_pos + kw.len())
@@ -760,6 +774,7 @@ impl LanguageServer for Backend {
 
     // ── Workspace Symbols ────────────────────────────────────────────────────
 
+    #[allow(deprecated)]
     async fn symbol(
         &self,
         params: WorkspaceSymbolParams,
@@ -843,13 +858,10 @@ impl LanguageServer for Backend {
                     if ref_uri == uri {
                         continue;
                     }
-                    changes
-                        .entry(ref_uri)
-                        .or_default()
-                        .push(TextEdit {
-                            range,
-                            new_text: new_name.clone(),
-                        });
+                    changes.entry(ref_uri).or_default().push(TextEdit {
+                        range,
+                        new_text: new_name.clone(),
+                    });
                 }
             }
             // Also jump to the cross-file definition site when it lives in an
@@ -927,10 +939,7 @@ impl LanguageServer for Backend {
 
     // ── Signature Help ───────────────────────────────────────────────────────
 
-    async fn signature_help(
-        &self,
-        params: SignatureHelpParams,
-    ) -> Result<Option<SignatureHelp>> {
+    async fn signature_help(&self, params: SignatureHelpParams) -> Result<Option<SignatureHelp>> {
         let uri = params.text_document_position_params.text_document.uri;
         let position = params.text_document_position_params.position;
 
@@ -938,18 +947,14 @@ impl LanguageServer for Backend {
             return Ok(None);
         };
 
-        let (func_name, open_paren_pos) =
-            match find_enclosing_call(&source, position) {
-                Some(v) => v,
-                None => return Ok(None),
-            };
+        let (func_name, open_paren_pos) = match find_enclosing_call(&source, position) {
+            Some(v) => v,
+            None => return Ok(None),
+        };
 
         let import_map = import_alias_map(&source);
         if let Some(sig) = stdlib_catalog().signature_for_call(&func_name, &import_map) {
-            let param_slice = sig
-                .find('(')
-                .map(|i| &sig[i..])
-                .unwrap_or("()");
+            let param_slice = sig.find('(').map(|i| &sig[i..]).unwrap_or("()");
             let params = parse_params_from_signature(param_slice);
             let active_param = count_commas_before(&source, open_paren_pos, position);
             let max_param = params.len().saturating_sub(1) as u32;
@@ -1015,10 +1020,7 @@ impl LanguageServer for Backend {
 
     // ── Code Lens ────────────────────────────────────────────────────────────
 
-    async fn code_lens(
-        &self,
-        params: CodeLensParams,
-    ) -> Result<Option<Vec<CodeLens>>> {
+    async fn code_lens(&self, params: CodeLensParams) -> Result<Option<Vec<CodeLens>>> {
         let uri = params.text_document.uri;
         let Some((source, index)) = self.get_source_and_index(&uri).await else {
             return Ok(None);
@@ -1028,8 +1030,7 @@ impl LanguageServer for Backend {
 
         for sym in index.all_symbols() {
             match sym.kind {
-                index::semantic::SymbolKind::Function
-                | index::semantic::SymbolKind::Method => {
+                index::semantic::SymbolKind::Function | index::semantic::SymbolKind::Method => {
                     let refs = index.find_references(&source, &sym.name);
                     let ref_count = refs.len();
 
@@ -1056,10 +1057,7 @@ impl LanguageServer for Backend {
 
     // ── Formatting ───────────────────────────────────────────────────────────
 
-    async fn formatting(
-        &self,
-        params: DocumentFormattingParams,
-    ) -> Result<Option<Vec<TextEdit>>> {
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri = params.text_document.uri;
         let Some((source, _)) = self.get_source_and_index(&uri).await else {
             return Ok(None);
@@ -1103,10 +1101,7 @@ impl LanguageServer for Backend {
                     .collect();
                 if args.is_empty() {
                     self.client
-                        .log_message(
-                            MessageType::WARNING,
-                            "ori.runTests requires a file path",
-                        )
+                        .log_message(MessageType::WARNING, "ori.runTests requires a file path")
                         .await;
                     return Ok(None);
                 }
@@ -1115,36 +1110,37 @@ impl LanguageServer for Backend {
 
                 // Run tests via ori driver
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    ori_driver::pipeline::run_test(
+                    ori_driver::pipeline::run_test_with_options(
                         &std::path::PathBuf::from(file_path),
+                        ori_driver::pipeline::TestOptions {
+                            filter: test_filter.map(str::to_string),
+                        },
                     )
                 }));
 
                 match result {
                     Ok(Ok(output)) => {
                         let passed = output.results.iter().filter(|r| r.passed).count();
-                        let total = output.results.len();
+                        let failed = output.results.iter().filter(|r| !r.passed).count();
+                        let filter_note = output
+                            .filter
+                            .as_deref()
+                            .map(|filter| format!(", filter `{filter}`"))
+                            .unwrap_or_default();
                         let msg = format!(
-                            "Tests completed: {passed} passed, {total} total",
+                            "Tests completed: {passed} passed, {failed} failed, {}/{} selected{filter_note}",
+                            output.selected, output.discovered
                         );
-                        self.client
-                            .log_message(MessageType::INFO, msg)
-                            .await;
+                        self.client.log_message(MessageType::INFO, msg).await;
                     }
                     Ok(Err(err)) => {
                         self.client
-                            .log_message(
-                                MessageType::ERROR,
-                                format!("Test run failed: {err}"),
-                            )
+                            .log_message(MessageType::ERROR, format!("Test run failed: {err}"))
                             .await;
                     }
                     Err(_) => {
                         self.client
-                            .log_message(
-                                MessageType::ERROR,
-                                "Test run panicked",
-                            )
+                            .log_message(MessageType::ERROR, "Test run panicked")
                             .await;
                     }
                 }
@@ -1181,11 +1177,7 @@ impl LanguageServer for Backend {
 }
 
 impl Backend {
-    async fn resolve_import_target(
-        &self,
-        index: &SemanticIndex,
-        _name: &str,
-    ) -> Option<Url> {
+    async fn resolve_import_target(&self, index: &SemanticIndex, _name: &str) -> Option<Url> {
         let imports = index.imports();
         for import in imports {
             if let Some(file_path) = &import.file_path {
@@ -1347,13 +1339,61 @@ fn encode_semantic_tokens(
 
 /// Ori keywords for semantic token scanning.
 const ORI_KEYWORDS: &[&str] = &[
-    "func", "return", "end", "const", "var", "if", "else", "while", "for", "in",
-    "repeat", "loop", "break", "continue", "match", "case", "struct", "trait",
-    "implement", "enum", "where", "is", "alias", "do", "and", "or", "not",
-    "true", "false", "none", "success", "error", "some", "mut", "self",
-    "extern", "any", "optional", "result", "list", "map", "set", "range",
-    "void", "using", "check", "with", "then", "tuple", "lazy", "namespace",
-    "import", "as", "public",
+    "func",
+    "return",
+    "end",
+    "const",
+    "var",
+    "if",
+    "else",
+    "while",
+    "for",
+    "in",
+    "repeat",
+    "loop",
+    "break",
+    "continue",
+    "match",
+    "case",
+    "struct",
+    "trait",
+    "implement",
+    "enum",
+    "where",
+    "is",
+    "alias",
+    "do",
+    "and",
+    "or",
+    "not",
+    "true",
+    "false",
+    "none",
+    "success",
+    "error",
+    "some",
+    "mut",
+    "self",
+    "extern",
+    "any",
+    "optional",
+    "result",
+    "list",
+    "map",
+    "set",
+    "range",
+    "void",
+    "using",
+    "try",
+    "check",
+    "with",
+    "then",
+    "tuple",
+    "lazy",
+    "namespace",
+    "import",
+    "as",
+    "public",
 ];
 
 fn is_builtin_type(name: &str) -> bool {
@@ -1401,11 +1441,7 @@ fn find_enclosing_call(source: &str, position: Position) -> Option<(String, usiz
         return None;
     }
 
-    let abs_pos = lines[..line_idx]
-        .iter()
-        .map(|l| l.len() + 1)
-        .sum::<usize>()
-        + open_paren;
+    let abs_pos = lines[..line_idx].iter().map(|l| l.len() + 1).sum::<usize>() + open_paren;
 
     Some((func_name.to_string(), abs_pos))
 }
@@ -1460,6 +1496,14 @@ fn range_for_whole_document(source: &str) -> Range {
         start: Position::new(0, 0),
         end: Position::new(lines as u32, last_len as u32),
     }
+}
+
+fn position_in_range(position: Position, range: &Range) -> bool {
+    !position_is_before(position, range.start) && position_is_before(position, range.end)
+}
+
+fn position_is_before(left: Position, right: Position) -> bool {
+    left.line < right.line || (left.line == right.line && left.character < right.character)
 }
 
 fn server_capabilities() -> ServerCapabilities {

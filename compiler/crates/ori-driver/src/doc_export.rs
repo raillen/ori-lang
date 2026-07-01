@@ -108,7 +108,9 @@ fn type_to_string(ty: &Type) -> String {
     match ty {
         Type::Named(q) => q.to_string(),
         Type::Optional(t, _) => format!("optional<{}>", type_to_string(t)),
-        Type::Result(ok, err, _) => format!("result<{}, {}>", type_to_string(ok), type_to_string(err)),
+        Type::Result(ok, err, _) => {
+            format!("result<{}, {}>", type_to_string(ok), type_to_string(err))
+        }
         Type::List(t, _) => format!("list<{}>", type_to_string(t)),
         Type::Map(k, v, _) => format!("map<{}, {}>", type_to_string(k), type_to_string(v)),
         Type::Set(t, _) => format!("set<{}>", type_to_string(t)),
@@ -136,7 +138,12 @@ fn func_signature_text(func: &FuncDecl) -> String {
     format!("func {}({}){}", func.name.text, params.join(", "), ret)
 }
 
-fn scan_orl_file(path: &Path, stdlib_root: &Path, catalog: &mut Vec<ExportSymbol>, modules: &mut BTreeSet<String>) {
+fn scan_orl_file(
+    path: &Path,
+    stdlib_root: &Path,
+    catalog: &mut Vec<ExportSymbol>,
+    modules: &mut BTreeSet<String>,
+) {
     let content = match fs::read_to_string(path) {
         Ok(c) => c,
         Err(_) => return,
@@ -191,10 +198,45 @@ fn scan_orl_layer(root: &Path, catalog: &mut Vec<ExportSymbol>, modules: &mut BT
 }
 
 const KEYWORDS: &[&str] = &[
-    "namespace", "import", "func", "struct", "enum", "trait", "const", "var", "public", "if",
-    "else", "then", "end", "match", "case", "while", "for", "loop", "break", "continue", "return",
-    "async", "await", "using", "some", "none", "success", "error", "true", "false", "is", "as",
-    "where", "type", "lazy", "spawn", "defer",
+    "namespace",
+    "import",
+    "func",
+    "struct",
+    "enum",
+    "trait",
+    "const",
+    "var",
+    "public",
+    "if",
+    "else",
+    "then",
+    "end",
+    "match",
+    "case",
+    "while",
+    "for",
+    "loop",
+    "break",
+    "continue",
+    "return",
+    "async",
+    "await",
+    "try",
+    "using",
+    "some",
+    "none",
+    "success",
+    "error",
+    "true",
+    "false",
+    "is",
+    "as",
+    "only",
+    "where",
+    "type",
+    "lazy",
+    "spawn",
+    "defer",
 ];
 
 /// Build the full documentation export payload.

@@ -44,7 +44,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 
 host_triple() {
-    rustc -vV | awk -F': ' '/^host:/ { print $2; exit }'
+    rustc -Vv | awk -F': ' '/^host:/ { print $2; exit }'
 }
 
 output_exe_name() {
@@ -66,11 +66,13 @@ run_checked() {
 
 target_root="${CARGO_TARGET_DIR:-$repo_root/target}"
 ori_exe=$(output_exe_name ori)
+lsp_exe=$(output_exe_name ori-lsp)
 source_ori="$target_root/release/$ori_exe"
+source_lsp="$target_root/release/$lsp_exe"
 host=$(host_triple)
 
 if [ -z "$host" ]; then
-    echo "could not detect Rust host target from rustc -vV" >&2
+    echo "could not detect Rust host target from rustc -Vv" >&2
     exit 2
 fi
 
@@ -82,6 +84,8 @@ package_root=$(CDPATH= cd -- "$(dirname -- "$package_root")" && pwd)/$(basename 
 examples_dir="$package_root/examples"
 runtime_dir="$package_root/runtime"
 package_ori="$package_root/$ori_exe"
+package_lsp="$package_root/$lsp_exe"
+stdlib_dir="$package_root/stdlib"
 
 cleanup() {
     if [ "$keep_package" -eq 0 ] && [ -d "$package_root" ]; then
@@ -91,18 +95,24 @@ cleanup() {
 trap cleanup EXIT
 
 if [ "$skip_build" -eq 0 ]; then
-    run_checked "cargo build -p ori-driver --release" \
-        sh -c "cd '$repo_root' && cargo build -p ori-driver --release"
+    run_checked "cargo build -p ori-driver -p ori-lsp --release" \
+        sh -c "cd '$repo_root' && cargo build -p ori-driver -p ori-lsp --release"
 fi
 
 if [ ! -f "$source_ori" ]; then
     echo "release compiler not found at $source_ori" >&2
     exit 1
 fi
+if [ ! -f "$source_lsp" ]; then
+    echo "release LSP server not found at $source_lsp" >&2
+    exit 1
+fi
 
 rm -rf "$package_root"
 mkdir -p "$examples_dir"
 cp "$source_ori" "$package_ori"
+cp "$source_lsp" "$package_lsp"
+cp -R "$repo_root/stdlib" "$stdlib_dir"
 cp "$repo_root/examples/hello_world.orl" "$examples_dir/hello_world.orl"
 cp "$repo_root/examples/async_demo.orl" "$examples_dir/async_demo.orl"
 
@@ -132,6 +142,26 @@ async func package_async_smoke_test()
 end
 ORI
 
+cat > "$examples_dir/stdlib_package_smoke.orl" <<'ORI'
+namespace app.stdlib_package_smoke
+
+import ori.io as io
+import ori.string only (trim_all)
+
+func main()
+    io.print(trim_all("hello   packaged   stdlib"))
+end
+ORI
+
+if [ ! -f "$package_lsp" ]; then
+    echo "packaged LSP server was not copied to $package_lsp" >&2
+    exit 1
+fi
+if [ ! -f "$stdlib_dir/string.orl" ]; then
+    echo "packaged stdlib was not copied to $stdlib_dir" >&2
+    exit 1
+fi
+
 hello_exe="$package_root/$(output_exe_name hello_world)"
 (
     cd "$package_root"
@@ -160,6 +190,22 @@ case "$async_output" in
     *)
         echo "compiled async_demo executable did not print expected async answer" >&2
         echo "$async_output" >&2
+        exit 1
+        ;;
+esac
+
+stdlib_exe="$package_root/$(output_exe_name stdlib_package_smoke)"
+(
+    cd "$package_root"
+    ORI_REQUIRE_PACKAGED_RUNTIME=1 "$package_ori" compile "examples/stdlib_package_smoke.orl" --out "$stdlib_exe"
+)
+
+stdlib_output=$("$stdlib_exe")
+case "$stdlib_output" in
+    *"hello packaged stdlib"*) ;;
+    *)
+        echo "compiled stdlib_package_smoke executable did not use the packaged stdlib" >&2
+        echo "$stdlib_output" >&2
         exit 1
         ;;
 esac

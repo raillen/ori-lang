@@ -1,7 +1,7 @@
 use ori_ast::common::{TypeParams, WhereClause};
 use ori_ast::item::{ExternMember, Item, Param, SourceFile, TraitMember};
 use ori_ast::ty::Type;
-use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label, SourceCache};
+use ori_diagnostics::{Diagnostic, DiagnosticSink, FileId, Label, SourceCache, Span};
 use ori_hir::{HirArg, HirBlock, HirExpr, HirExprKind, HirFunc, HirStmt};
 use ori_lexer::{Token, TokenKind};
 use ori_types::{resolve::ResolvedModule, DefId, Ty};
@@ -68,11 +68,20 @@ pub struct DocOutput {
     pub has_errors: bool,
 }
 
+pub struct DocCheckOutput {
+    pub cache: SourceCache,
+    pub diagnostics: Vec<Diagnostic>,
+    pub has_errors: bool,
+}
+
 pub struct TestOutput {
     pub cache: SourceCache,
     pub diagnostics: Vec<Diagnostic>,
     pub has_errors: bool,
     pub results: Vec<TestResult>,
+    pub discovered: usize,
+    pub selected: usize,
+    pub filter: Option<String>,
 }
 
 pub struct TestResult {
@@ -82,6 +91,11 @@ pub struct TestResult {
     pub stdout: String,
     pub stderr: String,
     pub status: Option<i32>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TestOptions {
+    pub filter: Option<String>,
 }
 
 pub struct FmtOutput {
@@ -99,8 +113,79 @@ struct LoadedSource {
     ast: SourceFile,
 }
 
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
 struct ProjectConfig {
+    manifest_path: PathBuf,
+    root: PathBuf,
+    name: Option<String>,
+    version: Option<String>,
+    kind: ProjectKind,
     entry: PathBuf,
+    source_root: Option<PathBuf>,
+    root_namespace: Option<String>,
+    dependencies: Vec<ProjectDependency>,
+    doc_paths: Vec<PathBuf>,
+    doc_mode: ProjectDocMode,
+    require_public_docs: DocRequirement,
+}
+
+#[derive(Clone, Debug)]
+struct ProjectDependency {
+    name: String,
+    path: Option<PathBuf>,
+    version: Option<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ImportContext {
+    dependencies: Vec<ImportDependency>,
+}
+
+#[derive(Clone, Debug)]
+struct ImportDependency {
+    name: String,
+    root: PathBuf,
+    entry: PathBuf,
+    source_root: Option<PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProjectKind {
+    App,
+    Lib,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NewProjectKind {
+    App,
+    Lib,
+}
+
+#[derive(Clone, Debug)]
+pub struct NewProjectOptions {
+    pub name: Option<String>,
+    pub kind: NewProjectKind,
+}
+
+#[derive(Clone, Debug)]
+pub struct NewProjectOutput {
+    pub root: PathBuf,
+    pub manifest: PathBuf,
+    pub entry: PathBuf,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProjectDocMode {
+    SidecarFirst,
+    InlineFirst,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DocRequirement {
+    Off,
+    Warn,
+    Error,
 }
 
 // â”€â”€ Pipeline steps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -229,6 +314,15 @@ pub fn run_compile_with_options(
         diagnostics,
         has_errors,
     })
+}
+
+/// Project-oriented native build route used by `ori build`.
+pub fn run_build_native(
+    source_path: &Path,
+    output: &Path,
+    options: CompileOptions,
+) -> Result<CompileOutput, String> {
+    run_compile_with_options(source_path, output, options)
 }
 
 /// Output of a JIT `run` (Rust removal Phase 3). When `has_errors` is false,
@@ -381,7 +475,10 @@ fn find_native_runtime_cdylib() -> Result<PathBuf, String> {
 
     if env_flag("ORI_REQUIRE_PACKAGED_RUNTIME") {
         return Err(missing_native_runtime_message(
-            &target, cdylib_artifact, &searched, true,
+            &target,
+            cdylib_artifact,
+            &searched,
+            true,
         ));
     }
 
@@ -394,7 +491,10 @@ fn find_native_runtime_cdylib() -> Result<PathBuf, String> {
     searched.extend(cargo_candidates);
 
     Err(missing_native_runtime_message(
-        &target, cdylib_artifact, &searched, false,
+        &target,
+        cdylib_artifact,
+        &searched,
+        false,
     ))
 }
 
@@ -509,8 +609,8 @@ fn read_runtime_link_metadata(path: &Path) -> Result<RuntimeLinkMetadata, String
             path.display()
         )
     })?;
-    let runtime_cdylib = json_string_field(&source, "runtime_cdylib")
-        .filter(|value| !value.is_empty());
+    let runtime_cdylib =
+        json_string_field(&source, "runtime_cdylib").filter(|value| !value.is_empty());
     let ori_version = json_string_field(&source, "ori_version").ok_or_else(|| {
         format!(
             "{NATIVE_RUNTIME_METADATA_INVALID}: runtime metadata `{}` is missing string field `ori_version`",
@@ -745,7 +845,7 @@ fn native_static_libs_for_target(target: &str) -> &'static [&'static str] {
             "/defaultlib:msvcrt",
         ]
     } else if target.contains("linux") {
-        &["pthread", "dl", "m"]
+        &["-lpthread", "-ldl", "-lm", "-no-pie"]
     } else {
         &[]
     }
@@ -1009,9 +1109,10 @@ mod tests {
     #[test]
     fn native_static_libs_are_known_for_linux() {
         let libs = native_static_libs_for_target("x86_64-unknown-linux-gnu");
-        assert!(libs.contains(&"pthread"));
-        assert!(libs.contains(&"dl"));
-        assert!(libs.contains(&"m"));
+        assert!(libs.contains(&"-lpthread"));
+        assert!(libs.contains(&"-ldl"));
+        assert!(libs.contains(&"-lm"));
+        assert!(libs.contains(&"-no-pie"));
     }
 
     /// Parity guard: every module referenced by `COLLECTION_STDLIB_DOC_SIGNATURES`
@@ -1070,6 +1171,66 @@ pub fn run_check_source(path: &Path, source: String) -> Result<CheckOutput, Stri
     })
 }
 
+pub fn run_new_project(
+    root: &Path,
+    options: NewProjectOptions,
+) -> Result<NewProjectOutput, String> {
+    if root.exists() {
+        let mut entries = std::fs::read_dir(root)
+            .map_err(|e| format!("cannot inspect `{}`: {e}", root.display()))?;
+        if entries.next().is_some() {
+            return Err(format!(
+                "project.new_exists: `{}` already exists and is not empty",
+                root.display()
+            ));
+        }
+    }
+
+    std::fs::create_dir_all(root)
+        .map_err(|e| format!("cannot create project `{}`: {e}", root.display()))?;
+    std::fs::create_dir_all(root.join("src"))
+        .map_err(|e| format!("cannot create `{}`: {e}", root.join("src").display()))?;
+    std::fs::create_dir_all(root.join("docs/api"))
+        .map_err(|e| format!("cannot create `{}`: {e}", root.join("docs/api").display()))?;
+
+    let name = options
+        .name
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| default_project_name(root));
+    let (kind, entry_rel, source) = match options.kind {
+        NewProjectKind::App => (
+            "app",
+            "src/main.orl",
+            "namespace app.main\n\nimport ori.io as io\n\nfunc main()\n    io.println(\"Hello, Ori!\")\nend\n",
+        ),
+        NewProjectKind::Lib => (
+            "lib",
+            "src/lib.orl",
+            "namespace app.lib\n\npublic func answer() -> int\n    return 42\nend\n",
+        ),
+    };
+
+    let manifest = root.join("ori.proj");
+    let entry = root.join(entry_rel);
+    let manifest_source = format!(
+        "-- Ori project file\nmanifest = 1\nname = \"{}\"\nversion = \"0.1.0\"\nkind = \"{}\"\nentry = \"{}\"\n\n[source]\nroot = \"src\"\nroot_namespace = \"app\"\n\n[docs]\npaths = [\"docs/api\"]\nmode = \"sidecar-first\"\nrequire_public = \"off\"\n\n[dependencies]\n",
+        escape_manifest_string(&name),
+        kind,
+        entry_rel
+    );
+
+    std::fs::write(&manifest, manifest_source)
+        .map_err(|e| format!("cannot write `{}`: {e}", manifest.display()))?;
+    std::fs::write(&entry, source)
+        .map_err(|e| format!("cannot write `{}`: {e}", entry.display()))?;
+
+    Ok(NewProjectOutput {
+        root: root.to_path_buf(),
+        manifest,
+        entry,
+    })
+}
+
 pub fn run_doc(path: &Path) -> Result<DocOutput, String> {
     run_doc_with_options(path, DocOptions::default())
 }
@@ -1078,13 +1239,27 @@ pub fn run_doc_with_options(path: &Path, options: DocOptions) -> Result<DocOutpu
     let mut cache = SourceCache::default();
     let mut sink = DiagnosticSink::default();
     let (loaded, resolved) = load_and_resolve(path, &mut cache, &mut sink)?;
+    let mut external_docs = crate::oridoc::OridocIndex::default();
+    let mut config = None;
 
     if !sink.has_errors() {
         check_loaded_sources(&loaded, &resolved, &mut sink);
     }
 
+    if !sink.has_errors() {
+        config = project_config_for_docs(path)?;
+        external_docs = load_oridoc_index(path, &loaded, config.as_ref(), &mut cache, &mut sink);
+        if !sink.has_errors() {
+            validate_oridoc_index(&loaded, &external_docs, config.as_ref(), &mut sink);
+        }
+    }
+
     let markdown = if !sink.has_errors() {
-        render_documentation_markdown(&loaded)
+        let doc_mode = config
+            .as_ref()
+            .map(|config| config.doc_mode)
+            .unwrap_or(ProjectDocMode::SidecarFirst);
+        render_documentation_markdown(&loaded, &external_docs, doc_mode)
     } else {
         String::new()
     };
@@ -1104,9 +1279,44 @@ pub fn run_doc_with_options(path: &Path, options: DocOptions) -> Result<DocOutpu
     })
 }
 
-pub fn run_test(path: &Path) -> Result<TestOutput, String> {
+pub fn run_doc_check(path: &Path) -> Result<DocCheckOutput, String> {
     let mut cache = SourceCache::default();
     let mut sink = DiagnosticSink::default();
+    let (loaded, resolved) = load_and_resolve(path, &mut cache, &mut sink)?;
+
+    if !sink.has_errors() {
+        check_loaded_sources(&loaded, &resolved, &mut sink);
+    }
+
+    if !sink.has_errors() {
+        let config = project_config_for_docs(path)?;
+        let external_docs =
+            load_oridoc_index(path, &loaded, config.as_ref(), &mut cache, &mut sink);
+        if !sink.has_errors() {
+            validate_oridoc_index(&loaded, &external_docs, config.as_ref(), &mut sink);
+        }
+    }
+
+    let has_errors = sink.has_errors();
+    let diagnostics = sink.into_diagnostics();
+    Ok(DocCheckOutput {
+        cache,
+        diagnostics,
+        has_errors,
+    })
+}
+
+pub fn run_test(path: &Path) -> Result<TestOutput, String> {
+    run_test_with_options(path, TestOptions::default())
+}
+
+pub fn run_test_with_options(path: &Path, options: TestOptions) -> Result<TestOutput, String> {
+    let mut cache = SourceCache::default();
+    let mut sink = DiagnosticSink::default();
+    let filter = options
+        .filter
+        .map(|filter| filter.trim().to_string())
+        .filter(|filter| !filter.is_empty());
     let (loaded, resolved) = load_and_resolve(path, &mut cache, &mut sink)?;
 
     if !sink.has_errors() {
@@ -1118,13 +1328,16 @@ pub fn run_test(path: &Path) -> Result<TestOutput, String> {
     } else {
         Vec::new()
     };
+    let discovered = tests.len();
+    let selected_tests = filter_test_cases(tests, filter.as_deref());
+    let selected = selected_tests.len();
 
-    let results = if !sink.has_errors() && !tests.is_empty() {
+    let results = if !sink.has_errors() && !selected_tests.is_empty() {
         let hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
         if sink.has_errors() {
             Vec::new()
         } else {
-            run_native_tests(&hir, &tests)?
+            run_native_tests(&hir, &selected_tests)?
         }
     } else {
         Vec::new()
@@ -1137,6 +1350,9 @@ pub fn run_test(path: &Path) -> Result<TestOutput, String> {
         diagnostics,
         has_errors,
         results,
+        discovered,
+        selected,
+        filter,
     })
 }
 
@@ -1148,7 +1364,15 @@ pub struct BuildOutput {
 }
 
 /// Full pipeline + HIR lowering + C code generation.
+///
+/// Kept as a compatibility helper for existing C debug backend tests. Public
+/// CLI access should use `ori emit c`, not `ori build`.
 pub fn run_build(path: &Path) -> Result<BuildOutput, String> {
+    run_emit_c(path)
+}
+
+/// Full pipeline + HIR lowering + C code generation for `ori emit c`.
+pub fn run_emit_c(path: &Path) -> Result<BuildOutput, String> {
     let mut cache = SourceCache::default();
     let mut sink = DiagnosticSink::default();
     let (loaded, resolved) = load_and_resolve(path, &mut cache, &mut sink)?;
@@ -1214,6 +1438,10 @@ fn resolve_entry_path(path: &Path) -> Result<PathBuf, String> {
         return read_project_config(path).map(|config| config.entry);
     }
 
+    if path.file_name().and_then(|name| name.to_str()) == Some("ori.pkg.toml") {
+        return crate::package::load_package_manifest(path).map(|manifest| manifest.entry);
+    }
+
     Ok(path.to_owned())
 }
 
@@ -1221,18 +1449,87 @@ fn read_project_config(manifest: &Path) -> Result<ProjectConfig, String> {
     let source = read_file(manifest)?;
     let root = manifest.parent().unwrap_or_else(|| Path::new("."));
     let mut entry = None;
+    let mut name = None;
+    let mut version = None;
+    let mut kind = ProjectKind::App;
+    let mut source_root = None;
+    let mut root_namespace = None;
+    let mut dependencies = Vec::new();
+    let mut doc_paths = Vec::new();
+    let mut doc_mode = ProjectDocMode::SidecarFirst;
+    let mut require_public_docs = DocRequirement::Off;
+    let mut section = ManifestSection::Root;
 
     for line in source.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with("--") || line.starts_with('[') {
+        let line = strip_manifest_comment(line).trim();
+        if line.is_empty() {
             continue;
         }
+        if line.starts_with('[') && line.ends_with(']') {
+            section = match &line[1..line.len() - 1] {
+                "source" => ManifestSection::Source,
+                "dependencies" => ManifestSection::Dependencies,
+                "docs" => ManifestSection::Docs,
+                _ => ManifestSection::Other,
+            };
+            continue;
+        }
+
         let Some((key, value)) = line.split_once('=') else {
             continue;
         };
-        if key.trim() == "entry" {
-            let value = value.trim().trim_matches('"');
-            entry = Some(root.join(value));
+        let key = key.trim();
+        let value = value.trim();
+        match (&section, key) {
+            (ManifestSection::Root, "name") => {
+                name = Some(parse_manifest_string(value, "name", manifest)?);
+            }
+            (ManifestSection::Root, "version") => {
+                version = Some(parse_manifest_string(value, "version", manifest)?);
+            }
+            (ManifestSection::Root, "kind") => {
+                kind =
+                    parse_project_kind(&parse_manifest_string(value, "kind", manifest)?, manifest)?;
+            }
+            (ManifestSection::Root, "entry") => {
+                entry = Some(root.join(parse_manifest_string(value, "entry", manifest)?));
+            }
+            (ManifestSection::Root, "manifest") => {
+                let _ = parse_manifest_number(value, "manifest", manifest)?;
+            }
+            (ManifestSection::Source, "root") => {
+                source_root =
+                    Some(root.join(parse_manifest_string(value, "source.root", manifest)?));
+            }
+            (ManifestSection::Source, "root_namespace" | "namespace") => {
+                root_namespace = Some(parse_manifest_string(
+                    value,
+                    "source.root_namespace",
+                    manifest,
+                )?);
+            }
+            (ManifestSection::Dependencies, name) => {
+                dependencies.push(parse_project_dependency(name, value, manifest, root)?);
+            }
+            (ManifestSection::Docs, "paths") => {
+                doc_paths = parse_manifest_string_array(value, "docs.paths", manifest)?
+                    .into_iter()
+                    .map(|path| root.join(path))
+                    .collect();
+            }
+            (ManifestSection::Docs, "mode") => {
+                doc_mode = parse_project_doc_mode(
+                    &parse_manifest_string(value, "docs.mode", manifest)?,
+                    manifest,
+                )?;
+            }
+            (ManifestSection::Docs, "require_public") => {
+                require_public_docs = parse_doc_requirement(
+                    &parse_manifest_string(value, "docs.require_public", manifest)?,
+                    manifest,
+                )?;
+            }
+            _ => {}
         }
     }
 
@@ -1248,7 +1545,407 @@ fn read_project_config(manifest: &Path) -> Result<ProjectConfig, String> {
             entry.display()
         ));
     }
-    Ok(ProjectConfig { entry })
+    Ok(ProjectConfig {
+        manifest_path: manifest.to_path_buf(),
+        root: root.to_path_buf(),
+        name,
+        version,
+        kind,
+        entry,
+        source_root,
+        root_namespace,
+        dependencies,
+        doc_paths,
+        doc_mode,
+        require_public_docs,
+    })
+}
+
+#[derive(Debug)]
+enum ManifestSection {
+    Root,
+    Source,
+    Dependencies,
+    Docs,
+    Other,
+}
+
+fn strip_manifest_comment(line: &str) -> &str {
+    let mut in_string = false;
+    let mut previous = '\0';
+    for (index, ch) in line.char_indices() {
+        if ch == '"' && previous != '\\' {
+            in_string = !in_string;
+        }
+        if !in_string && ch == '-' && line[index..].starts_with("--") {
+            return &line[..index];
+        }
+        previous = ch;
+    }
+    line
+}
+
+fn default_project_name(root: &Path) -> String {
+    root.file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or("app")
+        .to_string()
+}
+
+fn escape_manifest_string(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn parse_manifest_string(value: &str, key: &str, manifest: &Path) -> Result<String, String> {
+    let value = value.trim();
+    if value.len() >= 2 && value.starts_with('"') && value.ends_with('"') {
+        return Ok(value[1..value.len() - 1].replace("\\\"", "\""));
+    }
+    Err(format!(
+        "project manifest `{}` field `{key}` must be a quoted string",
+        manifest.display()
+    ))
+}
+
+fn parse_manifest_number(value: &str, key: &str, manifest: &Path) -> Result<u32, String> {
+    value.trim().parse::<u32>().map_err(|_| {
+        format!(
+            "project manifest `{}` field `{key}` must be a number",
+            manifest.display()
+        )
+    })
+}
+
+fn parse_manifest_string_array(
+    value: &str,
+    key: &str,
+    manifest: &Path,
+) -> Result<Vec<String>, String> {
+    let value = value.trim();
+    if !(value.starts_with('[') && value.ends_with(']')) {
+        return Err(format!(
+            "project manifest `{}` field `{key}` must be an array of quoted strings",
+            manifest.display()
+        ));
+    }
+    let inner = value[1..value.len() - 1].trim();
+    if inner.is_empty() {
+        return Ok(Vec::new());
+    }
+    inner
+        .split(',')
+        .map(|part| parse_manifest_string(part.trim(), key, manifest))
+        .collect()
+}
+
+fn parse_project_dependency(
+    name: &str,
+    value: &str,
+    manifest: &Path,
+    root: &Path,
+) -> Result<ProjectDependency, String> {
+    let name = name.trim().to_string();
+    validate_project_dependency_name(&name, manifest)?;
+    let value = value.trim();
+    if value.starts_with('"') {
+        return Ok(ProjectDependency {
+            name,
+            path: None,
+            version: Some(parse_manifest_string(
+                value,
+                "dependencies.version",
+                manifest,
+            )?),
+        });
+    }
+    if value.starts_with('{') {
+        let table = parse_manifest_inline_table(value, manifest)?;
+        let path = table.get("path").map(|path| root.join(path));
+        let version = table.get("version").cloned();
+        if path.is_none() {
+            return Err(format!(
+                "project manifest `{}` dependency `{name}` needs `path` for local resolution",
+                manifest.display()
+            ));
+        }
+        return Ok(ProjectDependency {
+            name,
+            path,
+            version,
+        });
+    }
+    Err(format!(
+        "project manifest `{}` dependency `{name}` must be a quoted version or `{{ path = \"...\" }}`",
+        manifest.display()
+    ))
+}
+
+fn validate_project_dependency_name(name: &str, manifest: &Path) -> Result<(), String> {
+    if name.is_empty() {
+        return Err(format!(
+            "project manifest `{}` has an empty dependency name",
+            manifest.display()
+        ));
+    }
+    for segment in name.split('.') {
+        let mut chars = segment.chars();
+        let Some(first) = chars.next() else {
+            return Err(format!(
+                "project manifest `{}` dependency `{name}` has an empty namespace segment",
+                manifest.display()
+            ));
+        };
+        if !(first == '_' || first.is_ascii_alphabetic()) {
+            return Err(format!(
+                "project manifest `{}` dependency `{name}` must start each segment with a letter or `_`",
+                manifest.display()
+            ));
+        }
+        if !chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric()) {
+            return Err(format!(
+                "project manifest `{}` dependency `{name}` may contain only letters, digits, and `_`",
+                manifest.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn parse_manifest_inline_table(
+    value: &str,
+    manifest: &Path,
+) -> Result<BTreeMap<String, String>, String> {
+    let trimmed = value.trim();
+    if !trimmed.starts_with('{') || !trimmed.ends_with('}') {
+        return Err(format!(
+            "project manifest `{}` inline table must start with `{{` and end with `}}`",
+            manifest.display()
+        ));
+    }
+    let inner = trimmed[1..trimmed.len() - 1].trim();
+    let mut table = BTreeMap::new();
+    if inner.is_empty() {
+        return Ok(table);
+    }
+    for part in split_manifest_inline_items(inner) {
+        let Some((key, raw_value)) = part.split_once('=') else {
+            return Err(format!(
+                "project manifest `{}` inline table item must use `key = value`",
+                manifest.display()
+            ));
+        };
+        let key = key.trim().to_string();
+        let parsed_value = parse_manifest_string(raw_value.trim(), &key, manifest)?;
+        table.insert(key, parsed_value);
+    }
+    Ok(table)
+}
+
+fn split_manifest_inline_items(value: &str) -> Vec<&str> {
+    let mut items = Vec::new();
+    let mut start = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    for (index, ch) in value.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' && in_string {
+            escaped = true;
+            continue;
+        }
+        if ch == '"' {
+            in_string = !in_string;
+            continue;
+        }
+        if ch == ',' && !in_string {
+            items.push(value[start..index].trim());
+            start = index + 1;
+        }
+    }
+    items.push(value[start..].trim());
+    items
+}
+
+fn parse_project_kind(value: &str, manifest: &Path) -> Result<ProjectKind, String> {
+    match value {
+        "app" => Ok(ProjectKind::App),
+        "lib" => Ok(ProjectKind::Lib),
+        other => Err(format!(
+            "project manifest `{}` field `kind` must be `app` or `lib`, got `{other}`",
+            manifest.display()
+        )),
+    }
+}
+
+fn parse_project_doc_mode(value: &str, manifest: &Path) -> Result<ProjectDocMode, String> {
+    match value {
+        "sidecar-first" => Ok(ProjectDocMode::SidecarFirst),
+        "inline-first" => Ok(ProjectDocMode::InlineFirst),
+        other => Err(format!(
+            "project manifest `{}` field `docs.mode` must be `sidecar-first` or `inline-first`, got `{other}`",
+            manifest.display()
+        )),
+    }
+}
+
+fn parse_doc_requirement(value: &str, manifest: &Path) -> Result<DocRequirement, String> {
+    match value {
+        "off" => Ok(DocRequirement::Off),
+        "warn" => Ok(DocRequirement::Warn),
+        "error" => Ok(DocRequirement::Error),
+        other => Err(format!(
+            "project manifest `{}` field `docs.require_public` must be `off`, `warn`, or `error`, got `{other}`",
+            manifest.display()
+        )),
+    }
+}
+
+fn project_config_for_docs(path: &Path) -> Result<Option<ProjectConfig>, String> {
+    if path.is_dir() {
+        let manifest = path.join("ori.proj");
+        return manifest
+            .is_file()
+            .then(|| read_project_config(&manifest))
+            .transpose();
+    }
+
+    if path.file_name().and_then(|name| name.to_str()) == Some("ori.proj") {
+        return read_project_config(path).map(Some);
+    }
+
+    let start = path.parent().unwrap_or_else(|| Path::new("."));
+    find_project_root(start)
+        .map(|root| read_project_config(&root.join("ori.proj")))
+        .transpose()
+}
+
+fn import_context_for_entry(entry: &Path) -> Result<ImportContext, String> {
+    let mut context = ImportContext::default();
+    let start = entry.parent().unwrap_or_else(|| Path::new("."));
+
+    if let Some(root) = find_project_root(start) {
+        let config = read_project_config(&root.join("ori.proj"))?;
+        add_project_dependencies(&config, &mut context)?;
+        let package_manifest = root.join("ori.pkg.toml");
+        if package_manifest.is_file() {
+            add_package_manifest_dependencies(&package_manifest, &mut context)?;
+        }
+    } else if let Some(package_manifest) = find_package_manifest(start) {
+        add_package_manifest_dependencies(&package_manifest, &mut context)?;
+    }
+
+    Ok(context)
+}
+
+fn add_project_dependencies(
+    config: &ProjectConfig,
+    context: &mut ImportContext,
+) -> Result<(), String> {
+    for dependency in &config.dependencies {
+        let Some(path) = &dependency.path else {
+            continue;
+        };
+        let import_dependency =
+            import_dependency_from_root(&dependency.name, path, dependency.version.as_deref())?;
+        add_import_dependency(context, import_dependency);
+    }
+    Ok(())
+}
+
+fn add_package_manifest_dependencies(
+    manifest_path: &Path,
+    context: &mut ImportContext,
+) -> Result<(), String> {
+    let manifest = crate::package::load_package_manifest(manifest_path)?;
+    for dependency in &manifest.dependencies {
+        if let crate::package::DependencyRequirement::Path { path, version } =
+            &dependency.requirement
+        {
+            let root = manifest.root.join(path);
+            let import_dependency =
+                import_dependency_from_root(&dependency.name, &root, version.as_deref())?;
+            add_import_dependency(context, import_dependency);
+        }
+    }
+    Ok(())
+}
+
+fn import_dependency_from_root(
+    expected_name: &str,
+    root: &Path,
+    expected_version: Option<&str>,
+) -> Result<ImportDependency, String> {
+    let package_manifest = root.join("ori.pkg.toml");
+    if package_manifest.is_file() {
+        let manifest = crate::package::load_package_manifest(&package_manifest)?;
+        if manifest.name != expected_name {
+            return Err(format!(
+                "package.dependency_name_mismatch: dependency `{expected_name}` points to package `{}`",
+                manifest.name
+            ));
+        }
+        if let Some(version) = expected_version {
+            if manifest.version != version {
+                return Err(format!(
+                    "package.dependency_version_mismatch: dependency `{expected_name}` expected `{version}`, found `{}`",
+                    manifest.version
+                ));
+            }
+        }
+        return Ok(ImportDependency {
+            name: manifest.name,
+            root: manifest.root,
+            source_root: manifest.entry.parent().map(Path::to_path_buf),
+            entry: manifest.entry,
+        });
+    }
+
+    let project_manifest = root.join("ori.proj");
+    if project_manifest.is_file() {
+        let config = read_project_config(&project_manifest)?;
+        if let Some(version) = expected_version {
+            if config.version.as_deref() != Some(version) {
+                return Err(format!(
+                    "package.dependency_version_mismatch: dependency `{expected_name}` expected `{version}`, found `{}`",
+                    config.version.as_deref().unwrap_or("<missing>")
+                ));
+            }
+        }
+        return Ok(ImportDependency {
+            name: expected_name.to_string(),
+            root: config.root,
+            entry: config.entry,
+            source_root: config.source_root,
+        });
+    }
+
+    Err(format!(
+        "package.dependency_manifest_missing: dependency `{expected_name}` needs `ori.pkg.toml` or `ori.proj` under `{}`",
+        root.display()
+    ))
+}
+
+fn add_import_dependency(context: &mut ImportContext, dependency: ImportDependency) {
+    if !context
+        .dependencies
+        .iter()
+        .any(|existing| existing.name == dependency.name && existing.entry == dependency.entry)
+    {
+        context.dependencies.push(dependency);
+    }
+}
+
+fn find_package_manifest(start: &Path) -> Option<PathBuf> {
+    for ancestor in start.ancestors() {
+        let manifest = ancestor.join("ori.pkg.toml");
+        if manifest.is_file() {
+            return Some(manifest);
+        }
+    }
+    None
 }
 
 fn load_and_resolve(
@@ -1257,7 +1954,8 @@ fn load_and_resolve(
     sink: &mut DiagnosticSink,
 ) -> Result<(Vec<LoadedSource>, ResolvedModule), String> {
     let entry = resolve_entry_path(path)?;
-    load_and_resolve_entry(&entry, None, cache, sink)
+    let context = import_context_for_entry(&entry)?;
+    load_and_resolve_entry(&entry, None, &context, cache, sink)
 }
 
 fn load_and_resolve_with_entry_source(
@@ -1268,12 +1966,14 @@ fn load_and_resolve_with_entry_source(
 ) -> Result<(Vec<LoadedSource>, ResolvedModule), String> {
     let entry = resolve_entry_path(path)?;
     let entry = std::fs::canonicalize(entry).unwrap_or_else(|_| path.to_owned());
-    load_and_resolve_entry(&entry, Some((&entry, &source)), cache, sink)
+    let context = import_context_for_entry(&entry)?;
+    load_and_resolve_entry(&entry, Some((&entry, &source)), &context, cache, sink)
 }
 
 fn load_and_resolve_entry(
     entry: &Path,
     entry_source: Option<(&Path, &str)>,
+    context: &ImportContext,
     cache: &mut SourceCache,
     sink: &mut DiagnosticSink,
 ) -> Result<(Vec<LoadedSource>, ResolvedModule), String> {
@@ -1288,6 +1988,7 @@ fn load_and_resolve_entry(
         &mut active,
         &mut loaded,
         entry_source,
+        context,
     )?;
     let entry_namespace = loaded
         .first()
@@ -1306,6 +2007,7 @@ fn load_source_recursive(
     active: &mut Vec<PathBuf>,
     loaded: &mut Vec<LoadedSource>,
     entry_source: Option<(&Path, &str)>,
+    context: &ImportContext,
 ) -> Result<(), String> {
     let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_owned());
     if !seen.insert(path.clone()) {
@@ -1321,7 +2023,7 @@ fn load_source_recursive(
     let imports: Vec<_> = ast
         .imports
         .iter()
-        .map(|i| (i.path.to_string(), i.span))
+        .map(|i| (i.path.to_string(), i.span, !i.selected.is_empty()))
         .collect();
     loaded.push(LoadedSource {
         path: path.clone(),
@@ -1331,13 +2033,12 @@ fn load_source_recursive(
         ast,
     });
     active.push(path.clone());
-    for (import, span) in imports {
-        match classify_stdlib_import(&import) {
+    for (import, span, has_selected_items) in imports {
+        match classify_stdlib_import(&import, has_selected_items) {
             StdlibImportStatus::Implemented => continue,
             StdlibImportStatus::StdlibSource(source_path) => {
                 if active.contains(&source_path) {
-                    let cycle =
-                        import_cycle_description(active, loaded, &source_path, &import);
+                    let cycle = import_cycle_description(active, loaded, &source_path, &import);
                     sink.emit(
                         Diagnostic::error(
                             "project.circular_import",
@@ -1348,14 +2049,7 @@ fn load_source_recursive(
                             "remove one import or move shared definitions into an acyclic module",
                         ),
                     );
-                    validate_import_namespace(
-                        loaded,
-                        &source_path,
-                        &import,
-                        file_id,
-                        span,
-                        sink,
-                    );
+                    validate_import_namespace(loaded, &source_path, &import, file_id, span, sink);
                     continue;
                 }
                 load_source_recursive(
@@ -1366,6 +2060,7 @@ fn load_source_recursive(
                     active,
                     loaded,
                     entry_source,
+                    context,
                 )?;
                 validate_import_namespace(loaded, &source_path, &import, file_id, span, sink);
                 continue;
@@ -1383,7 +2078,7 @@ fn load_source_recursive(
             }
             StdlibImportStatus::NotStdlib => {}
         }
-        match resolve_import_path(&path, &import) {
+        match resolve_import_path(&path, &import, context) {
             ImportResolution::Found(import_path) => {
                 if active.contains(&import_path) {
                     let cycle = import_cycle_description(active, loaded, &import_path, &import);
@@ -1408,6 +2103,7 @@ fn load_source_recursive(
                     active,
                     loaded,
                     entry_source,
+                    context,
                 )?;
                 validate_import_namespace(loaded, &import_path, &import, file_id, span, sink);
             }
@@ -1498,11 +2194,16 @@ enum StdlibImportStatus {
     NotStdlib,
 }
 
-fn classify_stdlib_import(import: &str) -> StdlibImportStatus {
+fn classify_stdlib_import(import: &str, has_selected_items: bool) -> StdlibImportStatus {
     if import != "ori" && !import.starts_with("ori.") {
         return StdlibImportStatus::NotStdlib;
     }
     if ori_types::stdlib::is_implemented_stdlib_module(import) {
+        if has_selected_items {
+            if let Some(path) = find_stdlib_source_module(import) {
+                return StdlibImportStatus::StdlibSource(path);
+            }
+        }
         return StdlibImportStatus::Implemented;
     }
     if let Some(path) = find_stdlib_source_module(import) {
@@ -1578,7 +2279,7 @@ enum ImportResolution {
     Missing,
 }
 
-fn resolve_import_path(importer: &Path, import: &str) -> ImportResolution {
+fn resolve_import_path(importer: &Path, import: &str, context: &ImportContext) -> ImportResolution {
     // Directory of the file performing the import
     let Some(dir) = importer.parent() else {
         return ImportResolution::Missing;
@@ -1622,11 +2323,51 @@ fn resolve_import_path(importer: &Path, import: &str) -> ImportResolution {
         }
     }
 
+    for dependency in &context.dependencies {
+        for candidate in dependency_import_candidates(dependency, import) {
+            if candidate.is_file() {
+                let path = std::fs::canonicalize(&candidate).unwrap_or(candidate);
+                if !matches.contains(&path) {
+                    matches.push(path);
+                }
+            }
+        }
+    }
+
     match matches.len() {
         0 => ImportResolution::Missing,
         1 => ImportResolution::Found(matches.remove(0)),
         _ => ImportResolution::Ambiguous(matches),
     }
+}
+
+fn dependency_import_candidates(dependency: &ImportDependency, import: &str) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if import == dependency.name {
+        candidates.push(dependency.entry.clone());
+    }
+
+    let prefix = format!("{}.", dependency.name);
+    let suffix = import.strip_prefix(&prefix);
+    for base in dependency_search_bases(dependency) {
+        candidates.extend(import_candidates(&base, import));
+        if let Some(suffix) = suffix {
+            candidates.extend(import_candidates(&base, suffix));
+        }
+    }
+    candidates
+}
+
+fn dependency_search_bases(dependency: &ImportDependency) -> Vec<PathBuf> {
+    let mut bases = Vec::new();
+    if let Some(source_root) = &dependency.source_root {
+        bases.push(source_root.clone());
+    }
+    if let Some(parent) = dependency.entry.parent() {
+        bases.push(parent.to_path_buf());
+    }
+    bases.push(dependency.root.clone());
+    dedup_paths(bases)
 }
 
 fn import_candidates(base: &Path, import: &str) -> Vec<PathBuf> {
@@ -1692,6 +2433,606 @@ fn check_loaded_sources(
 }
 
 #[derive(Clone)]
+struct DocSymbol {
+    symbol: String,
+    kind: String,
+    signature: String,
+    source_path: PathBuf,
+    file_id: FileId,
+    span: Span,
+    param_names: HashSet<String>,
+    return_requires_doc: bool,
+    inline_doc: Option<ParsedDocComment>,
+    has_inline_doc: bool,
+    is_public: bool,
+}
+
+fn load_oridoc_index(
+    _path: &Path,
+    loaded: &[LoadedSource],
+    config: Option<&ProjectConfig>,
+    cache: &mut SourceCache,
+    sink: &mut DiagnosticSink,
+) -> crate::oridoc::OridocIndex {
+    let mut paths = Vec::new();
+    for source in loaded {
+        let sidecar = source.path.with_extension("oridoc");
+        if sidecar.is_file() {
+            paths.push(sidecar);
+        }
+    }
+
+    let mut configured_paths = config
+        .map(|config| config.doc_paths.clone())
+        .unwrap_or_default();
+    if configured_paths.is_empty() {
+        if let Some(config) = config {
+            let default_docs = config.root.join("docs/api");
+            if default_docs.exists() {
+                configured_paths.push(default_docs);
+            }
+        }
+    }
+    for path in configured_paths {
+        collect_oridoc_paths(&path, &mut paths);
+    }
+
+    load_oridoc_index_from_paths(paths, cache, sink)
+}
+
+fn load_oridoc_index_from_paths(
+    paths: Vec<PathBuf>,
+    cache: &mut SourceCache,
+    sink: &mut DiagnosticSink,
+) -> crate::oridoc::OridocIndex {
+    let mut index = crate::oridoc::OridocIndex::default();
+    for path in dedup_paths(paths) {
+        let Ok(source) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let file_id = cache.add(&path, source.clone());
+        let parsed = crate::oridoc::parse_oridoc(&path, &source);
+        for diagnostic in parsed.diagnostics {
+            sink.emit(
+                Diagnostic::error("doc.syntax", diagnostic.message)
+                    .with_label(Label::primary(
+                        file_id,
+                        diagnostic.span,
+                        ".oridoc syntax here",
+                    ))
+                    .with_action(diagnostic.action),
+            );
+        }
+        for mut entry in parsed.entries {
+            entry.file_id = Some(file_id);
+            index.insert(entry);
+        }
+    }
+    index
+}
+
+fn collect_oridoc_paths(path: &Path, out: &mut Vec<PathBuf>) {
+    if path.is_file() {
+        if path.extension().is_some_and(|ext| ext == "oridoc") {
+            out.push(path.to_path_buf());
+        }
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            collect_oridoc_paths(&path, out);
+        } else if path.extension().is_some_and(|ext| ext == "oridoc") {
+            out.push(path);
+        }
+    }
+}
+
+fn dedup_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for path in paths {
+        let key = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+        if seen.insert(key) {
+            out.push(path);
+        }
+    }
+    out
+}
+
+fn validate_oridoc_index(
+    loaded: &[LoadedSource],
+    index: &crate::oridoc::OridocIndex,
+    config: Option<&ProjectConfig>,
+    sink: &mut DiagnosticSink,
+) {
+    let symbols = collect_doc_symbols(loaded);
+    for entry in index.entries() {
+        let Some(symbol) = symbols.get(&entry.symbol) else {
+            let mut diagnostic = Diagnostic::error(
+                "doc.symbol_not_found",
+                format!("`.oridoc` documents unknown symbol `{}`", entry.symbol),
+            )
+            .with_action("rename the doc target or document a symbol that exists in the namespace");
+            if let Some(file_id) = entry.file_id {
+                diagnostic = diagnostic.with_label(Label::primary(
+                    file_id,
+                    entry.span,
+                    "unknown documentation target",
+                ));
+            }
+            sink.emit(diagnostic);
+            continue;
+        };
+
+        for (name, _) in &entry.doc.params {
+            if name.is_empty() || !symbol.param_names.contains(name) {
+                let name = if name.is_empty() {
+                    "missing parameter name"
+                } else {
+                    name.as_str()
+                };
+                let mut diagnostic = Diagnostic::warning(
+                    "doc.param_name_mismatch",
+                    format!(
+                        "documentation tag `param {name}` does not match `{}`",
+                        symbol.symbol
+                    ),
+                )
+                .with_action("rename the param entry or remove it");
+                if let Some(file_id) = entry.file_id {
+                    diagnostic = diagnostic.with_label(Label::primary(
+                        file_id,
+                        entry.span,
+                        "documentation entry here",
+                    ));
+                }
+                sink.emit(diagnostic);
+            }
+        }
+
+        if symbol.return_requires_doc && entry.doc.returns.is_none() {
+            let mut diagnostic = Diagnostic::warning(
+                "doc.missing_return",
+                format!(
+                    "documentation for `{}` is missing `returns:`",
+                    symbol.symbol
+                ),
+            )
+            .with_action("add a `returns:` section for the returned value");
+            if let Some(file_id) = entry.file_id {
+                diagnostic = diagnostic.with_label(Label::primary(
+                    file_id,
+                    entry.span,
+                    "documentation entry here",
+                ));
+            }
+            sink.emit(diagnostic);
+        }
+    }
+
+    let requirement = config
+        .map(|config| config.require_public_docs)
+        .unwrap_or(DocRequirement::Off);
+    if requirement == DocRequirement::Off {
+        return;
+    }
+    let documented: HashSet<&str> = symbols
+        .values()
+        .filter(|symbol| symbol.has_inline_doc)
+        .map(|symbol| symbol.symbol.as_str())
+        .chain(index.symbols())
+        .collect();
+    for symbol in symbols.values() {
+        if symbol.kind == "module"
+            || !symbol.is_public
+            || documented.contains(symbol.symbol.as_str())
+        {
+            continue;
+        }
+        let message = format!("public symbol `{}` has no documentation", symbol.symbol);
+        let diagnostic = match requirement {
+            DocRequirement::Warn => Diagnostic::warning("doc.missing_public", message),
+            DocRequirement::Error => Diagnostic::error("doc.missing_public", message),
+            DocRequirement::Off => continue,
+        }
+        .with_label(Label::primary(
+            symbol.file_id,
+            symbol.span,
+            "public symbol without documentation",
+        ))
+        .with_action("add an inline doc comment or a matching `.oridoc` entry");
+        sink.emit(diagnostic);
+    }
+}
+
+fn collect_doc_symbols(loaded: &[LoadedSource]) -> BTreeMap<String, DocSymbol> {
+    let mut symbols = BTreeMap::new();
+    for source in loaded {
+        let namespace = namespace_of(&source.ast);
+        symbols.insert(
+            namespace.clone(),
+            DocSymbol {
+                symbol: namespace.clone(),
+                kind: "module".into(),
+                signature: format!("namespace {namespace}"),
+                source_path: source.path.clone(),
+                file_id: source.file_id,
+                span: source.ast.namespace.span,
+                param_names: HashSet::new(),
+                return_requires_doc: false,
+                inline_doc: None,
+                has_inline_doc: false,
+                is_public: true,
+            },
+        );
+
+        for item in &source.ast.items {
+            let leading_start = item
+                .attrs
+                .first()
+                .map(|attr| attr.span.start)
+                .unwrap_or_else(|| item.item.span().start);
+            let inline_doc = doc_comment_for(source, leading_start);
+            match &item.item {
+                Item::Func(func) => insert_doc_symbol(
+                    &mut symbols,
+                    source,
+                    format!("{}.{}", namespace, func.name),
+                    "function",
+                    func_signature_text(source, func),
+                    func.span,
+                    &func.params,
+                    func.return_ty.as_ref(),
+                    inline_doc,
+                    func.visibility.is_public(),
+                ),
+                Item::Struct(decl) => {
+                    insert_doc_symbol_without_params(
+                        &mut symbols,
+                        source,
+                        format!("{}.{}", namespace, decl.name),
+                        "struct",
+                        format!(
+                            "{}struct {}{}{}",
+                            visibility_prefix(decl.visibility),
+                            decl.name,
+                            type_params_text(&decl.type_params),
+                            where_text(source, decl.where_clause.as_ref())
+                        ),
+                        decl.span,
+                        inline_doc,
+                        decl.visibility.is_public(),
+                    );
+                    for method in &decl.methods {
+                        insert_doc_symbol(
+                            &mut symbols,
+                            source,
+                            format!("{}.{}.{}", namespace, decl.name, method.name),
+                            "method",
+                            func_signature_text(source, method),
+                            method.span,
+                            &method.params,
+                            method.return_ty.as_ref(),
+                            doc_comment_for(source, method.span.start),
+                            method.visibility.is_public(),
+                        );
+                    }
+                }
+                Item::Enum(decl) => insert_doc_symbol_without_params(
+                    &mut symbols,
+                    source,
+                    format!("{}.{}", namespace, decl.name),
+                    "enum",
+                    format!(
+                        "{}enum {}{}",
+                        visibility_prefix(decl.visibility),
+                        decl.name,
+                        type_params_text(&decl.type_params)
+                    ),
+                    decl.span,
+                    inline_doc,
+                    decl.visibility.is_public(),
+                ),
+                Item::Trait(decl) => {
+                    insert_doc_symbol_without_params(
+                        &mut symbols,
+                        source,
+                        format!("{}.{}", namespace, decl.name),
+                        "trait",
+                        format!(
+                            "{}trait {}{}{}",
+                            visibility_prefix(decl.visibility),
+                            decl.name,
+                            type_params_text(&decl.type_params),
+                            where_text(source, decl.where_clause.as_ref())
+                        ),
+                        decl.span,
+                        inline_doc,
+                        decl.visibility.is_public(),
+                    );
+                    for member in &decl.members {
+                        match member {
+                            TraitMember::Required(sig) => insert_doc_symbol(
+                                &mut symbols,
+                                source,
+                                format!("{}.{}.{}", namespace, decl.name, sig.name),
+                                "trait method",
+                                func_signature_decl_text(source, sig),
+                                sig.span,
+                                &sig.params,
+                                sig.return_ty.as_ref(),
+                                doc_comment_for(source, sig.span.start),
+                                sig.visibility.is_public(),
+                            ),
+                            TraitMember::Default(func) => insert_doc_symbol(
+                                &mut symbols,
+                                source,
+                                format!("{}.{}.{}", namespace, decl.name, func.name),
+                                "trait method",
+                                func_signature_text(source, func),
+                                func.span,
+                                &func.params,
+                                func.return_ty.as_ref(),
+                                doc_comment_for(source, func.span.start),
+                                func.visibility.is_public(),
+                            ),
+                            TraitMember::Type(_) => {}
+                        }
+                    }
+                }
+                Item::Implement(decl) => {
+                    for method in &decl.methods {
+                        insert_doc_symbol(
+                            &mut symbols,
+                            source,
+                            format!(
+                                "{}.implement {} for {}.{}",
+                                namespace, decl.trait_name, decl.for_type, method.name
+                            ),
+                            "implementation method",
+                            func_signature_text(source, method),
+                            method.span,
+                            &method.params,
+                            method.return_ty.as_ref(),
+                            doc_comment_for(source, method.span.start),
+                            method.visibility.is_public(),
+                        );
+                    }
+                }
+                Item::Alias(decl) => insert_doc_symbol_without_params(
+                    &mut symbols,
+                    source,
+                    format!("{}.{}", namespace, decl.name),
+                    "alias",
+                    format!(
+                        "{}alias {}{} = {}",
+                        visibility_prefix(decl.visibility),
+                        decl.name,
+                        type_params_text(&decl.type_params),
+                        type_text(source, &decl.ty)
+                    ),
+                    decl.span,
+                    inline_doc,
+                    decl.visibility.is_public(),
+                ),
+                Item::Const(decl) => insert_doc_symbol_without_params(
+                    &mut symbols,
+                    source,
+                    format!("{}.{}", namespace, decl.name),
+                    "constant",
+                    format!(
+                        "{}const {}: {}",
+                        visibility_prefix(decl.visibility),
+                        decl.name,
+                        type_text(source, &decl.ty)
+                    ),
+                    decl.span,
+                    inline_doc,
+                    decl.visibility.is_public(),
+                ),
+                Item::Var(decl) => insert_doc_symbol_without_params(
+                    &mut symbols,
+                    source,
+                    format!("{}.{}", namespace, decl.name),
+                    "variable",
+                    format!(
+                        "{}var {}: {}",
+                        visibility_prefix(decl.visibility),
+                        decl.name,
+                        type_text(source, &decl.ty)
+                    ),
+                    decl.span,
+                    inline_doc,
+                    decl.visibility.is_public(),
+                ),
+                Item::Extern(decl) => {
+                    for member in &decl.members {
+                        match member {
+                            ExternMember::Func {
+                                visibility,
+                                name,
+                                params,
+                                return_ty,
+                                span,
+                            } => insert_doc_symbol(
+                                &mut symbols,
+                                source,
+                                format!("{}.{}", namespace, name),
+                                "extern function",
+                                func_signature_parts_text(
+                                    source,
+                                    *visibility,
+                                    name.as_str(),
+                                    params,
+                                    return_ty.as_ref(),
+                                    None,
+                                ),
+                                *span,
+                                params,
+                                return_ty.as_ref(),
+                                doc_comment_for(source, span.start),
+                                visibility.is_public(),
+                            ),
+                            ExternMember::Var {
+                                visibility,
+                                name,
+                                ty,
+                                span,
+                            } => insert_doc_symbol_without_params(
+                                &mut symbols,
+                                source,
+                                format!("{}.{}", namespace, name),
+                                "extern variable",
+                                format!(
+                                    "{}var {}: {}",
+                                    visibility_prefix(*visibility),
+                                    name,
+                                    type_text(source, ty)
+                                ),
+                                *span,
+                                doc_comment_for(source, span.start),
+                                visibility.is_public(),
+                            ),
+                        }
+                    }
+                }
+            }
+        }
+    }
+    symbols
+}
+
+fn insert_doc_symbol(
+    symbols: &mut BTreeMap<String, DocSymbol>,
+    source: &LoadedSource,
+    symbol: String,
+    kind: &str,
+    signature: String,
+    span: Span,
+    params: &[Param],
+    return_ty: Option<&Type>,
+    inline_doc: Option<ParsedDocComment>,
+    is_public: bool,
+) {
+    let has_inline_doc = inline_doc.is_some();
+    symbols.insert(
+        symbol.clone(),
+        DocSymbol {
+            symbol,
+            kind: kind.into(),
+            signature,
+            source_path: source.path.clone(),
+            file_id: source.file_id,
+            span,
+            param_names: params
+                .iter()
+                .map(|param| param.name.to_string())
+                .collect::<HashSet<_>>(),
+            return_requires_doc: return_type_requires_doc(return_ty),
+            inline_doc,
+            has_inline_doc,
+            is_public,
+        },
+    );
+}
+
+fn insert_doc_symbol_without_params(
+    symbols: &mut BTreeMap<String, DocSymbol>,
+    source: &LoadedSource,
+    symbol: String,
+    kind: &str,
+    signature: String,
+    span: Span,
+    inline_doc: Option<ParsedDocComment>,
+    is_public: bool,
+) {
+    let has_inline_doc = inline_doc.is_some();
+    symbols.insert(
+        symbol.clone(),
+        DocSymbol {
+            symbol,
+            kind: kind.into(),
+            signature,
+            source_path: source.path.clone(),
+            file_id: source.file_id,
+            span,
+            param_names: HashSet::new(),
+            return_requires_doc: false,
+            inline_doc,
+            has_inline_doc,
+            is_public,
+        },
+    );
+}
+
+pub fn oridoc_hover_for_symbol(source_path: &Path, source: &str, symbol: &str) -> Option<String> {
+    let namespace = namespace_from_source_text(source)?;
+    let mut paths = Vec::new();
+    let sidecar = source_path.with_extension("oridoc");
+    if sidecar.is_file() {
+        paths.push(sidecar);
+    }
+    if let Some(config) = project_config_for_docs(source_path).ok().flatten() {
+        let mut configured_paths = config.doc_paths;
+        if configured_paths.is_empty() {
+            let default_docs = config.root.join("docs/api");
+            if default_docs.exists() {
+                configured_paths.push(default_docs);
+            }
+        }
+        for path in configured_paths {
+            collect_oridoc_paths(&path, &mut paths);
+        }
+    }
+
+    let mut index = crate::oridoc::OridocIndex::default();
+    for path in dedup_paths(paths) {
+        let Ok(doc_source) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let parsed = crate::oridoc::parse_oridoc(&path, &doc_source);
+        if !parsed.diagnostics.is_empty() {
+            continue;
+        }
+        for entry in parsed.entries {
+            index.insert(entry);
+        }
+    }
+
+    for candidate in hover_symbol_candidates(&namespace, symbol) {
+        if let Some(entry) = index.get(&candidate) {
+            return Some(crate::oridoc::hover_markdown(entry));
+        }
+    }
+    None
+}
+
+fn namespace_from_source_text(source: &str) -> Option<String> {
+    source.lines().find_map(|line| {
+        let line = line.trim();
+        let rest = line.strip_prefix("namespace ")?;
+        rest.split_whitespace().next().map(str::to_string)
+    })
+}
+
+fn hover_symbol_candidates(namespace: &str, symbol: &str) -> Vec<String> {
+    let mut candidates = Vec::new();
+    if symbol == namespace || symbol.starts_with(&format!("{namespace}.")) {
+        candidates.push(symbol.to_string());
+    } else {
+        candidates.push(format!("{namespace}.{symbol}"));
+        if symbol.contains('.') {
+            candidates.push(symbol.to_string());
+        }
+    }
+    candidates
+}
+
+#[derive(Clone)]
 struct TestCase {
     name: String,
     span: ori_diagnostics::Span,
@@ -1750,6 +3091,16 @@ fn collect_test_cases(
         }
     }
     tests
+}
+
+fn filter_test_cases(tests: Vec<TestCase>, filter: Option<&str>) -> Vec<TestCase> {
+    let Some(filter) = filter.map(str::trim).filter(|filter| !filter.is_empty()) else {
+        return tests;
+    };
+    tests
+        .into_iter()
+        .filter(|test| test.name.contains(filter) || test.name.rsplit('.').next() == Some(filter))
+        .collect()
 }
 
 fn run_native_tests(
@@ -2107,7 +3458,7 @@ fn doc_has_return_tag(comment: &str) -> bool {
     })
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct ParsedDocComment {
     body: Vec<String>,
     params: Vec<(String, String)>,
@@ -2618,9 +3969,7 @@ pub struct DoctorReport {
 
 impl DoctorReport {
     pub fn has_failures(&self) -> bool {
-        self.checks
-            .iter()
-            .any(|c| c.status == DoctorStatus::Fail)
+        self.checks.iter().any(|c| c.status == DoctorStatus::Fail)
     }
 }
 
@@ -2640,8 +3989,7 @@ pub fn run_doctor() -> DoctorReport {
         None => checks.push(DoctorCheck {
             name: "stdlib root",
             status: DoctorStatus::Fail,
-            detail: "not found — set ORI_STDLIB_ROOT or install the packaged stdlib/ layout"
-                .into(),
+            detail: "not found — set ORI_STDLIB_ROOT or install the packaged stdlib/ layout".into(),
         }),
     }
 
@@ -2723,6 +4071,13 @@ pub fn run_doctor() -> DoctorReport {
 pub struct SummaryImport {
     pub path: String,
     pub alias: Option<String>,
+    pub selected: Vec<SummaryImportItem>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SummaryImportItem {
+    pub name: String,
+    pub alias: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -2755,6 +4110,14 @@ pub fn run_summary(path: &Path) -> Result<SummaryOutput, String> {
             .map(|import| SummaryImport {
                 path: import.path.to_string(),
                 alias: import.alias.as_ref().map(|a| a.text.to_string()),
+                selected: import
+                    .selected
+                    .iter()
+                    .map(|item| SummaryImportItem {
+                        name: item.name.text.to_string(),
+                        alias: item.alias.as_ref().map(|a| a.text.to_string()),
+                    })
+                    .collect(),
             })
             .collect();
         modules.push(SummaryModule {
@@ -2788,7 +4151,21 @@ pub fn format_summary_text(summary: &SummaryOutput) -> String {
             module.namespace
         ));
         for import in &module.imports {
-            if let Some(alias) = &import.alias {
+            if !import.selected.is_empty() {
+                let selected = import
+                    .selected
+                    .iter()
+                    .map(|item| {
+                        if let Some(alias) = &item.alias {
+                            format!("{} as {}", item.name, alias)
+                        } else {
+                            item.name.clone()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                out.push_str(&format!("    import {} only ({})\n", import.path, selected));
+            } else if let Some(alias) = &import.alias {
                 out.push_str(&format!("    import {} as {}\n", import.path, alias));
             } else {
                 out.push_str(&format!("    import {}\n", import.path));
@@ -2817,12 +4194,40 @@ fn count_orl_files(root: &std::path::Path) -> usize {
     count
 }
 
-fn render_documentation_markdown(loaded: &[LoadedSource]) -> String {
+fn render_documentation_markdown(
+    loaded: &[LoadedSource],
+    external_docs: &crate::oridoc::OridocIndex,
+    doc_mode: ProjectDocMode,
+) -> String {
     let mut out = String::from("# Ori API Documentation\n\n");
     let mut entry_count = 0usize;
+    let symbols = collect_doc_symbols(loaded);
+    let mut skip_inline = HashSet::new();
+
+    if doc_mode == ProjectDocMode::SidecarFirst {
+        for entry in external_docs.entries() {
+            if let Some(symbol) = symbols.get(&entry.symbol) {
+                append_oridoc_entry(&mut out, symbol, entry);
+                skip_inline.insert(symbol.symbol.clone());
+                entry_count += 1;
+            }
+        }
+    }
 
     for source in loaded {
-        entry_count += render_source_documentation(source, &mut out);
+        entry_count += render_source_documentation(source, &mut out, &skip_inline);
+    }
+
+    if doc_mode == ProjectDocMode::InlineFirst {
+        for entry in external_docs.entries() {
+            if let Some(symbol) = symbols.get(&entry.symbol) {
+                if symbol.has_inline_doc {
+                    continue;
+                }
+                append_oridoc_entry(&mut out, symbol, entry);
+                entry_count += 1;
+            }
+        }
     }
 
     if entry_count == 0 {
@@ -2840,8 +4245,9 @@ fn append_stdlib_documentation(out: &mut String) {
     // here; `implemented_stdlib_modules()` covers canonical paths, `ori.*`
     // aliases (e.g. `ori.files`), and the module-only allowlist
     // (`ori`, `ori.core`, `ori.Error`, `ori.mem`, `ori.concurrent`).
-    let modules: BTreeSet<&'static str> =
-        ori_types::stdlib::implemented_stdlib_modules().into_iter().collect();
+    let modules: BTreeSet<&'static str> = ori_types::stdlib::implemented_stdlib_modules()
+        .into_iter()
+        .collect();
 
     out.push_str("## Standard Library\n\n");
     out.push_str("### Modules\n\n");
@@ -2869,7 +4275,15 @@ fn append_stdlib_documentation(out: &mut String) {
     }
 }
 
-fn render_source_documentation(source: &LoadedSource, out: &mut String) -> usize {
+fn render_source_documentation(
+    source: &LoadedSource,
+    out: &mut String,
+    skip_inline: &HashSet<String>,
+) -> usize {
+    if !skip_inline.is_empty() {
+        return render_source_documentation_from_symbols(source, out, skip_inline);
+    }
+
     let mut entry_count = 0usize;
     let namespace = namespace_of(&source.ast);
 
@@ -3128,6 +4542,49 @@ fn render_source_documentation(source: &LoadedSource, out: &mut String) -> usize
     entry_count
 }
 
+fn render_source_documentation_from_symbols(
+    source: &LoadedSource,
+    out: &mut String,
+    skip_inline: &HashSet<String>,
+) -> usize {
+    let mut entry_count = 0usize;
+    let symbols = collect_doc_symbols(std::slice::from_ref(source));
+    for symbol in symbols.values() {
+        if skip_inline.contains(&symbol.symbol) {
+            continue;
+        }
+        let Some(doc) = &symbol.inline_doc else {
+            continue;
+        };
+        append_doc_entry_with_source_path(
+            out,
+            &symbol.symbol,
+            &symbol.kind,
+            &symbol.signature,
+            doc,
+            &symbol.source_path,
+        );
+        entry_count += 1;
+    }
+    entry_count
+}
+
+fn append_oridoc_entry(out: &mut String, symbol: &DocSymbol, entry: &crate::oridoc::OridocEntry) {
+    let doc = ParsedDocComment {
+        body: entry.doc.body.clone(),
+        params: entry.doc.params.clone(),
+        returns: entry.doc.returns.clone(),
+    };
+    append_doc_entry_with_source_path(
+        out,
+        &symbol.symbol,
+        &symbol.kind,
+        &symbol.signature,
+        &doc,
+        &symbol.source_path,
+    );
+}
+
 fn doc_comment_for(source: &LoadedSource, leading_start: u32) -> Option<ParsedDocComment> {
     let span = leading_block_comment_before(&source.tokens, leading_start)?;
     Some(parse_doc_comment(&source.source[span.as_range()]))
@@ -3199,10 +4656,21 @@ fn append_doc_entry(
     doc: &ParsedDocComment,
     source: &LoadedSource,
 ) {
+    append_doc_entry_with_source_path(out, name, kind, signature, doc, &source.path);
+}
+
+fn append_doc_entry_with_source_path(
+    out: &mut String,
+    name: &str,
+    kind: &str,
+    signature: &str,
+    doc: &ParsedDocComment,
+    source_path: &Path,
+) {
     let _ = writeln!(out, "## {name}");
     let _ = writeln!(out);
     let _ = writeln!(out, "- Kind: {kind}");
-    let _ = writeln!(out, "- Source: {}", source.path.display());
+    let _ = writeln!(out, "- Source: {}", source_path.display());
     let _ = writeln!(out);
     let _ = writeln!(out, "```ori");
     let _ = writeln!(out, "{signature}");
@@ -3381,21 +4849,27 @@ fn lower_loaded_sources(
     if let Some(concrete_id) = json_val_def_id {
         if !merged.enums.iter().any(|e| e.def_id == concrete_id) {
             if let Some(sig) = resolved.enum_sigs.iter().find(|s| s.def_id == concrete_id) {
-                let variants = sig.variants.iter().map(|v| {
-                    let fields = v.fields.iter().map(|(fname, fty)| {
-                        ori_hir::hir::HirField {
-                            name: fname.clone(),
-                            ty: fty.clone(),
-                            contract: None,
+                let variants = sig
+                    .variants
+                    .iter()
+                    .map(|v| {
+                        let fields = v
+                            .fields
+                            .iter()
+                            .map(|(fname, fty)| ori_hir::hir::HirField {
+                                name: fname.clone(),
+                                ty: fty.clone(),
+                                contract: None,
+                                span: ori_diagnostics::Span::DUMMY,
+                            })
+                            .collect();
+                        ori_hir::hir::HirVariant {
+                            name: v.name.clone(),
+                            fields,
                             span: ori_diagnostics::Span::DUMMY,
                         }
-                    }).collect();
-                    ori_hir::hir::HirVariant {
-                        name: v.name.clone(),
-                        fields,
-                        span: ori_diagnostics::Span::DUMMY,
-                    }
-                }).collect();
+                    })
+                    .collect();
                 let hir_enum = ori_hir::hir::HirEnum {
                     def_id: concrete_id,
                     name: smol_str::SmolStr::new("ori.json.Value"),
@@ -3413,4 +4887,5 @@ fn lower_loaded_sources(
     merged
 }
 
-// The native route now links against the Rust ori-runtime static library. ori build remains the C debug backend.
+// The native route now links against the Rust ori-runtime static library. C
+// emission remains available only as the explicit debug route `ori emit c`.

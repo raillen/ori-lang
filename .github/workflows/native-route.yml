@@ -43,7 +43,7 @@ jobs:
         run: |
           rustup toolchain install ${{ matrix.toolchain }}
           rustup default ${{ matrix.toolchain }}
-          rustc -vV
+          rustc -Vv
           cargo -V
 
       - name: Configure Windows GNU linker
@@ -68,10 +68,28 @@ jobs:
       - name: Test diagnostic catalog
         run: cargo test -p ori-driver --test diagnostic_catalog
 
-      - name: Native release smoke (Windows)
+      - name: Native release package (Windows)
         if: matrix.smoke == 'powershell'
-        run: .\tools\smoke_native_release.ps1
+        shell: pwsh
+        run: |
+          .\tools\package_native_release.ps1 `
+            -PackageRoot "target\dist\ori-${{ matrix.name }}" `
+            -ArchivePath "target\dist\ori-${{ matrix.name }}.zip" `
+            -Force
 
-      - name: Native release smoke (Unix)
+      - name: Native release package (Unix)
         if: matrix.smoke == 'sh'
-        run: sh tools/smoke_native_release.sh
+        run: |
+          sh tools/package_native_release.sh \
+            --package-root "target/dist/ori-${{ matrix.name }}" \
+            --archive "target/dist/ori-${{ matrix.name }}.tar.gz" \
+            --force
+
+      - name: Upload native release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ori-${{ matrix.name }}
+          path: |
+            target/dist/ori-${{ matrix.name }}.zip
+            target/dist/ori-${{ matrix.name }}.tar.gz
+          if-no-files-found: error

@@ -29,6 +29,30 @@ cargo test -p ori-runtime
 cargo test -p ori-lsp
 ```
 
+Complete testing manual:
+
+```text
+docs/guides/testing-manual.md
+```
+
+Security and performance metrics:
+
+```bash
+cargo run -p ori-driver -- run tools/quality_metrics.orl
+```
+
+Language comparison workloads:
+
+```powershell
+.\tools\compare_language_workloads.ps1 -Iterations 5
+```
+
+Comparison guide:
+
+```text
+docs/guides/language-comparison.md
+```
+
 The driver suite also checks the official examples in `examples/*.orl` so the
 public samples do not drift from the implemented language.
 

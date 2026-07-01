@@ -90,13 +90,14 @@ The manifest is protected by tests in `ori-types::stdlib::tests`:
 Steps 1-3 are guarded by the parity tests above; the build fails fast if
 they diverge.
 
-### Future: `.orl` modules
+### `.orl` modules
 
-Migrating stdlib modules to `.orl` source is a v2 backlog item. Hot-path
-modules (collections, async, I/O, ARC) will remain runtime intrinsics; only
-cold compositional modules (e.g. `ori.format` helpers, `ori.iter`
-combinators) are candidates for `.orl` facades over intrinsics. See
-`docs/planning/PLANO-MATURIDADE-COMPLETO.md` Etapa 8.1.
+The stdlib now uses a three-layer model. Hot-path modules (collections, async,
+I/O, ARC) keep runtime intrinsics. Cold compositional APIs can live in
+`stdlib/*.orl` as source modules loaded by the compiler. This is how modules
+such as `ori.string`, `ori.list`, `ori.fs`, `ori.time`, `ori.args`,
+`ori.config`, and `ori.log` expose ergonomic helpers without expanding the
+runtime ABI.
 
 ---
 
@@ -116,7 +117,10 @@ Implemented and importable today:
 - `ori.convert`
 - `ori.mem`
 - `ori.time`
+- `ori.args`
+- `ori.config`
 - `ori.format`
+- `ori.log`
 - `ori.os`
 - `ori.random`
 - `ori.iter`
@@ -127,6 +131,14 @@ Implemented and importable today:
 - `ori.atomic`
 - `ori.Error`
 - `ori.json`
+
+`ori.string`, `ori.list`, `ori.fs`, and `ori.time` are hybrid modules: native
+runtime functions and selected `.orl` helpers live under the same public namespace.
+Use `import ori.string only (is_empty)`-style imports for helper-only names.
+Normal alias imports keep the runtime surface lightweight.
+The older helper paths (`ori.string.utils`, `ori.string.algorithms`,
+`ori.list.utils`, `ori.list.algorithms`, `ori.fs.utils`) remain valid for
+compatibility.
 
 Partially importable modules:
 - `ori.test`
@@ -243,9 +255,22 @@ fs.is_file(path: string)               -> result<bool, string>
 fs.is_dir(path: string)                -> result<bool, string>
 fs.copy(from: string, to: string)      -> result<void, string>
 fs.rename(from: string, to: string)    -> result<void, string>
+```
 
 `ori.fs` is the canonical module name. `ori.files` is accepted as a
 compatibility alias for the same functions.
+
+Additional `.orl` helpers are available directly under `ori.fs`:
+
+```ori
+import ori.fs only (read_text_or, remove_file)
+
+read_text_or(path: string, fallback: string) -> string
+write_text_result(path: string, content: string) -> result<string, string>
+exists_result(path: string) -> result<bool, string>
+remove_file(path: string) -> result<void, string>
+move_path(from: string, to: string) -> result<void, string>
+```
 
 The async variants complete on the native runtime and return the same
 `result<string,string>` shape after `await`.
@@ -273,7 +298,6 @@ fs.close(file: fs.File)                  -> void
 ```
 
 `File` is an opaque managed type. Use `using` or explicit `close` for cleanup.
-```
 
 ---
 
@@ -300,6 +324,19 @@ string.parse_int(s: string)                   -> result<int, string>
 string.parse_float(s: string)                 -> result<float, string>
 string.to_bytes(s: string)                    -> bytes
 string.from_bytes(b: bytes)                   -> result<string, string>
+```
+
+Additional `.orl` helpers are available directly under `ori.string`:
+
+```ori
+import ori.string only (is_empty, truncate as cut)
+
+is_empty(s: string)                           -> bool
+blank(s: string)                              -> bool
+replicate(s: string, n: int)                  -> string
+replace_all(s: string, needle: string, replacement: string) -> string
+join_non_empty(parts: list<string>, separator: string) -> string
+truncate(s: string, max_len: int)             -> string
 ```
 
 Invalid input returns `error(message)`. The `ori.convert` parsing helpers are
@@ -344,6 +381,20 @@ The native runtime stores collection values as runtime handles. `map` keys and
 `set` elements currently support built-in hashable scalar values and
 user-defined values that satisfy the checker rules for `Hashable` and
 `Equatable`.
+
+`ori.list` also exposes small `.orl` helpers directly:
+
+```ori
+import ori.list only (singleton, sum_int)
+
+get_or<T>(items: list<T>, index: int, fallback: T) -> T
+first_or<T>(items: list<T>, fallback: T) -> T
+last_or<T>(items: list<T>, fallback: T) -> T
+singleton<T>(item: T) -> list<T>
+sum_int(items: list<int>) -> int
+binary_search_int(items: list<int>, target: int) -> int
+all_equal_int(items: list<int>, expected: int) -> bool
+```
 
 ```ori
 import ori.deque as deque
@@ -737,14 +788,34 @@ The current parser does not support type-argument call syntax such as
 
 ```ori
 import ori.time as time
+import ori.time only (Instant, Duration, instant_now, duration_seconds)
 
 time.now() -> int
 time.sleep(millis: int) -> void
 time.duration_ms(start: int, end: int) -> int
+
+Instant
+Duration
+
+time.instant_now() -> time.Instant
+time.instant_from_unix_ms(value: int) -> time.Instant
+time.instant_to_unix_ms(value: time.Instant) -> int
+time.duration_millis(value: int) -> time.Duration
+time.duration_seconds(value: int) -> time.Duration
+time.duration_minutes(value: int) -> time.Duration
+time.duration_hours(value: int) -> time.Duration
+time.duration_to_millis(value: time.Duration) -> int
+time.elapsed_since(start: time.Instant) -> time.Duration
+time.between(start: time.Instant, finish: time.Instant) -> time.Duration
+time.add(value: time.Instant, duration: time.Duration) -> time.Instant
+time.sub(value: time.Instant, duration: time.Duration) -> time.Instant
+time.sleep_duration(duration: time.Duration) -> void
 ```
 
 `time.now()` returns the Unix timestamp in milliseconds. `time.sleep(0)` is
-valid and returns immediately.
+valid and returns immediately. `Instant` and `Duration` are `.orl` value
+wrappers over milliseconds; they make APIs read better without changing the
+runtime ABI.
 
 ## `ori.format` - Presentation Formatting
 
@@ -1002,6 +1073,10 @@ Status: partially implemented. Test functions marked with `@test` can be run
 with `ori test <file-or-project>`. This command uses the native backend and the
 Rust `ori-runtime` static library.
 
+Use `ori test <file-or-project> --filter <name>` to run only tests whose full
+name or short function name contains `<name>`. The runner reports how many tests
+were discovered and how many matched the filter.
+
 The `ori.test` module is importable today for basic assertion helpers.
 
 ```ori
@@ -1062,6 +1137,54 @@ Current implementation notes:
   `"macos"`, or `"unknown"`.
 - `os.arch()` currently normalizes known targets to `"x86_64"`, `"aarch64"`,
   `"x86"`, `"arm"`, or `"unknown"`.
+
+---
+
+## `ori.args` - CLI Arguments
+
+```ori
+import ori.args as args
+
+args.all() -> list<string>
+args.count() -> int
+args.get_or(index: int, fallback: string) -> string
+args.program_name_or(fallback: string) -> string
+```
+
+`ori.args` is a small `.orl` convenience layer over `ori.os.args`.
+
+---
+
+## `ori.log` - Minimal Logging
+
+```ori
+import ori.log as log
+
+log.info(message: string)
+log.warn(message: string)
+log.error_message(message: string)
+log.debug(message: string)
+```
+
+The first version is intentionally simple and CLI-oriented. `info`, `warn`, and
+`debug` write to stdout. `error_message` writes to stderr.
+
+---
+
+## `ori.config` - Local Config Helpers
+
+```ori
+import ori.config as config
+
+config.read_text(path: string) -> result<string, string>
+config.read_text_or(path: string, fallback: string) -> string
+config.write_text(path: string, content: string) -> result<string, string>
+config.read_json(path: string) -> result<json.Value, string>
+config.write_json(path: string, value: json.Value) -> result<string, string>
+```
+
+`ori.config` is a small `.orl` layer over `ori.fs` and `ori.json`. It is meant
+for local project/tool config, not for a full schema-validation framework.
 
 ---
 

@@ -38,6 +38,7 @@ lsp.log
 tests/snapshots/tmp/
 tmp/
 .ztc-tmp/
+.playwright-mcp/
 
 # Python cache (tools)
 __pycache__/

@@ -14,17 +14,129 @@
   },
   "func": {
     "prefix": "func",
-    "body": "func ${1:name}(${2:params}) -> ${3:void}\n    ${0}\nend",
+    "body": [
+      "func ${1:name}(${2:params}) -> ${3:void}",
+      "    ${0}",
+      "end"
+    ],
     "description": "Function declaration"
+  },
+  "async func": {
+    "prefix": "afunc",
+    "body": [
+      "async func ${1:name}(${2:params}) -> ${3:void}",
+      "    ${0}",
+      "end"
+    ],
+    "description": "Async function declaration"
   },
   "struct": {
     "prefix": "struct",
-    "body": "struct ${1:Name}\n    ${0}\nend",
+    "body": [
+      "struct ${1:Name}",
+      "    ${2:field: type}",
+      "end"
+    ],
     "description": "Struct declaration"
+  },
+  "enum": {
+    "prefix": "enum",
+    "body": [
+      "enum ${1:Name}",
+      "    ${2:Variant}",
+      "end"
+    ],
+    "description": "Enum declaration"
+  },
+  "trait": {
+    "prefix": "trait",
+    "body": [
+      "trait ${1:Name}",
+      "    func ${2:method}(self) -> ${3:void}",
+      "end"
+    ],
+    "description": "Trait declaration"
+  },
+  "implement": {
+    "prefix": "impl",
+    "body": [
+      "implement ${1:Trait} for ${2:Type}",
+      "    func ${3:method}(self) -> ${4:void}",
+      "        ${0}",
+      "    end",
+      "end"
+    ],
+    "description": "Implement trait for type"
   },
   "import stdlib": {
     "prefix": "import",
     "body": "import ${1:ori.module} as ${2:alias}",
     "description": "Import stdlib module"
+  },
+  "if": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition}",
+      "    ${0}",
+      "end"
+    ],
+    "description": "If statement"
+  },
+  "if else": {
+    "prefix": "ifelse",
+    "body": [
+      "if ${1:condition}",
+      "    ${2}",
+      "else",
+      "    ${0}",
+      "end"
+    ],
+    "description": "If-else statement"
+  },
+  "for in": {
+    "prefix": "for",
+    "body": [
+      "for ${1:item} in ${2:collection}",
+      "    ${0}",
+      "end"
+    ],
+    "description": "For-in loop"
+  },
+  "while": {
+    "prefix": "while",
+    "body": [
+      "while ${1:condition}",
+      "    ${0}",
+      "end"
+    ],
+    "description": "While loop"
+  },
+  "match": {
+    "prefix": "match",
+    "body": [
+      "match ${1:expression}",
+      "    case ${2:pattern} -> ${3:action}",
+      "    case _ -> ${0}",
+      "end"
+    ],
+    "description": "Pattern matching"
+  },
+  "using": {
+    "prefix": "using",
+    "body": [
+      "using ${1:resource} = ${2:value}",
+      "    ${0}",
+      "end"
+    ],
+    "description": "Resource scoping block"
+  },
+  "test func": {
+    "prefix": "test",
+    "body": [
+      "func test_${1:name}() -> void",
+      "    ${0}",
+      "end"
+    ],
+    "description": "Unit test function"
   }
 }

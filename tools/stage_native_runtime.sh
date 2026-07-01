@@ -63,7 +63,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 
 host_triple() {
-    rustc -vV | awk -F': ' '/^host:/ { print $2; exit }'
+    rustc -Vv | awk -F': ' '/^host:/ { print $2; exit }'
 }
 
 # Locate rust-lld: ORI_RUST_LLD env -> rustc sysroot -> PATH.
@@ -123,10 +123,24 @@ runtime_cdylib_name() {
 
 fallback_native_static_libs() {
     case "$1" in
-        *linux*) printf '%s\n' "pthread dl m" ;;
+        *linux*) printf '%s\n' "-lpthread -ldl -lm -no-pie" ;;
         *apple-darwin*) printf '%s\n' "System" ;;
         *windows-msvc*) printf '%s\n' "legacy_stdio_definitions.lib kernel32.lib ntdll.lib userenv.lib ws2_32.lib dbghelp.lib /defaultlib:msvcrt" ;;
         *) printf '\n' ;;
+    esac
+}
+
+required_native_link_args() {
+    target_triple="$1"
+    libs="$2"
+    case "$target_triple" in
+        *linux*)
+            case " $libs " in
+                *" -no-pie "*) printf '%s\n' "$libs" ;;
+                *) printf '%s -no-pie\n' "$libs" ;;
+            esac
+            ;;
+        *) printf '%s\n' "$libs" ;;
     esac
 }
 
@@ -238,7 +252,7 @@ if [ "$cdylib_found" -ne 1 ]; then
     cdylib_value=""
 fi
 
-libs=$(native_static_libs)
+libs=$(required_native_link_args "$target" "$(native_static_libs)")
 libs_json=$(json_array_from_words "$libs")
 metadata_path="$target_dir/runtime-link.json"
 cat > "$metadata_path" <<JSON

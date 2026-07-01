@@ -10,7 +10,7 @@ contract.
 
 **Languages:** English | [Portuguese](README.pt-BR.md) | [Japanese](README.ja.md)
 
-**Project menu:** [Specification](docs/spec/README.md) | [Planning](docs/planning/README.md) | [Standard library](stdlib/README.md) | [Runtime](runtime/README.md) | [Examples](examples/) | [Changelog](CHANGELOG.md) | [Contributing](CONTRIBUTING.md)
+**Project menu:** [Specification](docs/spec/README.md) | [Planning](docs/planning/README.md) | [First project](docs/guides/first-project-and-packages.md) | [Cookbook](docs/guides/cookbook-pequeno-medio.md) | [Bug reports](docs/guides/reportar-bugs.md) | [Standard library](stdlib/README.md) | [Runtime](runtime/README.md) | [Examples](examples/) | [Changelog](CHANGELOG.md) | [Contributing](CONTRIBUTING.md)
 
 ## Contents
 
@@ -20,6 +20,7 @@ contract.
 - [Quick start](#quick-start)
 - [A first program](#a-first-program)
 - [CLI overview](#cli-overview)
+- [Project docs](#project-docs)
 - [Language overview](#language-overview)
 - [Compiler architecture](#compiler-architecture)
 - [Standard library](#standard-library)
@@ -33,8 +34,9 @@ contract.
 
 ## What Ori is
 
-Ori is a statically typed language with explicit namespaces, explicit types,
-structured errors, deterministic cleanup, and native code generation.
+Ori is a statically typed language with explicit module namespaces (namespace),
+explicit types, absence/failure types (optional, result), structured errors,
+deterministic cleanup, and native code generation.
 
 The current compiler pipeline is:
 
@@ -114,10 +116,22 @@ On Windows, validate a release-style package with:
 .\tools\smoke_native_release.ps1
 ```
 
+Create a validated `.zip` package with:
+
+```powershell
+.\tools\package_native_release.ps1
+```
+
 On Linux or macOS:
 
 ```sh
 sh tools/smoke_native_release.sh
+```
+
+Create a validated `.tar.gz` package with:
+
+```sh
+sh tools/package_native_release.sh
 ```
 
 ## A first program
@@ -150,21 +164,25 @@ The `ori` CLI is implemented by `compiler/crates/ori-driver`.
 
 | Command | Purpose |
 |---|---|
+| `ori new <path>` | create a new app project skeleton |
 | `ori check <file.orl>` | parse, resolve, and type-check a source file |
 | `ori run <file.orl>` | compile and run through JIT or AOT, depending on runtime availability and env vars |
 | `ori compile <file.orl>` | emit a native executable through the Cranelift backend |
-| `ori test <file.orl>` | run functions marked with `@test` |
+| `ori test <file.orl> [--filter name]` | run functions marked with `@test`; `--filter` selects matching fully-qualified or short test names |
+| `ori repl` | run a small interactive JIT-backed REPL |
 | `ori fmt <file.orl>` | format source and print the formatted result |
 | `ori doc file <file.orl>` | extract documentation comments as Markdown or HTML |
+| `ori doc check <path>` | validate inline docs and `.oridoc` sidecar files |
 | `ori doc export` | export stdlib symbols, diagnostics, and keywords as JSON |
 | `ori doctor` | report stdlib, runtime, linker, target, and JIT health |
 | `ori explain <code>` | explain a diagnostic code |
 | `ori summary [path]` | print entry file, namespaces, imports, and diagnostics count |
-| `ori build <file.orl>` | emit C through the debug backend |
+| `ori build <path>` | build a file or project through the native backend |
+| `ori emit c <file.orl>` | emit C through the partial debug backend |
 | `ori lex <file.orl>` | print the token stream for compiler debugging |
 | `ori parse <file.orl>` | print the AST for compiler debugging |
-| `ori install <name>` | registry placeholder; not available yet |
-| `ori publish <path>` | registry placeholder; not available yet |
+| `ori install <name> --path <dir>` | validate a local `ori.pkg.toml` package and copy it to the package cache |
+| `ori publish <path>` | validate a package manifest; remote registry upload is not available yet |
 
 Useful environment variables:
 
@@ -178,21 +196,61 @@ Useful environment variables:
 | `ORI_USE_BUNDLED_RUST_LLD=1` | link through bundled `rust-lld` without the `rustc` driver |
 | `ORI_USE_SYSTEM_LINKER=1` | link through the platform linker directly |
 | `ORI_REQUIRE_PACKAGED_RUNTIME=1` | reject workspace runtime fallback during package validation |
+| `ORI_PACKAGE_CACHE` | override the local package cache used by `ori install --path` |
 
 The full environment matrix lives in [AGENTS.md](AGENTS.md).
+
+## Project docs
+
+Projects can use `ori.proj` as the entry point:
+
+```ini
+manifest = 1
+name = "demo"
+kind = "app"
+entry = "src/main.orl"
+
+[docs]
+paths = ["docs/api"]
+mode = "sidecar-first"
+require_public = "off"
+```
+
+Long symbol documentation can live outside the `.orl` file:
+
+```text
+oridoc 1
+
+namespace app.math
+
+doc func add
+    summary:
+        Soma dois numeros.
+    param left:
+        Primeiro valor.
+    param right:
+        Segundo valor.
+    returns:
+        Soma dos valores.
+end
+```
+
+See [Project and docs](docs/spec/17-project-and-docs.md) for the full
+manifest and `.oridoc` contract. For a shorter workflow guide, use
+[First project and local packages](docs/guides/first-project-and-packages.md).
 
 ## Language overview
 
 Ori's core model is small:
 
 - every file starts with `namespace`;
-- imports create local aliases;
+- imports create local aliases or explicit selective names with `only (...)`;
 - top-level declarations are private unless marked `public`;
 - `struct` and `enum` define data;
 - `trait` and `implement` define behavior;
 - `optional<T>` models absence;
 - `result<T, E>` models recoverable failure;
-- `?` propagates `result` or `optional` values;
+- `try` propagates `result` or `optional` values (`?` is the compact form);
 - `using` makes cleanup explicit;
 - diagnostics use stable codes such as `name.undefined` and
   `project.circular_import`.
@@ -213,7 +271,7 @@ func divide(a: int, b: int) -> result<int, string>
 end
 
 func main() -> result<void, string>
-    const value: int = divide(84, 2)?
+    const value: int = try divide(84, 2)
     io.print(f"value: {value}")
     return success()
 end
@@ -361,6 +419,9 @@ A release-style package is expected to keep this shape:
 
 ```text
 ori.exe                         # or `ori` on Unix
+ori-lsp.exe                     # or `ori-lsp` on Unix
+stdlib/
+  *.orl                         # packaged stdlib source modules
 runtime/
   bin/
     rust-lld[.exe]              # optional bundled linker
@@ -386,11 +447,12 @@ Current pre-1.0 limitations:
 - Ori is not self-hosting.
 - `ori compile` remains an AOT route and still depends on a working linker
   strategy.
-- The C backend is partial and exists for debugging.
-- `ori install` and `ori publish` are registry stubs.
-- `ori repl` is still backlog work.
-- Some advanced async shapes are still documented as known issues in the
-  maturity plan.
+- C emission is partial and exists for debugging via `ori emit c`.
+- `ori install --path` supports local packages and path dependencies, and the
+  compiler resolves local package imports from `ori.proj` or `ori.pkg.toml`.
+  Remote registry fetch and upload are still future work.
+- `ori repl` is intentionally small: imports, simple `const`/`var` bindings,
+  calls, literals, and simple expressions are supported first.
 - Public contracts can still change before 1.0.
 
 See [docs/planning/PENDENTES.md](docs/planning/PENDENTES.md) and

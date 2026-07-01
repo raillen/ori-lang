@@ -11,8 +11,8 @@ Ori has two distinct constructs for absence and failure:
 
 | Construct | Use | Propagation |
 |---|---|---|
-| `optional<T>` | A value that may be absent | `?` or `if some` |
-| `result<T, E>` | An operation that may fail | `?` |
+| `optional<T>` | A value that may be absent | `try`, `?`, or `if some` |
+| `result<T, E>` | An operation that may fail | `try` or `?` |
 
 There are no exceptions. There is no `null`. There is no `throw`/`catch`.
 
@@ -77,20 +77,22 @@ const user: User = find_user(id).or_return()
 -- The enclosing function must return optional<_>.
 ```
 
-Current status: `.or_return()` is accepted as shorthand for `?`. The older
-`.or_return(value)` form is not implemented. Use `?`, `if some(...) = ...`, or
-`match` when explicit control flow is clearer.
+Current status: `.or_return()` is accepted as shorthand for propagation. The
+older `.or_return(value)` form is not implemented. Use `try`, `?`,
+`if some(...) = ...`, or `match` when explicit control flow is clearer.
 
-**`?` propagation** — unwrap or propagate absence:
+**`try` propagation** — unwrap or propagate absence:
 
 ```ori
 func get_user_name(id: int) -> optional<string>
-    const user: User = find_user(id)?
+    const user: User = try find_user(id)
     -- If none: return none from get_user_name
     -- If some(u): bind u to user
     return some(user.name)
 end
 ```
+
+`find_user(id)?` is the compact form with the same semantics.
 
 ---
 
@@ -104,8 +106,8 @@ func read_config(path: string) -> result<Config, string>
     if path == ""
         return error("empty path")
     end
-    const raw: string = ori.fs.read_text(path)?
-    return success(parse_config(raw)?)
+    const raw: string = try ori.fs.read_text(path)
+    return success(try parse_config(raw))
 end
 ```
 
@@ -113,11 +115,11 @@ Constructors:
 - `success(value)` — the success variant.
 - `error(value)` — the failure variant.
 
-### `?` Propagation on `result<T, E>`
+### `try` Propagation on `result<T, E>`
 
 ```ori
 func start(path: string) -> result<void, string>
-    const config: Config = read_config(path)?
+    const config: Config = try read_config(path)
     -- If error(e): return error(e) from start
     -- If success(v): bind v to config
     apply_config(config)
@@ -125,18 +127,20 @@ func start(path: string) -> result<void, string>
 end
 ```
 
-Rules for `?` on `result<T, E>`:
+Rules for `try` on `result<T, E>`:
 1. The enclosing function must return `result<_, F>` where `F` is compatible with `E`.
 2. If `E == F`: the error is propagated as-is.
 3. If `E != F`: a compile error. Use explicit conversion. For `result<T, string>`,
    `.or_wrap(context)` can add string context before propagation.
+
+`read_config(path)?` is the compact form with the same semantics.
 
 ### `.or_wrap(context)`
 
 Adds a context string to an existing error without losing the original:
 
 ```ori
-const config: Config = read_config(path).or_wrap("loading configuration")?
+const config: Config = try read_config(path).or_wrap("loading configuration")
 ```
 
 If `read_config` returns `error("empty path")`, the result becomes
@@ -161,10 +165,13 @@ end
 
 ---
 
-## `?` — The Propagation Operator
+## `try` and `?` — Propagation
 
-`?` is the unified propagation operator. It works on both `optional<T>` and
+`try expr` is the readable propagation form. It works on both `optional<T>` and
 `result<T, E>`.
+
+`expr?` is the compact form with the same semantics. Prefer `try` in examples,
+guides, public docs, and code where readability is more important than brevity.
 
 **Behavior summary:**
 
@@ -179,16 +186,16 @@ The enclosing function's return type must be compatible:
 
 | Expression type | Required enclosing return type |
 |---|---|
-| `optional<T>?` | `optional<_>` |
-| `result<T, E>?` | `result<_, E>` or `result<_, F>` where `E` converts to `F` |
+| `try optional<T>` / `optional<T>?` | `optional<_>` |
+| `try result<T, E>` / `result<T, E>?` | `result<_, E>` or `result<_, F>` where `E` converts to `F` |
 
-Using `?` in a function that returns `void` or an incompatible type is a
-compile error.
+Using `try` or `?` in a function that returns `void` or an incompatible type is
+a compile error.
 
 Backend status:
 
-- The native backend supports `?` propagation.
-- The C backend supports `?` propagation for `optional<T>` and
+- The native backend supports `try` and `?` propagation.
+- The C backend supports `try` and `?` propagation for `optional<T>` and
   `result<T, E>` when the enclosing function returns a compatible
   `optional<_>` or `result<_, E>`.
 
@@ -287,7 +294,9 @@ expected failures.
 
 ## No Exceptions
 
-Ori has no exceptions, no `throw`, no `catch`, no `try` blocks.
+Ori has no exceptions, no `throw`, no `catch`, no exception-style `try` blocks.
+The `try expr` syntax is not a catch block; it is only readable propagation for
+`optional<T>` and `result<T, E>`.
 
 The reason: exceptions are invisible in function signatures. A function that
 throws can fail in ways not visible to the caller, requiring knowledge of the
@@ -302,9 +311,9 @@ says so in its return type.
 
 ```ori
 func process(path: string) -> result<Output, string>
-    const raw: string   = ori.fs.read_text(path)?
-    const parsed: Input = parse(raw)?
-    const output: Output = transform(parsed)?
+    const raw: string = try ori.fs.read_text(path)
+    const parsed: Input = try parse(raw)
+    const output: Output = try transform(parsed)
     return success(output)
 end
 ```
@@ -329,8 +338,8 @@ end
 
 ```ori
 func find_display_name(id: int) -> optional<string>
-    const user: User = find_user(id)?
-    const profile: Profile = find_profile(user.profile_id)?
+    const user: User = try find_user(id)
+    const profile: Profile = try find_profile(user.profile_id)
     return some(profile.display_name)
 end
 ```

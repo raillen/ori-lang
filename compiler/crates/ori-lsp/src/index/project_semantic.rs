@@ -72,9 +72,7 @@ impl ProjectSemanticIndex {
                 .map(|(n, t)| format!("- `{n}`: {}", ty_to_str(t, &self.resolved)))
                 .collect::<Vec<_>>()
                 .join("\n");
-            return Some(format!(
-                "```ori\nstruct {symbol}\n```\n\nFields:\n{fields}"
-            ));
+            return Some(format!("```ori\nstruct {symbol}\n```\n\nFields:\n{fields}"));
         }
         if let Some(e) = self.find_enum_by_name(symbol) {
             let variants = e
@@ -196,7 +194,9 @@ impl ProjectSemanticIndex {
             let bytes = content.as_bytes();
             let mut i = 0usize;
             while i + needle.len() <= bytes.len() {
-                if &bytes[i..i + needle.len()] == needle && is_word_boundary(bytes, i, i + needle.len()) {
+                if &bytes[i..i + needle.len()] == needle
+                    && is_word_boundary(bytes, i, i + needle.len())
+                {
                     let start = position::position_for_byte_offset(content, i);
                     let end = position::position_for_byte_offset(content, i + needle.len());
                     out.push((file.path.clone(), Range::new(start, end)));
@@ -221,7 +221,10 @@ impl ProjectSemanticIndex {
 
     fn find_struct_by_name(&self, name: &str) -> Option<&ori_types::resolve::StructSig> {
         let def = self.find_def_by_name(name)?;
-        self.resolved.struct_sigs.iter().find(|s| s.def_id == def.id)
+        self.resolved
+            .struct_sigs
+            .iter()
+            .find(|s| s.def_id == def.id)
     }
 
     fn find_enum_by_name(&self, name: &str) -> Option<&ori_types::resolve::EnumSig> {
@@ -289,7 +292,20 @@ impl ProjectSemanticIndex {
         // the byte range `def.span`. This is unambiguous in practice because
         // `def.span` is the exact byte range of the defining identifier
         // within its own file.
+        if let Some(active_file) = self
+            .cache
+            .all_files()
+            .iter()
+            .find(|candidate| candidate.path == self.active_path)
+        {
+            if let Some(name_range) = locate_name_span(&active_file.content, &def.name, def.span) {
+                return Some((active_file.path.clone(), name_range));
+            }
+        }
         for candidate in self.cache.all_files() {
+            if candidate.path == self.active_path {
+                continue;
+            }
             if let Some(name_range) = locate_name_span(&candidate.content, &def.name, def.span) {
                 return Some((candidate.path.clone(), name_range));
             }
@@ -414,8 +430,13 @@ impl ProjectSemanticIndex {
                     }
                 }
             }
-            Stmt::Expr(_) | Stmt::Assign(_) | Stmt::CompoundAssign(_)
-            | Stmt::Return(_) | Stmt::Break(_) | Stmt::Continue(_) | Stmt::Check(_) => {}
+            Stmt::Expr(_)
+            | Stmt::Assign(_)
+            | Stmt::CompoundAssign(_)
+            | Stmt::Return(_)
+            | Stmt::Break(_)
+            | Stmt::Continue(_)
+            | Stmt::Check(_) => {}
         }
     }
 }
@@ -435,9 +456,8 @@ fn named_type_simple_name(ty: &Type) -> Option<String> {
 fn infer_type_from_expr(expr: &Expr) -> Option<String> {
     match expr {
         Expr::StructLit { ty, .. } => Some(ty.to_string()),
-        Expr::EnumVariantUnit { ty: Some(qn), .. } | Expr::EnumVariantNamed { ty: Some(qn), .. } => {
-            Some(qn.to_string())
-        }
+        Expr::EnumVariantUnit { ty: Some(qn), .. }
+        | Expr::EnumVariantNamed { ty: Some(qn), .. } => Some(qn.to_string()),
         Expr::Call { callee, .. } => infer_type_from_call_callee(callee),
         _ => None,
     }
@@ -490,10 +510,18 @@ fn ty_to_str(ty: &Ty, resolved: &ResolvedModule) -> String {
         Ty::Error => "?".into(),
         Ty::Optional(inner) => format!("{}?", ty_to_str(inner, resolved)),
         Ty::Result(ok, err) => {
-            format!("result<{}, {}>", ty_to_str(ok, resolved), ty_to_str(err, resolved))
+            format!(
+                "result<{}, {}>",
+                ty_to_str(ok, resolved),
+                ty_to_str(err, resolved)
+            )
         }
         Ty::List(inner) => format!("list<{}>", ty_to_str(inner, resolved)),
-        Ty::Map(k, v) => format!("map<{}, {}>", ty_to_str(k, resolved), ty_to_str(v, resolved)),
+        Ty::Map(k, v) => format!(
+            "map<{}, {}>",
+            ty_to_str(k, resolved),
+            ty_to_str(v, resolved)
+        ),
         Ty::Set(inner) => format!("set<{}>", ty_to_str(inner, resolved)),
         Ty::Range(inner) => format!("range<{}>", ty_to_str(inner, resolved)),
         Ty::Lazy(inner) => format!("lazy<{}>", ty_to_str(inner, resolved)),
@@ -571,9 +599,7 @@ fn locate_name_span(content: &str, name: &str, span: Span) -> Option<Range> {
     let needle = name.as_bytes();
     let mut i = s;
     while i + needle.len() <= e {
-        if &bytes[i..i + needle.len()] == needle
-            && is_word_boundary(bytes, i, i + needle.len())
-        {
+        if &bytes[i..i + needle.len()] == needle && is_word_boundary(bytes, i, i + needle.len()) {
             let start = position::position_for_byte_offset(content, i);
             let end = position::position_for_byte_offset(content, i + needle.len());
             return Some(Range::new(start, end));

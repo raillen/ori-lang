@@ -7521,7 +7521,10 @@ pub unsafe extern "C" fn ori_deque_iterator_new(deque: *mut OriDeque) -> *mut Or
     if deque.is_null() {
         return std::ptr::null_mut();
     }
-    let iter = ori_alloc(std::mem::size_of::<OriDequeIterator>(), Some(ori_deque_iterator_dtor)) as *mut OriDequeIterator;
+    let iter = ori_alloc(
+        std::mem::size_of::<OriDequeIterator>(),
+        Some(ori_deque_iterator_dtor),
+    ) as *mut OriDequeIterator;
     if !iter.is_null() {
         ori_arc_retain(deque as *mut u8);
         (*iter).deque = deque;
@@ -7544,7 +7547,11 @@ pub unsafe extern "C" fn ori_deque_iterator_next(iter: *mut OriDequeIterator) ->
     if (*iter).index >= (*deque).values.len() as i64 {
         return std::ptr::null_mut();
     }
-    let val = (*deque).values.get((*iter).index as usize).copied().unwrap_or(0);
+    let val = (*deque)
+        .values
+        .get((*iter).index as usize)
+        .copied()
+        .unwrap_or(0);
     (*iter).last_value = val;
     (*iter).index += 1;
     &mut (*iter).last_value
@@ -7571,7 +7578,9 @@ pub unsafe extern "C" fn ori_stack_iterator_next(iter: *mut OriDequeIterator) ->
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_linked_list_iterator_new(list: *mut OriDeque) -> *mut OriDequeIterator {
+pub unsafe extern "C" fn ori_linked_list_iterator_new(
+    list: *mut OriDeque,
+) -> *mut OriDequeIterator {
     ori_deque_iterator_new(list)
 }
 
@@ -7581,12 +7590,16 @@ pub unsafe extern "C" fn ori_linked_list_iterator_next(iter: *mut OriDequeIterat
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_doubly_linked_list_iterator_new(list: *mut OriDeque) -> *mut OriDequeIterator {
+pub unsafe extern "C" fn ori_doubly_linked_list_iterator_new(
+    list: *mut OriDeque,
+) -> *mut OriDequeIterator {
     ori_deque_iterator_new(list)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_doubly_linked_list_iterator_next(iter: *mut OriDequeIterator) -> *mut i64 {
+pub unsafe extern "C" fn ori_doubly_linked_list_iterator_next(
+    iter: *mut OriDequeIterator,
+) -> *mut i64 {
     ori_deque_iterator_next(iter)
 }
 
@@ -7610,7 +7623,10 @@ pub unsafe extern "C" fn ori_heap_iterator_new(heap: *mut OriHeap) -> *mut OriHe
     if heap.is_null() {
         return std::ptr::null_mut();
     }
-    let iter = ori_alloc(std::mem::size_of::<OriHeapIterator>(), Some(ori_heap_iterator_dtor)) as *mut OriHeapIterator;
+    let iter = ori_alloc(
+        std::mem::size_of::<OriHeapIterator>(),
+        Some(ori_heap_iterator_dtor),
+    ) as *mut OriHeapIterator;
     if !iter.is_null() {
         ori_arc_retain(heap as *mut u8);
         (*iter).heap = heap;
@@ -7659,7 +7675,10 @@ pub unsafe extern "C" fn ori_graph_iterator_new(graph: *mut OriGraph) -> *mut Or
     if graph.is_null() {
         return std::ptr::null_mut();
     }
-    let iter = ori_alloc(std::mem::size_of::<OriGraphIterator>(), Some(ori_graph_iterator_dtor)) as *mut OriGraphIterator;
+    let iter = ori_alloc(
+        std::mem::size_of::<OriGraphIterator>(),
+        Some(ori_graph_iterator_dtor),
+    ) as *mut OriGraphIterator;
     if !iter.is_null() {
         ori_arc_retain(graph as *mut u8);
         (*iter).graph = graph;
@@ -7894,7 +7913,12 @@ pub unsafe extern "C" fn ori_net_connect(host: *const u8, port: i64, timeout_ms:
             if payload.is_null() {
                 return new_result(false, cstring_from_str("allocation failed"));
             }
-            std::ptr::write(payload, RuntimeConnection { stream: Some(stream) });
+            std::ptr::write(
+                payload,
+                RuntimeConnection {
+                    stream: Some(stream),
+                },
+            );
             new_result(true, payload as *mut u8)
         }
         Err(e) => new_result(false, cstring_from_str(&e.to_string())),

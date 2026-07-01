@@ -13,7 +13,7 @@ use ori_diagnostics::Span;
 use ori_hir::hir::*;
 use ori_types::{
     stdlib::{stdlib_func_sig, stdlib_native_abi, stdlib_runtime_functions, StdlibNativeAbiTy},
-    OpaqueTy, Ty, substitute_ty_params,
+    substitute_ty_params, OpaqueTy, Ty,
 };
 
 mod string_collector;
@@ -1952,7 +1952,12 @@ struct GeneralAsyncCollector {
 impl GeneralAsyncCollector {
     fn collect_stmt(&mut self, stmt: &HirStmt, loop_counter: &mut usize) {
         match stmt {
-            HirStmt::Let { name, ty, value, .. } | HirStmt::Using { name, ty, value, .. } => {
+            HirStmt::Let {
+                name, ty, value, ..
+            }
+            | HirStmt::Using {
+                name, ty, value, ..
+            } => {
                 self.locals.push(SimpleAsyncLocal {
                     name: name.clone(),
                     ty: ty.clone(),
@@ -1972,7 +1977,13 @@ impl GeneralAsyncCollector {
             HirStmt::Expr(expr) => {
                 self.collect_expr(expr);
             }
-            HirStmt::If { cond, then, else_ifs, else_, .. } => {
+            HirStmt::If {
+                cond,
+                then,
+                else_ifs,
+                else_,
+                ..
+            } => {
                 self.collect_expr(cond);
                 self.collect_block(then, loop_counter);
                 for (e_cond, e_block) in else_ifs {
@@ -1987,7 +1998,14 @@ impl GeneralAsyncCollector {
                 self.collect_expr(cond);
                 self.collect_block(body, loop_counter);
             }
-            HirStmt::For { iterable, body, index_binding, elem_ty, binding, span } => {
+            HirStmt::For {
+                iterable,
+                body,
+                index_binding,
+                elem_ty,
+                binding,
+                span,
+            } => {
                 let has_await = stmt_contains_await(stmt);
                 if has_await {
                     let loop_id = *loop_counter;
@@ -2088,7 +2106,9 @@ impl GeneralAsyncCollector {
                 self.collect_expr(count);
                 self.collect_block(body, loop_counter);
             }
-            HirStmt::Match { scrutinee, arms, .. } => {
+            HirStmt::Match {
+                scrutinee, arms, ..
+            } => {
                 self.collect_expr(scrutinee);
                 let has_await = stmt_contains_await(stmt);
                 for arm in arms {
@@ -2113,7 +2133,14 @@ impl GeneralAsyncCollector {
                     }
                 }
             }
-            HirStmt::IfSome { binding, inner_ty, value, then, else_, span } => {
+            HirStmt::IfSome {
+                binding,
+                inner_ty,
+                value,
+                then,
+                else_,
+                span,
+            } => {
                 let has_await = stmt_contains_await(stmt);
                 if has_await {
                     let dummy = HirExpr {
@@ -2133,7 +2160,13 @@ impl GeneralAsyncCollector {
                     self.collect_block(e_block, loop_counter);
                 }
             }
-            HirStmt::WhileSome { binding, inner_ty, value, body, span } => {
+            HirStmt::WhileSome {
+                binding,
+                inner_ty,
+                value,
+                body,
+                span,
+            } => {
                 let has_await = stmt_contains_await(stmt);
                 if has_await {
                     let dummy = HirExpr {
@@ -2235,7 +2268,10 @@ impl GeneralAsyncCollector {
                     self.collect_expr(value);
                 }
             }
-            HirExprKind::Some_(inner) | HirExprKind::Ok_(inner) | HirExprKind::Err_(inner) | HirExprKind::Propagate(inner) => {
+            HirExprKind::Some_(inner)
+            | HirExprKind::Ok_(inner)
+            | HirExprKind::Err_(inner)
+            | HirExprKind::Propagate(inner) => {
                 self.collect_expr(inner);
             }
             HirExprKind::IfExpr { cond, then, else_ } => {
@@ -2529,17 +2565,14 @@ fn type_needs_destructor(
                     return false;
                 }
                 let res = if let Some(layout) = struct_layouts.get(def_id) {
-                    layout
-                        .fields
-                        .iter()
-                        .any(|(_, f)| needs_dtor_inner(&f.ty, struct_layouts, enum_layouts, visited))
+                    layout.fields.iter().any(|(_, f)| {
+                        needs_dtor_inner(&f.ty, struct_layouts, enum_layouts, visited)
+                    })
                 } else if let Some(layout) = enum_layouts.get(def_id) {
                     layout.variants.values().any(|variant_layout| {
-                        variant_layout
-                            .fields
-                            .fields
-                            .iter()
-                            .any(|(_, f)| needs_dtor_inner(&f.ty, struct_layouts, enum_layouts, visited))
+                        variant_layout.fields.fields.iter().any(|(_, f)| {
+                            needs_dtor_inner(&f.ty, struct_layouts, enum_layouts, visited)
+                        })
                     })
                 } else {
                     false
@@ -2648,7 +2681,11 @@ fn collect_tys_from_expr(expr: &HirExpr, tuples: &mut HashSet<Vec<Ty>>) {
                 collect_tys_from_expr(e, tuples);
             }
         }
-        HirExprKind::Some_(e) | HirExprKind::Ok_(e) | HirExprKind::Err_(e) | HirExprKind::Propagate(e) | HirExprKind::Await(e) => {
+        HirExprKind::Some_(e)
+        | HirExprKind::Ok_(e)
+        | HirExprKind::Err_(e)
+        | HirExprKind::Propagate(e)
+        | HirExprKind::Await(e) => {
             collect_tys_from_expr(e, tuples);
         }
         HirExprKind::IfExpr { cond, then, else_ } => {
@@ -2687,7 +2724,9 @@ fn collect_tys_from_stmt(stmt: &HirStmt, tuples: &mut HashSet<Vec<Ty>>) {
             collect_all_tys(ty, tuples);
             collect_tys_from_expr(value, tuples);
         }
-        HirStmt::Assign { lvalue: _, value, .. } => {
+        HirStmt::Assign {
+            lvalue: _, value, ..
+        } => {
             collect_tys_from_expr(value, tuples);
         }
         HirStmt::Return(val, _) => {
@@ -2698,7 +2737,13 @@ fn collect_tys_from_stmt(stmt: &HirStmt, tuples: &mut HashSet<Vec<Ty>>) {
         HirStmt::Expr(e) => {
             collect_tys_from_expr(e, tuples);
         }
-        HirStmt::If { cond, then, else_ifs, else_, .. } => {
+        HirStmt::If {
+            cond,
+            then,
+            else_ifs,
+            else_,
+            ..
+        } => {
             collect_tys_from_expr(cond, tuples);
             collect_tys_from_block(then, tuples);
             for (c, b) in else_ifs {
@@ -2724,7 +2769,9 @@ fn collect_tys_from_stmt(stmt: &HirStmt, tuples: &mut HashSet<Vec<Ty>>) {
             collect_tys_from_expr(count, tuples);
             collect_tys_from_block(body, tuples);
         }
-        HirStmt::Match { scrutinee, arms, .. } => {
+        HirStmt::Match {
+            scrutinee, arms, ..
+        } => {
             collect_tys_from_expr(scrutinee, tuples);
             for arm in arms {
                 for s in &arm.body {
@@ -2732,7 +2779,9 @@ fn collect_tys_from_stmt(stmt: &HirStmt, tuples: &mut HashSet<Vec<Ty>>) {
                 }
             }
         }
-        HirStmt::IfSome { value, then, else_, .. } => {
+        HirStmt::IfSome {
+            value, then, else_, ..
+        } => {
             collect_tys_from_expr(value, tuples);
             collect_tys_from_block(then, tuples);
             if let Some(b) = else_ {
@@ -3867,20 +3916,10 @@ impl<M: Module> NativeBackend<M> {
         let id = decl("ori_files_list_dir", &[pt], vec![Ty::String], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_files_list_dir"), id);
-        let id = decl(
-            "ori_files_create_dir",
-            &[pt],
-            vec![Ty::String],
-            Some(pt),
-        )?;
+        let id = decl("ori_files_create_dir", &[pt], vec![Ty::String], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_files_create_dir"), id);
-        let id = decl(
-            "ori_files_is_file",
-            &[pt],
-            vec![Ty::String],
-            Some(pt),
-        )?;
+        let id = decl("ori_files_is_file", &[pt], vec![Ty::String], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_files_is_file"), id);
         let id = decl("ori_files_is_dir", &[pt], vec![Ty::String], Some(pt))?;
@@ -3924,42 +3963,67 @@ impl<M: Module> NativeBackend<M> {
         self.stdlib_ids.insert(SmolStr::new("ori_alloc"), id);
 
         let id = decl("ori_abort_concurrent_modification", &[], vec![], None)?;
-        self.stdlib_ids.insert(SmolStr::new("ori_abort_concurrent_modification"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_abort_concurrent_modification"), id);
 
         let id = decl("ori_deque_iterator_new", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_deque_iterator_new"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_deque_iterator_new"), id);
         let id = decl("ori_deque_iterator_next", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_deque_iterator_next"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_deque_iterator_next"), id);
 
         let id = decl("ori_queue_iterator_new", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_queue_iterator_new"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_queue_iterator_new"), id);
         let id = decl("ori_queue_iterator_next", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_queue_iterator_next"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_queue_iterator_next"), id);
 
         let id = decl("ori_stack_iterator_new", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_stack_iterator_new"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_stack_iterator_new"), id);
         let id = decl("ori_stack_iterator_next", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_stack_iterator_next"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_stack_iterator_next"), id);
 
         let id = decl("ori_linked_list_iterator_new", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_linked_list_iterator_new"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_linked_list_iterator_new"), id);
         let id = decl("ori_linked_list_iterator_next", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_linked_list_iterator_next"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_linked_list_iterator_next"), id);
 
-        let id = decl("ori_doubly_linked_list_iterator_new", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_doubly_linked_list_iterator_new"), id);
-        let id = decl("ori_doubly_linked_list_iterator_next", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_doubly_linked_list_iterator_next"), id);
+        let id = decl(
+            "ori_doubly_linked_list_iterator_new",
+            &[pt],
+            vec![],
+            Some(pt),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_doubly_linked_list_iterator_new"), id);
+        let id = decl(
+            "ori_doubly_linked_list_iterator_next",
+            &[pt],
+            vec![],
+            Some(pt),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_doubly_linked_list_iterator_next"), id);
 
         let id = decl("ori_heap_iterator_new", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_heap_iterator_new"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_heap_iterator_new"), id);
         let id = decl("ori_heap_iterator_next", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_heap_iterator_next"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_heap_iterator_next"), id);
 
         let id = decl("ori_graph_iterator_new", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_graph_iterator_new"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_graph_iterator_new"), id);
         let id = decl("ori_graph_iterator_next", &[pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_graph_iterator_next"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_graph_iterator_next"), id);
 
         Ok(())
     }
@@ -4020,7 +4084,11 @@ impl<M: Module> NativeBackend<M> {
             if !declared_struct_dtors.insert(s.def_id) {
                 continue;
             }
-            if type_needs_destructor(&Ty::Named(s.def_id, Vec::new()), &self.struct_layouts, &self.enum_layouts) {
+            if type_needs_destructor(
+                &Ty::Named(s.def_id, Vec::new()),
+                &self.struct_layouts,
+                &self.enum_layouts,
+            ) {
                 let sig = self.make_dtor_sig();
                 let name = format!("__dtor_struct_{}", s.def_id.0);
                 let id = self
@@ -4040,7 +4108,11 @@ impl<M: Module> NativeBackend<M> {
             if !declared_enum_dtors.insert(e.def_id) {
                 continue;
             }
-            if type_needs_destructor(&Ty::Named(e.def_id, Vec::new()), &self.struct_layouts, &self.enum_layouts) {
+            if type_needs_destructor(
+                &Ty::Named(e.def_id, Vec::new()),
+                &self.struct_layouts,
+                &self.enum_layouts,
+            ) {
                 let sig = self.make_dtor_sig();
                 let name = format!("__dtor_enum_{}", e.def_id.0);
                 let id = self
@@ -4099,7 +4171,9 @@ impl<M: Module> NativeBackend<M> {
             self.func_ids.insert(f.name.clone(), id);
         }
         for f in &hir.funcs {
-            let has_plan = f.is_async && (simple_async_state_machine_plan(f).is_some() || collect_general_async_plan(f).is_some());
+            let has_plan = f.is_async
+                && (simple_async_state_machine_plan(f).is_some()
+                    || collect_general_async_plan(f).is_some());
             if has_plan {
                 let step_name = async_step_name(f);
                 let sig = self.make_async_step_sig();
@@ -4245,8 +4319,8 @@ impl<M: Module> NativeBackend<M> {
         }
 
         for f in &hir.funcs {
-            let plan_opt = simple_async_state_machine_plan(f)
-                .or_else(|| collect_general_async_plan(f));
+            let plan_opt =
+                simple_async_state_machine_plan(f).or_else(|| collect_general_async_plan(f));
             let Some(plan) = plan_opt else {
                 continue;
             };
@@ -4370,7 +4444,11 @@ impl<M: Module> NativeBackend<M> {
             if !defined_structs.insert(s.def_id) {
                 continue;
             }
-            if !type_needs_destructor(&Ty::Named(s.def_id, Vec::new()), &self.struct_layouts, &self.enum_layouts) {
+            if !type_needs_destructor(
+                &Ty::Named(s.def_id, Vec::new()),
+                &self.struct_layouts,
+                &self.enum_layouts,
+            ) {
                 continue;
             }
             let name = format!("__dtor_struct_{}", s.def_id.0);
@@ -4399,7 +4477,9 @@ impl<M: Module> NativeBackend<M> {
                 for (_, fi) in &layout.fields {
                     if is_managed_ty(&fi.ty) {
                         let cl_ty = cl_type(&fi.ty, self.ptr_ty).unwrap();
-                        let val = builder.ins().load(cl_ty, MemFlags::new(), ptr, fi.offset as i32);
+                        let val = builder
+                            .ins()
+                            .load(cl_ty, MemFlags::new(), ptr, fi.offset as i32);
                         let release_ref = func_refs["ori_arc_release"];
                         builder.ins().call(release_ref, &[val]);
                     }
@@ -4423,7 +4503,11 @@ impl<M: Module> NativeBackend<M> {
             if !defined_enums.insert(e.def_id) {
                 continue;
             }
-            if !type_needs_destructor(&Ty::Named(e.def_id, Vec::new()), &self.struct_layouts, &self.enum_layouts) {
+            if !type_needs_destructor(
+                &Ty::Named(e.def_id, Vec::new()),
+                &self.struct_layouts,
+                &self.enum_layouts,
+            ) {
                 continue;
             }
             let name = format!("__dtor_enum_{}", e.def_id.0);
@@ -4458,8 +4542,13 @@ impl<M: Module> NativeBackend<M> {
                     let next_block = builder.create_block();
 
                     let expected_tag = builder.ins().iconst(types::I32, v_layout.tag as i64);
-                    let is_match = builder.ins().icmp(ir::condcodes::IntCC::Equal, tag_val, expected_tag);
-                    builder.ins().brif(is_match, match_block, &[], next_block, &[]);
+                    let is_match =
+                        builder
+                            .ins()
+                            .icmp(ir::condcodes::IntCC::Equal, tag_val, expected_tag);
+                    builder
+                        .ins()
+                        .brif(is_match, match_block, &[], next_block, &[]);
 
                     builder.switch_to_block(match_block);
                     builder.seal_block(match_block);
@@ -4468,7 +4557,9 @@ impl<M: Module> NativeBackend<M> {
                         if is_managed_ty(&fi.ty) {
                             let cl_ty = cl_type(&fi.ty, self.ptr_ty).unwrap();
                             let total_offset = (layout.payload_offset + fi.offset) as i32;
-                            let val = builder.ins().load(cl_ty, MemFlags::new(), ptr, total_offset);
+                            let val = builder
+                                .ins()
+                                .load(cl_ty, MemFlags::new(), ptr, total_offset);
                             let release_ref = func_refs["ori_arc_release"];
                             builder.ins().call(release_ref, &[val]);
                         }
@@ -4498,7 +4589,9 @@ impl<M: Module> NativeBackend<M> {
     fn define_tuple_dtors(&mut self) -> Result<(), String> {
         let tuple_dtors = self.tuple_dtors.clone();
         for (elems, func_id) in tuple_dtors {
-            let name = self.func_ids.iter()
+            let name = self
+                .func_ids
+                .iter()
                 .find(|(_, &fid)| fid == func_id)
                 .map(|(n, _)| n.clone())
                 .unwrap_or_else(|| SmolStr::new("__dtor_tuple_unknown"));
@@ -4527,7 +4620,9 @@ impl<M: Module> NativeBackend<M> {
                 for (offset, elem_ty) in layout {
                     if is_managed_ty(&elem_ty) {
                         let cl_ty = cl_type(&elem_ty, self.ptr_ty).unwrap();
-                        let val = builder.ins().load(cl_ty, MemFlags::new(), ptr, offset as i32);
+                        let val = builder
+                            .ins()
+                            .load(cl_ty, MemFlags::new(), ptr, offset as i32);
                         let release_ref = func_refs["ori_arc_release"];
                         builder.ins().call(release_ref, &[val]);
                     }
@@ -4742,11 +4837,21 @@ impl<M: Module> NativeBackend<M> {
             }
         }
         if std::env::var("ORI_DUMP_CLIF").is_ok() {
-            eprintln!("--- CLIF for async step `{}` ---\n{}", step_name, ctx.func.display());
+            eprintln!(
+                "--- CLIF for async step `{}` ---\n{}",
+                step_name,
+                ctx.func.display()
+            );
         }
         self.module
             .define_function(func_id, &mut ctx)
-            .map_err(|e| format!("define async step '{}': {e}", step_name))?;
+            .map_err(|e| {
+                if std::env::var("ORI_DUMP_CLIF").is_ok() {
+                    format!("define async step '{}': {e} ({e:?})", step_name)
+                } else {
+                    format!("define async step '{}': {e}", step_name)
+                }
+            })?;
         Ok(())
     }
 
@@ -4933,12 +5038,36 @@ impl<'a> FuncCodegen<'a> {
 
     fn type_supports_equality(&self, ty: &Ty, visiting: &mut Vec<ori_types::DefId>) -> bool {
         match ty {
-            Ty::Void | Ty::Never | Ty::Bool | Ty::Int | Ty::Float | Ty::Float32 | Ty::Float64 | Ty::U8 | Ty::U16 | Ty::U32 | Ty::U64 | Ty::Int8 | Ty::Int16 | Ty::Int32 | Ty::Int64 | Ty::String | Ty::Bytes | Ty::Any(_) => true,
+            Ty::Void
+            | Ty::Never
+            | Ty::Bool
+            | Ty::Int
+            | Ty::Float
+            | Ty::Float32
+            | Ty::Float64
+            | Ty::U8
+            | Ty::U16
+            | Ty::U32
+            | Ty::U64
+            | Ty::Int8
+            | Ty::Int16
+            | Ty::Int32
+            | Ty::Int64
+            | Ty::String
+            | Ty::Bytes
+            | Ty::Any(_) => true,
             Ty::Optional(inner) => self.type_supports_equality(inner, visiting),
-            Ty::Result(ok, err) => self.type_supports_equality(ok, visiting) && self.type_supports_equality(err, visiting),
-            Ty::Tuple(elements) => elements.iter().all(|e| self.type_supports_equality(e, visiting)),
+            Ty::Result(ok, err) => {
+                self.type_supports_equality(ok, visiting)
+                    && self.type_supports_equality(err, visiting)
+            }
+            Ty::Tuple(elements) => elements
+                .iter()
+                .all(|e| self.type_supports_equality(e, visiting)),
             Ty::List(inner) | Ty::Set(inner) => self.type_supports_equality(inner, visiting),
-            Ty::Map(k, v) => self.type_supports_equality(k, visiting) && self.type_supports_equality(v, visiting),
+            Ty::Map(k, v) => {
+                self.type_supports_equality(k, visiting) && self.type_supports_equality(v, visiting)
+            }
             Ty::Named(def_id, args) => {
                 if visiting.contains(def_id) {
                     return true;
@@ -4987,11 +5116,17 @@ impl<'a> FuncCodegen<'a> {
             OpaqueTy::Stack => "ori_stack_to_list",
             OpaqueTy::LinkedList => "ori_linked_list_to_list",
             OpaqueTy::DoublyLinkedList => "ori_doubly_linked_list_to_list",
-            _ => return Err(format!("unsupported opaque collection for equality: {:?}", kind)),
+            _ => {
+                return Err(format!(
+                    "unsupported opaque collection for equality: {:?}",
+                    kind
+                ))
+            }
         };
-        let to_list_ref = *self.func_refs.get(to_list_fn_name).ok_or_else(|| {
-            format!("missing runtime function `{}`", to_list_fn_name)
-        })?;
+        let to_list_ref = *self
+            .func_refs
+            .get(to_list_fn_name)
+            .ok_or_else(|| format!("missing runtime function `{}`", to_list_fn_name))?;
 
         // Convert both collections to lists
         let left_list_call = self.builder.ins().call(to_list_ref, &[lv]);
@@ -5012,21 +5147,105 @@ impl<'a> FuncCodegen<'a> {
 
     fn store_async_local_if_any(&mut self, name: &str, val: ir::Value) -> Result<(), String> {
         if let Some(frame) = self.async_frame {
-            let plan = self.async_plan.expect("must have async plan if frame is set");
+            let plan = self
+                .async_plan
+                .expect("must have async plan if frame is set");
             if let Some(local_index) = plan.locals.iter().position(|l| l.name == name) {
                 let offset = simple_async_frame_local_offset(plan, local_index, self.ptr_ty)
                     .expect("async frame local offset");
-                self.builder.ins().store(MemFlags::new(), val, frame, offset as i32);
-            } else if let Some(await_index) = plan.awaits.iter().position(|a| a.binding.as_ref().is_some_and(|b| b.name == name)) {
+                self.builder
+                    .ins()
+                    .store(MemFlags::new(), val, frame, offset as i32);
+            } else if let Some(await_index) = plan
+                .awaits
+                .iter()
+                .position(|a| a.binding.as_ref().is_some_and(|b| b.name == name))
+            {
                 let offset = simple_async_frame_binding_offset(plan, await_index, self.ptr_ty)
                     .expect("async frame binding offset");
-                self.builder.ins().store(MemFlags::new(), val, frame, offset as i32);
+                self.builder
+                    .ins()
+                    .store(MemFlags::new(), val, frame, offset as i32);
             } else if let Some(param_index) = plan.params.iter().position(|p| p.name == name) {
                 let offset = simple_async_frame_param_offset(plan, param_index, self.ptr_ty)
                     .expect("async frame param offset");
-                self.builder.ins().store(MemFlags::new(), val, frame, offset as i32);
+                self.builder
+                    .ins()
+                    .store(MemFlags::new(), val, frame, offset as i32);
             }
         }
+        Ok(())
+    }
+
+    fn reload_async_frame_vars(
+        &mut self,
+        plan: &SimpleAsyncStateMachinePlan,
+        frame: ir::Value,
+        initialized_bindings: usize,
+    ) -> Result<(), String> {
+        for (index, param) in plan.params.iter().enumerate() {
+            let cl_ty = cl_type(&param.ty, self.ptr_ty)
+                .ok_or_else(|| format!("async param `{}` has no native value", param.name))?;
+            let offset = simple_async_frame_param_offset(plan, index, self.ptr_ty)
+                .expect("async frame param offset");
+            let value = self
+                .builder
+                .ins()
+                .load(cl_ty, MemFlags::new(), frame, offset as i32);
+            let var = self
+                .lookup_var(&param.name)
+                .map(|(var, _)| var)
+                .unwrap_or_else(|| {
+                    let var = self.builder.declare_var(cl_ty);
+                    self.insert_var(param.name.clone(), (var, param.ty.clone()));
+                    var
+                });
+            self.builder.def_var(var, value);
+        }
+
+        for (index, local) in plan.locals.iter().enumerate() {
+            let cl_ty = cl_type(&local.ty, self.ptr_ty)
+                .ok_or_else(|| format!("async local `{}` has no native value", local.name))?;
+            let offset = simple_async_frame_local_offset(plan, index, self.ptr_ty)
+                .expect("async frame local offset");
+            let value = self
+                .builder
+                .ins()
+                .load(cl_ty, MemFlags::new(), frame, offset as i32);
+            let var = self
+                .lookup_var(&local.name)
+                .map(|(var, _)| var)
+                .unwrap_or_else(|| {
+                    let var = self.builder.declare_var(cl_ty);
+                    self.insert_var(local.name.clone(), (var, local.ty.clone()));
+                    var
+                });
+            self.builder.def_var(var, value);
+        }
+
+        for (index, step) in plan.awaits.iter().take(initialized_bindings).enumerate() {
+            let Some(binding) = &step.binding else {
+                continue;
+            };
+            let cl_ty = cl_type(&binding.ty, self.ptr_ty)
+                .ok_or_else(|| format!("async binding `{}` has no native value", binding.name))?;
+            let offset = simple_async_frame_binding_offset(plan, index, self.ptr_ty)
+                .expect("async frame binding offset");
+            let value = self
+                .builder
+                .ins()
+                .load(cl_ty, MemFlags::new(), frame, offset as i32);
+            let var = self
+                .lookup_var(&binding.name)
+                .map(|(var, _)| var)
+                .unwrap_or_else(|| {
+                    let var = self.builder.declare_var(cl_ty);
+                    self.insert_var(binding.name.clone(), (var, binding.ty.clone()));
+                    var
+                });
+            self.builder.def_var(var, value);
+        }
+
         Ok(())
     }
 
@@ -5939,7 +6158,11 @@ impl<'a> FuncCodegen<'a> {
         Ok(self.builder.inst_results(call)[0])
     }
 
-    fn malloc_bytes_with_dtor(&mut self, size: u32, dtor_v: ir::Value) -> Result<ir::Value, String> {
+    fn malloc_bytes_with_dtor(
+        &mut self,
+        size: u32,
+        dtor_v: ir::Value,
+    ) -> Result<ir::Value, String> {
         let alloc_ref = *self
             .func_refs
             .get("ori_alloc")
@@ -6497,7 +6720,9 @@ impl<'a> FuncCodegen<'a> {
 
     fn emit_return(&mut self, val: Option<&HirExpr>) -> Result<(), String> {
         if let Some(frame) = self.async_frame {
-            let plan = self.async_plan.expect("must have async plan if frame is set");
+            let plan = self
+                .async_plan
+                .expect("must have async plan if frame is set");
             let inner_ty = plan.inner_ty.clone();
             let value = match val {
                 Some(expr) if inner_ty == Ty::Void => {
@@ -7228,17 +7453,19 @@ impl<'a> FuncCodegen<'a> {
     }
 
     fn emit_await(&mut self, future_expr: &HirExpr, result_ty: &Ty) -> Result<ir::Value, String> {
-        let frame = self.async_frame.ok_or_else(|| {
-            "`await` can only be used inside async functions".to_string()
-        })?;
-        let plan = self.async_plan.expect("must have async plan if frame is set");
+        let frame = self
+            .async_frame
+            .ok_or_else(|| "`await` can only be used inside async functions".to_string())?;
+        let plan = self
+            .async_plan
+            .expect("must have async plan if frame is set");
 
         let index = self.async_await_index;
         self.async_await_index += 1;
 
         let awaited_offset = simple_async_frame_awaited_offset(index, self.ptr_ty);
         let awaited = self.emit_expr(future_expr)?;
-        
+
         self.builder
             .ins()
             .store(MemFlags::new(), awaited, frame, awaited_offset);
@@ -7250,22 +7477,22 @@ impl<'a> FuncCodegen<'a> {
 
         // Switch to poll block
         self.builder.switch_to_block(poll_block);
-        
+
         let awaited = self
             .builder
             .ins()
             .load(self.ptr_ty, MemFlags::new(), frame, awaited_offset);
-            
+
         let poll_ref = *self
             .func_refs
             .get("ori_future_poll")
             .ok_or_else(|| "missing runtime function `ori_future_poll`".to_string())?;
         let poll_call = self.builder.ins().call(poll_ref, &[awaited]);
         let status = self.builder.inst_results(poll_call)[0];
-        
+
         let ready_block = self.builder.create_block();
         let status_block = self.builder.create_block();
-        
+
         let ready = self
             .builder
             .ins()
@@ -7277,38 +7504,34 @@ impl<'a> FuncCodegen<'a> {
         // Status block: check pending vs non-pending (failed/cancelled)
         self.builder.switch_to_block(status_block);
         self.builder.seal_block(status_block);
-        
+
         let pending_block = self.builder.create_block();
         let non_pending_status_block = self.builder.create_block();
-        
+
         let pending = self
             .builder
             .ins()
             .icmp_imm(ir::condcodes::IntCC::Equal, status, 0);
-        self.builder.ins().brif(
-            pending,
-            pending_block,
-            &[],
-            non_pending_status_block,
-            &[],
-        );
+        self.builder
+            .ins()
+            .brif(pending, pending_block, &[], non_pending_status_block, &[]);
 
         // Pending path: register continuation and return 0
         self.builder.switch_to_block(pending_block);
         self.builder.seal_block(pending_block);
-        
+
         let next_state = self.builder.ins().iconst(types::I64, (index + 1) as i64);
         self.builder
             .ins()
             .store(MemFlags::new(), next_state, frame, ASYNC_FRAME_STATE_OFFSET);
-            
+
         let step_name = SmolStr::new(format!("{}.__async_step", self.func_name));
         let step_ref = *self
             .func_refs
             .get(step_name.as_str())
             .ok_or_else(|| format!("missing async step function `{step_name}`"))?;
         let continuation = self.emit_closure_object(step_ref, Some(frame))?;
-        
+
         let on_ready_ref = *self
             .func_refs
             .get("ori_future_on_ready")
@@ -7316,7 +7539,7 @@ impl<'a> FuncCodegen<'a> {
         self.builder
             .ins()
             .call(on_ready_ref, &[awaited, continuation]);
-            
+
         let zero = self.builder.ins().iconst(types::I64, 0);
         self.builder.ins().return_(&[zero]);
         self.terminated = true;
@@ -7324,21 +7547,17 @@ impl<'a> FuncCodegen<'a> {
         // Non-pending status path
         self.builder.switch_to_block(non_pending_status_block);
         self.builder.seal_block(non_pending_status_block);
-        
+
         let failed_block = self.builder.create_block();
         let cancelled_block = self.builder.create_block();
-        
+
         let failed = self
             .builder
             .ins()
             .icmp_imm(ir::condcodes::IntCC::Equal, status, 2);
-        self.builder.ins().brif(
-            failed,
-            failed_block,
-            &[],
-            cancelled_block,
-            &[],
-        );
+        self.builder
+            .ins()
+            .brif(failed, failed_block, &[], cancelled_block, &[]);
 
         // Failed path
         self.builder.switch_to_block(failed_block);
@@ -7385,17 +7604,18 @@ impl<'a> FuncCodegen<'a> {
         // Ready block path: load/read value, unregister and continue
         self.builder.switch_to_block(ready_block);
         self.builder.seal_block(ready_block);
-        
+
         let value = self.emit_future_value_read(awaited, result_ty)?;
         self.emit_arc_unregister_edge(frame, awaited)?;
-        
+        self.reload_async_frame_vars(plan, frame, index)?;
+
         let cont_block = self.builder.create_block();
         self.builder.ins().jump(cont_block, &[]);
-        
+
         self.builder.switch_to_block(cont_block);
         self.builder.seal_block(cont_block);
         self.terminated = false;
-        
+
         Ok(value)
     }
 
@@ -7447,8 +7667,9 @@ impl<'a> FuncCodegen<'a> {
         }
         for (index, step) in plan.awaits.iter().enumerate() {
             if let Some(binding) = &step.binding {
-                let cl_ty = cl_type(&binding.ty, self.ptr_ty)
-                    .ok_or_else(|| format!("async binding `{}` has no native value", binding.name))?;
+                let cl_ty = cl_type(&binding.ty, self.ptr_ty).ok_or_else(|| {
+                    format!("async binding `{}` has no native value", binding.name)
+                })?;
                 let offset = simple_async_frame_binding_offset(plan, index, self.ptr_ty)
                     .expect("async frame binding offset");
                 let value = self
@@ -7472,7 +7693,7 @@ impl<'a> FuncCodegen<'a> {
         let dispatch_blocks: Vec<_> = (0..=await_count)
             .map(|_| self.builder.create_block())
             .collect();
-            
+
         self.builder.ins().jump(dispatch_blocks[0], &[]);
         for state_index in 0..=await_count {
             self.builder.switch_to_block(dispatch_blocks[state_index]);
@@ -7720,7 +7941,14 @@ impl<'a> FuncCodegen<'a> {
                 ..
             } => {
                 let has_await = self.async_frame.is_some() && stmt_contains_await(stmt);
-                self.emit_for(binding, index_binding.as_ref(), elem_ty, iterable, body, has_await)?;
+                self.emit_for(
+                    binding,
+                    index_binding.as_ref(),
+                    elem_ty,
+                    iterable,
+                    body,
+                    has_await,
+                )?;
             }
             HirStmt::Match {
                 scrutinee, arms, ..
@@ -7791,7 +8019,7 @@ impl<'a> FuncCodegen<'a> {
                     .ok_or_else(|| "invalid repeat-count trap code `4`".to_string())?;
                 self.emit_trap_unless(non_negative, trap, true)?;
 
-                let (idx_var, limit_val) = if has_await {
+                let (idx_var, limit_val, repeat_loop_id) = if has_await {
                     let loop_id = self.async_loop_index;
                     self.async_loop_index += 1;
                     let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
@@ -7803,12 +8031,12 @@ impl<'a> FuncCodegen<'a> {
                     self.builder.def_var(limit_var, count_v);
                     self.store_async_local_if_any(&idx_name, loop_zero)?;
                     self.store_async_local_if_any(&limit_name, count_v)?;
-                    (idx_var, self.builder.use_var(limit_var))
+                    (idx_var, self.builder.use_var(limit_var), Some(loop_id))
                 } else {
                     let idx_var = self.builder.declare_var(types::I64);
                     let loop_zero = self.builder.ins().iconst(types::I64, 0);
                     self.builder.def_var(idx_var, loop_zero);
-                    (idx_var, count_v)
+                    (idx_var, count_v, None)
                 };
 
                 let header = self.builder.create_block();
@@ -7836,8 +8064,7 @@ impl<'a> FuncCodegen<'a> {
                     let one = self.builder.ins().iconst(types::I64, 1);
                     let next = self.builder.ins().iadd(cur2, one);
                     self.builder.def_var(idx_var, next);
-                    if has_await {
-                        let loop_id = self.async_loop_index - 1;
+                    if let Some(loop_id) = repeat_loop_id {
                         let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
                         self.store_async_local_if_any(&idx_name, next)?;
                     }
@@ -8109,7 +8336,15 @@ impl<'a> FuncCodegen<'a> {
                 let Ty::Map(key_ty, value_ty) = &iterable.ty else {
                     unreachable!();
                 };
-                self.emit_for_map(binding, index_binding, key_ty, value_ty, iterable, body, has_await)
+                self.emit_for_map(
+                    binding,
+                    index_binding,
+                    key_ty,
+                    value_ty,
+                    iterable,
+                    body,
+                    has_await,
+                )
             }
             _ if matches!(&iterable.ty, Ty::String) => {
                 self.emit_for_string(binding, index_binding, iterable, body, has_await)
@@ -8123,7 +8358,15 @@ impl<'a> FuncCodegen<'a> {
                     unreachable!();
                 };
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_opaque(binding, index_binding, &elem, iterable, *kind, has_await, body)
+                self.emit_for_opaque(
+                    binding,
+                    index_binding,
+                    &elem,
+                    iterable,
+                    *kind,
+                    has_await,
+                    body,
+                )
             }
             _ if matches!(
                 &iterable.ty,
@@ -8137,7 +8380,15 @@ impl<'a> FuncCodegen<'a> {
                     unreachable!();
                 };
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_opaque(binding, index_binding, &elem, iterable, OpaqueTy::Heap, has_await, body)
+                self.emit_for_opaque(
+                    binding,
+                    index_binding,
+                    &elem,
+                    iterable,
+                    OpaqueTy::Heap,
+                    has_await,
+                    body,
+                )
             }
             _ if matches!(
                 &iterable.ty,
@@ -8151,7 +8402,15 @@ impl<'a> FuncCodegen<'a> {
                     unreachable!();
                 };
                 let elem = args.first().cloned().unwrap_or(Ty::Infer(0));
-                self.emit_for_opaque(binding, index_binding, &elem, iterable, OpaqueTy::Graph, has_await, body)
+                self.emit_for_opaque(
+                    binding,
+                    index_binding,
+                    &elem,
+                    iterable,
+                    OpaqueTy::Graph,
+                    has_await,
+                    body,
+                )
             }
             _ if matches!(
                 &iterable.ty,
@@ -8226,22 +8485,27 @@ impl<'a> FuncCodegen<'a> {
         let new_func = format!("{}_new", prefix);
         let next_func = format!("{}_next", prefix);
 
-        let new_ref = *self.func_refs.get(new_func.as_str()).ok_or_else(|| {
-            format!("missing runtime function `{new_func}`")
-        })?;
-        let next_ref = *self.func_refs.get(next_func.as_str()).ok_or_else(|| {
-            format!("missing runtime function `{next_func}`")
-        })?;
+        let new_ref = *self
+            .func_refs
+            .get(new_func.as_str())
+            .ok_or_else(|| format!("missing runtime function `{new_func}`"))?;
+        let next_ref = *self
+            .func_refs
+            .get(next_func.as_str())
+            .ok_or_else(|| format!("missing runtime function `{next_func}`"))?;
 
         let elem_cl_ty = cl_type(elem_ty, self.ptr_ty).ok_or_else(|| {
-            format!("missing Cranelift type for element type `{}`", elem_ty.display())
+            format!(
+                "missing Cranelift type for element type `{}`",
+                elem_ty.display()
+            )
         })?;
 
         let handle = self.emit_expr(iterable)?;
         let call = self.builder.ins().call(new_ref, &[handle]);
         let iter_value = self.builder.inst_results(call)[0];
 
-        let (idx_var, iter_var, _iter_val) = if has_await {
+        let (idx_var, iter_var, _iter_val, loop_id) = if has_await {
             let loop_id = self.async_loop_index;
             self.async_loop_index += 1;
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
@@ -8251,20 +8515,29 @@ impl<'a> FuncCodegen<'a> {
 
             self.builder.def_var(iter_var, iter_value);
             self.store_async_local_if_any(&list_name, iter_value)?;
-            self.emit_arc_register_edge_if_managed(&iterable.ty, self.async_frame.unwrap(), iter_value)?;
+            self.emit_arc_register_edge_if_managed(
+                &iterable.ty,
+                self.async_frame.unwrap(),
+                iter_value,
+            )?;
 
             let zero = self.builder.ins().iconst(types::I64, 0);
             self.builder.def_var(idx_var, zero);
             self.store_async_local_if_any(&idx_name, zero)?;
 
-            (idx_var, iter_var, self.builder.use_var(iter_var))
+            (
+                idx_var,
+                iter_var,
+                self.builder.use_var(iter_var),
+                Some(loop_id),
+            )
         } else {
             let iter_var = self.builder.declare_var(self.ptr_ty);
             self.builder.def_var(iter_var, iter_value);
             let idx_var = self.builder.declare_var(types::I64);
             let zero = self.builder.ins().iconst(types::I64, 0);
             self.builder.def_var(idx_var, zero);
-            (idx_var, iter_var, iter_value)
+            (idx_var, iter_var, iter_value, None)
         };
 
         let binding_var = if has_await {
@@ -8293,13 +8566,19 @@ impl<'a> FuncCodegen<'a> {
         let iter_current = self.builder.use_var(iter_var);
         let call = self.builder.ins().call(next_ref, &[iter_current]);
         let val_ptr = self.builder.inst_results(call)[0];
-        let has_val = self.builder.ins().icmp_imm(ir::condcodes::IntCC::NotEqual, val_ptr, 0);
+        let has_val = self
+            .builder
+            .ins()
+            .icmp_imm(ir::condcodes::IntCC::NotEqual, val_ptr, 0);
         self.builder.ins().brif(has_val, body_b, &[], exit, &[]);
 
         self.builder.seal_block(body_b);
         self.builder.switch_to_block(body_b);
 
-        let item_storage = self.builder.ins().load(elem_cl_ty, MemFlags::new(), val_ptr, 0);
+        let item_storage = self
+            .builder
+            .ins()
+            .load(elem_cl_ty, MemFlags::new(), val_ptr, 0);
         let item = self.from_list_storage_value(item_storage, elem_ty);
         self.builder.def_var(binding_var, item);
         if has_await {
@@ -8335,8 +8614,7 @@ impl<'a> FuncCodegen<'a> {
         let one = self.builder.ins().iconst(types::I64, 1);
         let next = self.builder.ins().iadd(cur, one);
         self.builder.def_var(idx_var, next);
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             self.store_async_local_if_any(&idx_name, next)?;
         }
@@ -8347,8 +8625,7 @@ impl<'a> FuncCodegen<'a> {
         self.builder.switch_to_block(exit);
         let final_iter = self.builder.use_var(iter_var);
         self.emit_arc_release_if_managed(&iterable.ty, final_iter)?;
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
             let zero = self.builder.ins().iconst(self.ptr_ty, 0);
             self.emit_arc_unregister_edge(self.async_frame.unwrap(), final_iter)?;
@@ -8388,7 +8665,7 @@ impl<'a> FuncCodegen<'a> {
         let iter_value = self.emit_expr(iterable)?;
         self.emit_arc_retain_if_managed(&iterable.ty, iter_value)?;
 
-        let (idx_var, iter_var, _iter_val) = if has_await {
+        let (idx_var, iter_var, _iter_val, loop_id) = if has_await {
             let loop_id = self.async_loop_index;
             self.async_loop_index += 1;
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
@@ -8398,20 +8675,29 @@ impl<'a> FuncCodegen<'a> {
 
             self.builder.def_var(iter_var, iter_value);
             self.store_async_local_if_any(&list_name, iter_value)?;
-            self.emit_arc_register_edge_if_managed(&iterable.ty, self.async_frame.unwrap(), iter_value)?;
+            self.emit_arc_register_edge_if_managed(
+                &iterable.ty,
+                self.async_frame.unwrap(),
+                iter_value,
+            )?;
 
             let zero = self.builder.ins().iconst(types::I64, 0);
             self.builder.def_var(idx_var, zero);
             self.store_async_local_if_any(&idx_name, zero)?;
 
-            (idx_var, iter_var, self.builder.use_var(iter_var))
+            (
+                idx_var,
+                iter_var,
+                self.builder.use_var(iter_var),
+                Some(loop_id),
+            )
         } else {
             let iter_var = self.builder.declare_var(iter_cl_ty);
             self.builder.def_var(iter_var, iter_value);
             let idx_var = self.builder.declare_var(types::I64);
             let zero = self.builder.ins().iconst(types::I64, 0);
             self.builder.def_var(idx_var, zero);
-            (idx_var, iter_var, iter_value)
+            (idx_var, iter_var, iter_value, None)
         };
 
         let binding_var = if has_await {
@@ -8488,8 +8774,7 @@ impl<'a> FuncCodegen<'a> {
         let one = self.builder.ins().iconst(types::I64, 1);
         let next = self.builder.ins().iadd(cur, one);
         self.builder.def_var(idx_var, next);
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             self.store_async_local_if_any(&idx_name, next)?;
         }
@@ -8499,8 +8784,7 @@ impl<'a> FuncCodegen<'a> {
         self.builder.switch_to_block(exit);
         let final_iter = self.builder.use_var(iter_var);
         self.emit_arc_release_if_managed(&iterable.ty, final_iter)?;
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
             let zero = self.builder.ins().iconst(self.ptr_ty, 0);
             self.emit_arc_unregister_edge(self.async_frame.unwrap(), final_iter)?;
@@ -8527,7 +8811,7 @@ impl<'a> FuncCodegen<'a> {
                 .ins()
                 .icmp(ir::condcodes::IntCC::SignedLessThanOrEqual, start_v, end_v);
 
-        let (idx_var, end_var, asc_var, iter_count_var) = if has_await {
+        let (idx_var, end_var, asc_var, iter_count_var, loop_id) = if has_await {
             let loop_id = self.async_loop_index;
             self.async_loop_index += 1;
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
@@ -8555,7 +8839,7 @@ impl<'a> FuncCodegen<'a> {
             self.store_async_local_if_any(&end_name, end_v)?;
             self.store_async_local_if_any(&asc_name, asc)?;
 
-            (idx_var, end_var, asc_var, iter_count_var)
+            (idx_var, end_var, asc_var, iter_count_var, Some(loop_id))
         } else {
             let idx_var = self.builder.declare_var(types::I64);
             self.builder.def_var(idx_var, start_v);
@@ -8572,7 +8856,7 @@ impl<'a> FuncCodegen<'a> {
             } else {
                 None
             };
-            (idx_var, end_var, asc_var, iter_count_var)
+            (idx_var, end_var, asc_var, iter_count_var, None)
         };
 
         if !has_await {
@@ -8605,7 +8889,7 @@ impl<'a> FuncCodegen<'a> {
         self.builder.switch_to_block(body_b);
 
         if let Some((bvar, _)) = self.lookup_var(binding) {
-                        let cur2 = self.builder.use_var(idx_var);
+            let cur2 = self.builder.use_var(idx_var);
             self.builder.def_var(bvar, cur2);
             if has_await {
                 self.store_async_local_if_any(binding, cur2)?;
@@ -8644,8 +8928,7 @@ impl<'a> FuncCodegen<'a> {
         let inc = self.builder.ins().select(asc_flag, one, neg_one);
         let next = self.builder.ins().iadd(cur2, inc);
         self.builder.def_var(idx_var, next);
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             self.store_async_local_if_any(&idx_name, next)?;
         }
@@ -8655,8 +8938,7 @@ impl<'a> FuncCodegen<'a> {
             let one_ic = self.builder.ins().iconst(types::I64, 1);
             let next_ic = self.builder.ins().iadd(ic, one_ic);
             self.builder.def_var(ic_var, next_ic);
-            if has_await {
-                let loop_id = self.async_loop_index - 1;
+            if let Some(loop_id) = loop_id {
                 let iter_name = SmolStr::new(format!(".__loop_iter_{}", loop_id));
                 self.store_async_local_if_any(&iter_name, next_ic)?;
             }
@@ -8741,9 +9023,12 @@ impl<'a> FuncCodegen<'a> {
             .ok_or_else(|| "missing runtime function `ori_list_get`".to_string())?;
 
         let version_offset = (self.ptr_ty.bytes() + 16) as i32;
-        let expected_version = self.builder.ins().load(types::I64, MemFlags::new(), list_v, version_offset);
+        let expected_version =
+            self.builder
+                .ins()
+                .load(types::I64, MemFlags::new(), list_v, version_offset);
 
-        let (idx_var, len_var, expected_ver_var, list_val, loop_id) = if has_await {
+        let (idx_var, len_var, expected_ver_var, list_var, loop_id) = if has_await {
             let loop_id = self.async_loop_index;
             self.async_loop_index += 1;
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
@@ -8757,7 +9042,11 @@ impl<'a> FuncCodegen<'a> {
 
             self.builder.def_var(list_var, list_v);
             self.store_async_local_if_any(&list_name, list_v)?;
-            self.emit_arc_register_edge_if_managed(&Ty::List(Box::new(elem_ty.clone())), self.async_frame.unwrap(), list_v)?;
+            self.emit_arc_register_edge_if_managed(
+                &Ty::List(Box::new(elem_ty.clone())),
+                self.async_frame.unwrap(),
+                list_v,
+            )?;
 
             let len_call = self.builder.ins().call(len_ref, &[list_v]);
             let len_v = self.builder.inst_results(len_call)[0];
@@ -8771,7 +9060,13 @@ impl<'a> FuncCodegen<'a> {
             self.builder.def_var(idx_var, zero);
             self.store_async_local_if_any(&idx_name, zero)?;
 
-            (idx_var, len_var, expected_ver_var, self.builder.use_var(list_var), Some(loop_id))
+            (
+                idx_var,
+                len_var,
+                expected_ver_var,
+                Some(list_var),
+                Some(loop_id),
+            )
         } else {
             let len_call = self.builder.ins().call(len_ref, &[list_v]);
             let len_v = self.builder.inst_results(len_call)[0];
@@ -8782,7 +9077,7 @@ impl<'a> FuncCodegen<'a> {
             self.builder.def_var(len_var, len_v);
             let expected_ver_var = self.builder.declare_var(types::I64);
             self.builder.def_var(expected_ver_var, expected_version);
-            (idx_var, len_var, expected_ver_var, list_v, None)
+            (idx_var, len_var, expected_ver_var, None, None)
         };
 
         if !has_await {
@@ -8811,20 +9106,34 @@ impl<'a> FuncCodegen<'a> {
         self.builder.switch_to_block(body_b);
 
         // Concurrent modification check
-        let current_version = self.builder.ins().load(types::I64, MemFlags::new(), list_val, version_offset);
+        let list_current = list_var
+            .map(|var| self.builder.use_var(var))
+            .unwrap_or(list_v);
+        let current_version =
+            self.builder
+                .ins()
+                .load(types::I64, MemFlags::new(), list_current, version_offset);
         let expected_ver_val = self.builder.use_var(expected_ver_var);
-        let version_eq = self.builder.ins().icmp(ir::condcodes::IntCC::Equal, current_version, expected_ver_val);
-        
+        let version_eq = self.builder.ins().icmp(
+            ir::condcodes::IntCC::Equal,
+            current_version,
+            expected_ver_val,
+        );
+
         let abort_b = self.builder.create_block();
         let check_b = self.builder.create_block();
-        self.builder.ins().brif(version_eq, check_b, &[], abort_b, &[]);
+        self.builder
+            .ins()
+            .brif(version_eq, check_b, &[], abort_b, &[]);
 
         self.builder.seal_block(abort_b);
         self.builder.switch_to_block(abort_b);
         let abort_ref = *self
             .func_refs
             .get("ori_abort_concurrent_modification")
-            .ok_or_else(|| "missing runtime function `ori_abort_concurrent_modification`".to_string())?;
+            .ok_or_else(|| {
+                "missing runtime function `ori_abort_concurrent_modification`".to_string()
+            })?;
         self.builder.ins().call(abort_ref, &[]);
         self.builder.ins().trap(ir::TrapCode::user(2).unwrap());
 
@@ -8833,7 +9142,10 @@ impl<'a> FuncCodegen<'a> {
 
         if let Some((_bvar, _)) = self.lookup_var(binding) {
             let cur2 = self.builder.use_var(idx_var);
-            let call = self.builder.ins().call(get_ref, &[list_val, cur2]);
+            let list_current = list_var
+                .map(|var| self.builder.use_var(var))
+                .unwrap_or(list_v);
+            let call = self.builder.ins().call(get_ref, &[list_current, cur2]);
             let elem = self.builder.inst_results(call)[0];
             let elem = self.from_list_storage_value(elem, elem_ty);
             self.emit_for_element_binding(binding, elem_ty, elem, has_await)?;
@@ -8883,7 +9195,10 @@ impl<'a> FuncCodegen<'a> {
             let ver_name = SmolStr::new(format!(".__loop_version_{}", loop_id));
             let zero = self.builder.ins().iconst(self.ptr_ty, 0);
             let zero_i64 = self.builder.ins().iconst(types::I64, 0);
-            self.emit_arc_unregister_edge(self.async_frame.unwrap(), list_val)?;
+            let list_current = list_var
+                .map(|var| self.builder.use_var(var))
+                .unwrap_or(list_v);
+            self.emit_arc_unregister_edge(self.async_frame.unwrap(), list_current)?;
             self.store_async_local_if_any(&list_name, zero)?;
             self.store_async_local_if_any(&ver_name, zero_i64)?;
         }
@@ -8916,7 +9231,10 @@ impl<'a> FuncCodegen<'a> {
             .ok_or_else(|| "missing runtime function `ori_map_value_at`".to_string())?;
 
         let version_offset = (self.ptr_ty.bytes() * 2 + 16) as i32;
-        let expected_version = self.builder.ins().load(types::I64, MemFlags::new(), map_v, version_offset);
+        let expected_version =
+            self.builder
+                .ins()
+                .load(types::I64, MemFlags::new(), map_v, version_offset);
 
         let (idx_var, len_var, expected_ver_var, map_val, loop_id) = if has_await {
             let loop_id = self.async_loop_index;
@@ -8946,7 +9264,13 @@ impl<'a> FuncCodegen<'a> {
             self.builder.def_var(idx_var, zero);
             self.store_async_local_if_any(&idx_name, zero)?;
 
-            (idx_var, len_var, expected_ver_var, self.builder.use_var(list_var), Some(loop_id))
+            (
+                idx_var,
+                len_var,
+                expected_ver_var,
+                self.builder.use_var(list_var),
+                Some(loop_id),
+            )
         } else {
             let len_call = self.builder.ins().call(len_ref, &[map_v]);
             let len_v = self.builder.inst_results(len_call)[0];
@@ -8994,20 +9318,31 @@ impl<'a> FuncCodegen<'a> {
         self.builder.switch_to_block(body_b);
 
         // Concurrent modification check
-        let current_version = self.builder.ins().load(types::I64, MemFlags::new(), map_val, version_offset);
+        let current_version =
+            self.builder
+                .ins()
+                .load(types::I64, MemFlags::new(), map_val, version_offset);
         let expected_ver_val = self.builder.use_var(expected_ver_var);
-        let version_eq = self.builder.ins().icmp(ir::condcodes::IntCC::Equal, current_version, expected_ver_val);
-        
+        let version_eq = self.builder.ins().icmp(
+            ir::condcodes::IntCC::Equal,
+            current_version,
+            expected_ver_val,
+        );
+
         let abort_b = self.builder.create_block();
         let check_b = self.builder.create_block();
-        self.builder.ins().brif(version_eq, check_b, &[], abort_b, &[]);
+        self.builder
+            .ins()
+            .brif(version_eq, check_b, &[], abort_b, &[]);
 
         self.builder.seal_block(abort_b);
         self.builder.switch_to_block(abort_b);
         let abort_ref = *self
             .func_refs
             .get("ori_abort_concurrent_modification")
-            .ok_or_else(|| "missing runtime function `ori_abort_concurrent_modification`".to_string())?;
+            .ok_or_else(|| {
+                "missing runtime function `ori_abort_concurrent_modification`".to_string()
+            })?;
         self.builder.ins().call(abort_ref, &[]);
         self.builder.ins().trap(ir::TrapCode::user(2).unwrap());
 
@@ -9089,7 +9424,7 @@ impl<'a> FuncCodegen<'a> {
             .get("ori_bytes_get")
             .ok_or_else(|| "missing runtime function `ori_bytes_get`".to_string())?;
 
-        let (idx_var, len_var, bytes_val) = if has_await {
+        let (idx_var, len_var, bytes_val, loop_id) = if has_await {
             let loop_id = self.async_loop_index;
             self.async_loop_index += 1;
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
@@ -9101,7 +9436,11 @@ impl<'a> FuncCodegen<'a> {
 
             self.builder.def_var(list_var, bytes_v);
             self.store_async_local_if_any(&list_name, bytes_v)?;
-            self.emit_arc_register_edge_if_managed(&iterable.ty, self.async_frame.unwrap(), bytes_v)?;
+            self.emit_arc_register_edge_if_managed(
+                &iterable.ty,
+                self.async_frame.unwrap(),
+                bytes_v,
+            )?;
 
             let len_call = self.builder.ins().call(len_ref, &[bytes_v]);
             let len_v = self.builder.inst_results(len_call)[0];
@@ -9112,7 +9451,12 @@ impl<'a> FuncCodegen<'a> {
             self.builder.def_var(idx_var, zero);
             self.store_async_local_if_any(&idx_name, zero)?;
 
-            (idx_var, len_var, self.builder.use_var(list_var))
+            (
+                idx_var,
+                len_var,
+                self.builder.use_var(list_var),
+                Some(loop_id),
+            )
         } else {
             let len_call = self.builder.ins().call(len_ref, &[bytes_v]);
             let len_v = self.builder.inst_results(len_call)[0];
@@ -9121,7 +9465,7 @@ impl<'a> FuncCodegen<'a> {
             self.builder.def_var(idx_var, zero);
             let len_var = self.builder.declare_var(types::I64);
             self.builder.def_var(len_var, len_v);
-            (idx_var, len_var, bytes_v)
+            (idx_var, len_var, bytes_v, None)
         };
 
         let bvar = if has_await {
@@ -9184,8 +9528,7 @@ impl<'a> FuncCodegen<'a> {
         let one = self.builder.ins().iconst(types::I64, 1);
         let next = self.builder.ins().iadd(cur3, one);
         self.builder.def_var(idx_var, next);
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             self.store_async_local_if_any(&idx_name, next)?;
         }
@@ -9193,8 +9536,7 @@ impl<'a> FuncCodegen<'a> {
         self.builder.seal_block(header);
         self.builder.seal_block(exit);
         self.builder.switch_to_block(exit);
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
             let zero = self.builder.ins().iconst(self.ptr_ty, 0);
             self.emit_arc_unregister_edge(self.async_frame.unwrap(), bytes_val)?;
@@ -9229,7 +9571,7 @@ impl<'a> FuncCodegen<'a> {
             .get("ori_list_get")
             .ok_or_else(|| "missing runtime function `ori_list_get`".to_string())?;
 
-        let (idx_var, len_var, list_val) = if has_await {
+        let (idx_var, len_var, list_val, loop_id) = if has_await {
             let loop_id = self.async_loop_index;
             self.async_loop_index += 1;
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
@@ -9241,7 +9583,11 @@ impl<'a> FuncCodegen<'a> {
 
             self.builder.def_var(list_var, list_v);
             self.store_async_local_if_any(&list_name, list_v)?;
-            self.emit_arc_register_edge_if_managed(&Ty::List(Box::new(Ty::String)), self.async_frame.unwrap(), list_v)?;
+            self.emit_arc_register_edge_if_managed(
+                &Ty::List(Box::new(Ty::String)),
+                self.async_frame.unwrap(),
+                list_v,
+            )?;
 
             let len_call = self.builder.ins().call(len_ref, &[list_v]);
             let len_v = self.builder.inst_results(len_call)[0];
@@ -9252,7 +9598,12 @@ impl<'a> FuncCodegen<'a> {
             self.builder.def_var(idx_var, zero);
             self.store_async_local_if_any(&idx_name, zero)?;
 
-            (idx_var, len_var, self.builder.use_var(list_var))
+            (
+                idx_var,
+                len_var,
+                self.builder.use_var(list_var),
+                Some(loop_id),
+            )
         } else {
             let len_call = self.builder.ins().call(len_ref, &[list_v]);
             let len_v = self.builder.inst_results(len_call)[0];
@@ -9261,7 +9612,7 @@ impl<'a> FuncCodegen<'a> {
             self.builder.def_var(idx_var, zero);
             let len_var = self.builder.declare_var(types::I64);
             self.builder.def_var(len_var, len_v);
-            (idx_var, len_var, list_v)
+            (idx_var, len_var, list_v, None)
         };
 
         if has_await {
@@ -9318,8 +9669,7 @@ impl<'a> FuncCodegen<'a> {
         let one = self.builder.ins().iconst(types::I64, 1);
         let next = self.builder.ins().iadd(cur3, one);
         self.builder.def_var(idx_var, next);
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let idx_name = SmolStr::new(format!(".__loop_idx_{}", loop_id));
             self.store_async_local_if_any(&idx_name, next)?;
         }
@@ -9330,8 +9680,7 @@ impl<'a> FuncCodegen<'a> {
         if !has_await {
             self.emit_for_release_element_binding(binding)?;
         }
-        if has_await {
-            let loop_id = self.async_loop_index - 1;
+        if let Some(loop_id) = loop_id {
             let list_name = SmolStr::new(format!(".__loop_list_{}", loop_id));
             self.emit_arc_release_if_managed(&Ty::List(Box::new(Ty::String)), list_val)?;
             let zero = self.builder.ins().iconst(self.ptr_ty, 0);
@@ -9836,6 +10185,18 @@ impl<'a> FuncCodegen<'a> {
         Ok(self.builder.block_params(merge_block)[0])
     }
 
+    fn expr_can_be_reloaded_after_await(expr: &HirExpr) -> bool {
+        matches!(
+            expr.kind,
+            HirExprKind::BoolLit(_)
+                | HirExprKind::IntLit(_)
+                | HirExprKind::FloatLit(_)
+                | HirExprKind::Unit
+                | HirExprKind::StrLit(_)
+                | HirExprKind::Var(_)
+        )
+    }
+
     fn emit_expr(&mut self, expr: &HirExpr) -> Result<ir::Value, String> {
         Ok(match &expr.kind {
             HirExprKind::BoolLit(b) => self.builder.ins().iconst(types::I8, if *b { 1 } else { 0 }),
@@ -9931,7 +10292,7 @@ impl<'a> FuncCodegen<'a> {
             HirExprKind::InterpolatedStr(parts) => self.emit_interpolated_string(parts)?,
             HirExprKind::Var(name) => {
                 if let Some((var, _)) = self.lookup_var(name) {
-                                        self.builder.use_var(var)
+                    self.builder.use_var(var)
                 } else if let Some(value) = self.load_global(name) {
                     value
                 } else if let Some(expr) = self.const_exprs.get(name).cloned() {
@@ -9946,17 +10307,23 @@ impl<'a> FuncCodegen<'a> {
                 }
                 let lhs_owned = Self::expr_produces_owned_ref(lhs);
                 let rhs_owned = Self::expr_produces_owned_ref(rhs);
-                let lv = self.emit_expr(lhs)?;
-                let rv = self.emit_expr(rhs)?;
+                let rhs_has_await = self.async_frame.is_some() && expr_contains_await(rhs);
+                let (lv, rv) = if rhs_has_await && Self::expr_can_be_reloaded_after_await(lhs) {
+                    let rv = self.emit_expr(rhs)?;
+                    let lv = self.emit_expr(lhs)?;
+                    (lv, rv)
+                } else {
+                    let lv = self.emit_expr(lhs)?;
+                    let rv = self.emit_expr(rhs)?;
+                    (lv, rv)
+                };
                 let res = self.emit_binary(*op, lv, rv, &lhs.ty)?;
                 // String/bytes concat runtime helpers borrow their operands
                 // without releasing them, so fresh +1 temporaries passed as
                 // operands would leak. Release owned managed operands after
                 // the concat call. Literal/Var operands are either static or
                 // owned by a binding (released by scope cleanup).
-                if matches!(op, BinaryOp::Add)
-                    && matches!(lhs.ty, Ty::String | Ty::Bytes)
-                {
+                if matches!(op, BinaryOp::Add) && matches!(lhs.ty, Ty::String | Ty::Bytes) {
                     if lhs_owned && is_managed_ty(&lhs.ty) {
                         self.emit_arc_release_if_managed(&lhs.ty, lv)?;
                     }
@@ -11917,7 +12284,8 @@ impl<'a> FuncCodegen<'a> {
                     return self.emit_any_equality(lv, rv, false);
                 } else if let Ty::Opaque { kind, args } = ty {
                     if kind.is_list_backed_collection() {
-                        return self.emit_opaque_collection_equality(lv, rv, *kind, &args[0], false);
+                        return self
+                            .emit_opaque_collection_equality(lv, rv, *kind, &args[0], false);
                     }
                     self.builder.ins().icmp(IntCC::NotEqual, lv, rv)
                 } else if let Ty::Optional(inner) = ty {
@@ -12201,41 +12569,70 @@ impl<'a> FuncCodegen<'a> {
         eq: bool,
     ) -> Result<ir::Value, String> {
         let ptr_size = self.ptr_ty.bytes() as i64;
-        let vtable_l = self.builder.ins().load(self.ptr_ty, MemFlags::new(), lv, ptr_size as i32);
-        let vtable_r = self.builder.ins().load(self.ptr_ty, MemFlags::new(), rv, ptr_size as i32);
-        let type_id_l = self.builder.ins().load(self.ptr_ty, MemFlags::new(), vtable_l, 0);
-        let type_id_r = self.builder.ins().load(self.ptr_ty, MemFlags::new(), vtable_r, 0);
-        let types_eq = self.builder.ins().icmp(ir::condcodes::IntCC::Equal, type_id_l, type_id_r);
+        let vtable_l = self
+            .builder
+            .ins()
+            .load(self.ptr_ty, MemFlags::new(), lv, ptr_size as i32);
+        let vtable_r = self
+            .builder
+            .ins()
+            .load(self.ptr_ty, MemFlags::new(), rv, ptr_size as i32);
+        let type_id_l = self
+            .builder
+            .ins()
+            .load(self.ptr_ty, MemFlags::new(), vtable_l, 0);
+        let type_id_r = self
+            .builder
+            .ins()
+            .load(self.ptr_ty, MemFlags::new(), vtable_r, 0);
+        let types_eq = self
+            .builder
+            .ins()
+            .icmp(ir::condcodes::IntCC::Equal, type_id_l, type_id_r);
 
         let types_eq_block = self.builder.create_block();
         let types_ne_block = self.builder.create_block();
         let merge_block = self.builder.create_block();
         self.builder.append_block_param(merge_block, types::I8);
 
-        self.builder.ins().brif(types_eq, types_eq_block, &[], types_ne_block, &[]);
+        self.builder
+            .ins()
+            .brif(types_eq, types_eq_block, &[], types_ne_block, &[]);
 
         // --- types_ne_block ---
         self.builder.switch_to_block(types_ne_block);
         self.builder.seal_block(types_ne_block);
         let false_val = self.builder.ins().iconst(types::I8, if eq { 0 } else { 1 });
-        self.builder.ins().jump(merge_block, &[BlockArg::Value(false_val)]);
+        self.builder
+            .ins()
+            .jump(merge_block, &[BlockArg::Value(false_val)]);
 
         // --- types_eq_block ---
         self.builder.switch_to_block(types_eq_block);
         self.builder.seal_block(types_eq_block);
-        let eq_fn = self.builder.ins().load(self.ptr_ty, MemFlags::new(), vtable_l, ptr_size as i32);
+        let eq_fn =
+            self.builder
+                .ins()
+                .load(self.ptr_ty, MemFlags::new(), vtable_l, ptr_size as i32);
         let zero_ptr = self.builder.ins().iconst(self.ptr_ty, 0);
-        let has_eq_fn = self.builder.ins().icmp(ir::condcodes::IntCC::NotEqual, eq_fn, zero_ptr);
+        let has_eq_fn = self
+            .builder
+            .ins()
+            .icmp(ir::condcodes::IntCC::NotEqual, eq_fn, zero_ptr);
 
         let call_block = self.builder.create_block();
         let no_call_block = self.builder.create_block();
-        self.builder.ins().brif(has_eq_fn, call_block, &[], no_call_block, &[]);
+        self.builder
+            .ins()
+            .brif(has_eq_fn, call_block, &[], no_call_block, &[]);
 
         // --- no_call_block ---
         self.builder.switch_to_block(no_call_block);
         self.builder.seal_block(no_call_block);
         let false_val2 = self.builder.ins().iconst(types::I8, if eq { 0 } else { 1 });
-        self.builder.ins().jump(merge_block, &[BlockArg::Value(false_val2)]);
+        self.builder
+            .ins()
+            .jump(merge_block, &[BlockArg::Value(false_val2)]);
 
         // --- call_block ---
         self.builder.switch_to_block(call_block);
@@ -12248,16 +12645,23 @@ impl<'a> FuncCodegen<'a> {
         sig.params.push(AbiParam::new(self.ptr_ty));
         sig.returns.push(AbiParam::new(types::I8));
         let sig_ref = self.builder.func.import_signature(sig);
-        let call = self.builder.ins().call_indirect(sig_ref, eq_fn, &[data_l, data_r]);
+        let call = self
+            .builder
+            .ins()
+            .call_indirect(sig_ref, eq_fn, &[data_l, data_r]);
         let eq_res = self.builder.inst_results(call)[0];
-        
+
         let final_res = if eq {
             eq_res
         } else {
             let zero8 = self.builder.ins().iconst(types::I8, 0);
-            self.builder.ins().icmp(ir::condcodes::IntCC::Equal, eq_res, zero8)
+            self.builder
+                .ins()
+                .icmp(ir::condcodes::IntCC::Equal, eq_res, zero8)
         };
-        self.builder.ins().jump(merge_block, &[BlockArg::Value(final_res)]);
+        self.builder
+            .ins()
+            .jump(merge_block, &[BlockArg::Value(final_res)]);
 
         // --- merge_block ---
         self.builder.switch_to_block(merge_block);
@@ -12656,9 +13060,8 @@ fn make_object_module() -> Result<ObjectModule, String> {
         .map_err(|e| format!("native ISA unavailable: {e}"))?
         .finish(flags)
         .map_err(|e| format!("ISA build failed: {e}"))?;
-    let builder =
-        ObjectBuilder::new(isa, "ori_module", cranelift_module::default_libcall_names())
-            .map_err(|e| format!("ObjectBuilder failed: {e}"))?;
+    let builder = ObjectBuilder::new(isa, "ori_module", cranelift_module::default_libcall_names())
+        .map_err(|e| format!("ObjectBuilder failed: {e}"))?;
     Ok(ObjectModule::new(builder))
 }
 
@@ -13013,7 +13416,11 @@ fn rustc_host_triple(rustc: &Path) -> Option<String> {
 /// Truthy env-var check: `1`, `true`, `yes`, `on` (case-insensitive) count as set.
 fn env_flag(name: &str) -> bool {
     matches!(
-        std::env::var(name).ok().as_deref().map(str::to_ascii_lowercase).as_deref(),
+        std::env::var(name)
+            .ok()
+            .as_deref()
+            .map(str::to_ascii_lowercase)
+            .as_deref(),
         Some("1" | "true" | "yes" | "on")
     )
 }
@@ -13203,8 +13610,9 @@ fn find_macos_ld() -> Result<PathBuf, String> {
 /// the Rust toolchain as a bootstrap). Discovery order:
 ///
 /// 1. `ORI_RUST_LLD` — explicit path.
-/// 2. `<ori exe dir>/rust-lld[.exe]` — packaged alongside the compiler.
-/// 3. `<rustc sysroot>/lib/rustlib/<host>/bin/rust-lld[.exe]` — Rust toolchain.
+/// 2. `<ori exe dir>/runtime/bin/rust-lld[.exe]` — release package layout.
+/// 3. `<ori exe dir>/rust-lld[.exe]` — bootstrap/dev layout.
+/// 4. `<rustc sysroot>/lib/rustlib/<host>/bin/rust-lld[.exe]` — Rust toolchain.
 fn find_bundled_rust_lld() -> Result<PathBuf, String> {
     if let Ok(path) = std::env::var("ORI_RUST_LLD") {
         let path = path.trim();
@@ -13235,9 +13643,17 @@ fn find_bundled_rust_lld() -> Result<PathBuf, String> {
 fn discover_bundled_rust_lld_next_to_exe() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
-    let name = if cfg!(windows) { "rust-lld.exe" } else { "rust-lld" };
-    let candidate = dir.join(name);
-    candidate.is_file().then_some(candidate)
+    discover_bundled_rust_lld_from_exe_dir(dir)
+}
+
+fn discover_bundled_rust_lld_from_exe_dir(dir: &Path) -> Option<PathBuf> {
+    let name = if cfg!(windows) {
+        "rust-lld.exe"
+    } else {
+        "rust-lld"
+    };
+    let candidates = [dir.join("runtime").join("bin").join(name), dir.join(name)];
+    candidates.into_iter().find(|candidate| candidate.is_file())
 }
 
 /// Discover Windows MSVC CRT library directories using `vswhere.exe` and the
@@ -13288,7 +13704,8 @@ fn msvc_arch_dir() -> &'static str {
 }
 
 fn find_vs_install_via_vswhere() -> Result<PathBuf, String> {
-    let vswhere = PathBuf::from(r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe");
+    let vswhere =
+        PathBuf::from(r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe");
     if !vswhere.is_file() {
         return Err(
             "vswhere.exe not found at the standard install location; install Visual Studio Build Tools"
@@ -13372,7 +13789,12 @@ fn find_windows_kits_root() -> Result<PathBuf, String> {
 fn pick_latest_windows_sdk_version(kits_root: &Path) -> Result<String, String> {
     let lib_dir = kits_root.join("Lib");
     let mut versions: Vec<_> = std::fs::read_dir(&lib_dir)
-        .map_err(|e| format!("cannot read Windows SDK Lib dir `{}`: {e}", lib_dir.display()))?
+        .map_err(|e| {
+            format!(
+                "cannot read Windows SDK Lib dir `{}`: {e}",
+                lib_dir.display()
+            )
+        })?
         .filter_map(Result::ok)
         .filter(|entry| entry.file_type().map(|t| t.is_dir()).unwrap_or(false))
         .map(|entry| entry.file_name().to_string_lossy().to_string())
@@ -13414,25 +13836,77 @@ struct MacOsCrt {
 }
 
 /// Discover Linux GNU CRT components using `cc -print-file-name` and
-/// `cc -print-search-dirs`. Does not require a Rust toolchain.
+/// `cc -print-search-dirs`, with fallback to common GNU/Linux system paths.
+/// Does not require a Rust toolchain.
 ///
 /// The C compiler driver (`cc`) is used only as a discovery tool — the
-/// actual link is performed by `rust-lld` directly. If `cc` is not
-/// installed, this strategy cannot engage and the caller should fall back
-/// to `RustcDriver`.
+/// actual link is performed by `rust-lld` directly. If `cc` is not installed,
+/// Ori still tries common libc development paths before failing.
 fn discover_linux_gnu_crt() -> Result<LinuxGnuCrt, String> {
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
-    let crt1 = cc_print_file_name(&cc, "crt1.o")?;
-    let crti = cc_print_file_name(&cc, "crti.o")?;
-    let crtn = cc_print_file_name(&cc, "crtn.o")?;
-    let dynamic_linker = discover_linux_dynamic_linker(&cc)?;
-    let lib_dirs = cc_print_search_dirs_libpaths(&cc)?;
+    match discover_linux_gnu_crt_with_cc(&cc) {
+        Ok(crt) => Ok(crt),
+        Err(cc_reason) => discover_linux_gnu_crt_from_common_paths().map_err(|fallback_reason| {
+            format!(
+                "Linux CRT discovery via `{cc}` failed: {cc_reason}; \
+                 fallback search in common system paths also failed: {fallback_reason}"
+            )
+        }),
+    }
+}
+
+fn discover_linux_gnu_crt_with_cc(cc: &str) -> Result<LinuxGnuCrt, String> {
     Ok(LinuxGnuCrt {
-        lib_dirs,
-        crt_pre: vec![crt1, crti],
-        crt_post: vec![crtn],
-        dynamic_linker,
+        lib_dirs: cc_print_search_dirs_libpaths(cc)?,
+        crt_pre: vec![
+            cc_print_file_name(cc, "crt1.o")?,
+            cc_print_file_name(cc, "crti.o")?,
+        ],
+        crt_post: vec![cc_print_file_name(cc, "crtn.o")?],
+        dynamic_linker: discover_linux_dynamic_linker(cc)?,
     })
+}
+
+fn discover_linux_gnu_crt_from_common_paths() -> Result<LinuxGnuCrt, String> {
+    Ok(LinuxGnuCrt {
+        lib_dirs: common_linux_lib_dirs(),
+        crt_pre: vec![
+            find_common_linux_file("crt1.o")?,
+            find_common_linux_file("crti.o")?,
+        ],
+        crt_post: vec![find_common_linux_file("crtn.o")?],
+        dynamic_linker: discover_linux_dynamic_linker_from_common_paths()?,
+    })
+}
+
+fn common_linux_lib_dirs() -> Vec<PathBuf> {
+    [
+        "/usr/lib/x86_64-linux-gnu",
+        "/usr/lib/aarch64-linux-gnu",
+        "/usr/lib64",
+        "/usr/lib",
+        "/lib/x86_64-linux-gnu",
+        "/lib/aarch64-linux-gnu",
+        "/lib64",
+        "/lib",
+    ]
+    .into_iter()
+    .map(PathBuf::from)
+    .filter(|path| path.is_dir())
+    .collect()
+}
+
+fn find_common_linux_file(file: &str) -> Result<PathBuf, String> {
+    for dir in common_linux_lib_dirs() {
+        let candidate = dir.join(file);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+    Err(format!(
+        "could not locate `{file}` in common Linux library directories; \
+         install libc development files such as libc6-dev"
+    ))
 }
 
 fn cc_print_file_name(cc: &str, file: &str) -> Result<PathBuf, String> {
@@ -13502,10 +13976,13 @@ fn discover_linux_dynamic_linker(cc: &str) -> Result<PathBuf, String> {
         "ld-linux-aarch64.so.1",
     ];
     for &name in &candidates {
-        let output = std::process::Command::new(cc)
+        let output = match std::process::Command::new(cc)
             .args(["-print-file-name", name])
             .output()
-            .map_err(|e| format!("failed to invoke `{cc} -print-file-name {name}`: {e}"))?;
+        {
+            Ok(output) => output,
+            Err(_) => break,
+        };
         if !output.status.success() {
             continue;
         }
@@ -13517,10 +13994,14 @@ fn discover_linux_dynamic_linker(cc: &str) -> Result<PathBuf, String> {
             }
         }
     }
-    // Last-resort: hard-coded common paths.
+    discover_linux_dynamic_linker_from_common_paths()
+}
+
+fn discover_linux_dynamic_linker_from_common_paths() -> Result<PathBuf, String> {
     let fallbacks = [
         "/lib64/ld-linux-x86-64.so.2",
         "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+        "/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
         "/lib/ld-linux-aarch64.so.1",
     ];
     for &path in &fallbacks {
@@ -13535,10 +14016,13 @@ fn discover_linux_dynamic_linker(cc: &str) -> Result<PathBuf, String> {
 }
 
 fn cc_print_search_dirs_libpaths(cc: &str) -> Result<Vec<PathBuf>, String> {
-    let output = std::process::Command::new(cc)
+    let output = match std::process::Command::new(cc)
         .args(["-print-search-dirs"])
         .output()
-        .map_err(|e| format!("failed to invoke `{cc} -print-search-dirs`: {e}"))?;
+    {
+        Ok(output) => output,
+        Err(_) => return Ok(common_linux_lib_dirs()),
+    };
     if !output.status.success() {
         return Err(format!(
             "`{cc} -print-search-dirs` exited with status {}",
@@ -13564,21 +14048,7 @@ fn cc_print_search_dirs_libpaths(cc: &str) -> Result<Vec<PathBuf>, String> {
         }
     }
     if dirs.is_empty() {
-        // Fall back to common system lib dirs.
-        let fallbacks = [
-            "/usr/lib/x86_64-linux-gnu",
-            "/usr/lib64",
-            "/usr/lib",
-            "/lib/x86_64-linux-gnu",
-            "/lib64",
-            "/lib",
-        ];
-        for &path in &fallbacks {
-            let candidate = PathBuf::from(path);
-            if candidate.is_dir() {
-                dirs.push(candidate);
-            }
-        }
+        dirs = common_linux_lib_dirs();
     }
     if dirs.is_empty() {
         return Err(format!(
@@ -13601,14 +14071,13 @@ fn discover_macos_crt() -> Result<MacOsCrt, String> {
     let sdk_path = xcrun_show_sdk_path()?;
     let sdk_version = xcrun_show_sdk_version()?;
     let arch = macos_arch().to_string();
-    let deployment_target = std::env::var("MACOSX_DEPLOYMENT_TARGET")
-        .unwrap_or_else(|_| {
-            if arch == "arm64" {
-                "11.0".to_string()
-            } else {
-                "10.12".to_string()
-            }
-        });
+    let deployment_target = std::env::var("MACOSX_DEPLOYMENT_TARGET").unwrap_or_else(|_| {
+        if arch == "arm64" {
+            "11.0".to_string()
+        } else {
+            "10.12".to_string()
+        }
+    });
     Ok(MacOsCrt {
         sdk_path,
         sdk_version,
@@ -13693,7 +14162,8 @@ fn xcrun_find_tool(tool: &str) -> Result<PathBuf, String> {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!(
             "`xcrun --find {tool}` exited with status {}: {}",
-            output.status, stderr.trim()
+            output.status,
+            stderr.trim()
         ));
     }
     let path = String::from_utf8_lossy(&output.stdout).trim().to_string();

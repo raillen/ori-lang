@@ -1066,7 +1066,10 @@ fn builtin_stdlib_json_value_enum_sig(def_id: DefId) -> EnumSig {
                 name: SmolStr::new("Object"),
                 fields: vec![(
                     SmolStr::new("fields"),
-                    Ty::Map(Box::new(Ty::String), Box::new(Ty::Named(def_id, Vec::new()))),
+                    Ty::Map(
+                        Box::new(Ty::String),
+                        Box::new(Ty::Named(def_id, Vec::new())),
+                    ),
                 )],
             },
         ],
@@ -1386,11 +1389,21 @@ fn collect_reexports(files: &[(&SourceFile, FileId)]) -> Vec<ReExport> {
         let namespace = SmolStr::new(file.namespace.name.to_string());
         for import in &file.imports {
             if import.visibility.is_public() {
-                reexports.push(ReExport {
-                    namespace: namespace.clone(),
-                    alias: direct_import_alias(import),
-                    target: SmolStr::new(import.path.to_string()),
-                });
+                if import.selected.is_empty() {
+                    reexports.push(ReExport {
+                        namespace: namespace.clone(),
+                        alias: direct_import_alias(import),
+                        target: SmolStr::new(import.path.to_string()),
+                    });
+                } else {
+                    for item in &import.selected {
+                        reexports.push(ReExport {
+                            namespace: namespace.clone(),
+                            alias: selected_import_alias(item),
+                            target: selected_import_target(import, item),
+                        });
+                    }
+                }
             }
         }
     }
@@ -1400,10 +1413,19 @@ fn collect_reexports(files: &[(&SourceFile, FileId)]) -> Vec<ReExport> {
 pub fn import_aliases(file: &SourceFile, reexports: &[ReExport]) -> HashMap<SmolStr, SmolStr> {
     let mut aliases = HashMap::new();
     for import in &file.imports {
-        aliases.insert(
-            direct_import_alias(import),
-            SmolStr::new(import.path.to_string()),
-        );
+        if import.selected.is_empty() {
+            aliases.insert(
+                direct_import_alias(import),
+                SmolStr::new(import.path.to_string()),
+            );
+        } else {
+            for item in &import.selected {
+                aliases.insert(
+                    selected_import_alias(item),
+                    selected_import_target(import, item),
+                );
+            }
+        }
     }
 
     for _ in 0..reexports.len().saturating_add(1) {
@@ -1435,4 +1457,15 @@ fn direct_import_alias(import: &ImportDecl) -> SmolStr {
         .as_ref()
         .map(|a| a.text.clone())
         .unwrap_or_else(|| import.path.last().text.clone())
+}
+
+fn selected_import_alias(item: &ori_ast::item::ImportItem) -> SmolStr {
+    item.alias
+        .as_ref()
+        .map(|a| a.text.clone())
+        .unwrap_or_else(|| item.name.text.clone())
+}
+
+fn selected_import_target(import: &ImportDecl, item: &ori_ast::item::ImportItem) -> SmolStr {
+    SmolStr::new(format!("{}.{}", import.path, item.name.text))
 }

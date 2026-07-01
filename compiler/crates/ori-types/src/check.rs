@@ -10,7 +10,8 @@ use crate::ty::{OpaqueTy, Ty};
 use ori_ast::common::{Attr, AttrArg, Name, QualifiedName, WhereConstraint};
 use ori_ast::expr::{Arg, ArgValue, BinaryOp, ClosureBody, Expr, FStrPart, UnaryOp};
 use ori_ast::item::{
-    ExternBlock, FuncDecl, ImplementDecl, Item, ItemWithAttrs, Param, ParamKind, SourceFile,
+    ExternBlock, FuncDecl, ImplementDecl, ImportDecl, ImportItem, Item, ItemWithAttrs, Param,
+    ParamKind, SourceFile,
 };
 use ori_ast::pattern::Pattern;
 use ori_ast::stmt::{Block, LValue, Stmt};
@@ -360,59 +361,61 @@ impl<'a> Checker<'a> {
         let mut seen_aliases: HashSet<SmolStr> = HashSet::new();
         let mut invalid_aliases: Vec<SmolStr> = Vec::new();
         for import in &file.imports {
-            let alias = import
-                .alias
-                .as_ref()
-                .map(|a| a.text.clone())
-                .unwrap_or_else(|| import.path.last().text.clone());
-            let alias_span = import.alias.as_ref().map(|a| a.span).unwrap_or(import.span);
-            if !seen_aliases.insert(alias.clone()) {
-                self.sink.emit(
-                    Diagnostic::error(
-                        "bind.duplicate_alias",
-                        format!("alias `{}` is already used by another import", alias),
-                    )
-                    .with_label(Label::primary(
-                        self.file_id,
-                        alias_span,
-                        "duplicate alias here",
-                    ))
-                    .with_action("rename one of the import aliases"),
-                );
-            } else if local_names.contains(&alias) {
-                invalid_aliases.push(alias.clone());
-                self.sink.emit(
-                    Diagnostic::error(
-                        "bind.alias_shadows_local",
-                        format!(
-                            "import alias `{}` conflicts with a local definition of the same name",
-                            alias
-                        ),
-                    )
-                    .with_label(Label::primary(
-                        self.file_id,
-                        alias_span,
-                        "alias defined here",
-                    ))
-                    .with_action("rename the import alias or the local definition"),
-                );
-            } else if is_reserved_type_alias_name(alias.as_str()) {
-                invalid_aliases.push(alias.clone());
-                self.sink.emit(
-                    Diagnostic::error(
-                        "bind.alias_shadows_builtin_type",
-                        format!(
-                            "import alias `{}` conflicts with a built-in type name",
-                            alias
-                        ),
-                    )
-                    .with_label(Label::primary(
-                        self.file_id,
-                        alias_span,
-                        "alias defined here",
-                    ))
-                    .with_action("use a plural alias such as `maps`, `sets`, or `tasks`"),
-                );
+            if !import.selected.is_empty() {
+                self.check_selected_import_members(import);
+            }
+            for (alias, alias_span) in import_visible_bindings(import) {
+                if !seen_aliases.insert(alias.clone()) {
+                    self.sink.emit(
+                        Diagnostic::error(
+                            "bind.duplicate_alias",
+                            format!(
+                                "imported name `{}` is already used by another import",
+                                alias
+                            ),
+                        )
+                        .with_label(Label::primary(
+                            self.file_id,
+                            alias_span,
+                            "duplicate imported name here",
+                        ))
+                        .with_action("rename one of the import aliases"),
+                    );
+                } else if local_names.contains(&alias) {
+                    invalid_aliases.push(alias.clone());
+                    self.sink.emit(
+                        Diagnostic::error(
+                            "bind.alias_shadows_local",
+                            format!(
+                                "imported name `{}` conflicts with a local definition of the same name",
+                                alias
+                            ),
+                        )
+                        .with_label(Label::primary(
+                            self.file_id,
+                            alias_span,
+                            "imported name defined here",
+                        ))
+                        .with_action("rename the import alias or the local definition"),
+                    );
+                } else if is_reserved_type_alias_name(alias.as_str()) {
+                    invalid_aliases.push(alias.clone());
+                    self.sink.emit(
+                        Diagnostic::error(
+                            "bind.alias_shadows_builtin_type",
+                            format!(
+                                "imported name `{}` conflicts with a built-in type name",
+                                alias
+                            ),
+                        )
+                        .with_label(Label::primary(
+                            self.file_id,
+                            alias_span,
+                            "imported name defined here",
+                        ))
+                        .with_action("use a plural alias such as `maps`, `sets`, or `tasks`"),
+                    );
+                }
             }
         }
         for alias in invalid_aliases {
@@ -502,22 +505,53 @@ impl<'a> Checker<'a> {
             if import.visibility.is_public() {
                 continue;
             }
-            let alias = import
-                .alias
-                .as_ref()
-                .map(|a| a.text.clone())
-                .unwrap_or_else(|| import.path.last().text.clone());
-            if !self.used_aliases.contains(&alias) {
-                let alias_span = import.alias.as_ref().map(|a| a.span).unwrap_or(import.span);
+            for (alias, alias_span) in import_visible_bindings(import) {
+                if self.used_aliases.contains(&alias) {
+                    continue;
+                }
                 self.sink.emit(
                     Diagnostic::warning(
                         "bind.unused_import",
-                        format!("import `{}` is never used", import.path),
+                        format!(
+                            "imported name `{}` from `{}` is never used",
+                            alias, import.path
+                        ),
                     )
                     .with_label(Label::primary(self.file_id, alias_span, "unused import"))
-                    .with_action("remove this import or use it"),
+                    .with_action("remove this import item or use it"),
                 );
             }
+        }
+    }
+
+    fn check_selected_import_members(&mut self, import: &ImportDecl) {
+        for item in &import.selected {
+            let target = selected_import_target(import, item);
+            if let Some(def_id) = self.def_map.lookup(&target) {
+                self.check_visibility(def_id, item.name.span);
+                continue;
+            }
+            if stdlib_func_sig(&target).is_some()
+                || stdlib_const_ty(&target).is_some()
+                || stdlib_named_ty_exists(&target)
+            {
+                continue;
+            }
+            self.sink.emit(
+                Diagnostic::error(
+                    "bind.import_member_unknown",
+                    format!(
+                        "module `{}` has no exported member `{}`",
+                        import.path, item.name.text
+                    ),
+                )
+                .with_label(Label::primary(
+                    self.file_id,
+                    item.name.span,
+                    "selected import item here",
+                ))
+                .with_action("check the member name or import the module with an alias"),
+            );
         }
     }
 
@@ -2049,7 +2083,7 @@ impl<'a> Checker<'a> {
                         } else {
                             self.sink.emit(Diagnostic::error(
                                 "type.propagate_return_mismatch",
-                                format!("cannot use `?` operator on a `result` in a function that returns `{}`", cur_ret.display())
+                                format!("cannot use `try`/`?` propagation on a `result` in a function that returns `{}`", cur_ret.display())
                             ).with_label(Label::primary(self.file_id, *span, "propagated here")));
                         }
                         *ok.clone()
@@ -2062,7 +2096,7 @@ impl<'a> Checker<'a> {
                         if !matches!(&cur_ret, Ty::Optional(_)) {
                             self.sink.emit(Diagnostic::error(
                                 "type.propagate_return_mismatch",
-                                format!("cannot use `?` operator on an `optional` in a function that returns `{}`", cur_ret.display())
+                                format!("cannot use `try`/`?` propagation on an `optional` in a function that returns `{}`", cur_ret.display())
                             ).with_label(Label::primary(self.file_id, *span, "propagated here")));
                         }
                         *ok.clone()
@@ -2070,8 +2104,8 @@ impl<'a> Checker<'a> {
                     _ => {
                         self.sink.emit(Diagnostic::error(
                             "type.propagate_not_result_or_optional",
-                            format!("the `?` operator can only be applied to `result` or `optional`, found `{}`", inner.display())
-                        ).with_label(Label::primary(self.file_id, *span, "cannot apply `?` here")));
+                            format!("`try`/`?` propagation can only be applied to `result` or `optional`, found `{}`", inner.display())
+                        ).with_label(Label::primary(self.file_id, *span, "cannot propagate here")));
                         Ty::Error
                     }
                 }
@@ -2495,7 +2529,12 @@ impl<'a> Checker<'a> {
     }
 
     fn supports_builtin_equality_inner(&self, ty: &Ty, visiting_named: &mut Vec<DefId>) -> bool {
-        if ty.is_numeric() || matches!(ty, Ty::Bool | Ty::String | Ty::Infer(_) | Ty::Never | Ty::Any(_)) {
+        if ty.is_numeric()
+            || matches!(
+                ty,
+                Ty::Bool | Ty::String | Ty::Infer(_) | Ty::Never | Ty::Any(_)
+            )
+        {
             return true;
         }
         // Structural equality for compound types whose elements support equality.
@@ -2543,7 +2582,9 @@ impl<'a> Checker<'a> {
     }
 
     fn supports_generic_equality_inner(&self, ty: &Ty, visiting_named: &mut Vec<DefId>) -> bool {
-        if self.supports_builtin_equality_inner(ty, visiting_named) || self.user_type_has_equatable(ty) {
+        if self.supports_builtin_equality_inner(ty, visiting_named)
+            || self.user_type_has_equatable(ty)
+        {
             return true;
         }
         if let Ty::Param { index, .. } = ty {
@@ -2571,13 +2612,10 @@ impl<'a> Checker<'a> {
             return false;
         };
         visiting_named.push(def_id);
-        let supported = sig
-            .fields
-            .iter()
-            .all(|(_, ty)| {
-                let substituted = substitute_ty_params(ty, args);
-                self.supports_generic_equality_inner(&substituted, visiting_named)
-            });
+        let supported = sig.fields.iter().all(|(_, ty)| {
+            let substituted = substitute_ty_params(ty, args);
+            self.supports_generic_equality_inner(&substituted, visiting_named)
+        });
         visiting_named.pop();
         supported
     }
@@ -3188,7 +3226,10 @@ impl<'a> Checker<'a> {
             return Some(ret);
         }
         let (params, ret) = stdlib_func_sig(path)?;
-        let params: Vec<Ty> = params.into_iter().map(|p| self.replace_json_placeholder(p)).collect();
+        let params: Vec<Ty> = params
+            .into_iter()
+            .map(|p| self.replace_json_placeholder(p))
+            .collect();
         let ret = self.replace_json_placeholder(ret);
         // Warn if this stdlib function lacks native codegen support.
         if !crate::stdlib::stdlib_native_codegen_available(path) {
@@ -3625,7 +3666,10 @@ impl<'a> Checker<'a> {
                     }
                 }
                 Ty::Named(id, args) => {
-                    let new_args = args.into_iter().map(|arg| recurse(arg, json_val_def_id)).collect();
+                    let new_args = args
+                        .into_iter()
+                        .map(|arg| recurse(arg, json_val_def_id))
+                        .collect();
                     Ty::Named(id, new_args)
                 }
                 Ty::Optional(inner) => Ty::Optional(Box::new(recurse(*inner, json_val_def_id))),
@@ -3641,19 +3685,28 @@ impl<'a> Checker<'a> {
                 Ty::Set(inner) => Ty::Set(Box::new(recurse(*inner, json_val_def_id))),
                 Ty::Range(inner) => Ty::Range(Box::new(recurse(*inner, json_val_def_id))),
                 Ty::Tuple(elems) => Ty::Tuple(
-                    elems.into_iter().map(|e| recurse(e, json_val_def_id)).collect()
+                    elems
+                        .into_iter()
+                        .map(|e| recurse(e, json_val_def_id))
+                        .collect(),
                 ),
                 Ty::Lazy(inner) => Ty::Lazy(Box::new(recurse(*inner, json_val_def_id))),
                 Ty::Future(inner) => Ty::Future(Box::new(recurse(*inner, json_val_def_id))),
                 Ty::TaskJob(inner) => Ty::TaskJob(Box::new(recurse(*inner, json_val_def_id))),
                 Ty::Channel(inner) => Ty::Channel(Box::new(recurse(*inner, json_val_def_id))),
                 Ty::Func { params, ret } => Ty::Func {
-                    params: params.into_iter().map(|p| recurse(p, json_val_def_id)).collect(),
+                    params: params
+                        .into_iter()
+                        .map(|p| recurse(p, json_val_def_id))
+                        .collect(),
                     ret: Box::new(recurse(*ret, json_val_def_id)),
                 },
                 Ty::Opaque { kind, args } => Ty::Opaque {
                     kind,
-                    args: args.into_iter().map(|a| recurse(a, json_val_def_id)).collect(),
+                    args: args
+                        .into_iter()
+                        .map(|a| recurse(a, json_val_def_id))
+                        .collect(),
                 },
                 other => other,
             }
@@ -6026,8 +6079,71 @@ fn stdlib_const_ty(path: &str) -> Option<Ty> {
     }
 }
 
+fn stdlib_named_ty_exists(path: &str) -> bool {
+    matches!(
+        path,
+        "ori.Error"
+            | "ori.fs.File"
+            | "ori.json.Value"
+            | "ori.task.Job"
+            | "ori.task.JoinError"
+            | "ori.task.CancelToken"
+            | "ori.channel.Channel"
+            | "ori.channel.SendError"
+            | "ori.channel.ReceiveError"
+            | "ori.atomic.AtomicInt"
+            | "ori.deque.Deque"
+            | "ori.queue.Queue"
+            | "ori.stack.Stack"
+            | "ori.linked_list.LinkedList"
+            | "ori.doubly_linked_list.DoublyLinkedList"
+            | "ori.tree.Tree"
+            | "ori.tree.NodeId"
+            | "ori.hash_table.HashTable"
+            | "ori.graph.Graph"
+            | "ori.heap.Heap"
+    )
+}
+
 fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
     crate::stdlib::stdlib_func_sig(path)
+}
+
+fn import_visible_bindings(import: &ImportDecl) -> Vec<(SmolStr, Span)> {
+    if import.selected.is_empty() {
+        let alias = import
+            .alias
+            .as_ref()
+            .map(|a| a.text.clone())
+            .unwrap_or_else(|| import.path.last().text.clone());
+        let alias_span = import.alias.as_ref().map(|a| a.span).unwrap_or(import.span);
+        return vec![(alias, alias_span)];
+    }
+
+    import
+        .selected
+        .iter()
+        .map(|item| {
+            let alias = selected_import_alias(item);
+            let span = item
+                .alias
+                .as_ref()
+                .map(|a| a.span)
+                .unwrap_or(item.name.span);
+            (alias, span)
+        })
+        .collect()
+}
+
+fn selected_import_alias(item: &ImportItem) -> SmolStr {
+    item.alias
+        .as_ref()
+        .map(|a| a.text.clone())
+        .unwrap_or_else(|| item.name.text.clone())
+}
+
+fn selected_import_target(import: &ImportDecl, item: &ImportItem) -> SmolStr {
+    SmolStr::new(format!("{}.{}", import.path, item.name.text))
 }
 
 fn restore_alias(aliases: &mut HashMap<SmolStr, SmolStr>, name: &str, previous: Option<SmolStr>) {
@@ -6334,7 +6450,8 @@ fn substitute_generic_params(ty: &Ty, subst: &HashMap<u32, Ty>) -> Ty {
         },
         Ty::Named(def_id, args) if (def_id.0 & 0x4000_0000) != 0 => {
             let index = def_id.0 & 0x3FFF_FFFF;
-            let substituted_args: Vec<Ty> = args.iter()
+            let substituted_args: Vec<Ty> = args
+                .iter()
                 .map(|arg| substitute_generic_params(arg, subst))
                 .collect();
             if let Some(ctor) = subst.get(&index) {
@@ -6365,8 +6482,12 @@ fn apply_type_constructor(ctor: &Ty, args: Vec<Ty>) -> Ty {
         Ty::Future(_) if !args.is_empty() => Ty::Future(Box::new(args[0].clone())),
         Ty::TaskJob(_) if !args.is_empty() => Ty::TaskJob(Box::new(args[0].clone())),
         Ty::Channel(_) if !args.is_empty() => Ty::Channel(Box::new(args[0].clone())),
-        Ty::Result(_, _) if args.len() >= 2 => Ty::Result(Box::new(args[0].clone()), Box::new(args[1].clone())),
-        Ty::Map(_, _) if args.len() >= 2 => Ty::Map(Box::new(args[0].clone()), Box::new(args[1].clone())),
+        Ty::Result(_, _) if args.len() >= 2 => {
+            Ty::Result(Box::new(args[0].clone()), Box::new(args[1].clone()))
+        }
+        Ty::Map(_, _) if args.len() >= 2 => {
+            Ty::Map(Box::new(args[0].clone()), Box::new(args[1].clone()))
+        }
         _ => ctor.clone(),
     }
 }
@@ -6374,7 +6495,13 @@ fn apply_type_constructor(ctor: &Ty, args: Vec<Ty>) -> Ty {
 fn strip_type_constructor_args(ty: &Ty) -> (Ty, Vec<Ty>) {
     match ty {
         Ty::Named(id, args) => (Ty::Named(*id, Vec::new()), args.clone()),
-        Ty::Opaque { kind, args } => (Ty::Opaque { kind: *kind, args: Vec::new() }, args.clone()),
+        Ty::Opaque { kind, args } => (
+            Ty::Opaque {
+                kind: *kind,
+                args: Vec::new(),
+            },
+            args.clone(),
+        ),
         Ty::Optional(inner) => (Ty::Optional(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
         Ty::List(inner) => (Ty::List(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
         Ty::Set(inner) => (Ty::Set(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
@@ -6383,8 +6510,14 @@ fn strip_type_constructor_args(ty: &Ty) -> (Ty, Vec<Ty>) {
         Ty::Future(inner) => (Ty::Future(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
         Ty::TaskJob(inner) => (Ty::TaskJob(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
         Ty::Channel(inner) => (Ty::Channel(Box::new(Ty::Infer(0))), vec![*inner.clone()]),
-        Ty::Result(ok, err) => (Ty::Result(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0))), vec![*ok.clone(), *err.clone()]),
-        Ty::Map(key, val) => (Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0))), vec![*key.clone(), *val.clone()]),
+        Ty::Result(ok, err) => (
+            Ty::Result(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0))),
+            vec![*ok.clone(), *err.clone()],
+        ),
+        Ty::Map(key, val) => (
+            Ty::Map(Box::new(Ty::Infer(0)), Box::new(Ty::Infer(0))),
+            vec![*key.clone(), *val.clone()],
+        ),
         _ => (ty.clone(), Vec::new()),
     }
 }

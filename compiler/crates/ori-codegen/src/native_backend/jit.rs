@@ -46,16 +46,15 @@ pub fn run_jit(hir: &HirModule, cdylib_path: &Path) -> Result<i32, String> {
     unsafe impl Send for SendLibrary {}
 
     let send_lib = SendLibrary(library);
-    let lookup: Box<dyn Fn(&str) -> Option<*const u8> + Send> = Box::new(move |name: &str| {
-        unsafe {
+    let lookup: Box<dyn Fn(&str) -> Option<*const u8> + Send> =
+        Box::new(move |name: &str| unsafe {
             send_lib
                 .0
                 .get::<unsafe extern "C" fn()>(name.as_bytes())
                 .ok()
                 .map(|sym| *sym as *const ())
                 .map(|p| p as *const u8)
-        }
-    });
+        });
     let mut builder = JITBuilder::new(cranelift_module::default_libcall_names())
         .map_err(|e| format!("JITBuilder: {e}"))?;
     builder.symbol_lookup_fn(lookup);
@@ -64,9 +63,9 @@ pub fn run_jit(hir: &HirModule, cdylib_path: &Path) -> Result<i32, String> {
     // 3. Lower the HIR into the JIT module (declare + define all functions
     //    and data, including the C `main` wrapper).
     let backend = NativeBackend::new(module)?.prepare(hir)?;
-    let main_id = backend.main_func_id().ok_or_else(|| {
-        "JIT entry point missing: HIR has no `main` function".to_string()
-    })?;
+    let main_id = backend
+        .main_func_id()
+        .ok_or_else(|| "JIT entry point missing: HIR has no `main` function".to_string())?;
 
     // 4. Finalize definitions — this allocates executable memory, patches
     //    relocations, and makes function pointers retrievable.
@@ -83,8 +82,7 @@ pub fn run_jit(hir: &HirModule, cdylib_path: &Path) -> Result<i32, String> {
     if main_ptr.is_null() {
         return Err("JIT main wrapper compiled to null address".to_string());
     }
-    let entry: extern "C" fn(i32, *mut u8) -> i32 =
-        unsafe { std::mem::transmute(main_ptr) };
+    let entry: extern "C" fn(i32, *mut u8) -> i32 = unsafe { std::mem::transmute(main_ptr) };
     let code = entry(0, std::ptr::null_mut());
 
     // 6. Drop the module only after the call returns. The `Library` is owned
@@ -126,4 +124,3 @@ mod tests {
         );
     }
 }
-

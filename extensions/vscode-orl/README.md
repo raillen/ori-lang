@@ -32,6 +32,15 @@ npm run compile
 
 Press F5 in VS Code to launch the Extension Development Host.
 
+Repository-level smoke:
+
+```powershell
+.\tools\smoke_vscode_extension.ps1
+```
+
+The smoke compiles the extension, validates extension JSON files, runs LSP E2E
+tests, and checks a temporary Ori project outside the repository.
+
 Build the language server first:
 
 ```bash

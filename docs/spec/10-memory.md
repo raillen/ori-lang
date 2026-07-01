@@ -177,8 +177,8 @@ database connections), use `using`:
 
 ```ori
 func read_file(path: string) -> result<string, string>
-    using file: ori.fs.File = ori.fs.open_read(path)?
-    const content: string = ori.fs.read_all(file)?
+    using file: ori.fs.File = try ori.fs.open_read(path)
+    const content: string = try ori.fs.read_all(file)
     return success(content)
 end
 ```
@@ -191,7 +191,7 @@ When `file` goes out of scope, `file.dispose()` is called automatically.
 
 - Normal `end` of block
 - `return` statement
-- `?` propagation (error path)
+- `try`/`?` propagation (error path)
 - `break` or `continue` in a loop
 - Panic
 
@@ -200,9 +200,9 @@ When `file` goes out of scope, `file.dispose()` is called automatically.
 Multiple `using` bindings are disposed in **reverse declaration order**:
 
 ```ori
-using a: ResourceA = open_a()?
-using b: ResourceB = open_b()?
-using c: ResourceC = open_c()?
+using a: ResourceA = try open_a()
+using b: ResourceB = try open_b()
+using c: ResourceC = try open_c()
 -- When scope exits: c.dispose(), then b.dispose(), then a.dispose()
 ```
 
@@ -219,13 +219,13 @@ end
 Attempting to use a type in `using` that does not implement `Disposable`
 is a compile error.
 
-### Interaction with `?`
+### Interaction with `try` and `?`
 
 ```ori
-using conn: Connection = get_connection()?
+using conn: Connection = try get_connection()
 -- If get_connection() returns error: conn is never bound, nothing to dispose.
 
-const data: bytes = conn.fetch(url)?
+const data: bytes = try conn.fetch(url)
 -- If fetch() returns error: conn.dispose() IS called before error propagates.
 ```
 

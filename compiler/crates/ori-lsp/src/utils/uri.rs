@@ -87,6 +87,7 @@ fn is_ident_byte(byte: u8) -> bool {
 }
 
 /// Find the matching closing paren for an open paren at `open` position.
+#[allow(dead_code)]
 pub fn matching_paren(s: &str, open: usize) -> Option<usize> {
     let bytes = s.as_bytes();
     let mut depth = 0u32;
@@ -106,6 +107,7 @@ pub fn matching_paren(s: &str, open: usize) -> Option<usize> {
 }
 
 /// Split a string by `sep` without splitting inside nested parens/brackets.
+#[allow(dead_code)]
 pub fn split_top_level(s: &str, sep: char) -> Vec<&str> {
     let bytes = s.as_bytes();
     let mut depth_paren = 0u32;
@@ -135,6 +137,7 @@ pub fn split_top_level(s: &str, sep: char) -> Vec<&str> {
 }
 
 /// Take an identifier from the start of `s`. Returns (ident, rest).
+#[allow(dead_code)]
 pub fn take_identifier(s: &str) -> Option<(&str, &str)> {
     let s = s.trim_start();
     let end = s

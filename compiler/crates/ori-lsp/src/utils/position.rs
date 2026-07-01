@@ -37,16 +37,14 @@ pub fn byte_offset_for_position(source: &str, position: Position) -> usize {
     }
 
     // Advance within the target line to the character position
-    let chars_in_line = source[offset..]
-        .bytes()
-        .take_while(|&b| b != b'\n')
-        .count();
+    let chars_in_line = source[offset..].bytes().take_while(|&b| b != b'\n').count();
     offset += position.character.min(chars_in_line as u32) as usize;
 
     offset
 }
 
 /// Build a Range from line/col indices (0-based).
+#[allow(dead_code)]
 pub fn range_for_line_and_columns(
     start_line: usize,
     start_col: usize,
@@ -60,6 +58,7 @@ pub fn range_for_line_and_columns(
 }
 
 /// Create a Range covering the entire document.
+#[allow(dead_code)]
 pub fn full_document_range(source: &str) -> Range {
     let lines = source.lines().count();
     let last_len = source.lines().last().map(|l| l.len()).unwrap_or(0);

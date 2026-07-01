@@ -37,7 +37,8 @@ end
 
 - `none` = ausência esperada.
 - `if some x in expr` desempacota com segurança.
-- `?` em `optional` propaga `none` (ver cap. 04).
+- `try valor` em `optional` propaga `none` (ver cap. 09).
+- `valor?` existe como forma compacta de `try valor`.
 
 ## `result<T, E>`
 
@@ -48,7 +49,7 @@ end
 ```
 
 - `success(value)` ou `error(reason)`.
-- Trate com `match`, `?`, ou Layer 2 helpers (`parse_int_or`, `get_or`).
+- Trate com `match`, `try`, `?`, ou Layer 2 helpers (`parse_int_or`, `get_or`).
 - Preferir `result` a `bool` para operações que falham (migração FS em andamento — ver `PENDENTES.md`).
 
 ## `check`

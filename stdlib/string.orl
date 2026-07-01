@@ -1,0 +1,301 @@
+namespace ori.string
+
+import ori.bytes as bytes_mod
+import ori.list as lists
+
+public func is_empty(s: string) -> bool
+    return ori.string.len(s) == 0
+end
+
+public func blank(s: string) -> bool
+    return is_empty(ori.string.trim(s))
+end
+
+public func replicate(s: string, n: int) -> string
+    var acc: string = ""
+    var i: int = 0
+    while i < n
+        acc = ori.string.concat(acc, s)
+        i = i + 1
+    end
+    return acc
+end
+
+public func default(s: string, fallback: string) -> string
+    if is_empty(s)
+        return fallback
+    end
+    return s
+end
+
+public func equals_ignore_case(a: string, b: string) -> bool
+    return ori.string.to_lower(a) == ori.string.to_lower(b)
+end
+
+public func center(s: string, width: int) -> string
+    const s_len: int = ori.string.len(s)
+    if s_len >= width
+        return s
+    end
+    const total: int = width - s_len
+    const left: int = total / 2
+    const right: int = total - left
+    const padded: string = ori.string.pad_left(s, left + s_len, " ")
+    return ori.string.pad_right(padded, right + ori.string.len(padded), " ")
+end
+
+public func count(s: string, sub: string) -> int
+    const sub_len: int = ori.string.len(sub)
+    if sub_len == 0
+        return 0
+    end
+    var n: int = 0
+    var pos: int = 0
+    loop
+        const remaining: int = ori.string.len(s) - pos
+        if remaining < sub_len
+            break
+        end
+        const window: string = ori.string.slice(s, pos, pos + sub_len)
+        if window == sub
+            n = n + 1
+            pos = pos + sub_len
+        else
+            pos = pos + 1
+        end
+    end
+    return n
+end
+
+public func reverse(s: string) -> string
+    const s_len: int = ori.string.len(s)
+    var out: string = ""
+    var i: int = s_len - 1
+    while i >= 0
+        out = ori.string.concat(out, ori.string.slice(s, i, i + 1))
+        i = i - 1
+    end
+    return out
+end
+
+public func capitalize(s: string) -> string
+    if is_empty(s)
+        return s
+    end
+    const head: string = ori.string.slice(s, 0, 1)
+    const tail: string = ori.string.slice(s, 1, ori.string.len(s))
+    return ori.string.concat(ori.string.to_upper(head), ori.string.to_lower(tail))
+end
+
+public func title(s: string) -> string
+    const parts: list<string> = ori.string.split(s, " ")
+    var titled: list<string> = []
+    var i: int = 0
+    const parts_len: int = lists.len(parts)
+    while i < parts_len
+        if some(part) = lists.try_get(parts, i)
+            lists.push(titled, capitalize(part))
+        end
+        i = i + 1
+    end
+    return ori.string.join(titled, " ")
+end
+
+func swap_char(ch: string) -> string
+    const raw: bytes = ori.string.to_bytes(ch)
+    if bytes_mod.len(raw) != 1
+        return ch
+    end
+    const code: int = int(bytes_mod.get(raw, 0))
+    if code >= 65 and code <= 90
+        match ori.string.from_bytes(bytes_mod.from_list([code + 32]))
+            case success(out):
+                return out
+            case error(_):
+                return ch
+        end
+    end
+    if code >= 97 and code <= 122
+        match ori.string.from_bytes(bytes_mod.from_list([code - 32]))
+            case success(out):
+                return out
+            case error(_):
+                return ch
+        end
+    end
+    return ch
+end
+
+public func swap_case(s: string) -> string
+    const s_len: int = ori.string.len(s)
+    var out: list<string> = []
+    var i: int = 0
+    while i < s_len
+        const ch: string = ori.string.slice(s, i, i + 1)
+        lists.push(out, swap_char(ch))
+        i = i + 1
+    end
+    return ori.string.join(out, "")
+end
+
+public func lines(s: string) -> list<string>
+    return ori.string.split(s, "\n")
+end
+
+public func left(s: string, n: int) -> string
+    return ori.string.slice(s, 0, n)
+end
+
+public func right(s: string, n: int) -> string
+    const s_len: int = ori.string.len(s)
+    if n >= s_len
+        return s
+    end
+    return ori.string.slice(s, s_len - n, s_len)
+end
+
+public func words(s: string) -> list<string>
+    const parts: list<string> = ori.string.split(ori.string.trim(s), " ")
+    var out: list<string> = []
+    var i: int = 0
+    const parts_len: int = lists.len(parts)
+    while i < parts_len
+        if some(part) = lists.try_get(parts, i)
+            if not is_empty(part)
+                lists.push(out, part)
+            end
+        end
+        i = i + 1
+    end
+    return out
+end
+
+public func trim_all(s: string) -> string
+    return ori.string.join(words(s), " ")
+end
+
+public func last_index_of(s: string, needle: string) -> int
+    const needle_len: int = ori.string.len(needle)
+    if needle_len == 0
+        return -1
+    end
+    const s_len: int = ori.string.len(s)
+    var pos: int = s_len - needle_len
+    while pos >= 0
+        const window: string = ori.string.slice(s, pos, pos + needle_len)
+        if window == needle
+            return pos
+        end
+        pos = pos - 1
+    end
+    return -1
+end
+
+public func is_digits(s: string) -> bool
+    if is_empty(s)
+        return false
+    end
+    const digits: string = "0123456789"
+    var i: int = 0
+    while i < ori.string.len(s)
+        const ch: string = ori.string.slice(s, i, i + 1)
+        if not ori.string.contains(digits, ch)
+            return false
+        end
+        i = i + 1
+    end
+    return true
+end
+
+public func has_whitespace(s: string) -> bool
+    var i: int = 0
+    while i < ori.string.len(s)
+        const ch: string = ori.string.slice(s, i, i + 1)
+        if ch == " " or ch == "\t" or ch == "\n" or ch == "\r"
+            return true
+        end
+        i = i + 1
+    end
+    return false
+end
+
+public func limit(s: string, max_len: int) -> string
+    if ori.string.len(s) <= max_len
+        return s
+    end
+    return ori.string.slice(s, 0, max_len)
+end
+
+public func replace_all(s: string, needle: string, replacement: string) -> string
+    const needle_len: int = ori.string.len(needle)
+    if needle_len == 0
+        return s
+    end
+    var out: string = ""
+    var pos: int = 0
+    loop
+        const remaining: int = ori.string.len(s) - pos
+        if remaining < needle_len
+            out = ori.string.concat(out, ori.string.slice(s, pos, ori.string.len(s)))
+            break
+        end
+        const window: string = ori.string.slice(s, pos, pos + needle_len)
+        if window == needle
+            out = ori.string.concat(out, replacement)
+            pos = pos + needle_len
+        else
+            out = ori.string.concat(out, ori.string.slice(s, pos, pos + 1))
+            pos = pos + 1
+        end
+    end
+    return out
+end
+
+public func has_prefix(s: string, prefix: string) -> bool
+    return ori.string.starts_with(s, prefix)
+end
+
+public func has_suffix(s: string, suffix: string) -> bool
+    return ori.string.ends_with(s, suffix)
+end
+
+public func join_non_empty(parts: list<string>, separator: string) -> string
+    var out: string = ""
+    var i: int = 0
+    const n: int = lists.len(parts)
+    while i < n
+        if some(part) = lists.try_get(parts, i)
+            if not is_empty(part)
+                if is_empty(out)
+                    out = part
+                else
+                    out = ori.string.concat(ori.string.concat(out, separator), part)
+                end
+            end
+        end
+        i = i + 1
+    end
+    return out
+end
+
+public func repeated(s: string, times: int) -> string
+    return replicate(s, times)
+end
+
+public func equals_any(value: string, candidates: list<string>) -> bool
+    var i: int = 0
+    const n: int = lists.len(candidates)
+    while i < n
+        if some(item) = lists.try_get(candidates, i)
+            if value == item
+                return true
+            end
+        end
+        i = i + 1
+    end
+    return false
+end
+
+public func truncate(s: string, max_len: int) -> string
+    return limit(s, max_len)
+end

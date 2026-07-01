@@ -9,9 +9,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Get-HostTriple {
-    $rustcVersion = & rustc -vV
+    $rustcVersion = & rustc -Vv
     if ($LASTEXITCODE -ne 0) {
-        throw "rustc -vV failed; install Rust or pass -Target explicitly."
+        throw "rustc -Vv failed; install Rust or pass -Target explicitly."
     }
 
     foreach ($line in $rustcVersion) {
@@ -20,7 +20,7 @@ function Get-HostTriple {
         }
     }
 
-    throw "Could not detect the Rust host target from rustc -vV."
+    throw "Could not detect the Rust host target from rustc -Vv."
 }
 
 function Get-RuntimeArtifactName([string]$TargetTriple) {

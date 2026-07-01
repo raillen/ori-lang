@@ -1,4 +1,4 @@
-use crate::{OpaqueTy, Ty, DefId};
+use crate::{DefId, OpaqueTy, Ty};
 
 pub const JSON_VALUE_PLACEHOLDER: DefId = DefId(9999);
 
@@ -1524,10 +1524,7 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.process.run_capture" => (
             vec![Ty::String, Ty::List(Box::new(Ty::String))],
             Ty::Result(
-                Box::new(Ty::Map(
-                    Box::new(Ty::String),
-                    Box::new(Ty::String),
-                )),
+                Box::new(Ty::Map(Box::new(Ty::String), Box::new(Ty::String))),
                 Box::new(Ty::String),
             ),
         ),
@@ -1545,9 +1542,8 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         ),
         "ori.net.close" => (vec![connection_ty()], Ty::Void),
         "ori.net.is_closed" => (vec![connection_ty()], Ty::Bool),
-        "ori.math.trunc" | "ori.math.ln" | "ori.math.exp" | "ori.math.asin" | "ori.math.acos" | "ori.math.atan" => {
-            (vec![Ty::Float], Ty::Float)
-        }
+        "ori.math.trunc" | "ori.math.ln" | "ori.math.exp" | "ori.math.asin" | "ori.math.acos"
+        | "ori.math.atan" => (vec![Ty::Float], Ty::Float),
         "ori.math.atan2" => (vec![Ty::Float, Ty::Float], Ty::Float),
         "ori.math.log10" => (vec![Ty::Float], Ty::Float),
         "ori.math.is_finite" => (vec![Ty::Float], Ty::Bool),
@@ -1885,13 +1881,8 @@ pub fn stdlib_native_abi(
         "ori_net_write_all" => (vec![Ptr, Ptr], Some(Ptr)),
         "ori_net_close" => (vec![Ptr], None),
         "ori_net_is_closed" => (vec![Ptr], Some(I8)),
-        "ori_math_trunc"
-        | "ori_math_ln"
-        | "ori_math_exp"
-        | "ori_math_asin"
-        | "ori_math_acos"
-        | "ori_math_atan"
-        | "ori_math_log10" => (vec![F64], Some(F64)),
+        "ori_math_trunc" | "ori_math_ln" | "ori_math_exp" | "ori_math_asin" | "ori_math_acos"
+        | "ori_math_atan" | "ori_math_log10" => (vec![F64], Some(F64)),
         "ori_math_atan2" => (vec![F64, F64], Some(F64)),
         "ori_math_is_finite" => (vec![F64], Some(I8)),
         _ => return None,
@@ -1920,13 +1911,8 @@ pub fn stdlib_entry_for_path(path: &str) -> Option<&'static StdlibRuntimeFunctio
 /// This list is the only hand-maintained addition to the manifest-derived
 /// module set; keep it small and document why each entry cannot be derived
 /// from `STDLIB_RUNTIME_FUNCTIONS`.
-const STDLIB_MODULE_ONLY_PATHS: &[&str] = &[
-    "ori",
-    "ori.core",
-    "ori.Error",
-    "ori.mem",
-    "ori.concurrent",
-];
+const STDLIB_MODULE_ONLY_PATHS: &[&str] =
+    &["ori", "ori.core", "ori.Error", "ori.mem", "ori.concurrent"];
 
 /// Extracts the module prefix from a canonical stdlib path.
 /// `"ori.io.print"` -> `Some("ori.io")`. Returns `None` for unqualified names
@@ -1963,10 +1949,8 @@ pub fn is_implemented_stdlib_module(import: &str) -> bool {
 /// `ori.files` are included. Useful for diagnostics, documentation, and
 /// parity tests.
 pub fn implemented_stdlib_modules() -> Vec<&'static str> {
-    let mut modules: std::collections::BTreeSet<&'static str> = STDLIB_MODULE_ONLY_PATHS
-        .iter()
-        .copied()
-        .collect();
+    let mut modules: std::collections::BTreeSet<&'static str> =
+        STDLIB_MODULE_ONLY_PATHS.iter().copied().collect();
     for entry in STDLIB_RUNTIME_FUNCTIONS {
         if let Some(module) = module_of_canonical_path(entry.canonical_path) {
             modules.insert(module);
@@ -2150,16 +2134,28 @@ mod tests {
         assert!(flagged("ori.format.number"), "format should be c_backend");
         assert!(flagged("ori.os.args"), "os should be c_backend");
         assert!(flagged("ori.random.int"), "random should be c_backend");
-        assert!(flagged("ori.test.assert"), "test.assert should be c_backend");
+        assert!(
+            flagged("ori.test.assert"),
+            "test.assert should be c_backend"
+        );
         assert!(flagged("ori.iter.map"), "iter should be c_backend");
         assert!(flagged("string"), "string builtin should be c_backend");
         assert!(flagged("int"), "int builtin should be c_backend");
         assert!(flagged("float"), "float builtin should be c_backend");
 
         // Rows documented as "no" (native-only or extern stubs).
-        assert!(!flagged("ori.io.eprint"), "io.eprint should NOT be c_backend");
-        assert!(!flagged("ori.io.read_line"), "io.read_line should NOT be c_backend");
-        assert!(!flagged("ori.string.len"), "string.* should NOT be c_backend");
+        assert!(
+            !flagged("ori.io.eprint"),
+            "io.eprint should NOT be c_backend"
+        );
+        assert!(
+            !flagged("ori.io.read_line"),
+            "io.read_line should NOT be c_backend"
+        );
+        assert!(
+            !flagged("ori.string.len"),
+            "string.* should NOT be c_backend"
+        );
         assert!(!flagged("ori.bytes.len"), "bytes.* should NOT be c_backend");
         assert!(!flagged("ori.list.new"), "list.* should NOT be c_backend");
         assert!(!flagged("ori.map.new"), "map.* should NOT be c_backend");
@@ -2168,9 +2164,18 @@ mod tests {
         assert!(!flagged("ori.json.parse"), "json should NOT be c_backend");
         assert!(!flagged("ori.fs.read_text"), "fs.* should NOT be c_backend");
         assert!(!flagged("ori.task.spawn"), "task.* should NOT be c_backend");
-        assert!(!flagged("ori.channel.create"), "channel.* should NOT be c_backend");
-        assert!(!flagged("ori.atomic.new"), "atomic.* should NOT be c_backend");
-        assert!(!flagged("ori.test.live_allocations"), "test leak checks NOT c_backend");
+        assert!(
+            !flagged("ori.channel.create"),
+            "channel.* should NOT be c_backend"
+        );
+        assert!(
+            !flagged("ori.atomic.new"),
+            "atomic.* should NOT be c_backend"
+        );
+        assert!(
+            !flagged("ori.test.live_allocations"),
+            "test leak checks NOT c_backend"
+        );
         assert!(!flagged("len"), "len builtin should NOT be c_backend");
         assert!(!flagged("ori.panic"), "panic should NOT be c_backend");
     }

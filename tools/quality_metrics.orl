@@ -1,0 +1,235 @@
+namespace tools.quality_metrics
+
+import ori.fs as fs
+import ori.io as io
+import ori.os.utils as os_utils
+import ori.process as proc
+import ori.string as str
+import ori.time as time
+
+func write_file(path: string, content: string)
+    match fs.write_text(path, content)
+        case success(_):
+            return
+        case error(message):
+            io.print("failed to write " + path + ": " + message)
+    end
+end
+
+func append_file(path: string, content: string)
+    match fs.append_text(path, content)
+        case success(_):
+            return
+        case error(message):
+            io.print("failed to append " + path + ": " + message)
+    end
+end
+
+func append_summary(
+    summary_path: string,
+    category: string,
+    name: string,
+    passed: bool,
+    duration_ms: int,
+    exit_code: int,
+)
+    var status: string = "FAIL"
+    if passed
+        status = "PASS"
+    end
+
+    var line: string = "- ["
+    line = line + status
+    line = line + "] "
+    line = line + category
+    line = line + "/"
+    line = line + name
+    line = line + " ("
+    line = line + string(duration_ms)
+    line = line + " ms, exit "
+    line = line + string(exit_code)
+    line = line + ")\n"
+    append_file(summary_path, line)
+end
+
+func append_csv(
+    csv_path: string,
+    category: string,
+    name: string,
+    exit_code: int,
+    passed: bool,
+    duration_ms: int,
+    log_bytes: int,
+    log_path: string,
+)
+    var line: string = category
+    line = line + ","
+    line = line + name
+    line = line + ","
+    line = line + string(exit_code)
+    line = line + ","
+    line = line + string(passed)
+    line = line + ","
+    line = line + string(duration_ms)
+    line = line + ","
+    line = line + string(log_bytes)
+    line = line + ","
+    line = line + log_path
+    line = line + "\n"
+    append_file(csv_path, line)
+end
+
+func log_size(path: string) -> int
+    match fs.read_text(path)
+        case success(content):
+            return str.len(content)
+        case error(_):
+            return 0
+    end
+    return 0
+end
+
+func shell_program() -> string
+    if os_utils.is_windows()
+        return "cmd"
+    end
+    return "sh"
+end
+
+func shell_args(command_label: string, log_path: string) -> list<string>
+    const redirected: string = command_label + " > " + log_path + " 2>&1"
+    if os_utils.is_windows()
+        return ["/C", redirected]
+    end
+    return ["-c", redirected]
+end
+
+func run_metric(
+    csv_path: string,
+    summary_path: string,
+    category: string,
+    name: string,
+    command_label: string,
+    log_path: string,
+)
+    write_file(log_path, "running: " + command_label + "\n\n")
+
+    const start: int = time.now()
+    var exit_code: int = -1
+
+    match proc.run(shell_program(), shell_args(command_label, log_path))
+        case success(code):
+            exit_code = code
+        case error(message):
+            write_file(log_path, "failed to start command: " + message + "\n")
+    end
+
+    const duration_ms: int = time.now() - start
+    const passed: bool = exit_code == 0
+    const size: int = log_size(log_path)
+
+    append_csv(
+        csv_path,
+        category,
+        name,
+        exit_code,
+        passed,
+        duration_ms,
+        size,
+        log_path,
+    )
+
+    append_summary(summary_path, category, name, passed, duration_ms, exit_code)
+end
+
+func main()
+    const report_dir: string = "target/ori-quality-metrics"
+    match fs.create_dir_all(report_dir)
+        case success(_):
+        case error(message):
+            io.print("failed to create report directory: " + message)
+            return
+    end
+
+    const run_id: string = string(time.now())
+    const csv_path: string = report_dir + "/metrics-" + run_id + ".csv"
+    const summary_path: string = report_dir + "/summary-" + run_id + ".txt"
+
+    write_file(
+        csv_path,
+        "category,name,exit_code,passed,duration_ms,log_bytes,log_path\n",
+    )
+    write_file(summary_path, "Ori quality metrics\n")
+    append_file(summary_path, "run_id: " + run_id + "\n")
+    append_file(summary_path, "report_dir: " + report_dir + "\n\n")
+    append_file(
+        summary_path,
+        "Tip: set ORI_PERF_STRICT=1 before running this script to enforce strict performance budgets.\n\n",
+    )
+
+    run_metric(
+        csv_path,
+        summary_path,
+        "baseline",
+        "cargo_check_workspace",
+        "cargo check --workspace",
+        report_dir + "/cargo_check_workspace-" + run_id + ".txt",
+    )
+
+    run_metric(
+        csv_path,
+        summary_path,
+        "security",
+        "diagnostic_catalog",
+        "cargo test -p ori-driver --test diagnostic_catalog",
+        report_dir + "/diagnostic_catalog-" + run_id + ".txt",
+    )
+
+    run_metric(
+        csv_path,
+        summary_path,
+        "security",
+        "security_robustness",
+        "cargo test -p ori-driver --test security_robustness",
+        report_dir + "/security_robustness-" + run_id + ".txt",
+    )
+
+    run_metric(
+        csv_path,
+        summary_path,
+        "security",
+        "memory_arc",
+        "cargo test -p ori-driver --test memory_arc",
+        report_dir + "/memory_arc-" + run_id + ".txt",
+    )
+
+    run_metric(
+        csv_path,
+        summary_path,
+        "security",
+        "concurrency_async",
+        "cargo test -p ori-driver --test concurrency_async",
+        report_dir + "/concurrency_async-" + run_id + ".txt",
+    )
+
+    run_metric(
+        csv_path,
+        summary_path,
+        "performance",
+        "performance_guard",
+        "cargo test -p ori-driver --test performance_guard",
+        report_dir + "/performance_guard-" + run_id + ".txt",
+    )
+
+    run_metric(
+        csv_path,
+        summary_path,
+        "performance",
+        "performance_guard_ignored_probe",
+        "cargo test -p ori-driver --test performance_guard -- --ignored",
+        report_dir + "/performance_guard_ignored_probe-" + run_id + ".txt",
+    )
+
+    io.print("metrics_csv=" + csv_path)
+    io.print("summary_txt=" + summary_path)
+end

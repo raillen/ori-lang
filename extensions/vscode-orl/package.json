@@ -169,7 +169,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package": "npm run compile && npx @vscode/vsce package --allow-missing-repository",
-    "install:cursor": "cursor --install-extension vscode-orl-0.2.1.vsix --force"
+    "install:cursor": "cursor --install-extension vscode-orl-0.2.2.vsix --force"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

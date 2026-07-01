@@ -1,0 +1,36 @@
+namespace examples.json_validator
+
+import ori.config as config
+import ori.io as io
+import ori.json as json
+import ori.log as log
+
+func is_valid_json(text: string) -> bool
+    match json.parse(text)
+        case success(_):
+            return true
+        case error(_):
+            return false
+    end
+    return false
+end
+
+func status_for(text: string) -> string
+    if is_valid_json(text)
+        return "valid"
+    end
+    return "invalid"
+end
+
+func main()
+    const fallback: string = "{\"name\":\"ori\",\"enabled\":true}"
+    const raw: string = config.read_text_or("config.local.json", fallback)
+
+    if is_valid_json(raw)
+        log.info("config json is valid")
+    else
+        log.warn("config json is invalid")
+    end
+
+    io.print("json status: " + status_for(raw))
+end

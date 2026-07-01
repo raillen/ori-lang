@@ -114,11 +114,17 @@ by `validate_import_namespace`).
 
 ### Discovery
 
-`pipeline::classify_stdlib_import` checks for `.orl` source modules in
-`find_stdlib_source_module` before returning `Unknown`. If a file exists at
-the expected path, the import is classified as `StdlibSource(PathBuf)` and
-loaded via `load_source_recursive` — same cycle detection and namespace
-validation as user files.
+`pipeline::classify_stdlib_import` keeps runtime modules lightweight for normal
+imports. If `ori.string`, `ori.list`, or `ori.fs` is imported with an alias, the
+runtime manifest wins and no parent `.orl` helper module is loaded.
+
+When the import has selected items, for example
+`import ori.string only (is_empty)`, the driver may load the matching parent
+`.orl` file with `StdlibSource(PathBuf)`. Unknown `ori.*` modules still check
+`find_stdlib_source_module` before returning `Unknown`.
+
+Loaded stdlib source files use the same `load_source_recursive` path as user
+files, including cycle detection and namespace validation.
 
 ### Stdlib root resolution
 
@@ -163,24 +169,38 @@ scanning `stdlib/` at compile time.
 - Keep compatibility aliases only when a test or public doc needs them.
 - Prefer one shared table over duplicating signatures in typecheck, HIR and codegen.
 
-## Future: namespace flattening (Opção C)
+## Namespace flattening (Opção C)
 
-For usability and ergonomics, a future architectural change may merge Layer 2 (compositional) and Layer 3 (algorithms) helpers directly into the parent Layer 1 module namespace.
-For example, instead of importing:
+Status: partially implemented for `ori.string`, `ori.list`, and `ori.fs`.
+The old submodules remain compatible.
+
+For usability and ergonomics, parent modules may merge Layer 2
+(compositional) and Layer 3 (algorithm) helpers directly into the parent Layer
+1 module namespace.
+
+Implemented parent modules:
+
+- `stdlib/string.orl` -> `ori.string`
+- `stdlib/list.orl` -> `ori.list`
+- `stdlib/fs.orl` -> `ori.fs`
+
+Instead of importing many helper modules:
 ```ori
 import ori.string as str
 import ori.string.utils as su
 import ori.string.algorithms as sa
 ```
-The user would import only the unified root namespace:
+Users can import only the helper names needed from the unified root namespace:
+
 ```ori
-import ori.string as str
+import ori.string only (is_empty, truncate as cut)
 ```
-All utils and algorithms (`is_empty`, `join_non_empty`, etc.) would be exposed directly via the unified module prefix (e.g. `str.is_empty`).
 
-### Implementation Strategy for Namespace Flattening:
-1. **Source modules priority in discovery**: Modify `classify_stdlib_import` in `pipeline.rs` to look for a matching `.orl` file (e.g., `stdlib/string.orl`) before fallback checking the static runtime functions list (`is_implemented_stdlib_module`). This allows a hybrid namespace where `.orl` files can complement native runtime symbols.
-2. **Unified file layout**: Create a parent source module `stdlib/string.orl` containing all compositional wrappers and algorithms.
-3. **Rust runtime FFI visibility**: Ensure that `lower.rs` continues to map calls like `ori.string.len` to native runtime symbols (`ori_string_len`) even if a `stdlib/string.orl` file is loaded. This is already supported as the compiler checks `stdlib_c_name` first and then searches the loaded `DefMap` for symbols.
-4. **Transition path**: Deprecate submodules like `ori.string.utils` and `ori.string.algorithms` via compiler warnings or documentation before fully removing them in a major release (e.g. `0.3.0`).
+Normal alias imports such as `import ori.string as str` continue to expose the
+native runtime surface (`str.len`, `str.slice`, `str.parse_int`, etc.) without
+forcing the parent `.orl` helper module into every compile.
 
+Compatibility rule: old submodules remain valid. `ori.string.utils`,
+`ori.string.algorithms`, `ori.list.utils`, `ori.list.algorithms`, and
+`ori.fs.utils` are still loaded from their existing files. Do not remove them
+until a future breaking release has a documented migration window.

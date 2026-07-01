@@ -186,14 +186,15 @@ surface.
 
 ---
 
-## Error Propagation (`?`)
+## Error Propagation (`try` and `?`)
 
-The `?` operator propagates errors and absence upward.
+`try expr` propagates errors and absence upward. `expr?` is the compact form
+with the same semantics.
 
 On `result<T, E>`:
 
 ```ori
-const value: T = fallible_operation()?
+const value: T = try fallible_operation()
 -- If error(e): returns error(e) from the enclosing function
 -- If success(v): unwraps to v
 ```
@@ -201,16 +202,16 @@ const value: T = fallible_operation()?
 On `optional<T>`:
 
 ```ori
-const value: T = maybe_value?
+const value: T = try maybe_value
 -- If none: returns none from the enclosing function
 -- If some(v): unwraps to v
 ```
 
 Rules:
 - The enclosing function's return type must be compatible with the propagated type.
-- `?` on `result<T, E>` requires the enclosing function to return `result<_, E>`.
-- `?` on `optional<T>` requires the enclosing function to return `optional<_>`.
-- `?` is a postfix operator with the highest postfix precedence (evaluated before `.`).
+- `try` or `?` on `result<T, E>` requires the enclosing function to return `result<_, E>`.
+- `try` or `?` on `optional<T>` requires the enclosing function to return `optional<_>`.
+- `try` is a prefix form. `?` is a postfix compact form in the postfix operator group.
 
 ---
 
@@ -332,14 +333,16 @@ const d: Direction = .North
 const s: Shape = .Circle(radius: 5.0)
 ```
 
-**Struct variant shorthand** (enum variant with named fields):
+Ori does not use `.Variant{field: value}` for enum construction. Named enum
+variants use call syntax, both in the full form and in the shorthand form:
 
 ```ori
-const s: Shape = .Rectangle{width: 5.0, height: 3.0}
+const a: Shape = Shape.Rectangle(width: 5.0, height: 3.0)
+const b: Shape = .Rectangle(width: 5.0, height: 3.0)
 ```
 
-The `.Variant{field: value}` form is the struct-variant equivalent of `.{field: value}`.
-It follows the same type-inference rules.
+This keeps enum construction visually distinct from anonymous struct literals,
+which use `.{field: value}`.
 
 ---
 

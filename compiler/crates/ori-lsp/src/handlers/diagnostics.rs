@@ -1,7 +1,7 @@
-use ori_diagnostics::{Diagnostic as OriDiagnostic, DiagnosticSink, Label, Severity, SourceCache};
-use std::path::{Path, PathBuf};
+use ori_diagnostics::{Diagnostic as OriDiagnostic, Label, Severity, SourceCache};
+use std::path::Path;
 use tower_lsp::lsp_types::{
-    Diagnostic as LspDiagnostic, DiagnosticSeverity, NumberOrString, Position, Range,
+    Diagnostic as LspDiagnostic, DiagnosticSeverity, NumberOrString, Range,
 };
 
 use crate::utils::position;
@@ -75,13 +75,11 @@ pub fn project_error_diagnostic(message: &str) -> Option<LspDiagnostic> {
     let (code, severity) = if message.contains("project manifest") && message.contains("not found")
     {
         ("project.no_proj_file", DiagnosticSeverity::ERROR)
-    } else if message.contains("project manifest") && message.contains("missing `entry`")
-    {
+    } else if message.contains("project manifest") && message.contains("missing `entry`") {
         // Manifest exists but declares no `entry=...` key: the entrypoint
         // cannot be located, so report it as `entry_not_found`.
         ("project.entry_not_found", DiagnosticSeverity::ERROR)
-    } else if message.contains("project entry") && message.contains("does not exist")
-    {
+    } else if message.contains("project entry") && message.contains("does not exist") {
         ("project.entry_not_found", DiagnosticSeverity::ERROR)
     } else {
         return None;
@@ -196,20 +194,19 @@ mod tests {
     #[test]
     fn project_error_diagnostic_maps_known_messages() {
         // Missing manifest → project.no_proj_file
-        let d = project_error_diagnostic(
-            "project manifest `/foo/ori.proj` not found",
-        )
-        .expect("missing manifest maps to a project diagnostic");
-        assert_eq!(d.code.as_ref().and_then(|c| match c {
-            NumberOrString::String(s) => Some(s.clone()),
-            _ => None,
-        }), Some("project.no_proj_file".to_string()));
+        let d = project_error_diagnostic("project manifest `/foo/ori.proj` not found")
+            .expect("missing manifest maps to a project diagnostic");
+        assert_eq!(
+            d.code.as_ref().and_then(|c| match c {
+                NumberOrString::String(s) => Some(s.clone()),
+                _ => None,
+            }),
+            Some("project.no_proj_file".to_string())
+        );
 
         // Manifest without an entry key → project.entry_not_found
-        let d = project_error_diagnostic(
-            "project manifest `/foo/ori.proj` is missing `entry`",
-        )
-        .expect("manifest missing entry maps to a project diagnostic");
+        let d = project_error_diagnostic("project manifest `/foo/ori.proj` is missing `entry`")
+            .expect("manifest missing entry maps to a project diagnostic");
         let code = d.code.and_then(|c| match c {
             NumberOrString::String(s) => Some(s),
             _ => None,
@@ -217,10 +214,8 @@ mod tests {
         assert_eq!(code.as_deref(), Some("project.entry_not_found"));
 
         // Entry points to a non-existent file → project.entry_not_found
-        let d = project_error_diagnostic(
-            "project entry `/foo/main.orl` does not exist",
-        )
-        .expect("missing entry maps to a project diagnostic");
+        let d = project_error_diagnostic("project entry `/foo/main.orl` does not exist")
+            .expect("missing entry maps to a project diagnostic");
         let code = d.code.and_then(|c| match c {
             NumberOrString::String(s) => Some(s),
             _ => None,

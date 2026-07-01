@@ -21,8 +21,22 @@ collections FFI) stays here permanently.
 
 ### Layer 2 — `.orl` safe wrappers (Stdlib Phase 0 — completo)
 
+Parent modules can expose `.orl` helpers beside native Layer 1 functions
+through selective imports, for example `import ori.string only (is_empty)`.
+Current flattened parents:
+
 | Module | File | Notes |
 |--------|------|-------|
+| `ori.string` | `stdlib/string.orl` | Flattened text helpers and string algorithms; old `ori.string.utils`/`ori.string.algorithms` stay valid |
+| `ori.list` | `stdlib/list.orl` | Flattened list helpers and integer list algorithms; old `ori.list.utils`/`ori.list.algorithms` stay valid |
+| `ori.fs` | `stdlib/fs.orl` | Flattened FS convenience wrappers; old `ori.fs.utils` stays valid |
+| `ori.time` | `stdlib/time.orl` | Typed `Instant`/`Duration` helpers over millisecond runtime primitives |
+
+| Module | File | Notes |
+|--------|------|-------|
+| `ori.args` | `stdlib/args.orl` | Thin CLI argument helpers over `ori.os.args` |
+| `ori.config` | `stdlib/config.orl` | Text/JSON config helpers over `ori.fs` and `ori.json` |
+| `ori.log` | `stdlib/log.orl` | Minimal CLI logging helpers |
 | `ori.validate` | `stdlib/validate.orl` | `between`, `even`, `blank`, `one_of`, string length checks, … |
 | `ori.path` | `stdlib/path.orl` | `join`, `normalize`, `relative`, `parent`, `extension`, … |
 | `ori.format.utils` | `stdlib/format/utils.orl` | Wrappers `number`, `hex`, `bytes_size`, `date`, … |

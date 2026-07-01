@@ -18,7 +18,12 @@ current compiler.
 - [async_demo.orl](async_demo.orl): `async func`, `await`, and `ori.task.sleep`.
 - [logic_and_matching.orl](logic_and_matching.orl): Control flow, `optional`, and range loops.
 - [struct_demo.orl](struct_demo.orl): Custom struct declarations and instantiation.
-- [error_handling.orl](error_handling.orl): Result type, `success/error`, and the `?` operator.
+- [error_handling.orl](error_handling.orl): Result type, `success/error`, `try`, and compact `?`.
+- [file_organizer.orl](file_organizer.orl): Plans file moves with `ori.path` and logging.
+- [json_validator.orl](json_validator.orl): Reads config text and validates JSON.
+- [log_analyzer.orl](log_analyzer.orl): Counts log levels from text.
+- [task_cli.orl](task_cli.orl): Small CLI-style task list using command-line args.
+- [process_runner.orl](process_runner.orl): Runs a host process and inspects captured output.
 - [release_smoke.orl](release_smoke.orl): Small release-package compile smoke test.
 
 ## How to run

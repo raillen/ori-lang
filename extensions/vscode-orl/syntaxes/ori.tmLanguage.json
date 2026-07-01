@@ -14,8 +14,13 @@
     "comments": {
       "patterns": [
         {
-          "name": "comment.line.number-sign.ori",
-          "match": "#.*$"
+          "name": "comment.block.ori",
+          "begin": "--\\|",
+          "end": "\\|--"
+        },
+        {
+          "name": "comment.line.double-dash.ori",
+          "match": "--.*$"
         }
       ]
     },
@@ -35,7 +40,7 @@
       "patterns": [
         {
           "name": "keyword.control.ori",
-          "match": "\\b(func|return|end|if|else|while|for|in|repeat|loop|break|continue|match|case|using|check|with|then|do|and|or|not|import|as|public|namespace|struct|trait|implement|enum|where|is|alias|mut|self|extern|lazy|tuple|void|true|false|none|success|error|some)\\b"
+          "match": "\\b(async|await|try|func|return|end|if|else|while|for|in|repeat|loop|break|continue|match|case|using|check|with|then|do|and|or|not|import|as|only|public|namespace|struct|trait|implement|enum|where|is|alias|mut|self|extern|lazy|tuple|void|true|false|none|success|error|some)\\b"
         },
         {
           "name": "storage.type.ori",

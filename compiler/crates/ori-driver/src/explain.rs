@@ -153,7 +153,10 @@ mod tests {
             "project.circular_import",
             "type.type_mismatch",
         ] {
-            assert!(explain_code(code).is_some(), "missing explain entry for {code}");
+            assert!(
+                explain_code(code).is_some(),
+                "missing explain entry for {code}"
+            );
         }
     }
 }

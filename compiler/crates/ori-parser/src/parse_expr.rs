@@ -199,6 +199,14 @@ impl<'src> Parser<'src> {
                 span: s,
             });
         }
+        if self.eat_contextual("try") {
+            let inner = self.parse_unary()?;
+            let s = span.cover(inner.span());
+            return Some(Expr::Try {
+                expr: Box::new(inner),
+                span: s,
+            });
+        }
         self.parse_postfix()
     }
 

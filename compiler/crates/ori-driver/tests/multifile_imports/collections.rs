@@ -1942,7 +1942,9 @@ end
 
     let output = Command::new(&exe).output().unwrap();
     assert!(output.status.success(), "{:?}", output);
-    let stdout = String::from_utf8(output.stdout).unwrap().replace("\r\n", "\n");
+    let stdout = String::from_utf8(output.stdout)
+        .unwrap()
+        .replace("\r\n", "\n");
     let lines: Vec<&str> = stdout.lines().collect();
     assert!(lines.len() >= 7);
     assert_eq!(lines[0], "Ada");
@@ -1951,7 +1953,7 @@ end
     assert_eq!(lines[3], "2");
     assert_eq!(lines[4], "10");
     assert_eq!(lines[5], "null ok");
-    
+
     // The stringified JSON should contain key fields
     let stringified = lines[6];
     assert!(stringified.contains("\"name\""));
@@ -1959,4 +1961,3 @@ end
     assert!(stringified.contains("\"age\""));
     assert!(stringified.contains("42"));
 }
-

@@ -161,13 +161,13 @@ end
 
 When a function returns `void`, `return` with no value exits early.
 
-### `result<T, E>` and `?`
+### `result<T, E>` and propagation
 
 Most functions that can fail return `result<T, E>`:
 
 ```ori
 func read_file(path: string) -> result<string, string>
-    const file: ori.fs.File = ori.fs.open_read(path)?
+    const file: ori.fs.File = try ori.fs.open_read(path)
     return ori.fs.read_all(file)
 end
 ```

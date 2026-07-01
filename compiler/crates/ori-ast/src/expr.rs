@@ -123,7 +123,7 @@ pub enum Expr {
         index: IndexExpr,
         span: Span,
     },
-    /// `expr?`  — propagate error / absence.
+    /// `try expr` or `expr?` — propagate error / absence.
     Try {
         expr: Box<Expr>,
         span: Span,

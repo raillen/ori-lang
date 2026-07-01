@@ -44,6 +44,7 @@ impl ProjectManager {
     }
 
     /// Get the workspace root, if known.
+    #[allow(dead_code)]
     pub fn workspace_root(&self) -> Option<&PathBuf> {
         self.workspace_root.as_ref()
     }
@@ -109,6 +110,7 @@ impl ProjectManager {
     }
 
     /// Check if a document is open.
+    #[allow(dead_code)]
     pub fn is_open(&self, uri: &Url) -> bool {
         self.open_documents.contains_key(uri)
     }

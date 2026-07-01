@@ -76,7 +76,7 @@ impl SemanticIndex {
         }
         let summaries: Vec<_> = entries
             .iter()
-            .map(|entry| format!("- {}", entry.summary))
+            .map(|entry| format!("- {}: {}", entry.kind.display(), entry.summary))
             .collect();
         Some(format!(
             "Multiple local symbols named `{symbol}`:\n\n{}",
@@ -133,8 +133,9 @@ impl SemanticIndex {
     pub fn symbol_at(&self, source: &str, pos: Position) -> Option<&SemanticSymbol> {
         let word = uri::word_at_position(source, pos)?;
         self.symbols
-            .get(&word)
-            .and_then(|entries| entries.first())
+            .get(&word)?
+            .iter()
+            .find(|entry| position_in_range(pos, &entry.range))
     }
 
     /// Determine completion context based on cursor position.
@@ -203,23 +204,61 @@ impl SemanticIndex {
 
         for import in &source_file.imports {
             let namespace = import.path.to_string();
-            let alias = import
-                .alias
-                .as_ref()
-                .map(|n| n.text.to_string())
-                .unwrap_or_else(|| {
-                    namespace
-                        .rsplit('.')
-                        .next()
-                        .unwrap_or(&namespace)
-                        .to_string()
-                });
             let file_path = ori_driver::pipeline::stdlib_source_path(&namespace);
-            self.imports.push(ResolvedImport {
-                alias,
-                namespace,
-                file_path,
-            });
+            if import.selected.is_empty() {
+                let alias = import
+                    .alias
+                    .as_ref()
+                    .map(|n| n.text.to_string())
+                    .unwrap_or_else(|| {
+                        namespace
+                            .rsplit('.')
+                            .next()
+                            .unwrap_or(&namespace)
+                            .to_string()
+                    });
+                let alias_span = import
+                    .alias
+                    .as_ref()
+                    .map(|name| name.span)
+                    .unwrap_or(import.path.span);
+                self.imports.push(ResolvedImport {
+                    alias: alias.clone(),
+                    namespace: namespace.clone(),
+                    file_path: file_path.clone(),
+                });
+                self.add(SemanticSymbol {
+                    name: alias,
+                    kind: SymbolKind::Import,
+                    range: span_to_range(source, alias_span),
+                    hover: format!("```ori\nimport {namespace}\n```\n\nModule import."),
+                    summary: format!("import {namespace}"),
+                });
+            } else {
+                for item in &import.selected {
+                    let alias = item
+                        .alias
+                        .as_ref()
+                        .map(|n| n.text.to_string())
+                        .unwrap_or_else(|| item.name.text.to_string());
+                    let selected_namespace = format!("{}.{}", namespace, item.name.text);
+                    self.imports.push(ResolvedImport {
+                        alias: alias.clone(),
+                        namespace: selected_namespace.clone(),
+                        file_path: file_path.clone(),
+                    });
+                    self.add(SemanticSymbol {
+                        name: alias,
+                        kind: SymbolKind::Import,
+                        range: span_to_range(source, item.span),
+                        hover: format!(
+                            "```ori\nimport {namespace} only ({})\n```\n\nSelective import.",
+                            item.name.text
+                        ),
+                        summary: format!("import {selected_namespace}"),
+                    });
+                }
+            }
         }
     }
 
@@ -317,10 +356,7 @@ impl SemanticIndex {
                     name: t.name.text.to_string(),
                     kind: SymbolKind::Trait,
                     range,
-                    hover: format!(
-                        "```ori\ntrait {}\n```\n\nUser-defined trait.",
-                        t.name.text
-                    ),
+                    hover: format!("```ori\ntrait {}\n```\n\nUser-defined trait.", t.name.text),
                     summary: format!("trait {}", t.name.text),
                 });
             }
@@ -364,7 +400,8 @@ impl SemanticIndex {
                         hover,
                         summary: format!(
                             "method {}.{}",
-                            imp.for_type.last().text, method.name.text
+                            imp.for_type.last().text,
+                            method.name.text
                         ),
                     });
                 }
@@ -439,7 +476,9 @@ fn type_to_string(ty: &ori_ast::ty::Type) -> String {
             let inner: Vec<_> = types.iter().map(type_to_string).collect();
             format!("({})", inner.join(", "))
         }
-        ori_ast::ty::Type::Func { params, return_ty, .. } => {
+        ori_ast::ty::Type::Func {
+            params, return_ty, ..
+        } => {
             let p: Vec<_> = params.iter().map(type_to_string).collect();
             let ret = return_ty
                 .as_ref()
@@ -467,4 +506,12 @@ fn span_to_range(source: &str, span: ori_diagnostics::Span) -> Range {
     let start = position::position_for_byte_offset(source, span.start as usize);
     let end = position::position_for_byte_offset(source, span.end as usize);
     Range::new(start, end)
+}
+
+fn position_in_range(pos: Position, range: &Range) -> bool {
+    !position_is_before(pos, range.start) && position_is_before(pos, range.end)
+}
+
+fn position_is_before(left: Position, right: Position) -> bool {
+    left.line < right.line || (left.line == right.line && left.character < right.character)
 }

@@ -1,0 +1,61 @@
+namespace ori.time
+
+public struct Instant
+    millis: int
+end
+
+public struct Duration
+    millis: int
+end
+
+public func instant_now() -> Instant
+    return Instant(millis: ori.time.now())
+end
+
+public func duration_millis(value: int) -> Duration
+    return Duration(millis: value)
+end
+
+public func duration_seconds(value: int) -> Duration
+    return Duration(millis: value * 1000)
+end
+
+public func duration_minutes(value: int) -> Duration
+    return Duration(millis: value * 60 * 1000)
+end
+
+public func duration_hours(value: int) -> Duration
+    return Duration(millis: value * 60 * 60 * 1000)
+end
+
+public func instant_from_unix_ms(value: int) -> Instant
+    return Instant(millis: value)
+end
+
+public func instant_to_unix_ms(value: Instant) -> int
+    return value.millis
+end
+
+public func duration_to_millis(value: Duration) -> int
+    return value.millis
+end
+
+public func elapsed_since(start: Instant) -> Duration
+    return Duration(millis: ori.time.now() - start.millis)
+end
+
+public func between(start: Instant, finish: Instant) -> Duration
+    return Duration(millis: finish.millis - start.millis)
+end
+
+public func add(value: Instant, duration: Duration) -> Instant
+    return Instant(millis: value.millis + duration.millis)
+end
+
+public func sub(value: Instant, duration: Duration) -> Instant
+    return Instant(millis: value.millis - duration.millis)
+end
+
+public func sleep_duration(duration: Duration)
+    ori.time.sleep(duration.millis)
+end

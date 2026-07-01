@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
-use ori_driver::{emit, explain, pipeline};
+use ori_driver::{emit, explain, package, pipeline};
+use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -22,6 +23,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Create a new Ori project.
+    New {
+        /// Directory to create or initialize when empty.
+        path: PathBuf,
+        /// Project name written to `ori.proj` (default: directory name).
+        #[arg(long)]
+        name: Option<String>,
+        /// Create a library project instead of an app project.
+        #[arg(long)]
+        lib: bool,
+    },
     /// Type-check an Ori source file and report diagnostics.
     Check {
         /// Path to the `.orl` source file.
@@ -32,10 +44,16 @@ enum Commands {
         #[command(subcommand)]
         action: DocAction,
     },
-    /// Install an Ori package from the registry (not yet available).
+    /// Install an Ori package into the local package cache.
     Install {
         /// Package name (e.g. `example.demo`).
         name: String,
+        /// Local package directory or `ori.pkg.toml` path.
+        #[arg(long)]
+        path: Option<PathBuf>,
+        /// Override the package cache root (default: ORI_PACKAGE_CACHE or ~/.ori/packages).
+        #[arg(long)]
+        cache: Option<PathBuf>,
     },
     /// Publish an Ori package to the registry (not yet available).
     Publish {
@@ -46,6 +64,9 @@ enum Commands {
     Test {
         /// Path to the `.orl` source file or project manifest.
         file: PathBuf,
+        /// Run only tests whose fully-qualified or short name contains this text.
+        #[arg(long)]
+        filter: Option<String>,
     },
     /// Format an Ori source file and print the result.
     Fmt {
@@ -81,13 +102,23 @@ enum Commands {
         #[arg(long)]
         native_raw: bool,
     },
-    /// Compile to C source (debug backend with partial feature parity).
+    /// Start a small interactive REPL backed by the native JIT.
+    Repl,
+    /// Build an Ori file or project through the native backend.
     Build {
-        /// Path to the `.orl` source file.
-        file: PathBuf,
-        /// Write generated C to this file instead of stdout.
+        /// Path to the `.orl` source file, `ori.proj`, or project root.
+        path: PathBuf,
+        /// Output executable path (default: same name as source, no extension).
         #[arg(short, long)]
         out: Option<PathBuf>,
+        /// Print full native linker stdout/stderr when link fails.
+        #[arg(long)]
+        native_raw: bool,
+    },
+    /// Emit secondary debug artifacts.
+    Emit {
+        #[command(subcommand)]
+        action: EmitAction,
     },
     /// Report environment, stdlib, and native runtime health.
     Doctor,
@@ -105,6 +136,18 @@ enum Commands {
 }
 
 #[derive(Subcommand)]
+enum EmitAction {
+    /// Emit C source through the partial debug backend.
+    C {
+        /// Path to the `.orl` source file.
+        file: PathBuf,
+        /// Write generated C to this file instead of stdout.
+        #[arg(short, long)]
+        out: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
 enum DocAction {
     /// Extract documentation from a source file (Markdown or HTML).
     File {
@@ -116,6 +159,12 @@ enum DocAction {
         /// Write output to this file instead of stdout.
         #[arg(short, long)]
         out: Option<PathBuf>,
+    },
+    /// Validate inline docs and `.oridoc` sidecar files.
+    Check {
+        /// Path to the `.orl` source file, `ori.proj`, or project root.
+        #[arg(default_value = ".")]
+        path: PathBuf,
     },
     /// Export stdlib + error catalog JSON for the documentation website.
     Export {
@@ -136,6 +185,31 @@ fn main() {
     let color = !cli.no_color && std::env::var("NO_COLOR").is_err();
 
     match &cli.command {
+        Commands::New { path, name, lib } => {
+            let kind = if *lib {
+                pipeline::NewProjectKind::Lib
+            } else {
+                pipeline::NewProjectKind::App
+            };
+            match pipeline::run_new_project(
+                path,
+                pipeline::NewProjectOptions {
+                    name: name.clone(),
+                    kind,
+                },
+            ) {
+                Err(e) => {
+                    eprintln!("ori: {}", e);
+                    process::exit(2);
+                }
+                Ok(out) => {
+                    eprintln!("project: {}", out.root.display());
+                    eprintln!("manifest: {}", out.manifest.display());
+                    eprintln!("entry: {}", out.entry.display());
+                }
+            }
+        }
+
         Commands::Check { file } => match pipeline::run_check(file) {
             Err(e) => {
                 eprintln!("ori: {}", e);
@@ -187,6 +261,19 @@ fn main() {
                     }
                 }
             }
+            DocAction::Check { path } => match pipeline::run_doc_check(path) {
+                Err(e) => {
+                    eprintln!("ori: {}", e);
+                    process::exit(2);
+                }
+                Ok(out) => {
+                    let errors = out.diagnostics.iter().filter(|d| d.is_error()).count();
+                    let warnings = out.diagnostics.len() - errors;
+                    emit::render_all(&out.cache, &out.diagnostics, color);
+                    emit::print_summary(errors, warnings, color);
+                    process::exit(if out.has_errors { 1 } else { 0 });
+                }
+            },
             DocAction::Export { out } => {
                 use ori_driver::doc_export;
                 match out {
@@ -207,24 +294,62 @@ fn main() {
             }
         },
 
-        Commands::Install { name } => {
+        Commands::Install { name, path, cache } => {
+            if path.is_some() {
+                match package::run_install_package(package::InstallPackageOptions {
+                    name: name.clone(),
+                    source: path.clone(),
+                    cache_root: cache.clone(),
+                }) {
+                    Err(e) => {
+                        eprintln!("ori: {}", e);
+                        process::exit(2);
+                    }
+                    Ok(out) => {
+                        eprintln!("cache: {}", out.cache_root.display());
+                        for installed in out.packages {
+                            let status = if installed.already_installed {
+                                "already installed"
+                            } else {
+                                "installed"
+                            };
+                            eprintln!(
+                                "{status}: {} {} -> {}",
+                                installed.name,
+                                installed.version,
+                                installed.installed_root.display()
+                            );
+                        }
+                    }
+                }
+                return;
+            }
             eprintln!(
-                "ori: registry install is not available yet (backlog v2)\n\
-                 package `{name}` cannot be fetched — see docs/planning/registry-v2.md"
+                "ori: remote registry install is not available yet\n\
+                 package `{name}` cannot be fetched; use `ori install {name} --path <local-package>` for local packages"
             );
             process::exit(2);
         }
 
         Commands::Publish { path } => {
+            if let Err(e) = package::load_package_manifest(path) {
+                eprintln!("ori: {}", e);
+                process::exit(2);
+            }
             eprintln!(
-                "ori: registry publish is not available yet (backlog v2)\n\
-                 cannot publish `{}` — see docs/planning/registry-v2.md",
+                "ori: remote registry publish is not available yet\n\
+                 package manifest `{}` is valid, but upload is not implemented",
                 path.display()
             );
             process::exit(2);
         }
 
-        Commands::Test { file } => match pipeline::run_test(file) {
+        Commands::Test { file, filter } => match pipeline::run_test_with_options(
+            file,
+            pipeline::TestOptions {
+                filter: filter.clone(),
+            },
+        ) {
             Err(e) => {
                 eprintln!("ori: {}", e);
                 process::exit(2);
@@ -241,11 +366,7 @@ fn main() {
                         .iter()
                         .filter(|result| result.passed && !result.skipped)
                         .count();
-                    let failed = out
-                        .results
-                        .iter()
-                        .filter(|result| !result.passed)
-                        .count();
+                    let failed = out.results.iter().filter(|result| !result.passed).count();
                     for result in &out.results {
                         if result.skipped {
                             eprintln!("skip: {}", result.name);
@@ -268,10 +389,21 @@ fn main() {
                             }
                         }
                     }
+                    let filter_note = out
+                        .filter
+                        .as_deref()
+                        .map(|filter| format!(", filter `{filter}`"))
+                        .unwrap_or_default();
                     if skipped > 0 {
-                        eprintln!("tests: {passed} passed, {skipped} skipped, {failed} failed");
+                        eprintln!(
+                            "tests: {passed} passed, {skipped} skipped, {failed} failed ({}/{} selected{filter_note})",
+                            out.selected, out.discovered
+                        );
                     } else {
-                        eprintln!("tests: {passed} passed, {failed} failed");
+                        eprintln!(
+                            "tests: {passed} passed, {failed} failed ({}/{} selected{filter_note})",
+                            out.selected, out.discovered
+                        );
                     }
                 }
                 let failed = out.results.iter().any(|result| !result.passed);
@@ -397,29 +529,66 @@ fn main() {
             }
         }
 
-        Commands::Build { file, out } => match pipeline::run_build(file) {
-            Err(e) => {
-                eprintln!("ori: {}", e);
-                process::exit(2);
-            }
-            Ok(build) => {
-                let errors = build.diagnostics.iter().filter(|d| d.is_error()).count();
-                let warnings = build.diagnostics.len() - errors;
-                emit::render_all(&build.cache, &build.diagnostics, color);
-                emit::print_summary(errors, warnings, color);
-                if !build.has_errors {
-                    match out {
-                        Some(p) => {
-                            std::fs::write(p, &build.c_source).unwrap_or_else(|e| {
-                                eprintln!("ori: {}", e);
-                                process::exit(2);
-                            });
-                        }
-                        None => print!("{}", build.c_source),
-                    }
+        Commands::Repl => {
+            process::exit(run_repl(color));
+        }
+
+        Commands::Build {
+            path,
+            out,
+            native_raw,
+        } => {
+            let default_out = default_build_exe_path(path);
+            let exe = out.as_deref().unwrap_or(&default_out);
+            match pipeline::run_build_native(
+                path,
+                exe,
+                pipeline::CompileOptions {
+                    native_raw: *native_raw,
+                },
+            ) {
+                Err(e) => {
+                    eprintln!("ori: {}", e);
+                    process::exit(2);
                 }
-                process::exit(if build.has_errors { 1 } else { 0 });
+                Ok(out) => {
+                    let errors = out.diagnostics.iter().filter(|d| d.is_error()).count();
+                    let warnings = out.diagnostics.len() - errors;
+                    emit::render_all(&out.cache, &out.diagnostics, color);
+                    emit::print_summary(errors, warnings, color);
+                    if !out.has_errors {
+                        eprintln!("binary: {}", out.exe_path.display());
+                    }
+                    process::exit(if out.has_errors { 1 } else { 0 });
+                }
             }
+        }
+
+        Commands::Emit { action } => match action {
+            EmitAction::C { file, out } => match pipeline::run_emit_c(file) {
+                Err(e) => {
+                    eprintln!("ori: {}", e);
+                    process::exit(2);
+                }
+                Ok(build) => {
+                    let errors = build.diagnostics.iter().filter(|d| d.is_error()).count();
+                    let warnings = build.diagnostics.len() - errors;
+                    emit::render_all(&build.cache, &build.diagnostics, color);
+                    emit::print_summary(errors, warnings, color);
+                    if !build.has_errors {
+                        match out {
+                            Some(p) => {
+                                std::fs::write(p, &build.c_source).unwrap_or_else(|e| {
+                                    eprintln!("ori: {}", e);
+                                    process::exit(2);
+                                });
+                            }
+                            None => print!("{}", build.c_source),
+                        }
+                    }
+                    process::exit(if build.has_errors { 1 } else { 0 });
+                }
+            },
         },
 
         Commands::Doctor => {
@@ -447,18 +616,16 @@ fn main() {
             process::exit(if report.has_failures() { 1 } else { 0 });
         }
 
-        Commands::Explain { code } => {
-            match explain::explain_code(&code) {
-                Some(entry) => {
-                    print!("{}", explain::format_explanation(entry));
-                }
-                None => {
-                    eprintln!("ori: unknown diagnostic code `{code}`");
-                    eprintln!("ori: see docs/spec/13-error-catalog.md for the full catalog");
-                    process::exit(2);
-                }
+        Commands::Explain { code } => match explain::explain_code(&code) {
+            Some(entry) => {
+                print!("{}", explain::format_explanation(entry));
             }
-        }
+            None => {
+                eprintln!("ori: unknown diagnostic code `{code}`");
+                eprintln!("ori: see docs/spec/13-error-catalog.md for the full catalog");
+                process::exit(2);
+            }
+        },
 
         Commands::Summary { path } => {
             let target = if path.as_os_str().is_empty() || path.as_path() == Path::new(".") {
@@ -516,6 +683,169 @@ fn temp_run_exe_path(file: &std::path::Path) -> PathBuf {
     std::env::temp_dir().join(name)
 }
 
+fn run_repl(color: bool) -> i32 {
+    let stdin = io::stdin();
+    let mut stdout = io::stdout();
+    let mut stderr = io::stderr();
+    let mut imports = Vec::new();
+    let mut bindings = Vec::new();
+
+    let _ = writeln!(
+        stderr,
+        "Ori REPL. Use :quit to exit. Supports imports, const/var bindings, calls, and simple expressions."
+    );
+    let _ = write!(stderr, "ori> ");
+    let _ = stderr.flush();
+
+    for line in stdin.lock().lines() {
+        let line = match line {
+            Ok(line) => line,
+            Err(e) => {
+                let _ = writeln!(stderr, "ori: {e}");
+                return 2;
+            }
+        };
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            let _ = write!(stderr, "ori> ");
+            let _ = stderr.flush();
+            continue;
+        }
+        if matches!(trimmed, ":quit" | ":exit" | "exit" | "quit") {
+            return 0;
+        }
+
+        if trimmed.starts_with("import ") || trimmed.starts_with("public import ") {
+            let mut next_imports = imports.clone();
+            next_imports.push(trimmed.to_string());
+            let source = repl_source(&next_imports, &bindings, None);
+            match pipeline::run_check_source(&repl_temp_source_path(), source) {
+                Ok(out) if !out.has_errors => imports = next_imports,
+                Ok(out) => {
+                    emit::render_all(&out.cache, &out.diagnostics, color);
+                    emit::print_summary(
+                        out.diagnostics.iter().filter(|d| d.is_error()).count(),
+                        out.diagnostics.iter().filter(|d| !d.is_error()).count(),
+                        color,
+                    );
+                }
+                Err(e) => {
+                    let _ = writeln!(stderr, "ori: {e}");
+                }
+            }
+            let _ = write!(stderr, "ori> ");
+            let _ = stderr.flush();
+            continue;
+        }
+
+        if trimmed.starts_with("const ") || trimmed.starts_with("var ") {
+            let mut next_bindings = bindings.clone();
+            next_bindings.push(trimmed.to_string());
+            let source = repl_source(&imports, &next_bindings, None);
+            match pipeline::run_check_source(&repl_temp_source_path(), source) {
+                Ok(out) if !out.has_errors => bindings = next_bindings,
+                Ok(out) => {
+                    emit::render_all(&out.cache, &out.diagnostics, color);
+                    emit::print_summary(
+                        out.diagnostics.iter().filter(|d| d.is_error()).count(),
+                        out.diagnostics.iter().filter(|d| !d.is_error()).count(),
+                        color,
+                    );
+                }
+                Err(e) => {
+                    let _ = writeln!(stderr, "ori: {e}");
+                }
+            }
+            let _ = write!(stderr, "ori> ");
+            let _ = stderr.flush();
+            continue;
+        }
+
+        let statement = repl_statement_for(trimmed);
+        let source = repl_source(&imports, &bindings, Some(&statement));
+        let path = repl_temp_source_path();
+        match std::fs::write(&path, source) {
+            Err(e) => {
+                let _ = writeln!(stderr, "ori: cannot write `{}`: {e}", path.display());
+                return 2;
+            }
+            Ok(()) => match pipeline::run_jit(&path) {
+                Err(e) => {
+                    let _ = writeln!(stderr, "ori: {e}");
+                }
+                Ok(out) => {
+                    let errors = out.diagnostics.iter().filter(|d| d.is_error()).count();
+                    let warnings = out.diagnostics.len() - errors;
+                    emit::render_all(&out.cache, &out.diagnostics, color);
+                    emit::print_summary(errors, warnings, color);
+                    let _ = stdout.flush();
+                }
+            },
+        }
+        let _ = std::fs::remove_file(&path);
+        let _ = write!(stderr, "ori> ");
+        let _ = stderr.flush();
+    }
+
+    0
+}
+
+fn repl_source(imports: &[String], bindings: &[String], statement: Option<&str>) -> String {
+    let mut source = String::from("namespace repl.main\n\nimport ori.io as io\n");
+    for import in imports {
+        source.push_str(import);
+        source.push('\n');
+    }
+    source.push_str("\nfunc main()\n");
+    for binding in bindings {
+        source.push_str("    ");
+        source.push_str(binding);
+        source.push('\n');
+    }
+    if let Some(statement) = statement {
+        source.push_str("    ");
+        source.push_str(statement);
+        source.push('\n');
+    }
+    source.push_str("end\n");
+    source
+}
+
+fn repl_statement_for(input: &str) -> String {
+    if input.starts_with("io.")
+        || input.starts_with("return ")
+        || input.starts_with("using ")
+        || input.starts_with("if ")
+        || input.starts_with("match ")
+        || input.starts_with("while ")
+        || input.starts_with("for ")
+    {
+        input.to_string()
+    } else if input.starts_with('"') || input.starts_with("f\"") {
+        format!("io.println({input})")
+    } else {
+        format!("io.println(string({input}))")
+    }
+}
+
+fn repl_temp_source_path() -> PathBuf {
+    std::env::temp_dir().join(format!("ori-repl-{}.orl", process::id()))
+}
+
+fn default_build_exe_path(path: &Path) -> PathBuf {
+    let exe_name = if cfg!(windows) { "app.exe" } else { "app" };
+    if path.is_dir() {
+        return path.join(exe_name);
+    }
+    if path.file_name().and_then(|name| name.to_str()) == Some("ori.proj") {
+        return path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(exe_name);
+    }
+    path.with_extension(if cfg!(windows) { "exe" } else { "" })
+}
+
 #[cfg(test)]
 mod tests {
     use super::Cli;
@@ -540,6 +870,11 @@ mod tests {
             .expect("build subcommand should exist")
             .render_long_help()
             .to_string();
+        let emit_help = command
+            .find_subcommand_mut("emit")
+            .expect("emit subcommand should exist")
+            .render_long_help()
+            .to_string();
         let run_help = command
             .find_subcommand_mut("run")
             .expect("run subcommand should exist")
@@ -559,10 +894,9 @@ mod tests {
             "{compile_help}"
         );
         assert!(test_help.contains("native runtime"), "{test_help}");
-        assert!(
-            build_help.contains("debug backend with partial feature parity"),
-            "{build_help}"
-        );
+        assert!(build_help.contains("native backend"), "{build_help}");
+        assert!(build_help.contains("--native-raw"), "{build_help}");
+        assert!(emit_help.contains("debug artifacts"), "{emit_help}");
         assert!(
             run_help.contains("Compile and run an Ori source file"),
             "{run_help}"
@@ -576,6 +910,19 @@ mod tests {
         assert!(
             help.contains("Format an Ori source file and print the result"),
             "{help}"
+        );
+    }
+
+    #[test]
+    fn repl_wraps_simple_expression_for_printing() {
+        assert_eq!(
+            super::repl_statement_for("1 + 2"),
+            "io.println(string(1 + 2))"
+        );
+        assert_eq!(super::repl_statement_for("\"ori\""), "io.println(\"ori\")");
+        assert_eq!(
+            super::repl_statement_for("io.println(\"ori\")"),
+            "io.println(\"ori\")"
         );
     }
 }

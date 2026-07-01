@@ -59,11 +59,7 @@ fn compile_and_run(dir: &TestDir, source: &str, exe_name: &str) -> (String, Stri
     dir.write("main.orl", source);
     let exe = exe_path(dir, exe_name);
     let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
-    assert!(
-        !out.has_errors,
-        "compile errors: {:?}",
-        out.diagnostics
-    );
+    assert!(!out.has_errors, "compile errors: {:?}", out.diagnostics);
 
     let output = Command::new(&exe).output().unwrap();
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -82,11 +78,7 @@ fn compile_and_run_with_leak_check(
     dir.write("main.orl", source);
     let exe = exe_path(dir, exe_name);
     let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
-    assert!(
-        !out.has_errors,
-        "compile errors: {:?}",
-        out.diagnostics
-    );
+    assert!(!out.has_errors, "compile errors: {:?}", out.diagnostics);
 
     let output = Command::new(&exe)
         .env("ORI_TEST_LEAK_CHECK", "1")
@@ -170,7 +162,10 @@ end
         .trim()
         .parse()
         .unwrap();
-    assert_eq!(leaks_n, 0, "expected 0 leaks for single list, got {leaks_n}: {stdout}");
+    assert_eq!(
+        leaks_n, 0,
+        "expected 0 leaks for single list, got {leaks_n}: {stdout}"
+    );
 }
 
 /// A struct holding a managed `list<int>` field must release the list when the
@@ -655,10 +650,7 @@ end
         .iter()
         .find(|l| l.starts_with("acc:"))
         .unwrap_or_else(|| panic!("missing acc line: {stdout}"));
-    assert!(
-        acc_line.starts_with("acc:"),
-        "missing acc line: {stdout}"
-    );
+    assert!(acc_line.starts_with("acc:"), "missing acc line: {stdout}");
     assert!(
         lines.iter().any(|l| l.starts_with("collected:")),
         "missing collected line: {stdout}"
