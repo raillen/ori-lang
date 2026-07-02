@@ -80,7 +80,18 @@ fn build_catalog() -> StdlibCatalog {
         scan_stdlib_dir(&root, &root, &mut catalog);
     }
 
+    register_stdlib_flatten_aliases(&mut catalog);
+
     catalog
+}
+
+fn register_stdlib_flatten_aliases(catalog: &mut StdlibCatalog) {
+    let keys: Vec<String> = catalog.by_qualified.keys().cloned().collect();
+    for qualified in keys {
+        if let Some(flat) = ori_types::stdlib::flatten_parent_symbol(&qualified) {
+            catalog.insert_alias(&flat, &qualified);
+        }
+    }
 }
 
 impl StdlibCatalog {

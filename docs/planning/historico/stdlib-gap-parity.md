@@ -1,7 +1,7 @@
 # Stdlib Gap Parity — Referência `std.*` vs Ori `ori.*`
 
 > Status: **Layer 2/3 stdlib `.orl` fechados para uso prático v1** (`[Unreleased]`, congelado em `0.2.x`)
-> Última revisão: 2026-06-29
+> Última revisão: 2026-07-01
 
 ## Objetivo
 
@@ -23,7 +23,7 @@ Fechar gaps funcionais entre a stdlib de referência (módulos `std.io`, `std.te
 | `std.bytes` | `ori.bytes` + `ori.bytes.utils` + `ori.bytes.algorithms` | ✅ |
 | `std.json` | `ori.json` + `ori.json.utils` | ✅ |
 | `std.format` | `ori.format` + `ori.format.utils` | ✅ |
-| `std.fs` | `ori.fs` + `ori.fs.utils` | ✅ (Layer 1 ainda `bool` legado) |
+| `std.fs` | `ori.fs` + `ori.fs.utils` | ✅ Layer 1 `result` + Layer 2 |
 | `std.fs.path` | `ori.path` | ✅ (`relative` implementado) |
 | `std.os` | `ori.os` + `ori.os.utils` | ✅ |
 | `std.os.process` | `ori.process` + `ori.process.utils` | ✅ |
@@ -36,7 +36,7 @@ Fechar gaps funcionais entre a stdlib de referência (módulos `std.io`, `std.te
 | `std.concurrent` | `ori.concurrent` + `ori.concurrent.utils` + `task`/`channel` | ⚠️ `transfer_*` aliases; contrato `Transferable` real = backlog |
 | `std.lazy` | `ori.lazy` + `is_consumed` | ✅ |
 | `std.test` | `ori.test` + `ori.test.utils` | ✅ |
-| `std.net` | `ori.net` + `ori.net.utils` | ✅ TCP síncrono |
+| `std.net` | `ori.net` + `ori.net.utils` | ✅ TCP + TLS + UDP (v2 síncrono) |
 | `std.iter` | `ori.iter` + `ori.iter.utils` | ✅ |
 
 ## Inventário Layer 2 (`.orl`) — completo
@@ -45,6 +45,8 @@ Fechar gaps funcionais entre a stdlib de referência (módulos `std.io`, `std.te
 |--------|---------|
 | `ori.validate` | `stdlib/validate.orl` |
 | `ori.path` | `stdlib/path.orl` |
+| `ori.io` | `stdlib/io.orl` |
+| `ori.net` | `stdlib/net.orl` |
 | `ori.format.utils` | `stdlib/format/utils.orl` |
 | `ori.iter.utils` | `stdlib/iter/utils.orl` |
 | `ori.net.utils` | `stdlib/net/utils.orl` |
@@ -91,7 +93,7 @@ Fechar gaps funcionais entre a stdlib de referência (módulos `std.io`, `std.te
 - `os.current_dir` / `os.change_dir`
 - `random.seed`
 - `process.run` / `process.run_capture`
-- `net.*` TCP + `OpaqueTy::Connection` (+ lowering `ori.net.Connection` para módulos `.orl`)
+- `net.*` TCP/TLS/UDP síncrono + tipos opacos `Connection`/`Listener`/`UdpSocket` (design: `docs/planning/net-v2-design.md`)
 - `test.skip` (exit 77)
 - `lazy.is_consumed`
 - `bytes.from_list` / `to_list`
@@ -103,10 +105,12 @@ Fechar gaps funcionais entre a stdlib de referência (módulos `std.io`, `std.te
 
 | Item | Impacto | Rastreabilidade |
 |------|---------|-----------------|
-| Uniformizar Layer 1 FS/io (`bool`/`string` → `result`/`optional`) | Ergonomia + breaking change | [`PENDENTES.md`](PENDENTES.md) § Backlog v2 §2 |
-| `time.Instant` / `Duration` tipados | APIs de tempo mais seguras | Backlog v2 §4 |
-| `io.Input` / `io.Output` streams | I/O incremental | Backlog v2 §4 |
-| `net` TLS / UDP / async | Rede avançada | Backlog v2 §4 |
+| Uniformizar Layer 1 FS/io (`bool`/`string` → `result`/`optional`) | ✅ Feito | [`PENDENTES.md`](PENDENTES.md) |
+| `time.Instant` / `Duration` tipados | ✅ Feito | Backlog v2 |
+| `io.Input` / `io.Output` streams | ✅ MVP Layer 1 | `stdlib/io.orl` + runtime FFI |
+| Flatten `import ori.X only (...)` | ✅ Feito | agrega `utils` + `algorithms` |
+| `net` TLS / UDP / servidor TCP (síncrono) | ✅ Feito | `docs/planning/net-v2-design.md`, `PENDENTES.md` §4 |
+| `net` async nativa (`*_async` no executor) | Rede avançada | Backlog longo prazo |
 | Genéricos `map`/`set`/`graph` em `.orl` | Chaves user-defined | Trait gate `Hashable`+`Equatable` |
 | `grid2d` / `circbuf` / `btree` | Coleções extras | Sem demanda concreta |
 | `format.date_pattern` locale | i18n | Backlog v2 |
@@ -145,6 +149,7 @@ Fechar gaps funcionais entre a stdlib de referência (módulos `std.io`, `std.te
 ## Testes
 
 - E2E por módulo novo: `compiler/crates/ori-driver/tests/multifile_imports.rs`
+- Rede v2: `compile_runs_net_tcp_listen_accept_loopback`, `compile_runs_net_udp_loopback`, `compile_runs_net_connect_tls_reports_error_on_refused_port`, `check_accepts_net_v2_flatten_selective_imports`
 - Smoke: `check_accepts_stdlib_gap_parity_imports`, `compile_runs_stdlib_layer2_remaining_utils`, `compile_runs_stdlib_layer3_algorithms_extensions`
 
 ## Mudança Arquitetural: Unificação de Namespaces (Opção C)
@@ -161,4 +166,5 @@ na seção "Namespace flattening (Opção C)".
 - `docs/spec/12-stdlib.md` — contratos públicos
 - `docs/spec/15-stdlib-maintenance.md` — workflow Layer 2/3
 - `stdlib/README.md` — inventário de módulos `.orl`
+- [`net-v2-design.md`](net-v2-design.md) — TLS, servidor TCP, UDP, blocking vs async
 - [`PENDENTES.md`](PENDENTES.md) — backlog v2 DX + uniformização APIs

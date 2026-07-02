@@ -14,10 +14,10 @@ end
 
 public func replicate(s: string, n: int) -> string
     var acc: string = ""
-    var i: int = 0
-    while i < n
+    var rep_idx: int = 0
+    while rep_idx < n
         acc = str.concat(acc, s)
-        i = i + 1
+        rep_idx = rep_idx + 1
     end
     return acc
 end
@@ -34,14 +34,14 @@ public func equals_ignore_case(a: string, b: string) -> bool
 end
 
 public func center(s: string, width: int) -> string
-    const s_len: int = str.len(s)
-    if s_len >= width
+    const center_len: int = str.len(s)
+    if center_len >= width
         return s
     end
-    const total: int = width - s_len
+    const total: int = width - center_len
     const left: int = total / 2
     const right: int = total - left
-    const padded: string = str.pad_left(s, left + s_len, " ")
+    const padded: string = str.pad_left(s, left + center_len, " ")
     return str.pad_right(padded, right + str.len(padded), " ")
 end
 
@@ -51,32 +51,32 @@ public func count(s: string, sub: string) -> int
         return 0
     end
     var n: int = 0
-    var pos: int = 0
+    var count_pos: int = 0
     loop
-        const remaining: int = str.len(s) - pos
-        if remaining < sub_len
+        const count_remaining: int = str.len(s) - count_pos
+        if count_remaining < sub_len
             break
         end
-        const window: string = str.slice(s, pos, pos + sub_len)
-        if window == sub
+        const count_window: string = str.slice(s, count_pos, count_pos + sub_len)
+        if count_window == sub
             n = n + 1
-            pos = pos + sub_len
+            count_pos = count_pos + sub_len
         else
-            pos = pos + 1
+            count_pos = count_pos + 1
         end
     end
     return n
 end
 
 public func reverse(s: string) -> string
-    const s_len: int = str.len(s)
-    var out: string = ""
-    var i: int = s_len - 1
-    while i >= 0
-        out = str.concat(out, str.slice(s, i, i + 1))
-        i = i - 1
+    const rev_len: int = str.len(s)
+    var rev_out: string = ""
+    var rev_idx: int = rev_len - 1
+    while rev_idx >= 0
+        rev_out = str.concat(rev_out, str.slice(s, rev_idx, rev_idx + 1))
+        rev_idx = rev_idx - 1
     end
-    return out
+    return rev_out
 end
 
 public func capitalize(s: string) -> string
@@ -89,15 +89,15 @@ public func capitalize(s: string) -> string
 end
 
 public func title(s: string) -> string
-    const parts: list<string> = str.split(s, " ")
+    const title_parts: list<string> = str.split(s, " ")
     var titled: list<string> = []
-    var i: int = 0
-    const parts_len: int = lists.len(parts)
-    while i < parts_len
-        if some(part) = lists.try_get(parts, i)
+    var title_idx: int = 0
+    const title_parts_len: int = lists.len(title_parts)
+    while title_idx < title_parts_len
+        if some(part) = lists.try_get(title_parts, title_idx)
             lists.push(titled, capitalize(part))
         end
-        i = i + 1
+        title_idx = title_idx + 1
     end
     return str.join(titled, " ")
 end
@@ -128,15 +128,15 @@ func swap_char(ch: string) -> string
 end
 
 public func swap_case(s: string) -> string
-    const s_len: int = str.len(s)
-    var out: list<string> = []
-    var i: int = 0
-    while i < s_len
-        const ch: string = str.slice(s, i, i + 1)
-        lists.push(out, swap_char(ch))
-        i = i + 1
+    const swap_len: int = str.len(s)
+    var swap_chars: list<string> = []
+    var swap_idx: int = 0
+    while swap_idx < swap_len
+        const swap_ch: string = str.slice(s, swap_idx, swap_idx + 1)
+        lists.push(swap_chars, swap_char(swap_ch))
+        swap_idx = swap_idx + 1
     end
-    return str.join(out, "")
+    return str.join(swap_chars, "")
 end
 
 public func lines(s: string) -> list<string>
@@ -148,27 +148,27 @@ public func left(s: string, n: int) -> string
 end
 
 public func right(s: string, n: int) -> string
-    const s_len: int = str.len(s)
-    if n >= s_len
+    const right_len: int = str.len(s)
+    if n >= right_len
         return s
     end
-    return str.slice(s, s_len - n, s_len)
+    return str.slice(s, right_len - n, right_len)
 end
 
 public func words(s: string) -> list<string>
-    const parts: list<string> = str.split(str.trim(s), " ")
-    var out: list<string> = []
-    var i: int = 0
-    const parts_len: int = lists.len(parts)
-    while i < parts_len
-        if some(part) = lists.try_get(parts, i)
+    const word_parts: list<string> = str.split(str.trim(s), " ")
+    var word_list: list<string> = []
+    var word_idx: int = 0
+    const word_parts_len: int = lists.len(word_parts)
+    while word_idx < word_parts_len
+        if some(part) = lists.try_get(word_parts, word_idx)
             if not is_empty(part)
-                lists.push(out, part)
+                lists.push(word_list, part)
             end
         end
-        i = i + 1
+        word_idx = word_idx + 1
     end
-    return out
+    return word_list
 end
 
 public func trim_all(s: string) -> string
@@ -176,18 +176,18 @@ public func trim_all(s: string) -> string
 end
 
 public func last_index_of(s: string, needle: string) -> int
-    const needle_len: int = str.len(needle)
-    if needle_len == 0
+    const last_needle_len: int = str.len(needle)
+    if last_needle_len == 0
         return -1
     end
-    const s_len: int = str.len(s)
-    var pos: int = s_len - needle_len
-    while pos >= 0
-        const window: string = str.slice(s, pos, pos + needle_len)
-        if window == needle
-            return pos
+    const last_s_len: int = str.len(s)
+    var last_pos: int = last_s_len - last_needle_len
+    while last_pos >= 0
+        const last_window: string = str.slice(s, last_pos, last_pos + last_needle_len)
+        if last_window == needle
+            return last_pos
         end
-        pos = pos - 1
+        last_pos = last_pos - 1
     end
     return -1
 end
@@ -197,25 +197,25 @@ public func is_digits(s: string) -> bool
         return false
     end
     const digits: string = "0123456789"
-    var i: int = 0
-    while i < str.len(s)
-        const ch: string = str.slice(s, i, i + 1)
-        if not str.contains(digits, ch)
+    var digit_idx: int = 0
+    while digit_idx < str.len(s)
+        const digit_ch: string = str.slice(s, digit_idx, digit_idx + 1)
+        if not str.contains(digits, digit_ch)
             return false
         end
-        i = i + 1
+        digit_idx = digit_idx + 1
     end
     return true
 end
 
 public func has_whitespace(s: string) -> bool
-    var i: int = 0
-    while i < str.len(s)
-        const ch: string = str.slice(s, i, i + 1)
-        if ch == " " or ch == "\t" or ch == "\n" or ch == "\r"
+    var ws_idx: int = 0
+    while ws_idx < str.len(s)
+        const ws_ch: string = str.slice(s, ws_idx, ws_idx + 1)
+        if ws_ch == " " or ws_ch == "\t" or ws_ch == "\n" or ws_ch == "\r"
             return true
         end
-        i = i + 1
+        ws_idx = ws_idx + 1
     end
     return false
 end
@@ -228,28 +228,28 @@ public func limit(s: string, max_len: int) -> string
 end
 
 public func replace_all(s: string, needle: string, replacement: string) -> string
-    const needle_len: int = str.len(needle)
-    if needle_len == 0
+    const repl_needle_len: int = str.len(needle)
+    if repl_needle_len == 0
         return s
     end
-    var out: string = ""
-    var pos: int = 0
+    var repl_out: string = ""
+    var repl_pos: int = 0
     loop
-        const remaining: int = str.len(s) - pos
-        if remaining < needle_len
-            out = str.concat(out, str.slice(s, pos, str.len(s)))
+        const repl_remaining: int = str.len(s) - repl_pos
+        if repl_remaining < repl_needle_len
+            repl_out = str.concat(repl_out, str.slice(s, repl_pos, str.len(s)))
             break
         end
-        const window: string = str.slice(s, pos, pos + needle_len)
-        if window == needle
-            out = str.concat(out, replacement)
-            pos = pos + needle_len
+        const repl_window: string = str.slice(s, repl_pos, repl_pos + repl_needle_len)
+        if repl_window == needle
+            repl_out = str.concat(repl_out, replacement)
+            repl_pos = repl_pos + repl_needle_len
         else
-            out = str.concat(out, str.slice(s, pos, pos + 1))
-            pos = pos + 1
+            repl_out = str.concat(repl_out, str.slice(s, repl_pos, repl_pos + 1))
+            repl_pos = repl_pos + 1
         end
     end
-    return out
+    return repl_out
 end
 
 public func has_prefix(s: string, prefix: string) -> bool

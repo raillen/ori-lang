@@ -1,0 +1,43 @@
+namespace ori.net
+
+import ori.net as net
+
+public func connect_tls(host: string, port: int, timeout_ms: int) -> result<net.Connection, string>
+    return net.connect_tls(host, port, timeout_ms)
+end
+
+public func listen(host: string, port: int) -> result<net.Listener, string>
+    return net.listen(host, port)
+end
+
+public func accept(listener: net.Listener) -> result<net.Connection, string>
+    return net.accept(listener)
+end
+
+public func close_listener(listener: net.Listener)
+    net.close_listener(listener)
+end
+
+public func listener_port(listener: net.Listener) -> int
+    return net.listener_port(listener)
+end
+
+public func udp_bind(host: string, port: int) -> result<net.UdpSocket, string>
+    return net.udp_bind(host, port)
+end
+
+public func udp_send_to(sock: net.UdpSocket, host: string, port: int, data: bytes) -> result<int, string>
+    return net.udp_send_to(sock, host, port, data)
+end
+
+public func udp_recv_from(sock: net.UdpSocket, max_bytes: int) -> result<bytes, string>
+    return net.udp_recv_from(sock, max_bytes)
+end
+
+public func udp_close(sock: net.UdpSocket)
+    net.udp_close(sock)
+end
+
+public func udp_local_port(sock: net.UdpSocket) -> int
+    return net.udp_local_port(sock)
+end

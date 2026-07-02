@@ -9596,6 +9596,34 @@ end
 }
 
 #[test]
+#[ignore = "pending: multiple sequential path.relative calls produce non-deterministic wrong output (c/a, c/b instead of c/d) — likely memory corruption in list/string management across .orl function calls. Single-call path.relative works correctly (see compile_runs_stdlib_source_module_path)."]
+fn compile_runs_stdlib_source_module_path_edge_cases() {
+    let dir = TestDir::new("stdlib_source_path_edge");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.path as path
+
+func main()
+    io.print(path.relative("a/b", "a/b/c"))
+    io.print(path.relative("a/b", "a/b"))
+    io.print(path.relative("x", "y"))
+    io.print(path.relative("a/b/c/d", "a/b"))
+    io.print(path.relative("a/b", "a/d/e"))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_source_path_edge");
+    assert_eq!(
+        stdout,
+        "..\n.\n../x\nc/d\n../../b\n"
+    );
+}
+
+#[test]
 fn compile_runs_stdlib_source_module_json_utils() {
     let dir = TestDir::new("stdlib_source_json_utils");
     let json_path = ori_path_literal(&dir.path("data.json"));
@@ -10243,4 +10271,275 @@ end
 
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn check_accepts_flattened_stdlib_parent_selective_imports() {
+    let dir = TestDir::new("flattened_stdlib_parent_selective");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.map as maps
+import ori.map only (get_or, merge_string_int)
+import ori.bytes as bytes_mod
+import ori.bytes only (compare_lex, is_empty)
+
+func main()
+    const m: map<string, int> = maps.new()
+    maps.set(m, "k", 1)
+    const overlay: map<string, int> = maps.new()
+    maps.set(overlay, "k", 2)
+    const merged: map<string, int> = merge_string_int(m, overlay)
+    const value: int = get_or(merged, "k", 0)
+    const left: bytes = bytes_mod.from_list([1, 2])
+    const right: bytes = bytes_mod.from_list([1, 3])
+    const cmp: int = compare_lex(left, right)
+    const empty: bool = is_empty(bytes_mod.from_list([]))
+    const _unused: int = value + cmp
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn compile_runs_stdlib_io_streams_native() {
+    let dir = TestDir::new("compile_stdlib_io_streams_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.string as str
+import ori.io only (write_bytes, flush, close_output)
+
+func main()
+    const out: ori.io.Output = io.stdout()
+    const payload: bytes = str.to_bytes("stream\n")
+    match write_bytes(out, payload)
+        case success(_):
+            match flush(out)
+                case success(_):
+                    close_output(out)
+                case error(_):
+            end
+        case error(_):
+    end
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "stdlib_io_streams");
+    let out = match run_compile(&dir.path("main.orl"), Path::new(&exe)) {
+        Ok(o) => o,
+        Err(e) => panic!("compile error: {e}"),
+    };
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout, "stream\n");
+}
+
+#[test]
+fn compile_runs_net_tcp_listen_accept_loopback() {
+    let dir = TestDir::new("net_tcp_listen_accept");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.net as net
+import ori.string as str
+import ori.task as task
+
+func serve_once(listener: net.Listener)
+    match net.accept(listener)
+        case success(server_conn):
+            match net.read_some(server_conn, 64)
+                case success(_):
+                    match net.write_all(server_conn, str.to_bytes("pong"))
+                        case success(_):
+                            net.close(server_conn)
+                        case error(_):
+                    end
+                case error(_):
+            end
+        case error(_):
+    end
+    net.close_listener(listener)
+end
+
+func main()
+    match net.listen("127.0.0.1", 0)
+        case success(listener):
+            const port: int = net.listener_port(listener)
+            const server_job: task.Job<void> = task.run_blocking(do() -> void
+                serve_once(listener)
+            end)
+            match net.connect("127.0.0.1", port, 5000)
+                case success(client):
+                    match net.write_all(client, str.to_bytes("ping"))
+                        case success(_):
+                            match net.read_some(client, 64)
+                                case success(data):
+                                    match str.from_bytes(data)
+                                        case success(text):
+                                            io.print(text)
+                                        case error(_):
+                                            io.print("decode_err")
+                                    end
+                                case error(_):
+                                    io.print("read_err")
+                            end
+                        case error(_):
+                            io.print("write_err")
+                    end
+                    net.close(client)
+                case error(_):
+                    io.print("connect_err")
+            end
+            match task.join(server_job)
+                case success(_):
+                case error(_):
+            end
+        case error(_):
+            io.print("listen_err")
+    end
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "net_tcp_loopback");
+    assert_eq!(stdout.trim(), "pong");
+}
+
+#[test]
+fn compile_runs_net_udp_loopback() {
+    let dir = TestDir::new("net_udp_loopback");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.net as net
+import ori.string as str
+
+func main()
+    match net.udp_bind("127.0.0.1", 0)
+        case success(sock):
+            const port: int = net.udp_local_port(sock)
+            match net.udp_send_to(sock, "127.0.0.1", port, str.to_bytes("udp"))
+                case success(_):
+                    match net.udp_recv_from(sock, 64)
+                        case success(data):
+                            match str.from_bytes(data)
+                                case success(text):
+                                    io.print(text)
+                                case error(_):
+                                    io.print("decode_err")
+                            end
+                        case error(_):
+                            io.print("recv_err")
+                    end
+                case error(_):
+                    io.print("send_err")
+            end
+            net.udp_close(sock)
+        case error(_):
+            io.print("bind_err")
+    end
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "net_udp_loopback");
+    assert_eq!(stdout.trim(), "udp");
+}
+
+#[test]
+fn compile_runs_net_connect_tls_reports_error_on_refused_port() {
+    let dir = TestDir::new("net_tls_refused");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.net as net
+
+func main()
+    match net.connect_tls("127.0.0.1", 59999, 500)
+        case success(_):
+            io.print("unexpected_success")
+        case error(_):
+            io.print("tls_err")
+    end
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "net_tls_refused");
+    assert_eq!(stdout.trim(), "tls_err");
+}
+
+#[test]
+fn check_accepts_net_v2_flatten_selective_imports() {
+    let dir = TestDir::new("net_v2_flatten_imports");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.net only (connect_tls, listen, udp_bind, listener_port)
+
+func main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn compile_runs_stdlib_io_utils_native() {
+    let dir = TestDir::new("compile_stdlib_io_utils_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.io as io
+import ori.io.utils as iu
+import ori.string as str
+
+func main()
+    const out: ori.io.Output = io.stdout()
+    const payload: bytes = str.to_bytes("utils ok\n")
+    match iu.write_bytes(out, payload)
+        case success(_):
+            match iu.flush(out)
+                case success(_):
+                    iu.close_output(out)
+                case error(_):
+            end
+        case error(_):
+    end
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "stdlib_io_utils");
+    let out = match run_compile(&dir.path("main.orl"), Path::new(&exe)) {
+        Ok(o) => o,
+        Err(e) => panic!("compile error: {e}"),
+    };
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout, "utils ok\n");
 }

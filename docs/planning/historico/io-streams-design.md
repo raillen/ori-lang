@@ -1,6 +1,6 @@
 # I/O streams design
 
-> Status: desenho antes de implementacao
+> Status: implementado (MVP Layer 1, 2026-07-01)
 > Data: 2026-07-01
 
 Ori ja possui I/O basico por funcoes como `io.print`, `io.read_line` e APIs de
@@ -46,11 +46,11 @@ io.flush(output: io.Output) -> result<void, string>
 
 ## Fora do recorte inicial
 
-- TLS;
-- sockets async;
+- sockets async (rede e streams);
 - backpressure avancado;
 - pipelines lazy;
-- adapters complexos.
+- adapters complexos de arquivo.
 
-Esses itens so devem entrar depois que `Input`/`Output` tiverem testes de
-arquivo, stdin/stdout e cleanup com `using`.
+TLS/UDP/servidor TCP vivem em `ori.net` (`docs/planning/net-v2-design.md`), não
+em `io.Input`/`Output`. Esses itens de streams só devem entrar depois que
+`Input`/`Output` tiverem testes de arquivo, stdin/stdout e cleanup com `using`.

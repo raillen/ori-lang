@@ -341,6 +341,22 @@ impl<'a> Checker<'a> {
         // Build the canonical alias map first — this is the map used for
         // resolution throughout the rest of type-checking.
         self.aliases = import_aliases(file, self.reexports);
+        for import in &file.imports {
+            if import.selected.is_empty() {
+                continue;
+            }
+            let import_path = import.path.to_string();
+            for item in &import.selected {
+                let alias = selected_import_alias(item);
+                if let Some(canonical) = crate::stdlib::resolve_flattened_stdlib_member(
+                    import_path.as_str(),
+                    &item.name.text,
+                    |path| self.def_map.lookup(path).is_some(),
+                ) {
+                    self.aliases.insert(alias, canonical);
+                }
+            }
+        }
         // Collect local top-level definition names for conflict detection
         let local_names: Vec<SmolStr> = file
             .items
@@ -525,15 +541,29 @@ impl<'a> Checker<'a> {
     }
 
     fn check_selected_import_members(&mut self, import: &ImportDecl) {
+        let import_path = import.path.to_string();
         for item in &import.selected {
             let target = selected_import_target(import, item);
-            if let Some(def_id) = self.def_map.lookup(&target) {
+            let resolved = crate::stdlib::resolve_flattened_stdlib_member(
+                import_path.as_str(),
+                &item.name.text,
+                |path| {
+                    self.def_map.lookup(path).is_some()
+                        || stdlib_func_sig(path).is_some()
+                        || stdlib_const_ty(path).is_some()
+                        || stdlib_named_ty_exists(path)
+                },
+            )
+            .map(|path| path.to_string())
+            .unwrap_or_else(|| target.to_string());
+
+            if let Some(def_id) = self.def_map.lookup(resolved.as_str()) {
                 self.check_visibility(def_id, item.name.span);
                 continue;
             }
-            if stdlib_func_sig(&target).is_some()
-                || stdlib_const_ty(&target).is_some()
-                || stdlib_named_ty_exists(&target)
+            if stdlib_func_sig(resolved.as_str()).is_some()
+                || stdlib_const_ty(resolved.as_str()).is_some()
+                || stdlib_named_ty_exists(resolved.as_str())
             {
                 continue;
             }
@@ -6102,6 +6132,11 @@ fn stdlib_named_ty_exists(path: &str) -> bool {
             | "ori.hash_table.HashTable"
             | "ori.graph.Graph"
             | "ori.heap.Heap"
+            | "ori.net.Connection"
+            | "ori.net.Listener"
+            | "ori.net.UdpSocket"
+            | "ori.io.Input"
+            | "ori.io.Output"
     )
 }
 

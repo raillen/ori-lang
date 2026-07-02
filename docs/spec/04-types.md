@@ -11,6 +11,11 @@ Ori is statically typed. Every binding, parameter, and return position has a
 type known at compile time. Type annotations are always explicit; there is no
 global type inference for binding declarations.
 
+**Design decision (2026-07-01):** global/Hindley-Milner inference for `const`/`var`
+bindings is intentionally out of scope. Local inference remains limited to generic
+call sites, literal contexts, and other checker-local unification. Do not treat
+this as a temporary gap waiting for a future language version.
+
 ---
 
 ## Primitive Types

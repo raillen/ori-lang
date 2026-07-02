@@ -16,7 +16,7 @@
 | 0 | Estabilização do workspace | ✅ Concluída (2026-06-19) |
 | 1 | Features bloqueadoras e consistência | ✅ Concluída ([`PENDENTES.md`](PENDENTES.md)) |
 | 2 | Sistema de tipos avançado | ✅ Concluída ([`PENDENTES.md`](PENDENTES.md)) |
-| 3 | Sincronização documental normativa | 🟡 Em andamento (~80%) |
+| 3 | Sincronização documental normativa | ✅ Concluída (2026-06-28) |
 | 4 | Dívida técnica do compilador | ✅ Concluída — matriz async if/else/match/while/for completa, tabela C×stdlib em cap. 14, refatoração avaliada (no-op: sem duplicação) |
 | 5 | Runtime, memória e ARC | ✅ Concluída — over-retain corrigido (12 testes zero-leak), disparo cooperativo de `collect_cycles` no executor async, ciclo `linked_list`/`graph` validado |
 | 6 | LSP semântico e ferramental | ✅ Concluída — `ProjectSemanticIndex` cross-file (hover/definition/references/completion type-aware via `run_check`), diagnósticos `project.*` (`circular_import`, `namespace_file_mismatch`, `entry_not_found`, `no_proj_file`), 4 testes E2E novos |
@@ -601,31 +601,32 @@ Checklist detalhado com gates de teste: [`PENDENTES.md`](PENDENTES.md) § **Back
 
 ### DX e toolchain pedagógica (alta — espelhar referência `zt *`)
 
-- [ ] `ori explain <code>` — catálogo cap. 13 interativo
-- [ ] `ori doctor` — validação de ambiente (runtime, linker, stdlib root, triple)
-- [ ] Guia pedagógico único **Errors, Null, Void** (linkado do README)
+- [x] `ori explain <code>` — catálogo cap. 13 interativo
+- [x] `ori doctor` — validação de ambiente (runtime, linker, stdlib root, triple)
+- [x] Guia pedagógico único **Errors, Null, Void** (linkado do README)
 
 ### Uniformização stdlib Layer 1 (alta)
 
-- [ ] `ori.io.read_line` → `optional<string>` (EOF = `none`)
-- [ ] FS Layer 1: migrar retornos `bool` → `result<…>` (wrappers Layer 2 de transição)
-- [ ] Sincronizar cap. 12 + `stdlib_func_sig` pós-migração
+- [x] `ori.io.read_line` → `optional<string>` (EOF = `none`)
+- [x] FS Layer 1: migrar retornos `bool` → `result<…>` (wrappers Layer 2 de transição)
+- [x] Sincronizar cap. 12 + `stdlib_func_sig` pós-migração
 
 > Detalhes: [`stdlib-gap-parity.md`](stdlib-gap-parity.md).
 
 ### Ergonomia (média)
 
-- [ ] `ori repl` — REPL interativo
-- [ ] `if then else` como expressão
-- [ ] `ori summary` — visão de projeto (entry, namespaces, imports)
-- [ ] Unificação de namespaces stdlib (Opção C) — fundir utils e algorithms em `ori.*` (ex: `ori.string`)
+- [x] `ori repl` — REPL interativo
+- [x] `if then else` como expressão
+- [x] `ori summary` — visão de projeto (entry, namespaces, imports)
+- [x] Unificação de namespaces stdlib (Opção C) — fundir utils e algorithms em `ori.*` (ex: `ori.string`)
 
 
 ### I/O e rede avançados (baixa)
 
-- [ ] `time.Instant` / `Duration` tipados (`ori.time` v2)
-- [ ] Streams `io.Input` / `io.Output` (redesign; spike antes de codar)
-- [ ] Rede TLS / UDP / async (fora do escopo v1 TCP síncrono)
+- [x] `time.Instant` / `Duration` tipados (`ori.time`)
+- [x] Streams `io.Input` / `io.Output` (MVP Layer 1 + `stdlib/io.orl`)
+- [x] Rede TLS / UDP / servidor TCP síncronos (`ori.net` v2; ver `docs/planning/net-v2-design.md`)
+- [ ] Rede async nativa (`net.*_async` no executor) — backlog longo prazo
 
 **Explicitamente fora de escopo v2:** alias ou rename `string` → `text`.
 

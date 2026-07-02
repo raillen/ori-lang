@@ -1,105 +1,39 @@
-# Ori Language Documentation
+# Planejamento e Backlog — Ori Language
 
-This directory contains all documentation for the Ori programming language.
+Este diretório contém o planejamento de maturidade, histórico de design e o backlog ativo para o desenvolvimento da linguagem Ori.
 
-## Structure
-
-```
-docs/
-```
-
-Changelog na **raiz** do repositório: `CHANGELOG.md`
+## Estrutura do Diretório
 
 ```
-docs/
-├── plano-correcao-bugs-2026-05-17.md         # Plano de correção de bugs atuais
-├── plano-implementacao-lsp-avancado.md       # Plano de implementação do LSP
-├── spec/                                     # Especificação formal (normativa)
-│   ├── README.md
-│   ├── 01-overview.md                        # Visão geral e filosofia
-│   ├── 02-lexical.md                         # Estrutura léxica
-│   ├── 03-grammar.ebnf                       # Gramática EBNF
-│   ├── 04-types.md                           # Sistema de tipos
-│   ├── 05-expressions.md                     # Expressões
-│   ├── 06-statements.md                      # Statements e control flow
-│   ├── 07-functions.md                       # Funções e closures
-│   ├── 08-traits.md                          # Traits e implement
-│   ├── 09-errors.md                          # Erros e propagação
-│   ├── 10-memory.md                          # Memória e cleanup
-│   ├── 11-generics.md                        # Genéricos e constraints
-│   ├── 12-stdlib.md                          # Standard library contracts
-│   ├── 13-error-catalog.md                   # Catálogo de diagnósticos
-│   ├── 14-backend-support.md                 # Suporte de backends
-│   ├── 15-stdlib-maintenance.md              # Manutenção da stdlib
-│   └── 16-runtime-ffi-safety.md              # Segurança FFI do runtime
-├── planning/                                 # Planos de implementação
-│   ├── README.md                             # Este índice
-│   ├── uso-real-pequeno-medio.md             # Plano ativo para uso real pequeno/médio
-│   ├── PLANO-MATURIDADE-COMPLETO.md          # Plano histórico do ciclo 0.2.0
-│   ├── IMPLEMENTADOS.md                      # Recursos implementados e resolvidos
-│   └── PENDENTES.md                          # Backlog resumido e histórico operacional
+docs/planning/
+├── README.md                           # Este índice explicativo
+├── uso-real-pequeno-medio.md           # [Ativo] Plano de maturidade para uso real em projetos pequenos e médios
+├── PENDENTES.md                        # [Ativo] Backlog condensado e histórico de pendências operacionais
+├── language-direction-decisions-2026-06-30.md # [Decisão] Decisões arquiteturais de direção da linguagem (ADR)
+├── IMPLEMENTADOS.md                    # [Histórico] Registro cronológico de recursos já implementados
+└── historico/                          # [Histórico] Planos de design e propostas concluídas/arquivadas
+    ├── PLANO-MATURIDADE-COMPLETO.md    # Plano mestre de maturidade do ciclo v0.2.0 (100% concluído)
+    ├── c-backend-redefinition.md       # Proposta de redefinição do backend C e `ori build`
+    ├── io-streams-design.md            # Design original do sistema de I/O streams
+    ├── net-v2-design.md                # Design e especificações do TCP/UDP síncrono v2
+    ├── registry-v2.md                  # Proposta e modelo mental para o gerenciador de pacotes local
+    ├── rust-independence.md            # Estratégia de independência de Rust (Phases 1-3)
+    ├── security-performance-testing.md  # Estratégia de testes de segurança, performance e orçamentos
+    └── stdlib-gap-parity.md            # Auditoria de paridade da biblioteca padrão
 ```
 
-Histórico de auditorias (raiz do repositório, **não** sob `docs/`):
+## Guia de Uso dos Documentos
 
-```
-_reversa_sdd/                                 # Arquivo histórico de auditorias
-    ├── auditoria-profunda-implementacao-2026-05-17.md  # Auditoria mais recente
-    ├── auditoria-profunda-implementacao-linguagem-2026-05-13.md
-    ├── analise-profunda-implementacao-linguagem.md
-    ├── plano-correcao-implementacao-linguagem.md
-    ├── relatorio-fechamento-correcao-implementacao-linguagem.md
-    └── relatorio-fechamento-nova-rodada.md
-```
+### 1. Documentos Ativos (Backlog Ativo)
+*   **[uso-real-pequeno-medio.md](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/planning/uso-real-pequeno-medio.md):** É o mapa de progresso atual. Deve ser consultado para entender as metas para a versão 1.0 (independência de compilador, robustez e paridade).
+*   **[PENDENTES.md](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/planning/PENDENTES.md):** É a lista consolidada de tarefas a fazer. Serve como checklist técnico diário.
 
-## Spec Status
+### 2. Decisões Arquiteturais (ADRs)
+*   **[language-direction-decisions-2026-06-30.md](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/planning/language-direction-decisions-2026-06-30.md):** Documenta as decisões e princípios fundamentais do design da linguagem (tratamento de erros com `try`, ARC vs cycle collector, monomorfização de genéricos, concorrência cooperativa).
 
-The `spec/` directory is the **source of truth** for the Ori language.
-All compiler implementation decisions must be consistent with these documents.
-Status: 18 chapters, covering the current language, stdlib, backend,
-project/docs, and stability contracts.
+### 3. Arquivo Histórico
+*   **[IMPLEMENTADOS.md](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/planning/IMPLEMENTADOS.md):** Contém os marcos de engenharia já completados para referência e auditorias de código.
+*   **[historico/](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/planning/historico):** Subdiretório contendo propostas antigas e planos de recursos cujas implementações foram concluídas com sucesso. Não devem ser alterados ou usados como backlog ativo.
 
-## Planning Status
-
-The `planning/` directory tracks implementation progress and technical decisions:
-- `uso-real-pequeno-medio.md` — active plan for making Ori usable in small and medium real projects.
-- `PLANO-MATURIDADE-COMPLETO.md` — historical master plan for the `0.2.0` maturity cycle, with mandatory checkboxes, tests, and gate criteria per stage.
-- `IMPLEMENTADOS.md` — tracks what has been built, tested, and resolved (Cranelift compiler, stdlib, collections v1, concurrency and basic async).
-- `PENDENTES.md` — condensed backlog and operational history; keep it in sync with the active plan.
-- `language-direction-decisions-2026-06-30.md` — accepted direction for `try`, ARC, concurrency, FFI, packages, references, and monomorphization.
-- `c-backend-redefinition.md` — plan to redefine `ori build` and reduce or isolate the C debug backend.
-
-The `_reversa_sdd/` directory contains historical audit reports. The most recent
-is `auditoria-profunda-implementacao-2026-05-17.md`.
-
-## Quality Gates
-
-- `../guides/testing-manual.md` - complete manual for running all project test suites.
-- `../guides/first-project-and-packages.md` - first project, local path dependency, package cache, and `0.2.x` upgrade guide.
-- `../guides/cookbook-pequeno-medio.md` - short recipes for CLI, config, files, time, local packages, and docs.
-- `../guides/reportar-bugs.md` - bug report policy for language, stdlib, runtime, tooling, and VS Code.
-- `../guides/language-comparison.md` - methodology and current results for comparing Ori with Rust, C, Python, and Node.js on equivalent workloads.
-- `../../tools/quality_metrics.orl` - Ori script that runs the security/performance metric suite and writes CSV/TXT reports.
-- `../../tools/compare_language_workloads.ps1` - PowerShell runner that writes CSV/TXT comparison reports for equivalent language workloads.
-
-- `security-performance-testing.md` — current security and performance test strategy, commands, and strict performance budgets.
-
-## Active Plans
-
-| Document | Purpose | Status |
-|---|---|---|
-| `docs/planning/uso-real-pequeno-medio.md` | Active plan for 100% small/medium project usability | **Active** |
-| `docs/planning/PENDENTES.md` | Condensed backlog and operational history | Active summary |
-| `docs/planning/PLANO-MATURIDADE-COMPLETO.md` | Historical master plan for the `0.2.0` maturity cycle | Historical / reference |
-| `docs/planning/language-direction-decisions-2026-06-30.md` | Language direction decisions | Active decision record |
-| `docs/planning/c-backend-redefinition.md` | C backend and `ori build` redefinition | Proposed change |
-| `docs/plano-implementacao-lsp-avancado.md` | LSP advanced features | **Historical** — see Etapa 6 of master plan |
-
-## Key Documents for Contributors
-
-1. **Spec:** `docs/spec/01-overview.md` — start here for language design
-2. **Architecture:** `docs/spec/14-backend-support.md` — backend architecture
-3. **Implementation:** `docs/planning/IMPLEMENTADOS.md` — what's built
-4. **Active plan:** `docs/planning/uso-real-pequeno-medio.md` — next implementation sequence
-5. **Bugs & Backlog:** `docs/planning/PENDENTES.md` — condensed pending checklist
-6. **Changelog:** `CHANGELOG.md` (repo root) — project history
+---
+Para documentação normativa sobre a gramática, tipos e biblioteca padrão da linguagem Ori, consulte a [Especificação Formal](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/spec/README.md).

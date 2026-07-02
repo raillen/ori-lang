@@ -136,6 +136,7 @@ mostrem ganho claro de legibilidade. Se a forma não existir hoje, remover da sp
 - [x] `json`: parse, stringify, leitura/escrita de arquivo JSON.
 - [x] `env`: variáveis de ambiente.
 - [x] `process`: execução de comando e captura de saída.
+- [x] `net`: TCP cliente, TLS (`connect_tls`), servidor (`listen`/`accept`), UDP síncrono; I/O blocking com `task.run_blocking` em código async.
 - [x] `time`: `Instant`, `Duration`, conversões e medição.
 - [x] `random`: geração determinística e não determinística.
 - [x] `string`, `bytes`, `list`, `map`, `set`: helpers estáveis e documentados.
@@ -153,20 +154,22 @@ mostrem ganho claro de legibilidade. Se a forma não existir hoje, remover da sp
   - validador de JSON;
   - analisador de logs;
   - CLI de tarefas;
-  - runner simples de processos.
+  - runner simples de processos;
+  - `examples/http_get.orl` (GET HTTPS mínimo).
 - [x] Garantir que exemplos usem apenas stdlib empacotada.
 - [x] Marcar APIs experimentais quando ainda não forem contrato estável.
 
 ### Fora do alvo imediato
 
-- TLS;
-- UDP;
-- rede async completa;
+- rede async nativa (`net.*_async` integrado ao executor);
+- TLS avançado (certificados customizados, pinning);
+- UDP avançado (multicast);
 - drivers de banco de dados;
 - framework web.
 
-Esses itens podem existir no backlog, mas não devem bloquear o 100% de projetos
-pequenos/médios.
+TLS cliente, UDP datagramas e servidor TCP **síncronos** já estão no kit mínimo
+(`ori.net`, `docs/planning/net-v2-design.md`). Os itens acima permanecem backlog
+e não bloqueiam o 100% de projetos pequenos/médios.
 
 ### Gate
 
@@ -268,7 +271,7 @@ pequenos/médios.
 | Forma curta de construção de structs | Permitir só com contexto de tipo inequívoco. | Mantém leitura explícita e evita inferência mágica. |
 | `ori build` | Tornar nativo/Cranelift o caminho principal; mover C para `ori emit c` ou equivalente. | O backend C não deve parecer backend de produção se for debug/parcial. |
 | Registry | Fazer path deps e cache local antes de registry hospedado. | Usuário real ganha valor antes de infraestrutura pública. |
-| Rede avançada | Não bloquear o 100% pequeno/médio. | CLI, arquivos, JSON e processos cobrem mais casos iniciais. |
+| Rede avançada | TLS/UDP/servidor TCP síncronos entregues; async nativo e TLS avançado ficam no backlog. | CLI, arquivos, JSON e processos cobrem a maioria dos casos iniciais; HTTP(S) básico já é possível. |
 | Breaking changes | Só promover para `0.3.0` quando houver quebra real e documentada. | Mantém a política `0.2.x` honesta. |
 
 ## Sequência recomendada
@@ -309,6 +312,71 @@ pequenos/médios.
 - [x] cache local.
 - [x] installer/release package multiplataforma.
 - [x] docs de instalação e migração.
+
+## Decisões futuras sobre 1.0
+
+> Esta seção registra os critérios, decisões arquiteturais e timeline para a versão `1.0` da linguagem Ori.  
+> Ela é uma continuação natural deste plano: quando o "100% de usabilidade" for atingido, o foco shifta para maturidade de longo prazo.
+
+### Definição de "independência do Rust" para 1.0
+
+A independência total do Rust é entendida em **dois níveis distintos**:
+
+1. **Independência para usuários finais (pré-requisito para 1.0):**  
+   Um usuário que instala Ori via release package deve conseguir `check`, `run`, `test`, `compile`, `fmt`, `doc` e usar o LSP **sem ter `rustc`, `cargo` ou qualquer toolchain Rust instalada**. Isso já é parcialmente verdade (Phase 2 + 3 de Rust removal) e será fechado com `SystemLinker` como default + JIT como default para `ori run`.
+
+2. **Self-hosting do compilador (não é pré-requisito para 1.0):**  
+   O compilador pode continuar sendo escrito em Rust indefinidamente. Self-hosting é um *sinal* de maturidade, não um *critério* de utilidade. Python, Ruby, Lua, JavaScript — nenhuma foi self-hosted. Zig está em `0.14` após ~10 anos e ainda não é `1.0`. **Self-hosting será reconsiderada apenas quando houver usuários reais estáveis e recursos dedicados.**
+
+### Critérios de 1.0 (6 itens)
+
+| # | Critério | Status atual | O que falta | Estimativa |
+|---|----------|--------------|-------------|------------|
+| 1 | **Rust dependency removida para usuários finais** | Phase 1, 2, 3 completas; SystemLinker default implementado | Smoke em máquinas sem Rust instalado; CI job sem Rust; `docs/install.md` | Semanas |
+| 2 | **Stdlib portada em `.orl` (Layer 2+3 substantivas)** | Layer 2/3 entregues; Layer 1 permanece Rust por design | Mais módulos Layer 2 cold-path (`format.utils`, `iter.utils`); trait gate para genéricos em map/set/graph | Meses |
+| 3 | **Compiler self-hosting ou bootstrapping documentado** | Não iniciado | Adiado indefinidamente; bootstrapping documentado é alternativa aceitável | Anos (se self-hosting) / Semanas (se documentação) |
+| 4 | **ABI estável documentada** | Parcial (FFI C existe, não formalizada) | Documentar layout de structs, calling convention, name mangling, versão ABI | Meses |
+| 5 | **Usuários reais** | Zero conhecidos fora dos mantenedores | Primeiros projetos externos; feedback; casos de uso documentados | Imprevisível |
+| 6 | **Sem breaking changes por ≥6 meses** | Não atingido | Congelar sintaxe e semântica por 6 meses após estabilização do contrato central | 6+ meses após fechamento do contrato |
+
+### Decisões arquiteturais fechadas (irreversíveis até 1.0)
+
+1. **Self-hosting adiado.** Não será iniciado antes de haver usuários reais e demanda comprovada. O modelo de distribuição binária (compilador pré-compilado + runtime empacotada) é suficiente para 1.0.
+2. **Runtime Layer 1 permanece Rust.** ARC, async executor, FFI, I/O e rede são hot paths que beneficiam da memory safety do Rust. A ABI C é o contrato público; a implementação interna pode ser reescrita no futuro sem quebrar compatibilidade.
+3. **SystemLinker é o default para AOT.** A partir de 2026-07-02, `NativeLinker::discover()` prefere o linker do sistema ao `rust-lld`. Isso elimina a dependência de um binário da toolchain Rust para compilação AOT.
+4. **Modelo de 3 camadas da stdlib é permanente.** Layer 1 (Rust runtime, hot path), Layer 2 (safe wrappers `.orl`), Layer 3 (algoritmos puros `.orl`). A fronteira Layer 1/2/3 é o contrato de ABI.
+5. **Versionamento congelado em `0.2.x`.** `0.3.0` só quando houver breaking change real que usuários precisem saber. Patch versions (`0.2.1`, `0.2.2`) para correções e small additive features. `1.0` é critério de maturidade, não marketing.
+
+### Próximos passos táticos para 1.0
+
+#### Fase A — Validação de independência (próximas semanas)
+- [ ] Smoke em máquina Windows sem Rust instalado (apenas VS Build Tools)
+- [ ] Smoke em máquina Linux sem Rust instalado (apenas build-essential)
+- [ ] Smoke em máquina macOS sem Rust instalado (apenas Xcode CLT)
+- [ ] CI job que valida release package em runner sem Rust toolchain
+- [ ] Escrever `docs/install.md` com prereqs do sistema por OS
+
+#### Fase B — Estabilização de contrato (próximos meses)
+- [ ] Documentar ABI C completa (layout, calling convention, name mangling)
+- [ ] Congelar sintaxe central (decisão já tomada; precisa de 6 meses sem breaking changes)
+- [ ] Portar mais módulos Layer 2 cold-path para `.orl`
+- [ ] Implementar trait gate `Hashable`+`Equatable` para genéricos em map/set/graph
+
+#### Fase C — Adoção (imprevisível)
+- [ ] Primeiros usuários externos reportando issues
+- [ ] Projetos reais documentados em `examples/` ou repositórios externos
+- [ ] Decisão sobre self-hosting baseada em evidência de adoção
+
+### Timeline estimada
+
+| Marco | Condição | Estimativa |
+|-------|----------|------------|
+| Fase A completa | Smoke sem Rust em 3 OSes + CI job verde | 2026-07 |
+| Fase B completa | ABI documentada + 6 meses sem breaking changes | 2026-Q4 a 2027-Q1 |
+| Fase C iniciada | Primeiros usuários reais | Imprevisível |
+| **1.0** | Todos os 6 critérios atendidos | Anos, não dias |
+
+---
 
 ## Critério de fechamento deste plano
 

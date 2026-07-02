@@ -210,6 +210,14 @@ end
         if (($jitOutput -join "`n") -notmatch "The answer is: 42") {
             throw "ori run (JIT default) did not print the expected answer."
         }
+
+        $doctorOutput = & $packageOri doctor
+        if ($LASTEXITCODE -ne 0) {
+            throw "ori doctor failed with exit code $LASTEXITCODE."
+        }
+        if (($doctorOutput -join "`n") -notmatch "SystemLinker|BundledRustLld|RustcDriver") {
+            throw "ori doctor did not report the active linker strategy."
+        }
     } finally {
         Pop-Location
         if ($null -eq $previousRequirePackagedRuntime) {

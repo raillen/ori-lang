@@ -2036,33 +2036,50 @@ fn load_source_recursive(
     for (import, span, has_selected_items) in imports {
         match classify_stdlib_import(&import, has_selected_items) {
             StdlibImportStatus::Implemented => continue,
-            StdlibImportStatus::StdlibSource(source_path) => {
-                if active.contains(&source_path) {
-                    let cycle = import_cycle_description(active, loaded, &source_path, &import);
-                    sink.emit(
-                        Diagnostic::error(
-                            "project.circular_import",
-                            format!("import cycle detected: {}", cycle),
-                        )
-                        .with_label(Label::primary(file_id, span, "cyclic import here"))
-                        .with_action(
-                            "remove one import or move shared definitions into an acyclic module",
-                        ),
+            StdlibImportStatus::StdlibSources(sources) => {
+                for (source_path, expected_namespace) in sources {
+                    if active.contains(&source_path) {
+                        let cycle =
+                            import_cycle_description(active, loaded, &source_path, &import);
+                        sink.emit(
+                            Diagnostic::error(
+                                "project.circular_import",
+                                format!("import cycle detected: {}", cycle),
+                            )
+                            .with_label(Label::primary(file_id, span, "cyclic import here"))
+                            .with_action(
+                                "remove one import or move shared definitions into an acyclic module",
+                            ),
+                        );
+                        validate_import_namespace(
+                            loaded,
+                            &source_path,
+                            &expected_namespace,
+                            file_id,
+                            span,
+                            sink,
+                        );
+                        continue;
+                    }
+                    load_source_recursive(
+                        &source_path,
+                        cache,
+                        sink,
+                        seen,
+                        active,
+                        loaded,
+                        entry_source,
+                        context,
+                    )?;
+                    validate_import_namespace(
+                        loaded,
+                        &source_path,
+                        &expected_namespace,
+                        file_id,
+                        span,
+                        sink,
                     );
-                    validate_import_namespace(loaded, &source_path, &import, file_id, span, sink);
-                    continue;
                 }
-                load_source_recursive(
-                    &source_path,
-                    cache,
-                    sink,
-                    seen,
-                    active,
-                    loaded,
-                    entry_source,
-                    context,
-                )?;
-                validate_import_namespace(loaded, &source_path, &import, file_id, span, sink);
                 continue;
             }
             StdlibImportStatus::Unknown => {
@@ -2189,7 +2206,7 @@ fn namespace_of(file: &SourceFile) -> String {
 
 enum StdlibImportStatus {
     Implemented,
-    StdlibSource(PathBuf),
+    StdlibSources(Vec<(PathBuf, String)>),
     Unknown,
     NotStdlib,
 }
@@ -2200,21 +2217,50 @@ fn classify_stdlib_import(import: &str, has_selected_items: bool) -> StdlibImpor
     }
     if ori_types::stdlib::is_implemented_stdlib_module(import) {
         if has_selected_items {
-            if let Some(path) = find_stdlib_source_module(import) {
-                return StdlibImportStatus::StdlibSource(path);
+            if let Some(sources) = find_stdlib_selective_sources(import) {
+                return StdlibImportStatus::StdlibSources(sources);
             }
         }
         return StdlibImportStatus::Implemented;
     }
-    if let Some(path) = find_stdlib_source_module(import) {
-        return StdlibImportStatus::StdlibSource(path);
+    if let Some(sources) = find_stdlib_selective_sources(import) {
+        return StdlibImportStatus::StdlibSources(sources);
     }
     StdlibImportStatus::Unknown
 }
 
 /// Resolve a stdlib module import (`ori.string.utils`) to its `.orl` source path.
 pub fn stdlib_source_path(import: &str) -> Option<PathBuf> {
-    find_stdlib_source_module(import)
+    find_stdlib_selective_sources(import)
+        .and_then(|sources| sources.into_iter().map(|(path, _)| path).next())
+}
+
+fn find_stdlib_selective_sources(import: &str) -> Option<Vec<(PathBuf, String)>> {
+    if let Some(path) = find_stdlib_source_module(import) {
+        return Some(vec![(path, import.to_string())]);
+    }
+    find_stdlib_flatten_submodules(import)
+}
+
+fn find_stdlib_flatten_submodules(import: &str) -> Option<Vec<(PathBuf, String)>> {
+    let relative = import.strip_prefix("ori.")?;
+    let stdlib_root = find_stdlib_root()?;
+    let mut dir = stdlib_root.clone();
+    for segment in relative.split('.') {
+        dir.push(segment);
+    }
+    let mut sources = Vec::new();
+    for sub in ["utils", "algorithms"] {
+        let candidate = dir.join(format!("{sub}.orl"));
+        if candidate.is_file() {
+            sources.push((candidate, format!("{import}.{sub}")));
+        }
+    }
+    if sources.is_empty() {
+        None
+    } else {
+        Some(sources)
+    }
 }
 
 fn find_stdlib_source_module(import: &str) -> Option<PathBuf> {
@@ -4026,21 +4072,31 @@ pub fn run_doctor() -> DoctorReport {
         }),
     }
 
-    let linker = if env_flag("ORI_NATIVE_LINKER") {
-        "Raw (ORI_NATIVE_LINKER)"
-    } else if env_flag("ORI_USE_BUNDLED_RUST_LLD") {
-        "BundledRustLld (ORI_USE_BUNDLED_RUST_LLD=1)"
-    } else if env_flag("ORI_USE_SYSTEM_LINKER") {
-        "SystemLinker (ORI_USE_SYSTEM_LINKER=1)"
-    } else if env_flag("ORI_USE_RUST_LLD") {
-        "RustcDriver + rust-lld (ORI_USE_RUST_LLD=1)"
-    } else {
-        "RustcDriver (default)"
+    let linker_detail = match ori_codegen::NativeLinker::discover() {
+        Ok(linker) => {
+            let name = linker.strategy_name();
+            let suffix = if env_flag("ORI_NATIVE_LINKER") {
+                " (ORI_NATIVE_LINKER)"
+            } else if env_flag("ORI_USE_BUNDLED_RUST_LLD") {
+                " (ORI_USE_BUNDLED_RUST_LLD=1)"
+            } else if env_flag("ORI_USE_SYSTEM_LINKER") {
+                " (ORI_USE_SYSTEM_LINKER=1)"
+            } else if env_flag("ORI_USE_RUSTC_DRIVER") {
+                " (ORI_USE_RUSTC_DRIVER=1)"
+            } else {
+                " (default)"
+            };
+            (DoctorStatus::Ok, format!("{name}{suffix}"))
+        }
+        Err(err) => (
+            DoctorStatus::Warn,
+            format!("{err} (AOT compile will fail until resolved)"),
+        ),
     };
     checks.push(DoctorCheck {
         name: "linker strategy",
-        status: DoctorStatus::Ok,
-        detail: linker.into(),
+        status: linker_detail.0,
+        detail: linker_detail.1,
     });
 
     let run_mode = if should_use_jit_for_run() {

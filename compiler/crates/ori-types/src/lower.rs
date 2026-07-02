@@ -275,6 +275,22 @@ fn lower_builtin_concurrency_type(path: &str, args: &[Ty]) -> Option<Ty> {
             kind: OpaqueTy::Connection,
             args: vec![],
         }),
+        "ori.net.Listener" => Some(Ty::Opaque {
+            kind: OpaqueTy::Listener,
+            args: vec![],
+        }),
+        "ori.net.UdpSocket" => Some(Ty::Opaque {
+            kind: OpaqueTy::UdpSocket,
+            args: vec![],
+        }),
+        "ori.io.Input" => Some(Ty::Opaque {
+            kind: OpaqueTy::Input,
+            args: vec![],
+        }),
+        "ori.io.Output" => Some(Ty::Opaque {
+            kind: OpaqueTy::Output,
+            args: vec![],
+        }),
         _ => None,
     }
 }

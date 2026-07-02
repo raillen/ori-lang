@@ -5268,7 +5268,7 @@ impl<'a> FuncCodegen<'a> {
             return self.emit(f);
         }
         Err(native_codegen_unsupported(format!(
-            "async function `{}` contains an `await` shape not yet covered by the native state machine; supported forms include top-level `await value`, `const x: T = await value`, `return await value`, expression-level awaits in calls/operators/conditions, and `const x = (await value)?`; awaits inside nested statement bodies are still blocked",
+            "async function `{}` contains an `await` shape not yet covered by the native state machine; supported forms include top-level and nested control-flow bodies (`if`, `match`, `while`, `for`), `const x: T = await value`, `return await value`, expression-level awaits in calls/operators/conditions, and `const x = (await value)?`; when both the simple and general state-machine plans fail, codegen rejects the function",
             f.name
         )))
     }
@@ -13201,6 +13201,22 @@ impl NativeLinker {
             }
         }
 
+        // Default path (Rust removal): prefer system linker, then bundled rust-lld.
+        // The system linker avoids a runtime dependency on rust-lld (which is
+        // shipped from the Rust toolchain). Requiring the OS linker (Visual
+        // Studio Build Tools on Windows, build-essential on Linux,
+        // Xcode Command Line Tools on macOS) is acceptable because those are
+        // standard development prerequisites and do not tie Ori to Rust.
+        // Opt back into the legacy `rustc` driver with `ORI_USE_RUSTC_DRIVER=1`.
+        if !env_flag("ORI_USE_RUSTC_DRIVER") {
+            if let Ok(strategy) = discover_system_linker() {
+                return Ok(Self { strategy });
+            }
+            if let Ok(strategy) = discover_bundled_rust_lld() {
+                return Ok(Self { strategy });
+            }
+        }
+
         let command = std::env::var("ORI_RUSTC")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("rustc"));
@@ -13211,6 +13227,15 @@ impl NativeLinker {
                 linker_override,
             },
         })
+    }
+
+    pub fn strategy_name(&self) -> &'static str {
+        match &self.strategy {
+            NativeLinkerStrategy::RustcDriver { .. } => "RustcDriver",
+            NativeLinkerStrategy::RawNativeCommand { .. } => "RawNativeCommand",
+            NativeLinkerStrategy::BundledRustLld { .. } => "BundledRustLld",
+            NativeLinkerStrategy::SystemLinker { .. } => "SystemLinker",
+        }
     }
 
     pub fn link(

@@ -389,7 +389,7 @@ macOS aarch64 を対象にしています。runtime staging の詳細は
 - public contract は 1.0 前に変わる可能性があります。
 
 active backlog は [docs/planning/PENDENTES.md](docs/planning/PENDENTES.md) と
-[docs/planning/PLANO-MATURIDADE-COMPLETO.md](docs/planning/PLANO-MATURIDADE-COMPLETO.md)
+[docs/planning/historico/PLANO-MATURIDADE-COMPLETO.md](docs/planning/historico/PLANO-MATURIDADE-COMPLETO.md)
 を参照してください。
 
 ## ロードマップ

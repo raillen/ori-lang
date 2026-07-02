@@ -226,9 +226,36 @@ io.eprint(value: string)                             -> void
 io.eprintln(value: string)                           -> void
 io.read_line()                                       -> optional<string>
 
--- Standard writers
-ori.io.stdout: ori.io.Writer
-ori.io.stderr: ori.io.Writer
+-- I/O streams (v2)
+stdin()                                                -> io.Input
+stdout()                                               -> io.Output
+stderr()                                               -> io.Output
+
+read(input: io.Input, max_bytes: int)                -> result<optional<bytes>, string>
+write(output: io.Output, data: bytes)                -> result<int, string>
+flush(output: io.Output)                             -> result<void, string>
+close_input(input: io.Input)                         -> void
+close_output(output: io.Output)                      -> void
+```
+
+`io.Input` and `io.Output` are opaque runtime-managed handles. They are created
+from the three standard streams (`stdin`, `stdout`, `stderr`) and support
+byte-oriented read/write with `result` error propagation.
+
+`read` returns `none` inside `success` on EOF, or `error(msg)` on failure.
+`write` returns the number of bytes written on success.
+`flush` is a no-op on `stderr` in some backends but is provided for consistency.
+
+`close_input` / `close_output` mark the handle closed; subsequent operations
+return errors.
+
+### Layer 2 helpers (`ori.io.utils`)
+
+```ori
+import ori.io.utils as iu
+
+iu.read_text(input: io.Input, max_chars: int)       -> result<optional<string>, string>
+iu.write_text(output: io.Output, text: string)        -> result<int, string>
 ```
 
 ---
@@ -1111,6 +1138,43 @@ future before recording the result.
 Native runtime coverage is canonical for standard-library behavior. The C
 backend is a debug/transpile backend with partial feature parity; it may reject
 standard-library features when generated C would not preserve Ori semantics.
+
+---
+
+## `ori.net` — Networking (TCP/TLS/UDP)
+
+```ori
+import ori.net as net
+
+net.connect(host, port, timeout_ms) -> result<net.Connection, string>
+net.connect_tls(host, port, timeout_ms) -> result<net.Connection, string>
+net.listen(host, port) -> result<net.Listener, string>
+net.accept(listener) -> result<net.Connection, string>
+net.close_listener(listener)
+net.listener_port(listener) -> int
+net.read_some(conn, max_bytes) -> result<bytes, string>
+net.write_all(conn, data) -> result<void, string>
+net.close(conn)
+net.is_closed(conn) -> bool
+net.udp_bind(host, port) -> result<net.UdpSocket, string>
+net.udp_send_to(sock, host, port, data) -> result<int, string>
+net.udp_recv_from(sock, max_bytes) -> result<bytes, string>
+net.udp_close(sock)
+net.udp_local_port(sock) -> int
+```
+
+Current implementation notes:
+
+- All network I/O is **synchronous and blocking** in the native runtime. Use
+  `task.run_blocking` (alias of `task.spawn` for worker-thread offload) or
+  helpers in `ori.net.utils` when calling from async code.
+- `connect_tls` performs a TCP connect then a TLS client handshake (rustls,
+  system trust roots via webpki-roots). The returned `Connection` is the same
+  opaque type as plain TCP.
+- `listen` with port `0` binds an ephemeral port; `listener_port` reads the
+  assigned port. Same pattern for `udp_bind` + `udp_local_port`.
+- Layer 2 helpers live in `stdlib/net.orl` (flatten imports) and
+  `stdlib/net/utils.orl`.
 
 ---
 

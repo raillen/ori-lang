@@ -1,7 +1,7 @@
 # Recursos Pendentes e Plano de Correções — Ori Language
 
 > **Plano ativo:** para a próxima fase de uso real, use [`uso-real-pequeno-medio.md`](uso-real-pequeno-medio.md).
-> **Plano histórico:** para o ciclo de maturidade até `0.2.0`, use [`PLANO-MATURIDADE-COMPLETO.md`](PLANO-MATURIDADE-COMPLETO.md).
+> **Plano histórico:** para o ciclo de maturidade até `0.2.0`, use [`PLANO-MATURIDADE-COMPLETO.md`](historico/PLANO-MATURIDADE-COMPLETO.md).
 > Este arquivo mantém o backlog resumido das Etapas 1–6 originais **e o Backlog v2 pós-0.2.0** (paridade de referência + DX).
 
 Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhorias necessárias para a maturidade da linguagem Ori.
@@ -201,10 +201,10 @@ adicione o detalhe no plano de uso real e mantenha aqui apenas o resumo.
 
 ## Backlog v2 — Paridade de referência e DX (pós-0.2.0)
 
-> **Stdlib Layer 2/3 `.orl`:** fechados em 2026-06-29 — ver [`stdlib-gap-parity.md`](stdlib-gap-parity.md). O backlog abaixo cobre **toolchain pedagógica**, **uniformização Layer 1** e **I/O avançado** (não mais módulos utils/algorithms faltantes).
+> **Stdlib Layer 2/3 `.orl`:** fechados em 2026-06-29 — ver [`stdlib-gap-parity.md`](historico/stdlib-gap-parity.md). O backlog abaixo cobre **toolchain pedagógica**, **uniformização Layer 1** e **I/O avançado** (não mais módulos utils/algorithms faltantes).
 
 > Inspirado na comparação Ori × linguagem de referência (`std.*`): fechar gaps de **consistência de API**, **toolchain pedagógica** e **documentação do modelo mental** (optional / result / void / check).  
-> Detalhamento espelhado em [`PLANO-MATURIDADE-COMPLETO.md`](PLANO-MATURIDADE-COMPLETO.md) Apêndice C.  
+> Detalhamento espelhado em [`PLANO-MATURIDADE-COMPLETO.md`](historico/PLANO-MATURIDADE-COMPLETO.md) Apêndice C.  
 > **Fora de escopo deste backlog:** alias ou rename de `string` → `text`.
 
 ### 1. Toolchain pedagógica (alta prioridade)
@@ -232,8 +232,8 @@ adicione o detalhe no plano de uso real e mantenha aqui apenas o resumo.
 ### 4. Stdlib e I/O avançado (baixa prioridade)
 
 - [x] **`time.Instant` / `Duration` tipados** — `ori.time` possui `Instant`, `Duration`, conversões e medição no recorte inicial de uso real.
-- [ ] **Streams `io.Input` / `io.Output`** — redesign de I/O (leitura/escrita incremental); spec futura cap. 12. Gate: spike documentado antes de implementação.
-- [ ] **Rede: TLS, UDP, async** — fora do escopo v1 (`ori.net` permanece TCP síncrono). Gate: entrada explícita em backlog v2 sem gate de release.
+- [x] **Streams `io.Input` / `io.Output`** — MVP Layer 1 entregue (`stdin`/`stdout`/`stderr`, `read`/`write`/`flush`, `stdlib/io.orl`); adapters de arquivo e `Disposable` ficam para iteração futura.
+- [x] **Rede: TLS, UDP, servidor TCP** — `connect_tls`, `listen`/`accept`, UDP síncrono, `listener_port`/`udp_local_port`; blocking documentado + `task.run_blocking`; exemplo `examples/http_get.orl`. Gate: testes `compile_runs_net_*` em `multifile_imports.rs`; design em `docs/planning/net-v2-design.md`. I/O async nativo permanece backlog.
 
 ### **Critérios de passagem (Backlog v2 — lote DX)**
 

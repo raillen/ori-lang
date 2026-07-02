@@ -445,8 +445,11 @@ macOS x86_64, and macOS aarch64. Runtime staging details live in
 Current pre-1.0 limitations:
 
 - Ori is not self-hosting.
-- `ori compile` remains an AOT route and still depends on a working linker
-  strategy.
+- `ori compile` is AOT and requires the platform linker (Visual Studio Build
+  Tools on Windows, `build-essential` on Linux, Xcode Command Line Tools on
+  macOS). `ori run` uses JIT by default and needs no linker.
+- The compiler itself is written in Rust, so building Ori from source still
+  requires Rust. End users who install via release package do not need Rust.
 - C emission is partial and exists for debugging via `ori emit c`.
 - `ori install --path` supports local packages and path dependencies, and the
   compiler resolves local package imports from `ori.proj` or `ori.pkg.toml`.
@@ -456,19 +459,24 @@ Current pre-1.0 limitations:
 - Public contracts can still change before 1.0.
 
 See [docs/planning/PENDENTES.md](docs/planning/PENDENTES.md) and
-[docs/planning/PLANO-MATURIDADE-COMPLETO.md](docs/planning/PLANO-MATURIDADE-COMPLETO.md)
+[docs/planning/historico/PLANO-MATURIDADE-COMPLETO.md](docs/planning/historico/PLANO-MATURIDADE-COMPLETO.md)
 for the active backlog.
 
 ## Roadmap
 
 Ori's long-term 1.0 criteria are deliberately strict:
 
-1. remove the practical Rust dependency from end-user compilation paths;
-2. keep substantive stdlib layers in `.orl` where it makes sense;
-3. prove a self-hosting path or a credible bootstrap path;
-4. document a stable ABI;
-5. gain real users beyond repository tests;
-6. avoid breaking changes for at least six months.
+1. remove the practical Rust dependency from end-user compilation paths —
+   **mostly done**: `ori run` uses JIT (no linker), and `ori compile` defaults
+   to the platform linker (no `rustc` or `rust-lld` required);
+2. keep substantive stdlib layers in `.orl` where it makes sense —
+   **in progress**: Layer 2/3 utilities and algorithms are already in `.orl`;
+3. prove a self-hosting path or a credible bootstrap path —
+   **deferred**: self-hosting is not a prerequisite for utility; a documented
+   bootstrap path is an acceptable alternative;
+4. document a stable ABI — **pending**;
+5. gain real users beyond repository tests — **pending**;
+6. avoid breaking changes for at least six months — **pending**.
 
 Until then, the project stays honest about its pre-1.0 status.
 

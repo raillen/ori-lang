@@ -34,6 +34,8 @@ Current flattened parents:
 
 | Module | File | Notes |
 |--------|------|-------|
+| `ori.io` | `stdlib/io.orl` | Flattened stream helpers over `ori.io.Input`/`Output` |
+| `ori.net` | `stdlib/net.orl` | Flattened TLS/TCP server/UDP Layer 1 symbols |
 | `ori.args` | `stdlib/args.orl` | Thin CLI argument helpers over `ori.os.args` |
 | `ori.config` | `stdlib/config.orl` | Text/JSON config helpers over `ori.fs` and `ori.json` |
 | `ori.log` | `stdlib/log.orl` | Minimal CLI logging helpers |
@@ -41,7 +43,7 @@ Current flattened parents:
 | `ori.path` | `stdlib/path.orl` | `join`, `normalize`, `relative`, `parent`, `extension`, … |
 | `ori.format.utils` | `stdlib/format/utils.orl` | Wrappers `number`, `hex`, `bytes_size`, `date`, … |
 | `ori.iter.utils` | `stdlib/iter/utils.orl` | `sum_int`, `contains_int`, `unique_count_int`, … |
-| `ori.net.utils` | `stdlib/net/utils.orl` | `connect`, `read_text`, `write_text`, `is_open` |
+| `ori.net.utils` | `stdlib/net/utils.orl` | `connect`, `connect_tls`, `read_text`, `write_text`, `listen_local`, `connect_*_in_background` |
 | `ori.os.utils` | `stdlib/os/utils.orl` | `env_or`, `is_windows`/`linux`/`macos`, `current_dir_or` |
 | `ori.random.utils` | `stdlib/random/utils.orl` | `seeded_int`, `pick_*`, `shuffle_*` |
 | `ori.string.utils` | `stdlib/string/utils.orl` | Text helpers (see gap parity doc) |
@@ -91,8 +93,8 @@ typechecker — tree algorithms use iterative stacks.
 ## What still blocks “production-ready” language use
 
 See `docs/planning/stdlib-gap-parity.md` § Lacunas remanescentes and
-`docs/planning/PENDENTES.md` § Backlog v2 (toolchain `explain`/`doctor`/`repl`,
-uniformização FS/io Layer 1, self-hosting).
+`docs/planning/PENDENTES.md` § Backlog v2 (self-hosting, genéricos map/set em `.orl`,
+rede async nativa).
 
 ## Adding a new stdlib function
 
@@ -115,7 +117,8 @@ uniformização FS/io Layer 1, self-hosting).
 
 No manifest changes needed for Layer 2/3 — the compiler discovers modules by
 scanning `stdlib/` at compile time. Opaque types used in Layer 2 signatures
-must be registered in `ori-types/src/lower.rs` (e.g. `ori.net.Connection`).
+must be registered in `ori-types/src/lower.rs` (e.g. `ori.net.Connection`,
+`ori.net.Listener`, `ori.net.UdpSocket`, `ori.io.Input`, `ori.io.Output`).
 
 ## Stdlib root resolution
 

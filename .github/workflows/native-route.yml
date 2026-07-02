@@ -93,3 +93,70 @@ jobs:
             target/dist/ori-${{ matrix.name }}.zip
             target/dist/ori-${{ matrix.name }}.tar.gz
           if-no-files-found: error
+
+  # ------------------------------------------------------------------
+  # Smoke test on a runner WITHOUT the Rust toolchain installed.
+  # This validates that end users can install Ori from the release
+  # package and use check/run/compile/test without ever needing Rust.
+  # ------------------------------------------------------------------
+  smoke-no-rust:
+    name: smoke-no-rust (linux-gnu)
+    needs: native-route
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install system linker only (no Rust)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+          # Ensure rustc/cargo are NOT present
+          if command -v rustc &> /dev/null; then
+            echo "ERROR: rustc is present on this runner — smoke would be invalid"
+            exit 1
+          fi
+          if command -v cargo &> /dev/null; then
+            echo "ERROR: cargo is present on this runner — smoke would be invalid"
+            exit 1
+          fi
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ori-linux-gnu
+          path: target/dist
+
+      - name: Extract release package
+        run: |
+          mkdir -p ~/ori-smoke
+          tar -xzf target/dist/ori-linux-gnu.tar.gz -C ~/ori-smoke
+          ls -la ~/ori-smoke/
+
+      - name: Smoke — ori doctor
+        run: |
+          ~/ori-smoke/ori doctor
+
+      - name: Smoke — ori run (JIT, no linker needed)
+        run: |
+          cat > /tmp/hello.orl << 'EOF'
+          import ori.io as io
+          func main()
+              io.println("hello from smoke-no-rust")
+          end
+          EOF
+          ~/ori-smoke/ori run /tmp/hello.orl
+
+      - name: Smoke — ori compile (AOT, needs system linker)
+        run: |
+          ~/ori-smoke/ori compile /tmp/hello.orl --out /tmp/hello
+          /tmp/hello
+
+      - name: Smoke — ori test
+        run: |
+          cat > /tmp/test.orl << 'EOF'
+          import ori.test as test
+
+          @test
+          func smoke_test()
+              test.assert(true, "smoke test passes")
+          end
+          EOF
+          ~/ori-smoke/ori test /tmp/test.orl

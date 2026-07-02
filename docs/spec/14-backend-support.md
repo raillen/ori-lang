@@ -1,6 +1,6 @@
 # Backend support matrix
 
-Status: current as of 2026-06-27.
+Status: current as of 2026-07-01.
 
 This page separates three things:
 
@@ -28,6 +28,7 @@ Legend:
 | Structural equality | yes | yes | partial | Native and C/debug cover primitives, `bytes`, `optional`, `result`, tuples, lists, generic structs, `set<T>`, and `map<K,V>` when keys/elements support equality. |
 | Hash tables, trees, graphs, heaps | yes | yes | partial | Native tests cover stdlib operations. |
 | JSON (`json.parse` / `json.Value`) | yes | yes | partial | C backend emits `ori_json_parse` FFI stubs without dedicated C lowering; execution requires native runtime. |
+| `ori.net` (TCP/TLS/UDP) | yes | yes | no | Native runtime only (rustls + blocking sockets). C/debug rejects or emits extern stubs without bodies. Use `task.run_blocking` for offload from async code. |
 | `bytes` with internal NUL | yes | yes | partial | `string` still rejects internal NUL at conversion boundary. |
 | Unicode `string.len`, `slice`, `index_of` | yes | yes | partial | Indices are Unicode scalar indices, not byte offsets. |
 | Async functions and `await` | yes | partial | no | Native supports the subset below. C/debug rejects async. |
@@ -81,6 +82,7 @@ Intentionally **not** supported on the C route:
 
 - `async func`, `await`, `task.*`, `channel.*`, `atomic.*`
 - `json.parse` / structured `json.Value` (C emits FFI stubs only; no dedicated C lowering)
+- `ori.net.*` (TCP/TLS/UDP; native runtime only)
 
 C/debug **does** support (see `multifile_imports.rs` `build_c_backend_*`):
 
@@ -130,6 +132,7 @@ Legend:
 | `graph.*`, `heap.*` | no | extern only | Native runtime. |
 | `json.parse`, `json.stringify`, `json.stringify_pretty` | no | extern stub | C emits FFI stub without dedicated lowering; execution requires native runtime. |
 | `fs.*`, `files.*` | no | extern only | Native runtime. |
+| `net.*` | no | extern only / rejected | TCP/TLS/UDP; rustls + blocking I/O in native runtime only. |
 | `task.*`, `channel.*`, `atomic.*` | no | rejected | C backend rejects async/concurrency symbols entirely. |
 | `lazy.once`, `lazy.force` | inline | yes | Inline C codegen; no runtime FFI flag. |
 | `panic` | no | extern only | Native runtime. |

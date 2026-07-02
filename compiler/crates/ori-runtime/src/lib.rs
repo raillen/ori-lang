@@ -1672,6 +1672,150 @@ pub unsafe extern "C" fn ori_io_read_line() -> *mut u8 {
     }
 }
 
+#[derive(Clone, Copy)]
+enum RuntimeStreamKind {
+    Stdin,
+    Stdout,
+    Stderr,
+}
+
+struct RuntimeIoStream {
+    kind: RuntimeStreamKind,
+    closed: bool,
+}
+
+unsafe extern "C" fn ori_io_stream_destructor(ptr: *mut u8) {
+    if !ptr.is_null() {
+        std::ptr::drop_in_place(ptr as *mut RuntimeIoStream);
+    }
+}
+
+unsafe fn alloc_stream(kind: RuntimeStreamKind) -> *mut u8 {
+    let layout_size = std::mem::size_of::<RuntimeIoStream>();
+    let payload = ori_alloc(layout_size, Some(ori_io_stream_destructor)) as *mut RuntimeIoStream;
+    if payload.is_null() {
+        return std::ptr::null_mut();
+    }
+    std::ptr::write(
+        payload,
+        RuntimeIoStream {
+            kind,
+            closed: false,
+        },
+    );
+    payload as *mut u8
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_io_stdin() -> *mut u8 {
+    alloc_stream(RuntimeStreamKind::Stdin)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_io_stdout() -> *mut u8 {
+    alloc_stream(RuntimeStreamKind::Stdout)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_io_stderr() -> *mut u8 {
+    alloc_stream(RuntimeStreamKind::Stderr)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_io_read(stream_ptr: *mut u8, max_bytes: i64) -> *mut u8 {
+    if stream_ptr.is_null() {
+        return new_result(false, cstring_from_str("Invalid input stream"));
+    }
+    if max_bytes < 0 {
+        return new_result(false, cstring_from_str("Invalid byte count"));
+    }
+    let stream = &mut *(stream_ptr as *mut RuntimeIoStream);
+    if stream.closed {
+        return new_result(false, cstring_from_str("Input stream is closed"));
+    }
+    let mut buf = vec![0u8; max_bytes as usize];
+    use std::io::Read;
+    let read_result = match stream.kind {
+        RuntimeStreamKind::Stdin => std::io::stdin().read(&mut buf),
+        RuntimeStreamKind::Stdout | RuntimeStreamKind::Stderr => {
+            return new_result(false, cstring_from_str("Cannot read from output stream"));
+        }
+    };
+    match read_result {
+        Ok(0) => new_result(true, new_optional_ptr(false, std::ptr::null_mut())),
+        Ok(n) => {
+            buf.truncate(n);
+            new_result(true, new_optional_ptr(true, cstring_from_bytes(buf)))
+        }
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_io_write(stream_ptr: *mut u8, data: *const u8) -> *mut u8 {
+    if stream_ptr.is_null() {
+        return new_result(false, cstring_from_str("Invalid output stream"));
+    }
+    let stream = &mut *(stream_ptr as *mut RuntimeIoStream);
+    if stream.closed {
+        return new_result(false, cstring_from_str("Output stream is closed"));
+    }
+    let bytes = bytes_payload(data);
+    use std::io::Write;
+    let write_result = match stream.kind {
+        RuntimeStreamKind::Stdout => std::io::stdout().write(bytes),
+        RuntimeStreamKind::Stderr => std::io::stderr().write(bytes),
+        RuntimeStreamKind::Stdin => {
+            return new_result(false, cstring_from_str("Cannot write to input stream"));
+        }
+    };
+    match write_result {
+        Ok(n) => new_result_i64_ok(n as i64),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_io_flush(stream_ptr: *mut u8) -> *mut u8 {
+    if stream_ptr.is_null() {
+        return new_result(false, cstring_from_str("Invalid output stream"));
+    }
+    let stream = &mut *(stream_ptr as *mut RuntimeIoStream);
+    if stream.closed {
+        return new_result(false, cstring_from_str("Output stream is closed"));
+    }
+    use std::io::Write;
+    let flush_result = match stream.kind {
+        RuntimeStreamKind::Stdout => std::io::stdout().flush(),
+        RuntimeStreamKind::Stderr => std::io::stderr().flush(),
+        RuntimeStreamKind::Stdin => {
+            return new_result(false, cstring_from_str("Cannot flush input stream"));
+        }
+    };
+    match flush_result {
+        Ok(()) => new_result(true, std::ptr::null_mut()),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_io_close_input(stream_ptr: *mut u8) {
+    if stream_ptr.is_null() {
+        return;
+    }
+    let stream = &mut *(stream_ptr as *mut RuntimeIoStream);
+    stream.closed = true;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_io_close_output(stream_ptr: *mut u8) {
+    if stream_ptr.is_null() {
+        return;
+    }
+    let stream = &mut *(stream_ptr as *mut RuntimeIoStream);
+    stream.closed = true;
+}
+
 // ── ori.string ────────────────────────────────────────────────────────────────
 
 /// Convert an i64 to a null-terminated C string allocated with malloc.
@@ -7710,13 +7854,108 @@ pub unsafe extern "C" fn ori_graph_iterator_next(iter: *mut OriGraphIterator) ->
 // ── Stdlib parity extensions (gap closure) ─────────────────────────────────
 
 struct RuntimeConnection {
-    stream: Option<std::net::TcpStream>,
+    stream: Option<ConnectionTransport>,
+}
+
+enum ConnectionTransport {
+    Plain(std::net::TcpStream),
+    Tls(rustls::StreamOwned<rustls::ClientConnection, std::net::TcpStream>),
+}
+
+impl ConnectionTransport {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        use std::io::Read;
+        match self {
+            ConnectionTransport::Plain(stream) => stream.read(buf),
+            ConnectionTransport::Tls(stream) => stream.read(buf),
+        }
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
+        use std::io::Write;
+        match self {
+            ConnectionTransport::Plain(stream) => stream.write_all(buf),
+            ConnectionTransport::Tls(stream) => stream.write_all(buf),
+        }
+    }
+
+    fn shutdown(&self, how: std::net::Shutdown) -> std::io::Result<()> {
+        match self {
+            ConnectionTransport::Plain(stream) => stream.shutdown(how),
+            ConnectionTransport::Tls(stream) => stream.get_ref().shutdown(how),
+        }
+    }
+}
+
+struct RuntimeListener {
+    listener: Option<std::net::TcpListener>,
+}
+
+struct RuntimeUdpSocket {
+    socket: Option<std::net::UdpSocket>,
 }
 
 unsafe extern "C" fn ori_net_destructor(ptr: *mut u8) {
     if !ptr.is_null() {
         std::ptr::drop_in_place(ptr as *mut RuntimeConnection);
     }
+}
+
+unsafe extern "C" fn ori_net_listener_destructor(ptr: *mut u8) {
+    if !ptr.is_null() {
+        std::ptr::drop_in_place(ptr as *mut RuntimeListener);
+    }
+}
+
+unsafe extern "C" fn ori_net_udp_destructor(ptr: *mut u8) {
+    if !ptr.is_null() {
+        std::ptr::drop_in_place(ptr as *mut RuntimeUdpSocket);
+    }
+}
+
+fn parse_socket_addr(address: &str) -> Result<std::net::SocketAddr, String> {
+    use std::net::ToSocketAddrs;
+    address
+        .to_socket_addrs()
+        .map_err(|e| e.to_string())?
+        .next()
+        .ok_or_else(|| format!("could not resolve address `{address}`"))
+}
+
+fn tcp_connect(address: &str, timeout_ms: i64) -> Result<std::net::TcpStream, String> {
+    use std::net::TcpStream;
+    if timeout_ms > 0 {
+        let timeout = Duration::from_millis(timeout_ms as u64);
+        let addr = parse_socket_addr(address)?;
+        TcpStream::connect_timeout(&addr, timeout).map_err(|e| e.to_string())
+    } else {
+        TcpStream::connect(address).map_err(|e| e.to_string())
+    }
+}
+
+fn alloc_runtime_connection(stream: ConnectionTransport) -> Result<*mut u8, String> {
+    let layout_size = std::mem::size_of::<RuntimeConnection>();
+    let payload = unsafe { ori_alloc(layout_size, Some(ori_net_destructor)) as *mut RuntimeConnection };
+    if payload.is_null() {
+        return Err("allocation failed".to_string());
+    }
+    unsafe {
+        std::ptr::write(
+            payload,
+            RuntimeConnection {
+                stream: Some(stream),
+            },
+        );
+    }
+    Ok(payload as *mut u8)
+}
+
+fn tls_client_config() -> Result<rustls::ClientConfig, String> {
+    let mut root_store = rustls::RootCertStore::empty();
+    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    Ok(rustls::ClientConfig::builder()
+        .with_root_certificates(root_store)
+        .with_no_client_auth())
 }
 
 unsafe fn list_string_at(list: *mut OriList, index: i64) -> Option<String> {
@@ -7891,32 +8130,73 @@ pub unsafe extern "C" fn ori_process_run_capture(
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_net_connect(host: *const u8, port: i64, timeout_ms: i64) -> *mut u8 {
-    use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
     let host_str = cstr_str(host);
     let address = format!("{host_str}:{port}");
-    let connect_result = if timeout_ms > 0 {
-        let timeout = Duration::from_millis(timeout_ms as u64);
-        address
-            .to_socket_addrs()
-            .ok()
-            .and_then(|mut addrs| addrs.next())
-            .map(|addr: SocketAddr| TcpStream::connect_timeout(&addr, timeout))
-            .unwrap_or_else(|| TcpStream::connect(address.as_str()))
-    } else {
-        TcpStream::connect(address.as_str())
+    match tcp_connect(&address, timeout_ms) {
+        Ok(stream) => match alloc_runtime_connection(ConnectionTransport::Plain(stream)) {
+            Ok(payload) => new_result(true, payload),
+            Err(msg) => new_result(false, cstring_from_str(&msg)),
+        },
+        Err(e) => new_result(false, cstring_from_str(&e)),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_connect_tls(
+    host: *const u8,
+    port: i64,
+    timeout_ms: i64,
+) -> *mut u8 {
+    use rustls::pki_types::ServerName;
+    let host_str = cstr_str(host);
+    let address = format!("{host_str}:{port}");
+    let tcp = match tcp_connect(&address, timeout_ms) {
+        Ok(stream) => stream,
+        Err(e) => return new_result(false, cstring_from_str(&e)),
     };
-    match connect_result {
-        Ok(stream) => {
-            let layout_size = std::mem::size_of::<RuntimeConnection>();
+    let config = match tls_client_config() {
+        Ok(config) => config,
+        Err(e) => return new_result(false, cstring_from_str(&e)),
+    };
+    let server_name = match ServerName::try_from(host_str.to_string()) {
+        Ok(name) => name,
+        Err(e) => {
+            return new_result(
+                false,
+                cstring_from_str(&format!("invalid TLS server name: {e}")),
+            )
+        }
+    };
+    let conn = match rustls::ClientConnection::new(std::sync::Arc::new(config), server_name) {
+        Ok(conn) => conn,
+        Err(e) => return new_result(false, cstring_from_str(&e.to_string())),
+    };
+    let mut tls = rustls::StreamOwned::new(conn, tcp);
+    if let Err(e) = std::io::Write::flush(&mut tls) {
+        return new_result(false, cstring_from_str(&e.to_string()));
+    }
+    match alloc_runtime_connection(ConnectionTransport::Tls(tls)) {
+        Ok(payload) => new_result(true, payload),
+        Err(msg) => new_result(false, cstring_from_str(&msg)),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_listen(host: *const u8, port: i64) -> *mut u8 {
+    let host_str = cstr_str(host);
+    let address = format!("{host_str}:{port}");
+    match std::net::TcpListener::bind(&address) {
+        Ok(listener) => {
+            let layout_size = std::mem::size_of::<RuntimeListener>();
             let payload =
-                ori_alloc(layout_size, Some(ori_net_destructor)) as *mut RuntimeConnection;
+                ori_alloc(layout_size, Some(ori_net_listener_destructor)) as *mut RuntimeListener;
             if payload.is_null() {
                 return new_result(false, cstring_from_str("allocation failed"));
             }
             std::ptr::write(
                 payload,
-                RuntimeConnection {
-                    stream: Some(stream),
+                RuntimeListener {
+                    listener: Some(listener),
                 },
             );
             new_result(true, payload as *mut u8)
@@ -7926,8 +8206,148 @@ pub unsafe extern "C" fn ori_net_connect(host: *const u8, port: i64, timeout_ms:
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn ori_net_accept(listener_ptr: *mut u8) -> *mut u8 {
+    if listener_ptr.is_null() {
+        return new_result(false, cstring_from_str("invalid listener"));
+    }
+    let listener = &mut *(listener_ptr as *mut RuntimeListener);
+    let Some(ref tcp_listener) = listener.listener else {
+        return new_result(false, cstring_from_str("listener closed"));
+    };
+    match tcp_listener.accept() {
+        Ok((stream, _addr)) => match alloc_runtime_connection(ConnectionTransport::Plain(stream)) {
+            Ok(payload) => new_result(true, payload),
+            Err(msg) => new_result(false, cstring_from_str(&msg)),
+        },
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_close_listener(listener_ptr: *mut u8) {
+    if listener_ptr.is_null() {
+        return;
+    }
+    let listener = &mut *(listener_ptr as *mut RuntimeListener);
+    listener.listener = None;
+    ori_arc_release(listener_ptr);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_listener_port(listener_ptr: *mut u8) -> i64 {
+    if listener_ptr.is_null() {
+        return -1;
+    }
+    let listener = &*(listener_ptr as *mut RuntimeListener);
+    listener
+        .listener
+        .as_ref()
+        .and_then(|l| l.local_addr().ok())
+        .map(|addr| addr.port() as i64)
+        .unwrap_or(-1)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_udp_bind(host: *const u8, port: i64) -> *mut u8 {
+    let host_str = cstr_str(host);
+    let address = format!("{host_str}:{port}");
+    match std::net::UdpSocket::bind(&address) {
+        Ok(socket) => {
+            let layout_size = std::mem::size_of::<RuntimeUdpSocket>();
+            let payload =
+                ori_alloc(layout_size, Some(ori_net_udp_destructor)) as *mut RuntimeUdpSocket;
+            if payload.is_null() {
+                return new_result(false, cstring_from_str("allocation failed"));
+            }
+            std::ptr::write(
+                payload,
+                RuntimeUdpSocket {
+                    socket: Some(socket),
+                },
+            );
+            new_result(true, payload as *mut u8)
+        }
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_udp_send_to(
+    sock_ptr: *mut u8,
+    host: *const u8,
+    port: i64,
+    data: *const u8,
+) -> *mut u8 {
+    if sock_ptr.is_null() {
+        return new_result(false, cstring_from_str("invalid UDP socket"));
+    }
+    let socket = &mut *(sock_ptr as *mut RuntimeUdpSocket);
+    let Some(ref udp) = socket.socket else {
+        return new_result(false, cstring_from_str("UDP socket closed"));
+    };
+    let host_str = cstr_str(host);
+    let address = format!("{host_str}:{port}");
+    let target = match parse_socket_addr(&address) {
+        Ok(addr) => addr,
+        Err(e) => return new_result(false, cstring_from_str(&e)),
+    };
+    let bytes = if data.is_null() {
+        &[][..]
+    } else {
+        CStr::from_ptr(data as *const i8).to_bytes()
+    };
+    match udp.send_to(bytes, target) {
+        Ok(n) => new_result_i64_ok(n as i64),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_udp_recv_from(sock_ptr: *mut u8, max_bytes: i64) -> *mut u8 {
+    if sock_ptr.is_null() {
+        return new_result(false, cstring_from_str("invalid UDP socket"));
+    }
+    let socket = &mut *(sock_ptr as *mut RuntimeUdpSocket);
+    let Some(ref udp) = socket.socket else {
+        return new_result(false, cstring_from_str("UDP socket closed"));
+    };
+    let cap = max_bytes.clamp(0, 65_536) as usize;
+    let mut buf = vec![0_u8; cap.max(1)];
+    match udp.recv_from(&mut buf) {
+        Ok((n, _addr)) => {
+            buf.truncate(n);
+            new_result(true, cstring_from_bytes(buf))
+        }
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_udp_close(sock_ptr: *mut u8) {
+    if sock_ptr.is_null() {
+        return;
+    }
+    let socket = &mut *(sock_ptr as *mut RuntimeUdpSocket);
+    socket.socket = None;
+    ori_arc_release(sock_ptr);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_udp_local_port(sock_ptr: *mut u8) -> i64 {
+    if sock_ptr.is_null() {
+        return -1;
+    }
+    let socket = &*(sock_ptr as *mut RuntimeUdpSocket);
+    socket
+        .socket
+        .as_ref()
+        .and_then(|s| s.local_addr().ok())
+        .map(|addr| addr.port() as i64)
+        .unwrap_or(-1)
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn ori_net_read_some(conn: *mut u8, max_bytes: i64) -> *mut u8 {
-    use std::io::Read;
     if conn.is_null() {
         return new_result(false, cstring_from_str("invalid connection"));
     }

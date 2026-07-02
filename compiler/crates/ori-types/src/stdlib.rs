@@ -74,6 +74,34 @@ fn connection_ty() -> Ty {
     }
 }
 
+fn listener_ty() -> Ty {
+    Ty::Opaque {
+        kind: OpaqueTy::Listener,
+        args: vec![],
+    }
+}
+
+fn udp_socket_ty() -> Ty {
+    Ty::Opaque {
+        kind: OpaqueTy::UdpSocket,
+        args: vec![],
+    }
+}
+
+fn input_ty() -> Ty {
+    Ty::Opaque {
+        kind: OpaqueTy::Input,
+        args: vec![],
+    }
+}
+
+fn output_ty() -> Ty {
+    Ty::Opaque {
+        kind: OpaqueTy::Output,
+        args: vec![],
+    }
+}
+
 fn list_backed_collection_kind(path: &str, ops: &[&str]) -> Option<OpaqueTy> {
     let candidates = [
         ("ori.deque.", OpaqueTy::Deque),
@@ -135,6 +163,14 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.io.eprint" => "ori_io_eprint"),
     stdlib!("ori.io.eprintln" => "ori_io_eprint"),
     stdlib!("ori.io.read_line" => "ori_io_read_line"),
+    stdlib!("ori.io.stdin" => "ori_io_stdin"),
+    stdlib!("ori.io.stdout" => "ori_io_stdout"),
+    stdlib!("ori.io.stderr" => "ori_io_stderr"),
+    stdlib!("ori.io.read" => "ori_io_read"),
+    stdlib!("ori.io.write" => "ori_io_write"),
+    stdlib!("ori.io.flush" => "ori_io_flush"),
+    stdlib!("ori.io.close_input" => "ori_io_close_input"),
+    stdlib!("ori.io.close_output" => "ori_io_close_output"),
     stdlib!("ori.string.len" => "ori_string_len"),
     stdlib!("ori.string.concat" => "ori_string_concat"),
     stdlib!("ori.string.split" => "ori_string_split"),
@@ -429,6 +465,7 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.task.join", ["task.join"] => "ori_task_join"),
     stdlib!("ori.task.detach", ["task.detach"] => "ori_task_detach"),
     stdlib!("ori.task.block_on", ["task.block_on"] => "ori_task_block_on"),
+    stdlib!("ori.task.run_blocking", ["task.run_blocking"] => "ori_task_spawn"),
     stdlib!("ori.task.sleep", ["task.sleep"] => "ori_task_sleep"),
     stdlib!("ori.task.create_token", ["task.create_token"] => "ori_task_create_token"),
     stdlib!("ori.task.cancel", ["task.cancel"] => "ori_task_cancel"),
@@ -635,6 +672,16 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
         ["process.run_capture"] => "ori_process_run_capture"
     ),
     stdlib!("ori.net.connect", ["net.connect"] => "ori_net_connect"),
+    stdlib!("ori.net.connect_tls", ["net.connect_tls"] => "ori_net_connect_tls"),
+    stdlib!("ori.net.listen", ["net.listen"] => "ori_net_listen"),
+    stdlib!("ori.net.accept", ["net.accept"] => "ori_net_accept"),
+    stdlib!("ori.net.close_listener", ["net.close_listener"] => "ori_net_close_listener"),
+    stdlib!("ori.net.listener_port", ["net.listener_port"] => "ori_net_listener_port"),
+    stdlib!("ori.net.udp_bind", ["net.udp_bind"] => "ori_net_udp_bind"),
+    stdlib!("ori.net.udp_send_to", ["net.udp_send_to"] => "ori_net_udp_send_to"),
+    stdlib!("ori.net.udp_recv_from", ["net.udp_recv_from"] => "ori_net_udp_recv_from"),
+    stdlib!("ori.net.udp_close", ["net.udp_close"] => "ori_net_udp_close"),
+    stdlib!("ori.net.udp_local_port", ["net.udp_local_port"] => "ori_net_udp_local_port"),
     stdlib!("ori.net.read_some", ["net.read_some"] => "ori_net_read_some"),
     stdlib!("ori.net.write_all", ["net.write_all"] => "ori_net_write_all"),
     stdlib!("ori.net.close", ["net.close"] => "ori_net_close"),
@@ -717,6 +764,25 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             (vec![Ty::String], Ty::Void)
         }
         "ori.io.read_line" => (vec![], Ty::Optional(Box::new(Ty::String))),
+        "ori.io.stdin" => (vec![], input_ty()),
+        "ori.io.stdout" | "ori.io.stderr" => (vec![], output_ty()),
+        "ori.io.read" => (
+            vec![input_ty(), Ty::Int],
+            Ty::Result(
+                Box::new(Ty::Optional(Box::new(Ty::Bytes))),
+                Box::new(Ty::String),
+            ),
+        ),
+        "ori.io.write" => (
+            vec![output_ty(), Ty::Bytes],
+            Ty::Result(Box::new(Ty::Int), Box::new(Ty::String)),
+        ),
+        "ori.io.flush" => (
+            vec![output_ty()],
+            Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
+        ),
+        "ori.io.close_input" => (vec![input_ty()], Ty::Void),
+        "ori.io.close_output" => (vec![output_ty()], Ty::Void),
         "ori.string.len" => (vec![Ty::String], Ty::Int),
         "ori.string.concat" => (vec![Ty::String, Ty::String], Ty::String),
         "ori.string.split" => (vec![Ty::String, Ty::String], Ty::List(Box::new(Ty::String))),
@@ -810,6 +876,13 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         ),
         "ori.task.detach" => (vec![Ty::TaskJob(Box::new(Ty::Infer(0)))], Ty::Void),
         "ori.task.block_on" => (vec![Ty::Future(Box::new(Ty::Infer(0)))], Ty::Infer(0)),
+        "ori.task.run_blocking" => (
+            vec![Ty::Func {
+                params: vec![],
+                ret: Box::new(Ty::Infer(0)),
+            }],
+            Ty::TaskJob(Box::new(Ty::Infer(0))),
+        ),
         "ori.task.sleep" => (vec![Ty::Int], Ty::Future(Box::new(Ty::Void))),
         "ori.task.create_token" => (vec![], cancel_token_ty()),
         "ori.task.cancel" => (vec![cancel_token_ty()], Ty::Void),
@@ -1532,6 +1605,34 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             vec![Ty::String, Ty::Int, Ty::Int],
             Ty::Result(Box::new(connection_ty()), Box::new(Ty::String)),
         ),
+        "ori.net.connect_tls" => (
+            vec![Ty::String, Ty::Int, Ty::Int],
+            Ty::Result(Box::new(connection_ty()), Box::new(Ty::String)),
+        ),
+        "ori.net.listen" => (
+            vec![Ty::String, Ty::Int],
+            Ty::Result(Box::new(listener_ty()), Box::new(Ty::String)),
+        ),
+        "ori.net.accept" => (
+            vec![listener_ty()],
+            Ty::Result(Box::new(connection_ty()), Box::new(Ty::String)),
+        ),
+        "ori.net.close_listener" => (vec![listener_ty()], Ty::Void),
+        "ori.net.listener_port" => (vec![listener_ty()], Ty::Int),
+        "ori.net.udp_bind" => (
+            vec![Ty::String, Ty::Int],
+            Ty::Result(Box::new(udp_socket_ty()), Box::new(Ty::String)),
+        ),
+        "ori.net.udp_send_to" => (
+            vec![udp_socket_ty(), Ty::String, Ty::Int, Ty::Bytes],
+            Ty::Result(Box::new(Ty::Int), Box::new(Ty::String)),
+        ),
+        "ori.net.udp_recv_from" => (
+            vec![udp_socket_ty(), Ty::Int],
+            Ty::Result(Box::new(Ty::Bytes), Box::new(Ty::String)),
+        ),
+        "ori.net.udp_close" => (vec![udp_socket_ty()], Ty::Void),
+        "ori.net.udp_local_port" => (vec![udp_socket_ty()], Ty::Int),
         "ori.net.read_some" => (
             vec![connection_ty(), Ty::Int],
             Ty::Result(Box::new(Ty::Bytes), Box::new(Ty::String)),
@@ -1559,6 +1660,11 @@ pub fn stdlib_native_abi(
     let sig = match runtime_symbol {
         "ori_io_print" | "ori_io_eprint" => (vec![Ptr, I64], None),
         "ori_io_read_line" => (vec![], Some(Ptr)),
+        "ori_io_stdin" | "ori_io_stdout" | "ori_io_stderr" => (vec![], Some(Ptr)),
+        "ori_io_read" => (vec![Ptr, I64], Some(Ptr)),
+        "ori_io_write" => (vec![Ptr, Ptr], Some(Ptr)),
+        "ori_io_flush" => (vec![Ptr], Some(Ptr)),
+        "ori_io_close_input" | "ori_io_close_output" => (vec![Ptr], None),
         "ori_string_len" | "ori_len" => (vec![Ptr], Some(I64)),
         "ori_string_concat" | "ori_string_split" => (vec![Ptr, Ptr], Some(Ptr)),
         "ori_string_slice" => (vec![Ptr, I64, I64], Some(Ptr)),
@@ -1876,7 +1982,13 @@ pub fn stdlib_native_abi(
         "ori_bytes_from_list" => (vec![Ptr], Some(Ptr)),
         "ori_bytes_to_list" => (vec![Ptr], Some(Ptr)),
         "ori_process_run" | "ori_process_run_capture" => (vec![Ptr, Ptr], Some(Ptr)),
-        "ori_net_connect" => (vec![Ptr, I64, I64], Some(Ptr)),
+        "ori_net_connect" | "ori_net_connect_tls" => (vec![Ptr, I64, I64], Some(Ptr)),
+        "ori_net_listen" | "ori_net_udp_bind" => (vec![Ptr, I64], Some(Ptr)),
+        "ori_net_accept" => (vec![Ptr], Some(Ptr)),
+        "ori_net_close_listener" | "ori_net_udp_close" => (vec![Ptr], None),
+        "ori_net_listener_port" | "ori_net_udp_local_port" => (vec![Ptr], Some(I64)),
+        "ori_net_udp_send_to" => (vec![Ptr, Ptr, I64, Ptr], Some(Ptr)),
+        "ori_net_udp_recv_from" => (vec![Ptr, I64], Some(Ptr)),
         "ori_net_read_some" => (vec![Ptr, I64], Some(Ptr)),
         "ori_net_write_all" => (vec![Ptr, Ptr], Some(Ptr)),
         "ori_net_close" => (vec![Ptr], None),
@@ -1966,10 +2078,59 @@ pub fn implemented_stdlib_modules() -> Vec<&'static str> {
     modules.into_iter().collect()
 }
 
+/// Flatten suffixes searched when resolving `import ori.X only (member)`.
+pub const STDLIB_FLATTEN_SUFFIXES: &[&str] = &[".utils", ".algorithms"];
+
+/// If `qualified` lives under a flatten submodule (`ori.map.utils.get_or`), return
+/// the parent symbol (`ori.map.get_or`).
+pub fn flatten_parent_symbol(qualified: &str) -> Option<String> {
+    for suffix in STDLIB_FLATTEN_SUFFIXES {
+        let needle = format!("{suffix}.");
+        if let Some(idx) = qualified.find(&needle) {
+            let parent = &qualified[..idx];
+            let member = &qualified[idx + needle.len()..];
+            return Some(format!("{parent}.{member}"));
+        }
+    }
+    None
+}
+
+/// Resolve a selective stdlib import member against a loaded definition map.
+pub fn resolve_flattened_stdlib_member(
+    module: &str,
+    member: &str,
+    lookup: impl Fn(&str) -> bool,
+) -> Option<smol_str::SmolStr> {
+    let direct = format!("{module}.{member}");
+    if lookup(&direct) {
+        return Some(smol_str::SmolStr::new(direct));
+    }
+    for suffix in STDLIB_FLATTEN_SUFFIXES {
+        let nested = format!("{module}{suffix}.{member}");
+        if lookup(&nested) {
+            return Some(smol_str::SmolStr::new(nested));
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn flatten_parent_symbol_maps_submodules_to_parent() {
+        assert_eq!(
+            flatten_parent_symbol("ori.map.utils.get_or").as_deref(),
+            Some("ori.map.get_or")
+        );
+        assert_eq!(
+            flatten_parent_symbol("ori.bytes.algorithms.compare_lex").as_deref(),
+            Some("ori.bytes.compare_lex")
+        );
+        assert_eq!(flatten_parent_symbol("ori.io.print").as_deref(), None);
+    }
 
     #[test]
     fn manifest_paths_and_aliases_are_unique() {

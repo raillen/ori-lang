@@ -396,7 +396,7 @@ Limitações atuais de pre-1.0:
 - Contratos públicos ainda podem mudar antes de 1.0.
 
 Veja [docs/planning/PENDENTES.md](docs/planning/PENDENTES.md) e
-[docs/planning/PLANO-MATURIDADE-COMPLETO.md](docs/planning/PLANO-MATURIDADE-COMPLETO.md)
+[docs/planning/historico/PLANO-MATURIDADE-COMPLETO.md](docs/planning/historico/PLANO-MATURIDADE-COMPLETO.md)
 para o backlog ativo.
 
 ## Roadmap

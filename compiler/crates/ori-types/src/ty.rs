@@ -16,6 +16,10 @@ pub enum OpaqueTy {
     File,
     CancelToken,
     Connection,
+    Input,
+    Output,
+    Listener,
+    UdpSocket,
 }
 
 impl OpaqueTy {
@@ -34,6 +38,10 @@ impl OpaqueTy {
             OpaqueTy::File => "fs.File",
             OpaqueTy::CancelToken => "task.CancelToken",
             OpaqueTy::Connection => "net.Connection",
+            OpaqueTy::Input => "io.Input",
+            OpaqueTy::Output => "io.Output",
+            OpaqueTy::Listener => "net.Listener",
+            OpaqueTy::UdpSocket => "net.UdpSocket",
         }
     }
 
@@ -210,7 +218,12 @@ impl Ty {
                         | OpaqueTy::Graph
                         | OpaqueTy::Heap
                         | OpaqueTy::File
-                        | OpaqueTy::CancelToken,
+                        | OpaqueTy::CancelToken
+                        | OpaqueTy::Connection
+                        | OpaqueTy::Input
+                        | OpaqueTy::Output
+                        | OpaqueTy::Listener
+                        | OpaqueTy::UdpSocket,
                     ..
                 }
         )
@@ -240,10 +253,10 @@ impl Ty {
         }
     }
 
-    /// `Never` and `Infer` (at any depth) are subtypes of everything (v1 — full inference pending).
-    /// Structural unification-based check. In v2 we don't record substitutions
-    /// but we walk both types to ensure they can be made equal when treating
-    /// `Infer(_)` as a wildcard.
+    /// `Never` and unsolved `Infer` (at any depth) are treated as assignable in this
+    /// structural check. Ori requires explicit binding annotations; local inference
+    /// variables are solved in `TypeChecker::unify`, not here. This helper treats
+    /// `Infer(_)` as a wildcard when comparing type shapes.
     pub fn is_assignable_to(&self, other: &Ty) -> bool {
         use Ty::*;
         // Reflexive & error/never rules

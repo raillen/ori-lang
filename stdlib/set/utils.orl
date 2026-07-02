@@ -1,6 +1,5 @@
 namespace ori.set.utils
 
-import ori.list as lists
 import ori.set as sets
 
 public func contains_all(s: set<string>, items: list<string>) -> bool
