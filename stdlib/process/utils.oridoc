@@ -1,0 +1,38 @@
+oridoc 1
+
+namespace ori.process.utils
+
+doc module self
+    summary:
+        Helpers that extract fields from a process capture map.
+    details:
+        A capture map is the `map<string, string>` returned by process
+        run helpers, with keys such as `status`, `stdout`, and `stderr`.
+end
+
+doc func exit_code
+    summary:
+        Returns the `status` field of `capture` parsed as an integer.
+    param capture:
+        Process capture map.
+    returns:
+        The exit code, or `-1` when missing or unparseable.
+end
+
+doc func stdout
+    summary:
+        Returns the `stdout` field of `capture`.
+    param capture:
+        Process capture map.
+    returns:
+        Captured stdout, or the empty string when missing.
+end
+
+doc func stderr
+    summary:
+        Returns the `stderr` field of `capture`.
+    param capture:
+        Process capture map.
+    returns:
+        Captured stderr, or the empty string when missing.
+end

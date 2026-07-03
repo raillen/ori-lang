@@ -348,12 +348,9 @@ impl<'a> Checker<'a> {
             let import_path = import.path.to_string();
             for item in &import.selected {
                 let alias = selected_import_alias(item);
-                if let Some(canonical) = crate::stdlib::resolve_flattened_stdlib_member(
-                    import_path.as_str(),
-                    &item.name.text,
-                    |path| self.def_map.lookup(path).is_some(),
-                ) {
-                    self.aliases.insert(alias, canonical);
+                let direct = format!("{}.{}", import_path, item.name.text);
+                if self.def_map.lookup(&direct).is_some() {
+                    self.aliases.insert(alias, smol_str::SmolStr::new(direct));
                 }
             }
         }
@@ -541,21 +538,10 @@ impl<'a> Checker<'a> {
     }
 
     fn check_selected_import_members(&mut self, import: &ImportDecl) {
-        let import_path = import.path.to_string();
+        let _import_path = import.path.to_string();
         for item in &import.selected {
             let target = selected_import_target(import, item);
-            let resolved = crate::stdlib::resolve_flattened_stdlib_member(
-                import_path.as_str(),
-                &item.name.text,
-                |path| {
-                    self.def_map.lookup(path).is_some()
-                        || stdlib_func_sig(path).is_some()
-                        || stdlib_const_ty(path).is_some()
-                        || stdlib_named_ty_exists(path)
-                },
-            )
-            .map(|path| path.to_string())
-            .unwrap_or_else(|| target.to_string());
+            let resolved = target.to_string();
 
             if let Some(def_id) = self.def_map.lookup(resolved.as_str()) {
                 self.check_visibility(def_id, item.name.span);
@@ -5281,18 +5267,21 @@ impl<'a> Checker<'a> {
         matches!(ty, Ty::String)
             || is_current_integer_hash_supported(ty)
             || self.user_type_has_hash_and_eq(ty)
+            || self.param_has_hash_and_eq(ty)
     }
 
     fn is_current_set_element_supported(&self, ty: &Ty) -> bool {
         matches!(ty, Ty::String)
             || is_current_integer_hash_supported(ty)
             || self.user_type_has_hash_and_eq(ty)
+            || self.param_has_hash_and_eq(ty)
     }
 
     fn is_current_heap_element_supported(&self, ty: &Ty) -> bool {
         matches!(ty, Ty::String)
             || is_current_integer_hash_supported(ty)
             || self.user_type_implements_core_trait(ty, "Comparable")
+            || self.param_implements_core_trait_by_ty(ty, "Comparable")
     }
 
     fn user_type_has_hash_and_eq(&self, ty: &Ty) -> bool {
@@ -5301,6 +5290,21 @@ impl<'a> Checker<'a> {
         };
         self.user_type_implements_core_trait_id(*type_def_id, "Hashable")
             && self.user_type_implements_core_trait_id(*type_def_id, "Equatable")
+    }
+
+    fn param_has_hash_and_eq(&self, ty: &Ty) -> bool {
+        let Ty::Param { index, .. } = ty else {
+            return false;
+        };
+        self.param_implements_core_trait(*index, "Hashable")
+            && self.param_implements_core_trait(*index, "Equatable")
+    }
+
+    fn param_implements_core_trait_by_ty(&self, ty: &Ty, trait_name: &str) -> bool {
+        let Ty::Param { index, .. } = ty else {
+            return false;
+        };
+        self.param_implements_core_trait(*index, trait_name)
     }
 
     fn user_type_has_equatable(&self, ty: &Ty) -> bool {

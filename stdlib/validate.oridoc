@@ -1,0 +1,250 @@
+oridoc 1
+
+namespace ori.validate
+
+doc module self
+    summary:
+        Predicate helpers for common input validation.
+    details:
+        Small boolean checkers over integers and strings. Intended for
+        guard clauses and test assertions, not schema validation.
+end
+
+doc func between
+    summary:
+        Reports whether `value` is in the inclusive range `[min_val, max_val]`.
+    param value:
+        Integer to test.
+    param min_val:
+        Inclusive lower bound.
+    param max_val:
+        Inclusive upper bound.
+    returns:
+        `true` when `min_val <= value <= max_val`.
+end
+
+doc func positive
+    summary:
+        Reports whether `value` is greater than zero.
+    param value:
+        Integer to test.
+    returns:
+        `true` when `value > 0`.
+end
+
+doc func non_negative
+    summary:
+        Reports whether `value` is zero or positive.
+    param value:
+        Integer to test.
+    returns:
+        `true` when `value >= 0`.
+end
+
+doc func negative
+    summary:
+        Reports whether `value` is less than zero.
+    param value:
+        Integer to test.
+    returns:
+        `true` when `value < 0`.
+end
+
+doc func non_zero
+    summary:
+        Reports whether `value` is not zero.
+    param value:
+        Integer to test.
+    returns:
+        `true` when `value != 0`.
+end
+
+doc func one_of
+    summary:
+        Reports whether `value` equals any integer in `candidates`.
+    param value:
+        Integer to look for.
+    param candidates:
+        Integers to compare against.
+    returns:
+        `true` when a match is found.
+end
+
+doc func one_of_string
+    summary:
+        Reports whether `value` equals any string in `candidates`.
+    param value:
+        String to look for.
+    param candidates:
+        Strings to compare against.
+    returns:
+        `true` when a match is found.
+end
+
+doc func not_empty
+    summary:
+        Reports whether `value` has non-zero length.
+    param value:
+        String to test.
+    returns:
+        `true` when the string is not empty.
+end
+
+doc func not_empty_text
+    summary:
+        Alias of `not_empty`.
+    param value:
+        String to test.
+    returns:
+        `true` when the string is not empty.
+end
+
+doc func min_length
+    summary:
+        Reports whether `value` has at least `min_val` characters.
+    param value:
+        String to test.
+    param min_val:
+        Inclusive minimum length.
+    returns:
+        `true` when `len(value) >= min_val`.
+end
+
+doc func min_len
+    summary:
+        Alias of `min_length`.
+    param value:
+        String to test.
+    param min_val:
+        Inclusive minimum length.
+    returns:
+        `true` when `len(value) >= min_val`.
+end
+
+doc func max_length
+    summary:
+        Reports whether `value` has at most `max_val` characters.
+    param value:
+        String to test.
+    param max_val:
+        Inclusive maximum length.
+    returns:
+        `true` when `len(value) <= max_val`.
+end
+
+doc func max_len
+    summary:
+        Alias of `max_length`.
+    param value:
+        String to test.
+    param max_val:
+        Inclusive maximum length.
+    returns:
+        `true` when `len(value) <= max_val`.
+end
+
+doc func length_between
+    summary:
+        Reports whether the length of `value` is in `[min_val, max_val]`.
+    param value:
+        String to test.
+    param min_val:
+        Inclusive minimum length.
+    param max_val:
+        Inclusive maximum length.
+    returns:
+        `true` when the length is within the range.
+end
+
+doc func even
+    summary:
+        Reports whether `value` is divisible by two.
+    param value:
+        Integer to test.
+    returns:
+        `true` when `value % 2 == 0`.
+end
+
+doc func odd
+    summary:
+        Reports whether `value` is not divisible by two.
+    param value:
+        Integer to test.
+    returns:
+        `true` when `value % 2 != 0`.
+end
+
+doc func in_range
+    summary:
+        Alias of `between`.
+    param value:
+        Integer to test.
+    param min_val:
+        Inclusive lower bound.
+    param max_val:
+        Inclusive upper bound.
+    returns:
+        `true` when within the range.
+end
+
+doc func blank
+    summary:
+        Reports whether `value` is empty or only whitespace.
+    param value:
+        String to test.
+    returns:
+        `true` when the trimmed value is empty.
+end
+
+doc func length_equal
+    summary:
+        Reports whether the length of `value` equals `expected`.
+    param value:
+        String to test.
+    param expected:
+        Required length.
+    returns:
+        `true` when `len(value) == expected`.
+end
+
+doc func all_digits
+    summary:
+        Reports whether `value` is non-empty and only ASCII digits.
+    param value:
+        String to test.
+    returns:
+        `true` when every character is `0`-`9`.
+end
+
+doc func matches_length
+    summary:
+        Alias of `length_equal`.
+    param value:
+        String to test.
+    param exact:
+        Required length.
+    returns:
+        `true` when `len(value) == exact`.
+end
+
+doc func int_in_range
+    summary:
+        Alias of `between`.
+    param value:
+        Integer to test.
+    param min_val:
+        Inclusive lower bound.
+    param max_val:
+        Inclusive upper bound.
+    returns:
+        `true` when within the range.
+end
+
+doc func string_not_blank
+    summary:
+        Reports whether `value` is not blank.
+    param value:
+        String to test.
+    returns:
+        `true` when the trimmed value is non-empty.
+end

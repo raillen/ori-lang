@@ -1,0 +1,290 @@
+oridoc 1
+
+namespace ori.string
+
+doc module self
+    summary:
+        Text helpers composed over the native `ori.string` runtime surface.
+    details:
+        Import with `import ori.string as str` for the runtime functions, or
+        `import ori.string only (is_empty, trim_all)` for these compositional
+        helpers. Operates on byte-oriented slices; multi-byte sequences are
+        handled positionally.
+end
+
+doc func is_empty
+    summary:
+        Reports whether `s` has zero length.
+    param s:
+        String to test.
+    returns:
+        `true` when the string is empty, `false` otherwise.
+end
+
+doc func blank
+    summary:
+        Reports whether `s` is empty or only whitespace after trimming.
+    param s:
+        String to test.
+    returns:
+        `true` when the trimmed value is empty.
+end
+
+doc func replicate
+    summary:
+        Repeats `s` exactly `n` times.
+    param s:
+        String to repeat.
+    param n:
+        Number of repetitions. Negative values yield the empty string.
+    returns:
+        The concatenated repetition of `s`.
+end
+
+doc func default
+    summary:
+        Returns `s` when non-empty, otherwise `fallback`.
+    param s:
+        Primary value.
+    param fallback:
+        Value used when `s` is empty.
+    returns:
+        `s` if not empty, else `fallback`.
+end
+
+doc func equals_ignore_case
+    summary:
+        Compares two strings case-insensitively.
+    param a:
+        First string.
+    param b:
+        Second string.
+    returns:
+        `true` when both strings compare equal after lowercasing.
+end
+
+doc func center
+    summary:
+        Pads `s` with spaces so it is centered within `width`.
+    param s:
+        String to center.
+    param width:
+        Target total width.
+    returns:
+        The centered string, or `s` unchanged when already at least `width` long.
+end
+
+doc func count
+    summary:
+        Counts non-overlapping occurrences of `sub` in `s`.
+    param s:
+        String to search in.
+    param sub:
+        Needle to count. An empty needle returns `0`.
+    returns:
+        Number of occurrences.
+end
+
+doc func reverse
+    summary:
+        Returns `s` with its characters reversed positionally.
+    param s:
+        String to reverse.
+    returns:
+        The reversed string.
+end
+
+doc func capitalize
+    summary:
+        Upper-cases the first character and lower-cases the rest.
+    param s:
+        String to capitalize.
+    returns:
+        The capitalized string, or the empty string unchanged.
+end
+
+doc func title
+    summary:
+        Capitalizes each space-separated word of `s`.
+    param s:
+        String to title-case.
+    returns:
+        Words joined by single spaces, each capitalized.
+end
+
+doc func swap_case
+    summary:
+        Swaps ASCII letter case of every character in `s`.
+    param s:
+        String to transform.
+    returns:
+        A new string with inverted ASCII letter case.
+end
+
+doc func lines
+    summary:
+        Splits `s` on newline characters.
+    param s:
+        String to split.
+    returns:
+        List of lines.
+end
+
+doc func left
+    summary:
+        Returns the first `n` characters of `s`.
+    param s:
+        Source string.
+    param n:
+        Number of leading characters to keep.
+    returns:
+        The leading slice.
+end
+
+doc func right
+    summary:
+        Returns the last `n` characters of `s`.
+    param s:
+        Source string.
+    param n:
+        Number of trailing characters to keep.
+    returns:
+        The trailing slice, or `s` when `n` exceeds its length.
+end
+
+doc func words
+    summary:
+        Splits `s` on spaces and drops empty fragments.
+    param s:
+        String to split.
+    returns:
+        Non-empty word fragments.
+end
+
+doc func trim_all
+    summary:
+        Collapses repeated whitespace into single spaces and trims the ends.
+    param s:
+        String to normalize.
+    returns:
+        Whitespace-normalized string.
+end
+
+doc func last_index_of
+    summary:
+        Finds the starting index of the last occurrence of `needle`.
+    param s:
+        String to search in.
+    param needle:
+        Needle to locate.
+    returns:
+        Starting index, or `-1` when not found or needle is empty.
+end
+
+doc func is_digits
+    summary:
+        Reports whether `s` is non-empty and only ASCII digits.
+    param s:
+        String to test.
+    returns:
+        `true` when every character is `0`-`9`.
+end
+
+doc func has_whitespace
+    summary:
+        Reports whether `s` contains any space, tab, or newline character.
+    param s:
+        String to test.
+    returns:
+        `true` when at least one whitespace character is present.
+end
+
+doc func limit
+    summary:
+        Truncates `s` to at most `max_len` characters.
+    param s:
+        Source string.
+    param max_len:
+        Maximum number of characters to keep.
+    returns:
+        The leading slice, or `s` when already short enough.
+end
+
+doc func replace_all
+    summary:
+        Replaces every non-overlapping occurrence of `needle` with `replacement`.
+    param s:
+        Source string.
+    param needle:
+        Text to replace. An empty needle leaves `s` unchanged.
+    param replacement:
+        Text to substitute.
+    returns:
+        A new string with all replacements applied.
+end
+
+doc func has_prefix
+    summary:
+        Reports whether `s` starts with `prefix`.
+    param s:
+        String to test.
+    param prefix:
+        Expected prefix.
+    returns:
+        `true` when `s` starts with `prefix`.
+end
+
+doc func has_suffix
+    summary:
+        Reports whether `s` ends with `suffix`.
+    param s:
+        String to test.
+    param suffix:
+        Expected suffix.
+    returns:
+        `true` when `s` ends with `suffix`.
+end
+
+doc func join_non_empty
+    summary:
+        Joins the non-empty entries of `parts` with `separator`.
+    param parts:
+        Fragments to join.
+    param separator:
+        Separator inserted between non-empty fragments.
+    returns:
+        The joined string, skipping empty fragments.
+end
+
+doc func repeated
+    summary:
+        Alias of `replicate`; repeats `s` `times` times.
+    param s:
+        String to repeat.
+    param times:
+        Number of repetitions.
+    returns:
+        The concatenated repetition of `s`.
+end
+
+doc func equals_any
+    summary:
+        Reports whether `value` equals any entry in `candidates`.
+    param value:
+        Value to look for.
+    param candidates:
+        Strings to compare against.
+    returns:
+        `true` when a match is found.
+end
+
+doc func truncate
+    summary:
+        Alias of `limit`; truncates `s` to at most `max_len` characters.
+    param s:
+        Source string.
+    param max_len:
+        Maximum number of characters to keep.
+    returns:
+        The leading slice, or `s` when already short enough.
+end

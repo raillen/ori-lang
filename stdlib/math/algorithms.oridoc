@@ -1,0 +1,63 @@
+oridoc 1
+
+namespace ori.math.algorithms
+
+doc module self
+    summary:
+        Float-oriented math algorithms over `ori.math`.
+end
+
+doc func clamp_float
+    summary:
+        Clamps `value` to the inclusive range `[min_val, max_val]`.
+    param value:
+        Float to clamp.
+    param min_val:
+        Inclusive lower bound.
+    param max_val:
+        Inclusive upper bound.
+    returns:
+        The clamped float.
+end
+
+doc func hypot
+    summary:
+        Returns `sqrt(a*a + b*b)` without intermediate overflow.
+    param a:
+        First leg.
+    param b:
+        Second leg.
+    returns:
+        The hypotenuse length.
+end
+
+doc func lerp_float
+    summary:
+        Linearly interpolates from `a` to `b` by `t`.
+    param a:
+        Start value.
+    param b:
+        End value.
+    param t:
+        Interpolation factor.
+    returns:
+        The interpolated float.
+end
+
+doc func is_approx_zero
+    summary:
+        Reports whether `value` is within `1e-5` of zero.
+    param value:
+        Float to test.
+    returns:
+        `true` when `value` is approximately zero.
+end
+
+doc func sign_float
+    summary:
+        Returns the sign of `value`.
+    param value:
+        Float to inspect.
+    returns:
+        `-1`, `0`, or `1`.
+end

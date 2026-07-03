@@ -92,16 +92,16 @@ This is no longer a future item — the infrastructure is live.
   `concat`/`slice` that allocate) stay here.
 - **Layer 2 (`.orl` wrappers):** `stdlib/**/*.orl`, call Layer 1 via normal
   `import`. Cold compositional functions go here. Modules include
-  `ori.validate`, `ori.path`, `ori.string.utils`, `ori.list.utils`,
-  `ori.convert.utils`, `ori.map.utils`, `ori.set.utils`, `ori.bytes.utils`,
-  `ori.math.utils`, `ori.json.utils`, `ori.io.utils`, `ori.fs.utils`,
-  `ori.time.utils`, `ori.test.utils`, `ori.process.utils`,
-  `ori.concurrent.utils`. Gap parity map: `docs/planning/stdlib-gap-parity.md`.
+  `ori.validate`, `ori.path`, `ori.string`, `ori.list`,
+  `ori.convert`, `ori.map`, `ori.set`, `ori.bytes`,
+  `ori.math`, `ori.json`, `ori.io`, `ori.fs`,
+  `ori.time`, `ori.test`, `ori.process`,
+  `ori.concurrent`. Gap parity map: `docs/planning/stdlib-gap-parity.md`.
 - **Layer 3 (`.orl` algorithms):** pure-Ori algorithms on top of Layer 1+2.
-  Modules: `ori.list.algorithms` (`sum_int`, `binary_search_int`,
-  `all_equal_int`), `ori.tree.algorithms` (iterative traversals:
+  Modules: `ori.list` (`sum_int`, `binary_search_int`,
+  `all_equal_int`), `ori.tree` (iterative traversals:
   `values_preorder`, `leaf_count`, `max_depth_from`, `is_leaf`),
-  `ori.graph.algorithms` (BFS in `.orl`: `has_path`, `reachable_count`,
+  `ori.graph` (BFS in `.orl`: `has_path`, `reachable_count`,
   `is_reachable`, `has_path_int`). Layer 3 avoids recursive generic helpers
   (typechecker rejects `generic.circular_instantiation`) and runtime traversal
   shortcuts where the goal is to express logic in Ori itself.
@@ -187,8 +187,8 @@ Implemented parent modules:
 Instead of importing many helper modules:
 ```ori
 import ori.string as str
-import ori.string.utils as su
-import ori.string.algorithms as sa
+import ori.string as su
+import ori.string as sa
 ```
 Users can import only the helper names needed from the unified root namespace:
 
@@ -200,7 +200,7 @@ Normal alias imports such as `import ori.string as str` continue to expose the
 native runtime surface (`str.len`, `str.slice`, `str.parse_int`, etc.) without
 forcing the parent `.orl` helper module into every compile.
 
-Compatibility rule: old submodules remain valid. `ori.string.utils`,
-`ori.string.algorithms`, `ori.list.utils`, `ori.list.algorithms`, and
-`ori.fs.utils` are still loaded from their existing files. Do not remove them
+Compatibility rule: old submodules remain valid. `ori.string`,
+`ori.string`, `ori.list`, `ori.list`, and
+`ori.fs` are still loaded from their existing files. Do not remove them
 until a future breaking release has a documented migration window.

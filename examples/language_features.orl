@@ -1,0 +1,326 @@
+namespace app.language_features
+
+--- Demonstra as features fundamentais da linguagem Ori:
+--- structs, enums, traits, generics, pattern matching, error handling,
+--- closures, pipes, contratos e operadores.
+
+import ori.core as core
+import ori.io as io
+import ori.list as lists
+import ori.string as su
+
+func section(title: string)
+    io.println("")
+    io.println(f"=== {title} ===")
+end
+
+-- ─────────────────── Structs ────────────────────
+struct Point
+    x: int
+    y: int
+end
+
+struct Color
+    r: int
+    g: int
+    b: int
+end
+
+struct Pixel
+    pos: Point
+    color: Color
+end
+
+func demo_structs()
+    section("Structs and Struct Update")
+
+    const origin: Point = Point(x: 0, y: 0)
+    const moved: Point = Point(x: 5, y: 10)
+    io.println(f"  origin: ({origin.x}, {origin.y})")
+    io.println(f"  moved: ({moved.x}, {moved.y})")
+
+    -- Struct update syntax
+    const shifted: Point = moved with { x: 99 } end
+    io.println(f"  shifted: ({shifted.x}, {shifted.y})")
+
+    -- Nested struct
+    const px: Pixel = Pixel(pos: Point(x: 3, y: 7), color: Color(r: 255, g: 128, b: 0))
+    io.println(f"  pixel at ({px.pos.x}, {px.pos.y}) color r={px.color.r}")
+end
+
+-- ─────────────────── Enums ──────────────────────
+enum Shape
+    Circle(radius: int)
+    Rectangle(width: int, height: int)
+    Triangle(base: int, height: int)
+end
+
+func shape_area(s: Shape) -> int
+    match s
+    case Circle(radius):
+        return radius * radius * 3
+    case Rectangle(width, height):
+        return width * height
+    case Triangle(base, height):
+        return (base * height) / 2
+    end
+    return 0
+end
+
+func shape_name(s: Shape) -> string
+    match s
+    case Circle(radius):
+        return "Circle"
+    case Rectangle(width, height):
+        return "Rectangle"
+    case Triangle(base, height):
+        return "Triangle"
+    end
+    return "Unknown"
+end
+
+func demo_enums()
+    section("Enums and Pattern Matching")
+
+    const shapes: list<Shape> = [
+        Shape.Circle(radius: 5),
+        Shape.Rectangle(width: 4, height: 6),
+        Shape.Triangle(base: 10, height: 3)
+    ]
+
+    for s in shapes
+        io.println(f"  {shape_name(s)}: area = {shape_area(s)}")
+    end
+end
+
+-- ─────────────────── Traits ─────────────────────
+struct Animal
+    name: string
+    sound: string
+    legs: int
+end
+
+implement core.Equatable for Animal
+    func equals(self, other: Animal) -> bool
+        return self.name == other.name
+    end
+end
+
+func demo_traits()
+    section("Traits (Equatable)")
+
+    const cat: Animal = Animal(name: "Cat", sound: "meow", legs: 4)
+    const dog: Animal = Animal(name: "Dog", sound: "woof", legs: 4)
+    const another_cat: Animal = Animal(name: "Cat", sound: "purr", legs: 4)
+
+    io.println(f"  cat == dog: {cat == dog}")
+    io.println(f"  cat == another_cat: {cat == another_cat}")
+end
+
+-- ─────────────── Generic Functions ──────────────
+func first_or_custom<T>(items: list<T>, fallback: T) -> T
+    if some(item) = lists.try_get(items, 0)
+        return item
+    end
+    return fallback
+end
+
+func repeat_element<T>(item: T, count: int) -> list<T>
+    var out: list<T> = []
+    var i: int = 0
+    while i < count
+        lists.push(out, item)
+        i = i + 1
+    end
+    return out
+end
+
+func demo_generics()
+    section("Generic Functions")
+
+    io.println(f"  first_or int: {first_or_custom([10, 20, 30], -1)}")
+    const fb_str: string = "empty"
+    const str_items: list<string> = ["hello", "world"]
+    io.println(f"  first_or string: {first_or_custom(str_items, fb_str)}")
+    const empty_list: list<int> = []
+    io.println(f"  first_or empty: {first_or_custom(empty_list, -1)}")
+
+    const repeated: list<string> = repeat_element("Ori", 3)
+    io.println(f"  repeat_element: [{repeated[0]}, {repeated[1]}, {repeated[2]}]")
+end
+
+-- ──────────── Optional and Result ──────────────
+func safe_divide(a: int, b: int) -> result<int, string>
+    if b == 0
+        return error("division by zero")
+    end
+    return success(a / b)
+end
+
+func find_by_name(names: list<string>, target: string) -> optional<int>
+    var i: int = 0
+    while i < lists.len(names)
+        if some(name) = lists.try_get(names, i)
+            if name == target
+                return some(i)
+            end
+        end
+        i = i + 1
+    end
+    return none
+end
+
+func demo_optional_result()
+    section("Optional and Result")
+
+    match safe_divide(10, 3)
+    case success(val):
+        io.println(f"  10 / 3 = {val}")
+    case error(msg):
+        io.println(f"  error: {msg}")
+    end
+
+    match safe_divide(10, 0)
+    case success(val):
+        io.println(f"  10 / 0 = {val}")
+    case error(msg):
+        io.println(f"  10 / 0 error: {msg}")
+    end
+
+    const people: list<string> = ["Ada", "Grace", "Margaret"]
+
+    const grace: string = "Grace"
+    match find_by_name(people, grace)
+    case some(idx):
+        io.println(f"  found Grace at index {idx}")
+    case none:
+        io.println("  Grace not found")
+    end
+
+    const linus: string = "Linus"
+    match find_by_name(people, linus)
+    case some(idx):
+        io.println(f"  found Linus at index {idx}")
+    case none:
+        io.println("  Linus not found (expected)")
+    end
+
+    const ada: string = "Ada"
+    if some(idx) = find_by_name(people, ada)
+        io.println(f"  if-some: Ada at index {idx}")
+    end
+end
+
+-- ─────────── Control Flow and Loops ───────────
+func demo_control_flow()
+    section("Control Flow")
+
+    const items: list<string> = ["alpha", "beta", "gamma"]
+    for item, idx in items
+        io.println(f"  [{idx}] {item}")
+    end
+
+    var count: int = 3
+    io.print("  countdown: ")
+    while count > 0
+        io.print(f"{count} ")
+        count = count - 1
+    end
+    io.println("launch!")
+
+    var n: int = 1
+    var total: int = 0
+    loop
+        if n > 5
+            break
+        end
+        total = total + n
+        n = n + 1
+    end
+    io.println(f"  loop sum 1..5: {total}")
+
+    var rep_count: int = 0
+    repeat 4 times
+        rep_count = rep_count + 1
+    end
+    io.println(f"  repeat 4 times: {rep_count}")
+
+    const status: string = if total > 10 then "high" else "low"
+    io.println(f"  inline if: {status}")
+end
+
+-- ─────────────── Pipe Operator ──────────────
+func double(n: int) -> int
+    return n * 2
+end
+
+func add_ten(n: int) -> int
+    return n + 10
+end
+
+func to_label(n: int) -> string
+    return f"result: {n}"
+end
+
+func demo_pipe()
+    section("Pipe Operator")
+
+    const label: string = 5 |> double |> add_ten |> to_label
+    io.println(f"  5 |> double |> add_ten |> to_label = {label}")
+end
+
+-- ──────────── Structural Equality ───────────
+func demo_structural_equality()
+    section("Structural Equality")
+
+    const p1: Point = Point(x: 1, y: 2)
+    const p2: Point = Point(x: 1, y: 2)
+    const p3: Point = Point(x: 3, y: 4)
+    io.println(f"  p1 == p2: {p1 == p2}")
+    io.println(f"  p1 == p3: {p1 == p3}")
+    io.println(f"  p1 != p3: {p1 != p3}")
+
+    const a: list<int> = [1, 2, 3]
+    const b: list<int> = [1, 2, 3]
+    const c: list<int> = [1, 2, 4]
+    io.println(f"  [1,2,3] == [1,2,3]: {a == b}")
+    io.println(f"  [1,2,3] == [1,2,4]: {a == c}")
+end
+
+-- ──────────── String Features ───────────────
+func demo_strings()
+    section("String Features")
+
+    const name: string = "Ori"
+    const version: int = 2
+    io.println(f"  {name} v0.{version}")
+
+    const block: string = """
+    multi-line
+    string
+    """
+    const line_count: int = lists.len(su.lines(block))
+    io.println(f"  triple-string lines: {line_count}")
+
+    const emoji: string = "Hello!"
+    io.println(f"  unicode string: {emoji}")
+    io.println(f"  unicode len: {ori.string.len(emoji)}")
+end
+
+-- ──────────────── Main ──────────────────────────
+func main()
+    io.println("Ori Language — Language Features Showcase")
+    io.println("==========================================")
+
+    demo_structs()
+    demo_enums()
+    demo_traits()
+    demo_generics()
+    demo_optional_result()
+    demo_control_flow()
+    demo_pipe()
+    demo_structural_equality()
+    demo_strings()
+
+    section("All language features validated!")
+end

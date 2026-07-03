@@ -9166,7 +9166,7 @@ fn compile_runs_stdlib_source_module_string_utils() {
         r#"namespace app.main
 
 import ori.io as io
-import ori.string.utils as su
+import ori.string as su
 
 func main()
     io.print(string(su.is_empty("")))
@@ -9190,7 +9190,7 @@ fn compile_runs_stdlib_source_module_string_utils_layer2() {
         r#"namespace app.main
 
 import ori.io as io
-import ori.string.utils as su
+import ori.string as su
 
 func main()
     io.print(su.default("", "fb"))
@@ -9219,7 +9219,7 @@ fn compile_runs_stdlib_source_module_string_utils_layer2_expanded() {
         r#"namespace app.main
 
 import ori.io as io
-import ori.string.utils as su
+import ori.string as su
 
 func main()
     io.print(su.reverse("abc"))
@@ -9243,7 +9243,7 @@ fn compile_runs_stdlib_source_module_list_utils() {
         r#"namespace app.main
 
 import ori.io as io
-import ori.list.utils as lu
+import ori.list as lu
 
 func main()
     const items: list<string> = ["a", "b", "c"]
@@ -9293,7 +9293,7 @@ fn compile_runs_stdlib_source_module_map_utils() {
         r#"namespace app.main
 
 import ori.io as io
-import ori.map.utils as mu
+import ori.map as mu
 
 func main()
     const scores: map<string, int> = { "a": 1, "b": 2 }
@@ -9396,7 +9396,7 @@ fn compile_runs_stdlib_source_module_string_utils_layer2_full() {
 
 import ori.io as io
 import ori.list as lists
-import ori.string.utils as su
+import ori.string as su
 
 func main()
     io.print(su.left("hello", 2))
@@ -9422,7 +9422,7 @@ fn compile_runs_stdlib_source_module_list_utils_expanded() {
         r#"namespace app.main
 
 import ori.io as io
-import ori.list.utils as lu
+import ori.list as lu
 
 func main()
     const one: list<int> = lu.singleton(42)
@@ -9464,7 +9464,7 @@ fn compile_runs_stdlib_source_module_list_algorithms() {
         r#"namespace app.main
 
 import ori.io as io
-import ori.list.algorithms as la
+import ori.list as la
 
 func main()
     const nums: list<int> = [1, 2, 3, 4]
@@ -9735,7 +9735,7 @@ fn compile_runs_stdlib_source_module_string_utils_gap_parity() {
         r#"namespace app.main
 
 import ori.io as io
-import ori.string.utils as su
+import ori.string as su
 
 func main()
     io.print(string(su.last_index_of("abab", "ab")))
@@ -9819,11 +9819,11 @@ fn compile_runs_stdlib_source_module_map_utils_gap_parity() {
         r#"namespace app.main
 
 import ori.io as io
-import ori.map.utils as mu
+import ori.map as mu
 
 func main()
     const empty: map<string, int> = {}
-    io.print(string(mu.is_empty(empty)))
+    io.print(string(mu.is_empty_int(empty)))
     const data: map<string, int> = { "x": 1 }
     io.print(string(mu.has_key(data, "x")))
     io.print(string(mu.has_key(data, "y")))
@@ -9971,9 +9971,9 @@ import ori.heap.utils as heap_utils
 import ori.hash_table.utils as hash_table_utils
 import ori.linked_list.utils as linked_list_utils
 import ori.doubly_linked_list.utils as doubly_linked_list_utils
-import ori.map.algorithms as map_algorithms
+import ori.map as map_algorithms
 import ori.set.algorithms as set_algorithms
-import ori.string.algorithms as string_algorithms
+import ori.string as string_algorithms
 import ori.bytes.algorithms as bytes_algorithms
 import ori.math.algorithms as math_algorithms
 
@@ -10040,16 +10040,16 @@ func main()
     io.print(string(iter_utils.contains_int([1, 2, 3], 2)))
     io.print(string(os_utils.pid() > 0))
     io.print(string(random_utils.seeded_int(7, 1, 3) >= 1))
-    const q: queue.Queue<int> = queue_utils.from_list_int([10, 20])
-    io.print(string(queue_utils.peek_or_int(q, -1)))
-    const s: stack.Stack<int> = stack_utils.from_list_int([5, 6])
-    io.print(string(stack_utils.peek_or_int(s, -1)))
-    const d: deque.Deque<int> = deque_utils.from_list_int([1, 2, 3])
-    io.print(string(deque_utils.front_or_int(d, -1)))
+    const q: queue.Queue<int> = queue_utils.from_list([10, 20])
+    io.print(string(queue_utils.peek_or(q, -1)))
+    const s: stack.Stack<int> = stack_utils.from_list([5, 6])
+    io.print(string(stack_utils.peek_or(s, -1)))
+    const d: deque.Deque<int> = deque_utils.from_list([1, 2, 3])
+    io.print(string(deque_utils.front_or(d, -1)))
     const h: heap.Heap<int> = heap_utils.from_list_int([30, 10, 20])
     io.print(string(heap_utils.peek_or_int(h, -1)))
-    const ll: linked_list.LinkedList<int> = linked_list_utils.from_list_int([9, 8])
-    io.print(string(linked_list_utils.front_or_int(ll, -1)))
+    const ll: linked_list.LinkedList<int> = linked_list_utils.from_list([9, 8])
+    io.print(string(linked_list_utils.front_or(ll, -1)))
     var table: hash_table.HashTable<string, int> = hash_table.new()
     hash_table.set(table, "a", 1)
     io.print(string(hash_table_utils.get_or_string_int(table, "a", 0)))
@@ -10077,12 +10077,12 @@ fn compile_runs_stdlib_layer3_algorithms_extensions() {
 import ori.bytes.algorithms as bytes_algorithms
 import ori.io as io
 import ori.map as maps
-import ori.map.algorithms as map_algorithms
+import ori.map as map_algorithms
 import ori.math.algorithms as math_algorithms
 import ori.set.algorithms as set_algorithms
 import ori.set as sets
 import ori.string as str
-import ori.string.algorithms as string_algorithms
+import ori.string as string_algorithms
 
 func main()
     var base: map<string, int> = maps.new()
@@ -10247,23 +10247,21 @@ end
 }
 
 #[test]
-fn check_keeps_legacy_stdlib_submodule_paths_compatible() {
-    let dir = TestDir::new("legacy_stdlib_submodule_compat");
+fn check_keeps_stdlib_flattened_paths_compatible() {
+    let dir = TestDir::new("flattened_stdlib_paths_compat");
     dir.write(
         "main.orl",
         r#"namespace app.main
 
 import ori.fs.utils as fu
-import ori.list.algorithms as la
-import ori.list.utils as lu
-import ori.string.algorithms as sa
-import ori.string.utils as su
+import ori.list as lu
+import ori.string as su
 
 func main()
     const empty: bool = su.is_empty("")
-    const text: string = sa.truncate("abcdef", 3)
+    const text: string = su.truncate("abcdef", 3)
     const one: list<int> = lu.singleton(3)
-    const total: int = la.sum_int(one)
+    const total: int = lu.sum_int(one)
     const fallback: string = fu.read_text_or("missing.txt", "fallback")
 end
 "#,
@@ -10283,7 +10281,8 @@ fn check_accepts_flattened_stdlib_parent_selective_imports() {
 import ori.map as maps
 import ori.map only (get_or, merge_string_int)
 import ori.bytes as bytes_mod
-import ori.bytes only (compare_lex, is_empty)
+import ori.bytes.algorithms only (compare_lex)
+import ori.bytes.utils only (is_empty)
 
 func main()
     const m: map<string, int> = maps.new()

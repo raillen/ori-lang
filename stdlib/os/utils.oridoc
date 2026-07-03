@@ -1,0 +1,89 @@
+oridoc 1
+
+namespace ori.os.utils
+
+doc module self
+    summary:
+        Ergonomic wrappers over the native `ori.os` runtime surface.
+    details:
+        Adds fallback-returning accessors and platform predicates on top
+        of the raw OS primitives.
+end
+
+doc func env_or
+    summary:
+        Returns the environment variable `name`, or `fallback` when unset.
+    param name:
+        Variable name.
+    param fallback:
+        Value returned when the variable is missing.
+    returns:
+        The variable value, or `fallback`.
+end
+
+doc func has_env
+    summary:
+        Reports whether the environment variable `name` is set.
+    param name:
+        Variable name.
+    returns:
+        `true` when the variable is present.
+end
+
+doc func platform
+    summary:
+        Returns the normalized platform string.
+    returns:
+        One of `windows`, `linux`, `macos`, or `unknown`.
+end
+
+doc func arch
+    summary:
+        Returns the normalized architecture string.
+    returns:
+        One of `x86_64`, `aarch64`, `x86`, `arm`, or `unknown`.
+end
+
+doc func pid
+    summary:
+        Returns the current process id.
+    returns:
+        The OS process id.
+end
+
+doc func args
+    summary:
+        Returns the process argument vector.
+    returns:
+        List of command-line arguments.
+end
+
+doc func is_windows
+    summary:
+        Reports whether the current platform is Windows.
+    returns:
+        `true` on Windows.
+end
+
+doc func is_linux
+    summary:
+        Reports whether the current platform is Linux.
+    returns:
+        `true` on Linux.
+end
+
+doc func is_macos
+    summary:
+        Reports whether the current platform is macOS.
+    returns:
+        `true` on macOS or Darwin.
+end
+
+doc func current_dir_or
+    summary:
+        Returns the current working directory, or `fallback` on failure.
+    param fallback:
+        Value returned when the directory cannot be read.
+    returns:
+        The working directory, or `fallback`.
+end

@@ -1,0 +1,212 @@
+namespace app.generics_showcase
+
+--- Demonstra o uso de coleções genéricas da stdlib Ori.
+--- Cada coleção é testada com int e string para validar
+--- que a parametrização <T> funciona em todo o pipeline.
+
+import ori.deque as deque
+import ori.deque.utils as deque_utils
+import ori.doubly_linked_list as dll
+import ori.doubly_linked_list.utils as dll_utils
+import ori.io as io
+import ori.linked_list as ll
+import ori.linked_list.utils as ll_utils
+import ori.list as lists
+import ori.queue as queue
+import ori.queue.utils as queue_utils
+import ori.stack as stack
+import ori.stack.utils as stack_utils
+
+func section(title: string)
+    io.println("")
+    io.println(f"=== {title} ===")
+end
+
+-- ─────────────────── Queue<T> ───────────────────
+func demo_queue()
+    section("Queue — FIFO generica")
+
+    -- Queue<int>
+    const numbers: queue.Queue<int> = queue.new()
+    queue.enqueue(numbers, 10)
+    queue.enqueue(numbers, 20)
+    queue.enqueue(numbers, 30)
+    io.println(f"  queue<int> len: {queue.len(numbers)}")
+
+    match queue.dequeue(numbers)
+    case some(first):
+        io.println(f"  dequeue (first): {first}")
+    case none:
+        io.println("  dequeue: empty")
+    end
+
+    -- Queue<string> via from_list genérico
+    const tasks: queue.Queue<string> = queue_utils.from_list(["compile", "test", "deploy"])
+    io.println(f"  queue<string> len: {queue.len(tasks)}")
+    const fallback_task: string = "nothing"
+    const peeked: string = queue_utils.peek_or(tasks, fallback_task)
+    io.println(f"  peek_or: {peeked}")
+
+    match queue.dequeue(tasks)
+    case some(task):
+        io.println(f"  dequeue (first task): {task}")
+    case none:
+        io.println("  dequeue: empty")
+    end
+    io.println(f"  after dequeue len: {queue.len(tasks)}")
+end
+
+-- ─────────────────── Stack<T> ───────────────────
+func demo_stack()
+    section("Stack — LIFO generica")
+
+    -- Stack<int>
+    const undo_ids: stack.Stack<int> = stack.new()
+    stack.push(undo_ids, 1)
+    stack.push(undo_ids, 2)
+    stack.push(undo_ids, 3)
+    io.println(f"  stack<int> len: {stack.len(undo_ids)}")
+
+    match stack.pop(undo_ids)
+    case some(top):
+        io.println(f"  pop (top): {top}")
+    case none:
+        io.println("  pop: empty")
+    end
+
+    -- Stack<string> via from_list genérico
+    const history: stack.Stack<string> = stack_utils.from_list(["open", "edit", "save"])
+    io.println(f"  stack<string> len: {stack.len(history)}")
+    const fallback_hist: string = "nothing"
+    const peeked_hist: string = stack_utils.peek_or(history, fallback_hist)
+    io.println(f"  peek_or: {peeked_hist}")
+    io.println(f"  is_singleton: {stack_utils.is_singleton(history)}")
+end
+
+-- ─────────────────── Deque<T> ───────────────────
+func demo_deque()
+    section("Deque — Double-ended generica")
+
+    -- Deque<int>
+    const window: deque.Deque<int> = deque.new()
+    deque.push_front(window, 10)
+    deque.push_back(window, 20)
+    deque.push_front(window, 5)
+    io.println(f"  deque<int> len: {deque.len(window)}")
+    io.println(f"  front_or: {deque_utils.front_or(window, -1)}")
+    io.println(f"  back_or: {deque_utils.back_or(window, -1)}")
+
+    -- Deque<string>
+    const buffer: deque.Deque<string> = deque_utils.from_list(["alpha", "beta", "gamma"])
+    io.println(f"  deque<string> len: {deque.len(buffer)}")
+
+    match deque.pop_front(buffer)
+    case some(first):
+        io.println(f"  pop_front: {first}")
+    case none:
+        io.println("  pop_front: empty")
+    end
+    match deque.pop_back(buffer)
+    case some(last):
+        io.println(f"  pop_back: {last}")
+    case none:
+        io.println("  pop_back: empty")
+    end
+    io.println(f"  remaining len: {deque.len(buffer)}")
+end
+
+-- ─────────────────── LinkedList<T> ───────────────
+func demo_linked_list()
+    section("LinkedList — Singly-linked generica")
+
+    -- LinkedList<int>
+    const ids: ll.LinkedList<int> = ll.new()
+    ll.push_back(ids, 100)
+    ll.push_back(ids, 200)
+    ll.push_front(ids, 50)
+    io.println(f"  linked_list<int> len: {ll.len(ids)}")
+
+    match ll.front(ids)
+    case some(first):
+        io.println(f"  front: {first}")
+    case none:
+        io.println("  front: empty")
+    end
+
+    -- LinkedList<string> via from_list genérico
+    const items: ll.LinkedList<string> = ll_utils.from_list(["red", "green", "blue"])
+    const ll_fallback: string = "none"
+    const ll_front: string = ll_utils.front_or(items, ll_fallback)
+    io.println(f"  linked_list<string> front_or: {ll_front}")
+
+    match ll.pop_front(items)
+    case some(color):
+        io.println(f"  pop_front: {color}")
+    case none:
+        io.println("  pop_front: empty")
+    end
+end
+
+-- ─────────────── DoublyLinkedList<T> ─────────────
+func demo_doubly_linked_list()
+    section("DoublyLinkedList — Doubly-linked generica")
+
+    -- DoublyLinkedList<int>
+    const scores: dll.DoublyLinkedList<int> = dll.new()
+    dll.push_back(scores, 88)
+    dll.push_back(scores, 95)
+    dll.push_front(scores, 72)
+    io.println(f"  dll<int> len: {dll.len(scores)}")
+
+    -- DoublyLinkedList<string>
+    const log: dll.DoublyLinkedList<string> = dll_utils.from_list(["start", "process", "done"])
+    io.println(f"  dll<string> len: {dll_utils.len(log)}")
+    const dll_fb_front: string = "n/a"
+    const dll_fb_back: string = "n/a"
+    io.println(f"  front_or: {dll_utils.front_or(log, dll_fb_front)}")
+    io.println(f"  back_or: {dll_utils.back_or(log, dll_fb_back)}")
+
+    match dll.pop_back(log)
+    case some(last):
+        io.println(f"  pop_back: {last}")
+    case none:
+        io.println("  pop_back: empty")
+    end
+    io.println(f"  after pop_back len: {dll_utils.len(log)}")
+end
+
+-- ─────────────────── List<T> ────────────────────
+func demo_list_generics()
+    section("List — Funcoes genericas da stdlib")
+
+    const names: list<string> = ["Ada", "Grace", "Margaret"]
+    const fb_name: string = "nobody"
+    io.println(f"  first_or: {lists.first_or(names, fb_name)}")
+    io.println(f"  last_or: {lists.last_or(names, fb_name)}")
+    io.println(f"  get_or(1): {lists.get_or(names, 1, fb_name)}")
+    io.println(f"  get_or(99): {lists.get_or(names, 99, fb_name)}")
+
+    const single: list<string> = lists.singleton("Ori")
+    io.println(f"  singleton: {single[0]}, len: {lists.len(single)}")
+
+    const nums: list<int> = [10, 20, 30, 40, 50]
+    io.println(f"  sum_int: {lists.sum_int(nums)}")
+    io.println(f"  binary_search_int(30): {lists.binary_search_int(nums, 30)}")
+    io.println(f"  binary_search_int(99): {lists.binary_search_int(nums, 99)}")
+    io.println(f"  all_equal_int: {lists.all_equal_int([7, 7, 7], 7)}")
+end
+
+-- ──────────────── Main ──────────────────────────
+func main()
+    io.println("Ori Language — Generic Collections Showcase")
+    io.println("============================================")
+
+    demo_queue()
+    demo_stack()
+    demo_deque()
+    demo_linked_list()
+    demo_doubly_linked_list()
+    demo_list_generics()
+
+    section("All generic collections validated successfully!")
+end

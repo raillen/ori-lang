@@ -1,0 +1,111 @@
+oridoc 1
+
+namespace ori.bytes.utils
+
+doc module self
+    summary:
+        Compositional helpers over the native `ori.bytes` runtime surface.
+    details:
+        Byte-wise predicates and conversions. The current `bytes` ABI is
+        NUL-terminated, so helpers avoid introducing embedded nulls.
+end
+
+doc func is_empty
+    summary:
+        Reports whether `b` has zero length.
+    param b:
+        Bytes to test.
+    returns:
+        `true` when the value is empty.
+end
+
+doc func equals
+    summary:
+        Reports whether `a` and `b` have equal length and contents.
+    param a:
+        First bytes.
+    param b:
+        Second bytes.
+    returns:
+        `true` when both values are byte-identical.
+end
+
+doc func from_hex_or
+    summary:
+        Decodes a hex string, returning `fallback` on failure.
+    param hex:
+        Hex-encoded text.
+    param fallback:
+        Value returned when decoding fails.
+    returns:
+        The decoded bytes, or `fallback`.
+end
+
+doc func empty_bytes
+    summary:
+        Returns a zero-length bytes value.
+    returns:
+        The empty bytes value.
+end
+
+doc func join
+    summary:
+        Concatenates `left` and `right`.
+    param left:
+        Prefix bytes.
+    param right:
+        Suffix bytes.
+    returns:
+        The concatenated bytes.
+end
+
+doc func starts_with
+    summary:
+        Reports whether `value` starts with `prefix`.
+    param value:
+        Bytes to test.
+    param prefix:
+        Expected prefix.
+    returns:
+        `true` when `value` starts with `prefix`.
+end
+
+doc func ends_with
+    summary:
+        Reports whether `value` ends with `suffix`.
+    param value:
+        Bytes to test.
+    param suffix:
+        Expected suffix.
+    returns:
+        `true` when `value` ends with `suffix`.
+end
+
+doc func contains
+    summary:
+        Reports whether `value` contains `part`.
+    param value:
+        Bytes to search in.
+    param part:
+        Needle to locate. An empty needle returns `true`.
+    returns:
+        `true` when the needle is present.
+end
+
+doc func from_list
+    summary:
+        Builds bytes from a list of byte values.
+    param values:
+        List of integers in `0..=255`.
+    returns:
+        The assembled bytes value.
+end
+
+doc func to_list
+    summary:
+        Returns the bytes as a list of byte values.
+    param value:
+        Bytes to convert.
+    returns:
+        List of integers in `0..=255`.
+end

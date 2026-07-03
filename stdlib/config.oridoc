@@ -1,0 +1,62 @@
+oridoc 1
+
+namespace ori.config
+
+doc module self
+    summary:
+        Local config helpers over `ori.fs` and `ori.json`.
+    details:
+        Meant for project/tool configuration files, not full schema
+        validation.
+end
+
+doc func read_text
+    summary:
+        Reads a text config file.
+    param path:
+        File to read.
+    returns:
+        `result` with the file text or an error message.
+end
+
+doc func read_text_or
+    summary:
+        Reads a text config file, returning `fallback` on failure.
+    param path:
+        File to read.
+    param fallback:
+        Value returned when the read fails.
+    returns:
+        File contents, or `fallback`.
+end
+
+doc func write_text
+    summary:
+        Writes `content` to the config file at `path`.
+    param path:
+        Destination file.
+    param content:
+        Text to write.
+    returns:
+        `result` with the path on success or an error message.
+end
+
+doc func read_json
+    summary:
+        Reads and parses a JSON config file.
+    param path:
+        File to read and parse.
+    returns:
+        `result` with a `json.Value` or an error message.
+end
+
+doc func write_json
+    summary:
+        Serializes `value` as pretty JSON and writes it to `path`.
+    param path:
+        Destination file.
+    param value:
+        JSON value to write.
+    returns:
+        `result` with the path on success or an error message.
+end

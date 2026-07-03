@@ -1,0 +1,187 @@
+namespace app.path_time_io
+
+--- Demonstra os módulos path, time, io e fs da stdlib Ori.
+--- Cobre: manipulação de caminhos, medição de tempo, I/O e sistema de arquivos.
+
+import ori.fs as fs
+import ori.io as io
+import ori.math as math
+import ori.os as os
+import ori.path as path
+import ori.string as su
+import ori.time as time
+
+func section(title: string)
+    io.println("")
+    io.println(f"=== {title} ===")
+end
+
+-- ─────────────────── Path ───────────────────
+func demo_path()
+    section("Path Utilities")
+
+    const file_path: string = "dir/file.txt"
+    io.println(f"  base_name: {path.base_name(file_path)}")
+
+    const photo: string = "photo.jpg"
+    io.println(f"  extension: {path.extension(photo)}")
+
+    const report: string = "report.pdf"
+    io.println(f"  name_without_ext: {path.name_without_extension(report)}")
+
+    const abs_path: string = "/usr/bin/ori"
+    io.println(f"  parent: {path.parent(abs_path)}")
+
+    const home_path: string = "/home/user"
+    io.println(f"  is_absolute: {path.is_absolute(home_path)}")
+
+    const rel_path: string = "src/main.orl"
+    io.println(f"  is_relative: {path.is_relative(rel_path)}")
+
+    const joined: string = path.join(["src", "compiler", "main.orl"])
+    io.println(f"  join: {joined}")
+
+    const messy_path: string = "src//main.orl"
+    io.println(f"  normalize: {path.normalize(messy_path)}")
+
+    const orl_file: string = "a.orl"
+    const orl_ext: string = "orl"
+    io.println(f"  has_extension orl: {path.has_extension(orl_file, orl_ext)}")
+
+    const txt_file: string = "a.txt"
+    const md_ext: string = "md"
+    io.println(f"  change_extension: {path.change_extension(txt_file, md_ext)}")
+
+    const relative_file: string = "file.orl"
+    const base_dir: string = "/home"
+    io.println(f"  absolute: {path.absolute(relative_file, base_dir)}")
+end
+
+-- ─────────────────── Time ───────────────────
+func demo_time()
+    section("Time Utilities")
+
+    const start: time.Instant = time.instant_now()
+    io.println(f"  instant_now (unix ms): {time.instant_to_unix_ms(start)}")
+
+    const dur_5s: time.Duration = time.duration_seconds(5)
+    io.println(f"  5 seconds in ms: {time.duration_to_millis(dur_5s)}")
+
+    const dur_2m: time.Duration = time.duration_minutes(2)
+    io.println(f"  2 minutes in ms: {time.duration_to_millis(dur_2m)}")
+
+    const dur_1h: time.Duration = time.duration_hours(1)
+    io.println(f"  1 hour in ms: {time.duration_to_millis(dur_1h)}")
+
+    const future: time.Instant = time.add(start, time.duration_seconds(60))
+    const diff: time.Duration = time.between(start, future)
+    io.println(f"  between now+60s ms: {time.duration_to_millis(diff)}")
+
+    const past: time.Instant = time.sub(start, time.duration_millis(500))
+    const delta: int = time.instant_to_unix_ms(start) - time.instant_to_unix_ms(past)
+    io.println(f"  sub 500ms delta: {delta}")
+
+    -- Elapsed benchmarking
+    const bench_start: time.Instant = time.instant_now()
+    var sum: int = 0
+    var i: int = 0
+    while i < 10000
+        sum = sum + i
+        i = i + 1
+    end
+    const elapsed: time.Duration = time.elapsed_since(bench_start)
+    io.println(f"  sum of 0..9999: {sum}")
+    io.println(f"  elapsed ms: {time.duration_to_millis(elapsed)}")
+end
+
+-- ─────────────────── OS ────────────────────
+func demo_os()
+    section("OS and Process")
+
+    const pid: int = os.pid()
+    io.println(f"  process id: {pid}")
+    io.println(f"  pid > 0: {pid > 0}")
+
+    match os.current_dir()
+    case success(cwd):
+        const display: string = su.limit(cwd, 60)
+        io.println(f"  current dir: {display}...")
+    case error(msg):
+        io.println(f"  current dir error: {msg}")
+    end
+end
+
+-- ─────────────────── FS ────────────────────
+func demo_fs()
+    section("Filesystem")
+
+    const test_path: string = "_ori_example_test.txt"
+    const content: string = "Hello from Ori!\nLine 2."
+
+    -- Write
+    match fs.write_text_result(test_path, content)
+    case success(_):
+        io.println("  write_text: OK")
+    case error(msg):
+        io.println(f"  write_text error: {msg}")
+    end
+
+    -- Exists
+    match fs.exists_result(test_path)
+    case success(found):
+        io.println(f"  exists: {found}")
+    case error(msg):
+        io.println(f"  exists error: {msg}")
+    end
+
+    -- Read
+    const fallback: string = "<failed>"
+    const read_back: string = fs.read_text_or(test_path, fallback)
+    const preview: string = su.left(read_back, 15)
+    io.println(f"  read_text_or: {preview}...")
+
+    -- Delete
+    match fs.remove_file(test_path)
+    case success(_):
+        io.println("  remove_file: OK")
+    case error(msg):
+        io.println(f"  remove_file error: {msg}")
+    end
+
+    -- Confirm deletion
+    match fs.exists_result(test_path)
+    case success(found):
+        io.println(f"  after delete exists: {found}")
+    case error(msg):
+        io.println(f"  after delete exists error: {msg}")
+    end
+end
+
+-- ─────────────────── Math ───────────────────
+func demo_math()
+    section("Math")
+
+    io.println(f"  abs -42: {math.abs(-42)}")
+    io.println(f"  min 3 7: {math.min(3, 7)}")
+    io.println(f"  max 3 7: {math.max(3, 7)}")
+    io.println(f"  clamp 15 0 10: {math.clamp(15, 0, 10)}")
+    io.println(f"  floor 3.7: {math.floor(3.7)}")
+    io.println(f"  ceil 3.2: {math.ceil(3.2)}")
+    io.println(f"  round 3.5: {math.round(3.5)}")
+    io.println(f"  sqrt 144: {math.sqrt(144.0)}")
+    io.println(f"  pow 2 10: {math.pow(2.0, 10.0)}")
+end
+
+-- ──────────────── Main ──────────────────────────
+func main()
+    io.println("Ori Language — Path, Time, IO, FS and Math Showcase")
+    io.println("=====================================================")
+
+    demo_path()
+    demo_time()
+    demo_os()
+    demo_fs()
+    demo_math()
+
+    section("All utility stdlib tests passed!")
+end

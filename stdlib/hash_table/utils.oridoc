@@ -1,0 +1,70 @@
+oridoc 1
+
+namespace ori.hash_table.utils
+
+doc module self
+    summary:
+        Concrete-key helpers over the native `ori.hash_table` runtime.
+end
+
+doc func get_or_string_int
+    summary:
+        Returns the value for `key`, or `fallback` when absent.
+    param table:
+        Source hash table.
+    param key:
+        Key to look up.
+    param fallback:
+        Value returned when the key is missing.
+    returns:
+        The stored value, or `fallback`.
+end
+
+doc func set_if_absent_string_int
+    summary:
+        Inserts `value` for `key` only when `key` is absent.
+    param table:
+        Target hash table.
+    param key:
+        Key to insert under.
+    param value:
+        Value to store.
+    returns:
+        `true` when the entry was inserted, `false` when it already existed.
+end
+
+doc func from_map_string_int
+    summary:
+        Builds a hash table from a `map<string, int>`.
+    param source:
+        Map to copy entries from.
+    returns:
+        A new hash table with the same entries.
+end
+
+doc func key_count_string_int
+    summary:
+        Returns the number of entries in `table`.
+    param table:
+        Source hash table.
+    returns:
+        Entry count.
+end
+
+doc func is_empty_string_int
+    summary:
+        Reports whether `table` has no entries.
+    param table:
+        Source hash table.
+    returns:
+        `true` when the table is empty.
+end
+
+doc func keys_string_int
+    summary:
+        Returns the keys of `table` as a list.
+    param table:
+        Source hash table.
+    returns:
+        List of keys.
+end

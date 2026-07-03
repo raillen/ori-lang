@@ -1,0 +1,120 @@
+oridoc 1
+
+namespace ori.concurrent.utils
+
+doc module self
+    summary:
+        Copy/transfer helpers for values that cross task or channel boundaries.
+    details:
+        Provides typed aliases that clone collections and return scalars
+        unchanged. Useful for making `Transferable` intent explicit at
+        call sites.
+end
+
+doc func copy_int
+    summary:
+        Returns `value` unchanged (integers are trivially transferable).
+    param value:
+        Integer to copy.
+    returns:
+        The same integer.
+end
+
+doc func copy_bool
+    summary:
+        Returns `value` unchanged.
+    param value:
+        Boolean to copy.
+    returns:
+        The same boolean.
+end
+
+doc func copy_float
+    summary:
+        Returns `value` unchanged.
+    param value:
+        Float to copy.
+    returns:
+        The same float.
+end
+
+doc func copy_string
+    summary:
+        Returns `value` unchanged (strings are reference-counted).
+    param value:
+        String to copy.
+    returns:
+        The same string.
+end
+
+doc func copy_bytes
+    summary:
+        Returns `value` unchanged.
+    param value:
+        Bytes to copy.
+    returns:
+        The same bytes.
+end
+
+doc func copy_list_int
+    summary:
+        Returns a shallow clone of `value`.
+    param value:
+        List to clone.
+    returns:
+        A new list with the same elements.
+end
+
+doc func copy_list_string
+    summary:
+        Returns a shallow clone of `value`.
+    param value:
+        List to clone.
+    returns:
+        A new list with the same elements.
+end
+
+doc func copy_map_string_string
+    summary:
+        Returns a shallow clone of `value`.
+    param value:
+        Map to clone.
+    returns:
+        A new map with the same entries.
+end
+
+doc func copy_set_string
+    summary:
+        Returns a shallow clone of `value`.
+    param value:
+        Set to clone.
+    returns:
+        A new set with the same elements.
+end
+
+doc func transfer_int
+    summary:
+        Transferable alias for `copy_int`.
+    param value:
+        Integer to transfer.
+    returns:
+        The same integer.
+end
+
+doc func transfer_string
+    summary:
+        Transferable alias for `copy_string`.
+    param value:
+        String to transfer.
+    returns:
+        The same string.
+end
+
+doc func transfer_list_string
+    summary:
+        Transferable alias for `copy_list_string`.
+    param value:
+        List to transfer.
+    returns:
+        A new list with the same elements.
+end

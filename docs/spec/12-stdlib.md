@@ -136,9 +136,6 @@ Implemented and importable today:
 runtime functions and selected `.orl` helpers live under the same public namespace.
 Use `import ori.string only (is_empty)`-style imports for helper-only names.
 Normal alias imports keep the runtime surface lightweight.
-The older helper paths (`ori.string.utils`, `ori.string.algorithms`,
-`ori.list.utils`, `ori.list.algorithms`, `ori.fs.utils`) remain valid for
-compatibility.
 
 Partially importable modules:
 - `ori.test`

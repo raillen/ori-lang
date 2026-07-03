@@ -1,0 +1,105 @@
+oridoc 1
+
+namespace ori.map
+
+doc module self
+    summary:
+        Compositional helpers over the native `ori.map` runtime surface.
+    details:
+        Concrete-key (`string`/`int`) wrappers until the `Hashable` +
+        `Equatable` trait gate ships. Import with
+        `import ori.map only (get_or, has_key)` for helper-only names.
+end
+
+doc func get_or
+    summary:
+        Returns the value for `key`, or `fallback` when absent.
+    param m:
+        Source map.
+    param key:
+        Key to look up.
+    param fallback:
+        Value returned when the key is missing.
+    returns:
+        The stored value, or `fallback`.
+end
+
+doc func contains_key
+    summary:
+        Reports whether `key` is present in `m`.
+    param m:
+        Source map.
+    param key:
+        Key to test.
+    returns:
+        `true` when the key exists.
+end
+
+doc func has_key
+    summary:
+        Alias of `contains_key`.
+    param m:
+        Source map.
+    param key:
+        Key to test.
+    returns:
+        `true` when the key exists.
+end
+
+doc func is_empty_int
+    summary:
+        Reports whether `m` has no entries.
+    param m:
+        Source map.
+    returns:
+        `true` when the map is empty.
+end
+
+doc func merge_string_int
+    summary:
+        Returns a clone of `base` with `overlay` entries applied on top.
+    param base:
+        Map to copy first.
+    param overlay:
+        Entries that override matching keys in `base`.
+    returns:
+        A new merged map.
+end
+
+doc func key_count_string_int
+    summary:
+        Returns the number of entries in `m`.
+    param m:
+        Source map.
+    returns:
+        Entry count.
+end
+
+doc func has_all_keys
+    summary:
+        Reports whether `m` contains every key in `keys`.
+    param m:
+        Source map.
+    param keys:
+        Keys that must all be present.
+    returns:
+        `true` when every key exists.
+end
+
+doc func values_sum_int
+    summary:
+        Sums every integer value in `m`.
+    param m:
+        Source map.
+    returns:
+        The total of all values.
+end
+
+doc func invert_string_int
+    summary:
+        Swaps keys and values of `m`.
+    param m:
+        Source map.
+    returns:
+        A new map from former values to former keys.
+end

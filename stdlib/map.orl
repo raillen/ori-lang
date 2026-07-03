@@ -1,0 +1,66 @@
+namespace ori.map
+
+public func get_or(m: map<string, int>, key: string, fallback: int) -> int
+    if some(value) = ori.map.try_get(m, key)
+        return value
+    end
+    return fallback
+end
+
+
+public func contains_key(m: map<string, int>, key: string) -> bool
+    return ori.map.contains(m, key)
+end
+
+public func has_key(m: map<string, int>, key: string) -> bool
+    return contains_key(m, key)
+end
+
+public func is_empty_int(m: map<string, int>) -> bool
+    return ori.map.is_empty(m)
+end
+
+public func merge_string_int(base: map<string, int>, overlay: map<string, int>) -> map<string, int>
+    var out: map<string, int> = ori.map.clone(base)
+    const keys: list<string> = ori.map.keys(overlay)
+    for key in keys
+        if some(value) = ori.map.try_get(overlay, key)
+            ori.map.set(out, key, value)
+        end
+    end
+    return out
+end
+
+public func key_count_string_int(m: map<string, int>) -> int
+    return ori.map.len(m)
+end
+
+public func has_all_keys(m: map<string, int>, keys: list<string>) -> bool
+    for key in keys
+        if not ori.map.contains(m, key)
+            return false
+        end
+    end
+    return true
+end
+
+public func values_sum_int(m: map<string, int>) -> int
+    const values: list<int> = ori.map.values(m)
+    var total: int = 0
+    for value in values
+        total = total + value
+    end
+    return total
+end
+
+public func invert_string_int(m: map<string, int>) -> map<int, string>
+    var out: map<int, string> = ori.map.new()
+    const keys: list<string> = ori.map.keys(m)
+    for key in keys
+        if some(value) = ori.map.try_get(m, key)
+            ori.map.set(out, value, key)
+        end
+    end
+    return out
+end
+

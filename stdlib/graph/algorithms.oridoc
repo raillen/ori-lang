@@ -1,0 +1,58 @@
+oridoc 1
+
+namespace ori.graph.algorithms
+
+doc module self
+    summary:
+        BFS-based graph algorithms over the native `ori.graph` runtime.
+end
+
+doc func has_path
+    summary:
+        Reports whether a path exists from `start` to `goal` in `g`.
+    param g:
+        Source graph.
+    param start:
+        Starting node.
+    param goal:
+        Target node.
+    returns:
+        `true` when `goal` is reachable from `start`.
+end
+
+doc func reachable_count
+    summary:
+        Returns the number of nodes reachable from `start` (including itself).
+    param g:
+        Source graph.
+    param start:
+        Starting node.
+    returns:
+        Count of reachable nodes, or `0` when `start` is absent.
+end
+
+doc func is_reachable
+    summary:
+        Alias of `has_path`.
+    param g:
+        Source graph.
+    param start:
+        Starting node.
+    param goal:
+        Target node.
+    returns:
+        `true` when `goal` is reachable from `start`.
+end
+
+doc func has_path_int
+    summary:
+        Integer-node variant of `has_path`.
+    param g:
+        Source graph.
+    param start:
+        Starting node.
+    param goal:
+        Target node.
+    returns:
+        `true` when `goal` is reachable from `start`.
+end

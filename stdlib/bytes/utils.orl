@@ -1,7 +1,6 @@
 namespace ori.bytes.utils
 
 import ori.bytes as bytes_mod
-import ori.list as lists
 import ori.string as str
 
 public func is_empty(b: bytes) -> bool

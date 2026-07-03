@@ -99,7 +99,7 @@ jobs:
   # This validates that end users can install Ori from the release
   # package and use check/run/compile/test without ever needing Rust.
   # ------------------------------------------------------------------
-  smoke-no-rust:
+  smoke-no-rust-linux:
     name: smoke-no-rust (linux-gnu)
     needs: native-route
     runs-on: ubuntu-latest
@@ -135,6 +135,118 @@ jobs:
           ~/ori-smoke/ori doctor
 
       - name: Smoke — ori run (JIT, no linker needed)
+        run: |
+          cat > /tmp/hello.orl << 'EOF'
+          import ori.io as io
+          func main()
+              io.println("hello from smoke-no-rust")
+          end
+          EOF
+          ~/ori-smoke/ori run /tmp/hello.orl
+
+      - name: Smoke — ori compile (AOT, needs system linker)
+        run: |
+          ~/ori-smoke/ori compile /tmp/hello.orl --out /tmp/hello
+          /tmp/hello
+
+      - name: Smoke — ori test
+        run: |
+          cat > /tmp/test.orl << 'EOF'
+          import ori.test as test
+
+          @test
+          func smoke_test()
+              test.assert(true, "smoke test passes")
+          end
+          EOF
+          ~/ori-smoke/ori test /tmp/test.orl
+
+  smoke-no-rust-windows:
+    name: smoke-no-rust (windows-msvc)
+    needs: native-route
+    runs-on: windows-latest
+    steps:
+      - name: Ensure Rust is not present
+        shell: pwsh
+        run: |
+          if (Get-Command rustc -ErrorAction SilentlyContinue) {
+            Write-Error "rustc is present on this runner — smoke would be invalid"
+            exit 1
+          }
+          if (Get-Command cargo -ErrorAction SilentlyContinue) {
+            Write-Error "cargo is present on this runner — smoke would be invalid"
+            exit 1
+          }
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ori-windows-msvc
+          path: target/dist
+
+      - name: Extract release package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path ~\ori-smoke
+          Expand-Archive -Path target\dist\ori-windows-msvc.zip -DestinationPath ~\ori-smoke -Force
+          Get-ChildItem ~\ori-smoke
+
+      - name: Smoke — ori doctor
+        shell: pwsh
+        run: |
+          ~\ori-smoke\ori.exe doctor
+
+      - name: Smoke — ori run (JIT)
+        shell: pwsh
+        run: |
+          Set-Content -Path $env:TEMP\hello.orl -Value "import ori.io as io`nfunc main()`n    io.println(`"hello from smoke-no-rust`")`nend"
+          ~\ori-smoke\ori.exe run $env:TEMP\hello.orl
+
+      - name: Smoke — ori compile (AOT, needs system linker)
+        shell: pwsh
+        run: |
+          ~\ori-smoke\ori.exe compile $env:TEMP\hello.orl --out $env:TEMP\hello.exe
+          & $env:TEMP\hello.exe
+
+      - name: Smoke — ori test
+        shell: pwsh
+        run: |
+          Set-Content -Path $env:TEMP\test.orl -Value "import ori.test as test`n@test`nfunc smoke_test()`n    test.assert(true, `"smoke test passes`")`nend"
+          ~\ori-smoke\ori.exe test $env:TEMP\test.orl
+
+  smoke-no-rust-macos:
+    name: smoke-no-rust (macos-x86_64)
+    needs: native-route
+    runs-on: macos-15-intel
+    steps:
+      - name: Ensure Rust is not present
+        run: |
+          if command -v rustc &> /dev/null; then
+            echo "ERROR: rustc is present on this runner — smoke would be invalid"
+            exit 1
+          fi
+          if command -v cargo &> /dev/null; then
+            echo "ERROR: cargo is present on this runner — smoke would be invalid"
+            exit 1
+          fi
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ori-macos-x86_64
+          path: target/dist
+
+      - name: Extract release package
+        run: |
+          mkdir -p ~/ori-smoke
+          tar -xzf target/dist/ori-macos-x86_64.tar.gz -C ~/ori-smoke
+          ls -la ~/ori-smoke/
+
+      - name: Smoke — ori doctor
+        run: |
+          ~/ori-smoke/ori doctor
+
+      - name: Smoke — ori run (JIT)
         run: |
           cat > /tmp/hello.orl << 'EOF'
           import ori.io as io

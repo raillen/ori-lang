@@ -5,7 +5,7 @@ Language support for [Ori](https://github.com/ori-lang/ori) (`.orl` files).
 ## Features
 
 - **LSP** via `ori-lsp`: diagnostics, hover, go-to-definition, completion (Layer 1 + Layer 2 stdlib), rename, format, semantic tokens, inlay hints
-- **Stdlib-aware completion**: `import ori.string.utils` + dot-complete on aliases
+- **Stdlib-aware completion**: `import ori.string` + dot-complete on aliases
 - **Go to stdlib source** for Layer 2 `.orl` functions
 - **Incremental document sync**
 - **Commands**: Check, Run, Test, Format, **Doctor** (`ori doctor`)

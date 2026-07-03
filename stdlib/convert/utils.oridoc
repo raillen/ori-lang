@@ -1,0 +1,41 @@
+oridoc 1
+
+namespace ori.convert.utils
+
+doc module self
+    summary:
+        Fallback-returning parsing wrappers over `ori.convert`.
+end
+
+doc func parse_int_or
+    summary:
+        Parses `s` as an integer, returning `default` on failure.
+    param s:
+        Text to parse.
+    param default:
+        Value returned when parsing fails.
+    returns:
+        The parsed integer, or `default`.
+end
+
+doc func parse_float_or
+    summary:
+        Parses `s` as a float, returning `default` on failure.
+    param s:
+        Text to parse.
+    param default:
+        Value returned when parsing fails.
+    returns:
+        The parsed float, or `default`.
+end
+
+doc func parse_bool_or
+    summary:
+        Parses `s` as a boolean, returning `default` on failure.
+    param s:
+        Text to parse. `true` and `false` are recognized.
+    param default:
+        Value returned when parsing fails.
+    returns:
+        The parsed boolean, or `default`.
+end

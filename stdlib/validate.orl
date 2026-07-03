@@ -2,7 +2,7 @@ namespace ori.validate
 
 import ori.list as lists
 import ori.string as str
-import ori.string.utils as su
+import ori.string as su
 
 public func between(value: int, min_val: int, max_val: int) -> bool
     if value < min_val

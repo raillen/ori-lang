@@ -1,0 +1,143 @@
+oridoc 1
+
+namespace ori.net.utils
+
+doc module self
+    summary:
+        Ergonomic network helpers over the blocking `ori.net` runtime.
+    details:
+        Text-oriented wrappers plus background-connect helpers that
+        offload blocking I/O onto a worker thread via `task.run_blocking`.
+end
+
+doc func connect
+    summary:
+        Opens a plain TCP connection to `host`:`port`.
+    param host:
+        Host name to connect to.
+    param port:
+        TCP port.
+    param timeout_ms:
+        Connect timeout in milliseconds.
+    returns:
+        `result` with a `Connection` or an error message.
+end
+
+doc func connect_tls
+    summary:
+        Opens a TLS connection to `host`:`port`.
+    param host:
+        Host name to connect to.
+    param port:
+        TCP port.
+    param timeout_ms:
+        Connect timeout in milliseconds.
+    returns:
+        `result` with a `Connection` or an error message.
+end
+
+doc func read_text
+    summary:
+        Reads up to `max_bytes` from `conn` and decodes them as UTF-8.
+    param conn:
+        Connection to read from.
+    param max_bytes:
+        Maximum number of bytes to read.
+    returns:
+        `result` with the decoded text or an error.
+end
+
+doc func write_text
+    summary:
+        Encodes `text` as UTF-8 and writes it to `conn`.
+    param conn:
+        Connection to write to.
+    param text:
+        Text to send.
+    returns:
+        `result` indicating success or an error.
+end
+
+doc func close
+    summary:
+        Closes `conn` and releases its socket.
+    param conn:
+        Connection to close.
+    returns:
+        Nothing.
+end
+
+doc func is_open
+    summary:
+        Reports whether `conn` is still open.
+    param conn:
+        Connection to test.
+    returns:
+        `true` when the connection has not been closed.
+end
+
+doc func read_bytes
+    summary:
+        Reads up to `max_bytes` from `conn`.
+    param conn:
+        Connection to read from.
+    param max_bytes:
+        Maximum number of bytes to read.
+    returns:
+        `result` with the bytes read, or an error.
+end
+
+doc func write_bytes
+    summary:
+        Writes `payload` to `conn`.
+    param conn:
+        Connection to write to.
+    param payload:
+        Bytes to send.
+    returns:
+        `result` indicating success or an error.
+end
+
+doc func connect_in_background
+    summary:
+        Spawns a worker thread that opens a plain TCP connection.
+    param host:
+        Host name to connect to.
+    param port:
+        TCP port.
+    param timeout_ms:
+        Connect timeout in milliseconds.
+    returns:
+        A `Job` that resolves to the connect `result`.
+end
+
+doc func connect_tls_in_background
+    summary:
+        Spawns a worker thread that opens a TLS connection.
+    param host:
+        Host name to connect to.
+    param port:
+        TCP port.
+    param timeout_ms:
+        Connect timeout in milliseconds.
+    returns:
+        A `Job` that resolves to the connect `result`.
+end
+
+doc func listen_local
+    summary:
+        Binds a TCP listener on `127.0.0.1`:`port`.
+    param port:
+        TCP port. `0` selects an ephemeral port.
+    returns:
+        `result` with a `Listener` or an error.
+end
+
+doc func udp_bind_local
+    summary:
+        Binds a UDP socket on `127.0.0.1`:`port`.
+    param port:
+        UDP port. `0` selects an ephemeral port.
+    returns:
+        `result` with a `UdpSocket` or an error.
+end

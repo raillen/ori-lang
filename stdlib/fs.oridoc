@@ -1,0 +1,63 @@
+oridoc 1
+
+namespace ori.fs
+
+doc module self
+    summary:
+        Result-style convenience wrappers over the native `ori.fs` runtime.
+    details:
+        Flattens common filesystem operations into `result`-returning
+        helpers. The legacy `ori.fs.utils` submodule stays importable for
+        the same surface.
+end
+
+doc func read_text_or
+    summary:
+        Reads a text file, returning `fallback` on failure.
+    param path:
+        File to read.
+    param fallback:
+        Value returned when the read fails.
+    returns:
+        File contents, or `fallback`.
+end
+
+doc func write_text_result
+    summary:
+        Writes `content` to `path`, returning the path on success.
+    param path:
+        Destination file.
+    param content:
+        Text to write.
+    returns:
+        `result` with the path on success or an error message.
+end
+
+doc func exists_result
+    summary:
+        Reports whether `path` exists.
+    param path:
+        Path to test.
+    returns:
+        `result` with a boolean on success or an error message.
+end
+
+doc func remove_file
+    summary:
+        Deletes the file at `path`.
+    param path:
+        File to delete.
+    returns:
+        `result` indicating success or an error message.
+end
+
+doc func move_path
+    summary:
+        Renames or moves `from` to `to`.
+    param from:
+        Source path.
+    param to:
+        Destination path.
+    returns:
+        `result` indicating success or an error message.
+end

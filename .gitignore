@@ -25,6 +25,9 @@ runtime/**/rust-lld.exe
 
 # IDE
 .idea/
+.cargo/
+.vscode/
+.windsurf/
 .vscode/settings.json
 *.swp
 *.swo

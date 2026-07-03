@@ -1,0 +1,122 @@
+oridoc 1
+
+namespace ori.format.utils
+
+doc module self
+    summary:
+        Presentation formatting wrappers with default precisions.
+    details:
+        Convenience overloads of `ori.format` that pick common decimal
+        counts so call sites stay short.
+end
+
+doc func number
+    summary:
+        Formats `value` with two decimal places.
+    param value:
+        Number to format.
+    returns:
+        The formatted string.
+end
+
+doc func number_with
+    summary:
+        Formats `value` with `decimals` decimal places.
+    param value:
+        Number to format.
+    param decimals:
+        Number of digits after the decimal point.
+    returns:
+        The formatted string.
+end
+
+doc func number_int
+    summary:
+        Formats `value` as an integer with no decimal places.
+    param value:
+        Integer to format.
+    returns:
+        The formatted string.
+end
+
+doc func percent
+    summary:
+        Formats `value` as a percentage with one decimal place.
+    param value:
+        Ratio to format (e.g. `0.42` for `42.0%`).
+    returns:
+        The formatted percentage string.
+end
+
+doc func percent_with
+    summary:
+        Formats `value` as a percentage with `decimals` decimal places.
+    param value:
+        Ratio to format.
+    param decimals:
+        Number of digits after the decimal point.
+    returns:
+        The formatted percentage string.
+end
+
+doc func hex
+    summary:
+        Formats `value` as a hexadecimal string.
+    param value:
+        Integer to format.
+    returns:
+        The hex string.
+end
+
+doc func binary
+    summary:
+        Formats `value` as a binary string.
+    param value:
+        Integer to format.
+    returns:
+        The binary string.
+end
+
+doc func bytes_size
+    summary:
+        Formats `value` as a human-readable byte size with default units.
+    param value:
+        Byte count.
+    returns:
+        The formatted size string.
+end
+
+doc func bytes_size_unit
+    summary:
+        Formats `value` as a human-readable byte size using `unit`.
+    param value:
+        Byte count.
+    param unit:
+        Unit style, for example `binary` for KiB/MiB.
+    returns:
+        The formatted size string.
+end
+
+doc func date
+    summary:
+        Formats a timestamp as a date using `pattern`.
+    param ts:
+        Unix-millisecond timestamp.
+    param pattern:
+        Date format pattern.
+    returns:
+        The formatted date string.
+end
+
+doc func datetime
+    summary:
+        Formats a timestamp as a date and time.
+    param ts:
+        Unix-millisecond timestamp.
+    param date_pattern:
+        Date portion pattern.
+    param time_pattern:
+        Time portion pattern.
+    returns:
+        The formatted date-time string.
+end

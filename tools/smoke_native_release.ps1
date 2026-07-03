@@ -211,12 +211,19 @@ end
             throw "ori run (JIT default) did not print the expected answer."
         }
 
-        $doctorOutput = & $packageOri doctor
+        $previousEap = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            $doctorOutput = & $packageOri doctor 2>&1
+        } finally {
+            $ErrorActionPreference = $previousEap
+        }
         if ($LASTEXITCODE -ne 0) {
             throw "ori doctor failed with exit code $LASTEXITCODE."
         }
-        if (($doctorOutput -join "`n") -notmatch "SystemLinker|BundledRustLld|RustcDriver") {
-            throw "ori doctor did not report the active linker strategy."
+        $doctorOutputRaw = ($doctorOutput | Out-String)
+        if ($doctorOutputRaw -notmatch "SystemLinker" -and $doctorOutputRaw -notmatch "BundledRustLld" -and $doctorOutputRaw -notmatch "RustcDriver") {
+            throw "ori doctor did not report the active linker strategy. Output was: $doctorOutputRaw"
         }
     } finally {
         Pop-Location

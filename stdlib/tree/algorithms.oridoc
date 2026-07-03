@@ -1,0 +1,51 @@
+oridoc 1
+
+namespace ori.tree.algorithms
+
+doc module self
+    summary:
+        Iterative tree traversal and inspection algorithms.
+    details:
+        Uses explicit stacks because recursive generic functions are
+        rejected by the typechecker.
+end
+
+doc func is_leaf
+    summary:
+        Reports whether `node` has no children in `t`.
+    param t:
+        Source tree.
+    param node:
+        Node to inspect.
+    returns:
+        `true` when the node has no children.
+end
+
+doc func values_preorder
+    summary:
+        Returns the values of `t` in pre-order (root, then children).
+    param t:
+        Source tree.
+    returns:
+        List of values in pre-order.
+end
+
+doc func leaf_count
+    summary:
+        Returns the number of leaf nodes in `t`.
+    param t:
+        Source tree.
+    returns:
+        Leaf node count.
+end
+
+doc func max_depth_from
+    summary:
+        Returns the maximum depth of the subtree rooted at `node`.
+    param t:
+        Source tree.
+    param node:
+        Subtree root.
+    returns:
+        Maximum depth measured in edges from `node`.
+end

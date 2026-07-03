@@ -945,7 +945,7 @@ fn e2e_lsp_stdlib_layer2_hover() {
     std::env::set_var("ORI_STDLIB_ROOT", stdlib_root());
     let dir = tempfile_dir();
     let root_uri = uri_for(&dir, "");
-    let src = "namespace app.main\nimport ori.string.utils as su\nfunc main() -> void\n    su.is_empty(\"x\")\nend\n";
+    let src = "namespace app.main\nimport ori.string as su\nfunc main() -> void\n    su.is_empty(\"x\")\nend\n";
     let main_uri = uri_for(&dir, "stdlib_hover.orl");
 
     let mut lsp = LspClient::new().expect("spawn ori-lsp");
@@ -982,7 +982,7 @@ fn e2e_lsp_stdlib_layer2_hover() {
         .or_else(|| hover_resp["result"]["contents"].as_str())
         .unwrap_or("");
     assert!(
-        hover_text.contains("is_empty") || hover_text.contains("string.utils"),
+        hover_text.contains("is_empty") || hover_text.contains("string"),
         "stdlib hover must describe is_empty: {hover_resp}"
     );
 

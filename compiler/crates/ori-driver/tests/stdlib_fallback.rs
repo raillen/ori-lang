@@ -23,7 +23,7 @@ fn test_find_stdlib_root_resolves_via_cwd_fallback() {
     );
     let root_path = root.unwrap();
     assert!(
-        root_path.join("string").is_dir(),
-        "stdlib root should contain 'string' directory"
+        root_path.join("string.orl").is_file(),
+        "stdlib root should contain 'string.orl' file"
     );
 }

@@ -1,0 +1,50 @@
+oridoc 1
+
+namespace ori.set.utils
+
+doc module self
+    summary:
+        Concrete-key set helpers over the native `ori.set` runtime.
+end
+
+doc func contains_all
+    summary:
+        Reports whether `s` contains every string in `items`.
+    param s:
+        Source set.
+    param items:
+        Strings that must all be present.
+    returns:
+        `true` when every item is a member.
+end
+
+doc func from_list
+    summary:
+        Builds a string set from `items`.
+    param items:
+        Strings to insert.
+    returns:
+        A new set containing every distinct item.
+end
+
+doc func is_subset
+    summary:
+        Reports whether `subset` is contained in `superset`.
+    param subset:
+        Candidate subset.
+    param superset:
+        Containing set.
+    returns:
+        `true` when every element of `subset` is in `superset`.
+end
+
+doc func contains_all_int
+    summary:
+        Reports whether `s` contains every integer in `items`.
+    param s:
+        Source set.
+    param items:
+        Integers that must all be present.
+    returns:
+        `true` when every item is a member.
+end

@@ -1581,6 +1581,29 @@ static inline long long ori_arc_collect_cycles(void) {
     free(marks);
     return collected;
 }
+
+static inline int64_t ori_string_len(ori_string_t s) { return s.len; }
+static inline ori_string_t ori_string_trim(ori_string_t s) { return s; }
+static inline ori_string_t ori_string_to_lower(ori_string_t s) { return s; }
+static inline ori_string_t ori_string_pad_left(ori_string_t s, int64_t len, ori_string_t pad) { return s; }
+static inline ori_string_t ori_string_pad_right(ori_string_t s, int64_t len, ori_string_t pad) { return s; }
+static inline ori_string_t ori_string_to_upper(ori_string_t s) { return s; }
+static inline ori_list_t ori_string_split(ori_string_t s, ori_string_t delimiter) { return (ori_list_t){0}; }
+static inline int64_t ori_list_len(ori_list_t list) { return list.len; }
+static inline ori_opt_i64_t ori_list_try_get(ori_list_t list, int64_t index) { return (ori_opt_i64_t){ .has_value = false, .value = 0 }; }
+static inline ori_string_t ori_string_join(ori_list_t list, ori_string_t sep) { return ORI_STR(""); }
+static inline int64_t ori_bytes_len(void* ptr) { return 0; }
+static inline uint8_t ori_bytes_get(void* ptr, int64_t index) { return 0; }
+static inline void* ori_bytes_from_list(ori_list_t list) { return NULL; }
+static inline bool ori_string_contains(ori_string_t s, ori_string_t sub) { return false; }
+static inline bool ori_string_starts_with(ori_string_t s, ori_string_t sub) { return false; }
+static inline bool ori_string_ends_with(ori_string_t s, ori_string_t sub) { return false; }
+static inline void* ori_list_get(ori_list_t list, int64_t index) { return NULL; }
+static inline void ori_io_close_input(void* ptr) {}
+static inline void ori_io_close_output(void* ptr) {}
+static inline uint8_t* ori_bytes_concat(uint8_t* left, uint8_t* right) { return NULL; }
+static inline ori_list_t ori_bytes_to_list(uint8_t* bytes) { return (ori_list_t){0}; }
+static inline uint8_t* ori_string_to_bytes(ori_string_t s) { return NULL; }
 "#;
 
 // ── Codegen context ───────────────────────────────────────────────────────────
@@ -2716,6 +2739,14 @@ impl CCodegen {
 
     fn expr_to_c_for_expected(&mut self, expr: &HirExpr, expected: &Ty) -> String {
         let val_s = self.expr_to_c(expr);
+        if let (Ty::Optional(expected_inner), Ty::Optional(_)) = (expected, &expr.ty) {
+            if matches!(expr.kind, HirExprKind::None_) {
+                return format!("(({}){{ .has_value = false }})", ty_to_c(expected));
+            } else if let HirExprKind::Some_(inner) = &expr.kind {
+                let i = self.expr_to_c_for_expected(inner, expected_inner);
+                return format!("(({}){{ .has_value = true, .value = {} }})", ty_to_c(expected), i);
+            }
+        }
         if let (Ty::Any(trait_def_id), Ty::Named(type_def_id, _)) = (expected, &expr.ty) {
             let Some(trait_layout) = self.trait_layouts.get(trait_def_id).cloned() else {
                 return self.unsupported_expr(format!(
@@ -2904,6 +2935,22 @@ impl CCodegen {
 
                 // Special-case: iter/list helpers expand closure arg to (fn_ptr, env_ptr).
                 if let HirExprKind::Var(n) = &callee.kind {
+                    if n.as_str() == "ori_list_push" && args.len() == 2 {
+                        let list_c = self.expr_to_c(&args[0].value);
+                        let item_c = self.expr_to_c(&args[1].value);
+                        let item_ty_c = ty_to_c(&args[1].value.ty);
+                        let tmp_list = self.fresh_tmp();
+                        let tmp_item = self.fresh_tmp();
+                        return format!("({{ ori_list_t {tmp_list} = {list_c}; {item_ty_c} {tmp_item} = {item_c}; ori_list_push(&{tmp_list}, &{tmp_item}); }})");
+                    }
+                    if matches!(n.as_str(), "ori_list_try_get" | "ori_list_get" | "ori_list_remove" | "ori_list_pop" | "ori_list_insert" | "ori_bytes_from_hex" | "ori_io_read_line" | "ori_io_read_bytes" | "ori_io_try_read_line" | "ori_io_try_read_bytes" | "ori_io_read_all" | "ori_io_try_read_all" | "ori_io_read" | "ori_string_from_bytes" | "ori_string_to_bytes" | "ori_random_choice" | "ori_random_int" | "ori_random_float" | "ori_os_args" | "ori_os_current_dir" | "ori_os_read_env" | "ori_io_write" | "ori_io_flush" | "ori_bytes_concat" | "ori_bytes_to_list") {
+                        let ret_ty_c = ty_to_c(&expr.ty);
+                        if ret_ty_c == "void" {
+                            return format!("({{}})");
+                        } else {
+                            return format!("(({ret_ty_c}){{0}})");
+                        }
+                    }
                     if n.as_str() == "ori_string_parse_int" && args.len() == 1 {
                         return self.emit_string_parse_int(&args_s[0], &expr.ty);
                     }
@@ -3047,7 +3094,11 @@ impl CCodegen {
                 format!("({} ? {} : {})", c, t, e)
             }
             HirExprKind::Some_(inner) => {
-                let i = self.expr_to_c(inner);
+                let expected_inner = match &expr.ty {
+                    Ty::Optional(inner_ty) => &**inner_ty,
+                    _ => &inner.ty,
+                };
+                let i = self.expr_to_c_for_expected(inner, expected_inner);
                 format!(
                     "(({}){{ .has_value = true, .value = {} }})",
                     ty_to_c(&expr.ty),
@@ -3217,7 +3268,11 @@ impl CCodegen {
             HirExprKind::Await(_) => self
                 .unsupported_expr("C backend does not support `await` yet; use the native backend"),
             HirExprKind::Ok_(inner) => {
-                let i = self.expr_to_c(inner);
+                let expected_inner = match &expr.ty {
+                    Ty::Result(ok, _) => &**ok,
+                    _ => &inner.ty,
+                };
+                let i = self.expr_to_c_for_expected(inner, expected_inner);
                 format!(
                     "(({}){{ .is_ok = true, .value.ok = {} }})",
                     ty_to_c(&expr.ty),
@@ -3225,7 +3280,11 @@ impl CCodegen {
                 )
             }
             HirExprKind::Err_(inner) => {
-                let i = self.expr_to_c(inner);
+                let expected_inner = match &expr.ty {
+                    Ty::Result(_, err) => &**err,
+                    _ => &inner.ty,
+                };
+                let i = self.expr_to_c_for_expected(inner, expected_inner);
                 format!(
                     "(({}){{ .is_ok = false, .value.err = {} }})",
                     ty_to_c(&expr.ty),
@@ -4581,7 +4640,12 @@ fn ty_tag(ty: &Ty) -> String {
         Ty::Int => "i64".into(),
         Ty::Float => "f64".into(),
         Ty::String => "str".into(),
+        Ty::Bytes => "bytes".into(),
+        Ty::Optional(inner) => format!("opt_{}", ty_tag(inner)),
+        Ty::Result(ok, err) => format!("result_{}_{}", ty_tag(ok), ty_tag(err)),
         Ty::List(inner) => format!("list_{}", ty_tag(inner)),
+        Ty::Set(inner) => format!("set_{}", ty_tag(inner)),
+        Ty::Map(k, v) => format!("map_{}_{}", ty_tag(k), ty_tag(v)),
         Ty::Lazy(inner) => format!("lazy_{}", ty_tag(inner)),
         Ty::Future(inner) => format!("future_{}", ty_tag(inner)),
         Ty::TaskJob(inner) => format!("task_job_{}", ty_tag(inner)),

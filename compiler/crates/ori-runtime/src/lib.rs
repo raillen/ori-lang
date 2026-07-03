@@ -4410,6 +4410,8 @@ pub struct OriMap {
     pub ht: *mut i64, // hash table slots (HT_EMPTY / HT_TOMB / dense_index)
     pub ht_cap: i64,  // hash table capacity (power of 2)
     pub key_kind: u8,
+    pub hash_fn: *const std::ffi::c_void,
+    pub eq_fn: *const std::ffi::c_void,
 }
 
 unsafe extern "C" fn ori_map_dtor(ptr: *mut u8) {
@@ -4429,6 +4431,7 @@ const INITIAL_MAP_HT_CAP: usize = 16;
 const MAP_KEY_UNKNOWN: u8 = 0;
 const MAP_KEY_INT: u8 = 1;
 const MAP_KEY_STRING: u8 = 2;
+const MAP_KEY_CUSTOM: u8 = 3;
 
 unsafe fn cstr_key_bytes(key: i64) -> &'static [u8] {
     if key == 0 {
@@ -4438,48 +4441,53 @@ unsafe fn cstr_key_bytes(key: i64) -> &'static [u8] {
     }
 }
 
-unsafe fn map_key_hash(kind: u8, key: i64) -> usize {
+unsafe fn map_key_hash(map: *mut OriMap, key: i64) -> usize {
+    let kind = (*map).key_kind;
     if kind == MAP_KEY_STRING {
         hash_bytes(cstr_key_bytes(key))
+    } else if kind == MAP_KEY_CUSTOM {
+        let hash_fn: extern "C" fn(i64) -> i64 = std::mem::transmute((*map).hash_fn);
+        hash_fn(key) as usize
     } else {
         hash_i64(key)
     }
 }
 
-unsafe fn map_key_equals(kind: u8, stored: i64, query: i64) -> bool {
+unsafe fn map_key_equals(map: *mut OriMap, stored: i64, query: i64) -> bool {
+    let kind = (*map).key_kind;
     if kind == MAP_KEY_STRING {
         cstr_key_bytes(stored) == cstr_key_bytes(query)
+    } else if kind == MAP_KEY_CUSTOM {
+        let eq_fn: extern "C" fn(i64, i64) -> c_uchar = std::mem::transmute((*map).eq_fn);
+        eq_fn(stored, query) != 0
     } else {
         stored == query
     }
 }
 
 unsafe fn ht_lookup_map(
-    ht: *mut i64,
-    ht_cap: usize,
-    keys: *mut i64,
-    key_kind: u8,
+    map: *mut OriMap,
     key: i64,
 ) -> usize {
-    let mask = ht_cap - 1;
-    let mut slot = map_key_hash(key_kind, key) & mask;
+    let mask = (*map).ht_cap as usize - 1;
+    let mut slot = map_key_hash(map, key) & mask;
     loop {
-        let v = *ht.add(slot);
+        let v = *(*map).ht.add(slot);
         if v == HT_EMPTY {
             return usize::MAX;
         }
-        if v != HT_TOMB && map_key_equals(key_kind, *keys.add(v as usize), key) {
+        if v != HT_TOMB && map_key_equals(map, *(*map).keys.add(v as usize), key) {
             return slot;
         }
         slot = (slot + 1) & mask;
     }
 }
 
-unsafe fn ht_find_insert_slot_map(ht: *mut i64, ht_cap: usize, key_kind: u8, key: i64) -> usize {
-    let mask = ht_cap - 1;
-    let mut slot = map_key_hash(key_kind, key) & mask;
+unsafe fn ht_find_insert_slot_map(map: *mut OriMap, key: i64) -> usize {
+    let mask = (*map).ht_cap as usize - 1;
+    let mut slot = map_key_hash(map, key) & mask;
     loop {
-        let v = *ht.add(slot);
+        let v = *(*map).ht.add(slot);
         if v == HT_EMPTY || v == HT_TOMB {
             return slot;
         }
@@ -4495,7 +4503,7 @@ unsafe fn map_prepare_key_kind(map: *mut OriMap, key_kind: u8) -> bool {
     (*map).key_kind == key_kind
 }
 
-unsafe fn map_alloc() -> *mut OriMap {
+unsafe fn map_alloc_with(hash_fn: *const std::ffi::c_void, eq_fn: *const std::ffi::c_void, kind: u8) -> *mut OriMap {
     let cap = 8_i64;
     let bytes = cap as usize * std::mem::size_of::<i64>();
     let ht_bytes = INITIAL_MAP_HT_CAP * std::mem::size_of::<i64>();
@@ -4510,7 +4518,9 @@ unsafe fn map_alloc() -> *mut OriMap {
         (*map).version = 0;
         (*map).ht = ht;
         (*map).ht_cap = INITIAL_MAP_HT_CAP as i64;
-        (*map).key_kind = MAP_KEY_UNKNOWN;
+        (*map).key_kind = kind;
+        (*map).hash_fn = hash_fn;
+        (*map).eq_fn = eq_fn;
     }
     map
 }
@@ -4522,14 +4532,9 @@ unsafe fn map_rebuild_ht(map: *mut OriMap) {
         0xFF,
         ht_cap * std::mem::size_of::<i64>(),
     );
-    let key_kind = if (*map).key_kind == MAP_KEY_UNKNOWN {
-        MAP_KEY_INT
-    } else {
-        (*map).key_kind
-    };
     for i in 0..(*map).len as usize {
         let key = *(*map).keys.add(i);
-        let slot = ht_find_insert_slot_map((*map).ht, ht_cap, key_kind, key);
+        let slot = ht_find_insert_slot_map(map, key);
         *(*map).ht.add(slot) = i as i64;
     }
 }
@@ -4568,7 +4573,15 @@ unsafe fn map_reserve_capacity(map: *mut OriMap, capacity: i64) {
 
 #[no_mangle]
 pub unsafe extern "C" fn ori_map_new() -> *mut OriMap {
-    map_alloc()
+    map_alloc_with(std::ptr::null(), std::ptr::null(), MAP_KEY_UNKNOWN)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_new_custom(
+    hash_fn: *const std::ffi::c_void,
+    eq_fn: *const std::ffi::c_void,
+) -> *mut OriMap {
+    map_alloc_with(hash_fn, eq_fn, MAP_KEY_CUSTOM)
 }
 
 unsafe fn ori_map_set_raw(map: *mut OriMap, key: i64, value: i64, key_kind: u8) {
@@ -4578,8 +4591,7 @@ unsafe fn ori_map_set_raw(map: *mut OriMap, key: i64, value: i64, key_kind: u8) 
     if !map_prepare_key_kind(map, key_kind) {
         return;
     }
-    let ht_cap = (*map).ht_cap as usize;
-    let existing = ht_lookup_map((*map).ht, ht_cap, (*map).keys, key_kind, key);
+    let existing = ht_lookup_map(map, key);
     if existing != usize::MAX {
         let dense_idx = *(*map).ht.add(existing) as usize;
         let old_value = *(*map).values.add(dense_idx);
@@ -4597,6 +4609,7 @@ unsafe fn ori_map_set_raw(map: *mut OriMap, key: i64, value: i64, key_kind: u8) 
         (*map).cap = new_cap;
     }
     // Grow hash table at 50% load
+    let ht_cap = (*map).ht_cap as usize;
     if (*map).len as usize * 2 >= ht_cap {
         map_grow(map);
     }
@@ -4604,8 +4617,7 @@ unsafe fn ori_map_set_raw(map: *mut OriMap, key: i64, value: i64, key_kind: u8) 
     *(*map).keys.add(dense_idx) = key;
     *(*map).values.add(dense_idx) = value;
     (*map).len += 1;
-    let ht_cap = (*map).ht_cap as usize;
-    let slot = ht_find_insert_slot_map((*map).ht, ht_cap, key_kind, key);
+    let slot = ht_find_insert_slot_map(map, key);
     *(*map).ht.add(slot) = dense_idx as i64;
     (*map).version += 1;
 }
@@ -4620,6 +4632,11 @@ pub unsafe extern "C" fn ori_map_set_string(map: *mut OriMap, key: *const u8, va
     ori_map_set_raw(map, key as i64, value, MAP_KEY_STRING);
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_set_custom(map: *mut OriMap, key: i64, value: i64) {
+    ori_map_set_raw(map, key, value, MAP_KEY_CUSTOM);
+}
+
 unsafe fn ori_map_get_raw(map: *mut OriMap, key: i64, key_kind: u8) -> i64 {
     if map.is_null() {
         return 0;
@@ -4627,8 +4644,7 @@ unsafe fn ori_map_get_raw(map: *mut OriMap, key: i64, key_kind: u8) -> i64 {
     if (*map).key_kind != MAP_KEY_UNKNOWN && (*map).key_kind != key_kind {
         return 0;
     }
-    let ht_cap = (*map).ht_cap as usize;
-    let slot = ht_lookup_map((*map).ht, ht_cap, (*map).keys, key_kind, key);
+    let slot = ht_lookup_map(map, key);
     if slot == usize::MAX {
         return 0;
     }
@@ -4644,6 +4660,11 @@ pub unsafe extern "C" fn ori_map_get(map: *mut OriMap, key: i64) -> i64 {
 #[no_mangle]
 pub unsafe extern "C" fn ori_map_get_string(map: *mut OriMap, key: *const u8) -> i64 {
     ori_map_get_raw(map, key as i64, MAP_KEY_STRING)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_get_custom(map: *mut OriMap, key: i64) -> i64 {
+    ori_map_get_raw(map, key, MAP_KEY_CUSTOM)
 }
 
 #[no_mangle]
@@ -4667,6 +4688,18 @@ pub unsafe extern "C" fn ori_map_try_get_string(
     }
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_try_get_custom(
+    map: *mut OriMap,
+    key: i64,
+) -> *mut OriOptionalInt {
+    if ori_map_contains_custom(map, key) == 0 {
+        alloc_optional_int(0, 0)
+    } else {
+        alloc_optional_int(1, ori_map_get_custom(map, key))
+    }
+}
+
 unsafe fn ori_map_contains_raw(map: *mut OriMap, key: i64, key_kind: u8) -> c_uchar {
     if map.is_null() {
         return 0;
@@ -4674,8 +4707,7 @@ unsafe fn ori_map_contains_raw(map: *mut OriMap, key: i64, key_kind: u8) -> c_uc
     if (*map).key_kind != MAP_KEY_UNKNOWN && (*map).key_kind != key_kind {
         return 0;
     }
-    let ht_cap = (*map).ht_cap as usize;
-    u8::from(ht_lookup_map((*map).ht, ht_cap, (*map).keys, key_kind, key) != usize::MAX) as c_uchar
+    u8::from(ht_lookup_map(map, key) != usize::MAX) as c_uchar
 }
 
 #[no_mangle]
@@ -4686,6 +4718,11 @@ pub unsafe extern "C" fn ori_map_contains(map: *mut OriMap, key: i64) -> c_uchar
 #[no_mangle]
 pub unsafe extern "C" fn ori_map_contains_string(map: *mut OriMap, key: *const u8) -> c_uchar {
     ori_map_contains_raw(map, key as i64, MAP_KEY_STRING)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_contains_custom(map: *mut OriMap, key: i64) -> c_uchar {
+    ori_map_contains_raw(map, key, MAP_KEY_CUSTOM)
 }
 
 #[no_mangle]
@@ -4700,8 +4737,7 @@ unsafe fn ori_map_remove_raw(map: *mut OriMap, key: i64, key_kind: u8) {
     if (*map).key_kind != MAP_KEY_UNKNOWN && (*map).key_kind != key_kind {
         return;
     }
-    let ht_cap = (*map).ht_cap as usize;
-    let slot = ht_lookup_map((*map).ht, ht_cap, (*map).keys, key_kind, key);
+    let slot = ht_lookup_map(map, key);
     if slot == usize::MAX {
         return;
     }
@@ -4718,7 +4754,7 @@ unsafe fn ori_map_remove_raw(map: *mut OriMap, key: i64, key_kind: u8) {
         *(*map).keys.add(dense_idx) = last_key;
         *(*map).values.add(dense_idx) = last_val;
         // Update hash slot that pointed to last_idx → now points to dense_idx
-        let last_slot = ht_lookup_map((*map).ht, ht_cap, (*map).keys, key_kind, last_key);
+        let last_slot = ht_lookup_map(map, last_key);
         if last_slot != usize::MAX {
             *(*map).ht.add(last_slot) = dense_idx as i64;
         }
@@ -4735,6 +4771,11 @@ pub unsafe extern "C" fn ori_map_remove(map: *mut OriMap, key: i64) {
 #[no_mangle]
 pub unsafe extern "C" fn ori_map_remove_string(map: *mut OriMap, key: *const u8) {
     ori_map_remove_raw(map, key as i64, MAP_KEY_STRING);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_remove_custom(map: *mut OriMap, key: i64) {
+    ori_map_remove_raw(map, key, MAP_KEY_CUSTOM);
 }
 
 #[no_mangle]
@@ -4760,6 +4801,21 @@ pub unsafe extern "C" fn ori_map_try_remove_string(
         let value = ori_map_get_string(map, key);
         ori_arc_retain(value as *mut u8);
         ori_map_remove_string(map, key);
+        alloc_optional_owned_managed_value(1, value)
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_map_try_remove_custom(
+    map: *mut OriMap,
+    key: i64,
+) -> *mut OriOptionalInt {
+    if ori_map_contains_custom(map, key) == 0 {
+        alloc_optional_int(0, 0)
+    } else {
+        let value = ori_map_get_custom(map, key);
+        ori_arc_retain(value as *mut u8);
+        ori_map_remove_custom(map, key);
         alloc_optional_owned_managed_value(1, value)
     }
 }

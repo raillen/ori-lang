@@ -1,0 +1,118 @@
+oridoc 1
+
+namespace ori.net
+
+doc module self
+    summary:
+        Flattened TLS/TCP server/UDP helpers over the native `ori.net` runtime.
+    details:
+        Re-exports the Layer 1 network primitives under the parent module
+        so `import ori.net only (connect_tls, listen)` works directly.
+        All I/O is synchronous and blocking.
+end
+
+doc func connect_tls
+    summary:
+        Opens a TLS connection to `host`:`port`.
+    param host:
+        Host name to connect to.
+    param port:
+        TCP port.
+    param timeout_ms:
+        Connect timeout in milliseconds.
+    returns:
+        `result` with a `Connection` or an error message.
+end
+
+doc func listen
+    summary:
+        Binds a TCP listener on `host`:`port`.
+    param host:
+        Bind address.
+    param port:
+        TCP port. `0` selects an ephemeral port.
+    returns:
+        `result` with a `Listener` or an error message.
+end
+
+doc func accept
+    summary:
+        Blocks until a client connects to `listener`.
+    param listener:
+        Listener returned by `listen`.
+    returns:
+        `result` with an accepted `Connection` or an error.
+end
+
+doc func close_listener
+    summary:
+        Closes `listener` and releases its socket.
+    param listener:
+        Listener to close.
+    returns:
+        Nothing.
+end
+
+doc func listener_port
+    summary:
+        Returns the local port bound by `listener`.
+    param listener:
+        Listener to inspect.
+    returns:
+        The bound TCP port.
+end
+
+doc func udp_bind
+    summary:
+        Binds a UDP socket on `host`:`port`.
+    param host:
+        Bind address.
+    param port:
+        UDP port. `0` selects an ephemeral port.
+    returns:
+        `result` with a `UdpSocket` or an error.
+end
+
+doc func udp_send_to
+    summary:
+        Sends `data` to `host`:`port` over `sock`.
+    param sock:
+        UDP socket to send from.
+    param host:
+        Destination host.
+    param port:
+        Destination port.
+    param data:
+        Payload to send.
+    returns:
+        `result` with the byte count written, or an error.
+end
+
+doc func udp_recv_from
+    summary:
+        Blocks until a datagram arrives on `sock`.
+    param sock:
+        UDP socket to receive on.
+    param max_bytes:
+        Maximum datagram size to read.
+    returns:
+        `result` with the received bytes, or an error.
+end
+
+doc func udp_close
+    summary:
+        Closes `sock` and releases its socket.
+    param sock:
+        UDP socket to close.
+    returns:
+        Nothing.
+end
+
+doc func udp_local_port
+    summary:
+        Returns the local port bound by `sock`.
+    param sock:
+        UDP socket to inspect.
+    returns:
+        The bound UDP port.
+end

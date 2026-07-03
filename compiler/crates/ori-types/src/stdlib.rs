@@ -2078,59 +2078,12 @@ pub fn implemented_stdlib_modules() -> Vec<&'static str> {
     modules.into_iter().collect()
 }
 
-/// Flatten suffixes searched when resolving `import ori.X only (member)`.
-pub const STDLIB_FLATTEN_SUFFIXES: &[&str] = &[".utils", ".algorithms"];
 
-/// If `qualified` lives under a flatten submodule (`ori.map.utils.get_or`), return
-/// the parent symbol (`ori.map.get_or`).
-pub fn flatten_parent_symbol(qualified: &str) -> Option<String> {
-    for suffix in STDLIB_FLATTEN_SUFFIXES {
-        let needle = format!("{suffix}.");
-        if let Some(idx) = qualified.find(&needle) {
-            let parent = &qualified[..idx];
-            let member = &qualified[idx + needle.len()..];
-            return Some(format!("{parent}.{member}"));
-        }
-    }
-    None
-}
-
-/// Resolve a selective stdlib import member against a loaded definition map.
-pub fn resolve_flattened_stdlib_member(
-    module: &str,
-    member: &str,
-    lookup: impl Fn(&str) -> bool,
-) -> Option<smol_str::SmolStr> {
-    let direct = format!("{module}.{member}");
-    if lookup(&direct) {
-        return Some(smol_str::SmolStr::new(direct));
-    }
-    for suffix in STDLIB_FLATTEN_SUFFIXES {
-        let nested = format!("{module}{suffix}.{member}");
-        if lookup(&nested) {
-            return Some(smol_str::SmolStr::new(nested));
-        }
-    }
-    None
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashSet;
-
-    #[test]
-    fn flatten_parent_symbol_maps_submodules_to_parent() {
-        assert_eq!(
-            flatten_parent_symbol("ori.map.utils.get_or").as_deref(),
-            Some("ori.map.get_or")
-        );
-        assert_eq!(
-            flatten_parent_symbol("ori.bytes.algorithms.compare_lex").as_deref(),
-            Some("ori.bytes.compare_lex")
-        );
-        assert_eq!(flatten_parent_symbol("ori.io.print").as_deref(), None);
-    }
 
     #[test]
     fn manifest_paths_and_aliases_are_unique() {

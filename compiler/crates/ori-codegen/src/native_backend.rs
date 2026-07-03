@@ -95,13 +95,20 @@ const INTERNAL_NATIVE_RUNTIME_IMPORTS: &[&str] = &[
     "ori_int_to_cstr",
     "ori_doubly_linked_list_find_string",
     "ori_linked_list_find_string",
+    "ori_map_contains_custom",
     "ori_map_contains_string",
+    "ori_map_get_custom",
     "ori_map_get_string",
     "ori_map_key_at",
+    "ori_map_new_custom",
+    "ori_map_remove_custom",
     "ori_map_remove_string",
+    "ori_map_set_custom",
     "ori_map_set_string",
     "ori_map_from_entries_string",
+    "ori_map_try_get_custom",
     "ori_map_try_get_string",
+    "ori_map_try_remove_custom",
     "ori_map_try_remove_string",
     "ori_map_value_at",
     "ori_math_abs_float",
@@ -3708,19 +3715,30 @@ impl<M: Module> NativeBackend<M> {
         self.stdlib_ids.insert(SmolStr::new("ori_list_filter"), id);
         let id = decl("ori_map_new", &[], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_new"), id);
+        let id = decl("ori_map_new_custom", &[pt, pt], vec![], Some(pt))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_map_new_custom"), id);
         let id = decl("ori_map_set", &[pt, types::I64, types::I64], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_set"), id);
         let id = decl("ori_map_set_string", &[pt, pt, types::I64], vec![], None)?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_map_set_string"), id);
+        let id = decl("ori_map_set_custom", &[pt, pt, types::I64], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_set_custom"), id);
         let id = decl("ori_map_get", &[pt, types::I64], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_get"), id);
         let id = decl("ori_map_get_string", &[pt, pt], vec![], Some(types::I64))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_map_get_string"), id);
+        let id = decl("ori_map_get_custom", &[pt, pt], vec![], Some(types::I64))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_get_custom"), id);
         let id = decl("ori_map_try_get_string", &[pt, pt], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_map_try_get_string"), id);
+        let id = decl("ori_map_try_get_custom", &[pt, pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_try_get_custom"), id);
         let id = decl(
             "ori_map_contains",
             &[pt, types::I64],
@@ -3736,6 +3754,14 @@ impl<M: Module> NativeBackend<M> {
         )?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_map_contains_string"), id);
+        let id = decl(
+            "ori_map_contains_custom",
+            &[pt, pt],
+            vec![],
+            Some(types::I8),
+        )?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_contains_custom"), id);
         let id = decl("ori_map_len", &[pt], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_len"), id);
         let id = decl("ori_map_capacity", &[pt], vec![], Some(types::I64))?;
@@ -3765,9 +3791,15 @@ impl<M: Module> NativeBackend<M> {
         let id = decl("ori_map_remove_string", &[pt, pt], vec![], None)?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_map_remove_string"), id);
+        let id = decl("ori_map_remove_custom", &[pt, pt], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_remove_custom"), id);
         let id = decl("ori_map_try_remove_string", &[pt, pt], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_map_try_remove_string"), id);
+        let id = decl("ori_map_try_remove_custom", &[pt, pt], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_try_remove_custom"), id);
         let id = decl("ori_map_from_entries_string", &[pt], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_map_from_entries_string"), id);
@@ -13935,13 +13967,14 @@ fn find_common_linux_file(file: &str) -> Result<PathBuf, String> {
 }
 
 fn cc_print_file_name(cc: &str, file: &str) -> Result<PathBuf, String> {
+    let arg = format!("-print-file-name={file}");
     let output = std::process::Command::new(cc)
-        .args(["-print-file-name", file])
+        .args([arg.as_str()])
         .output()
-        .map_err(|e| format!("failed to invoke `{cc} -print-file-name {file}`: {e}"))?;
+        .map_err(|e| format!("failed to invoke `{cc} -print-file-name={file}`: {e}"))?;
     if !output.status.success() {
         return Err(format!(
-            "`{cc} -print-file-name {file}` exited with status {}",
+            "`{cc} -print-file-name={file}` exited with status {}",
             output.status
         ));
     }
@@ -13950,14 +13983,14 @@ fn cc_print_file_name(cc: &str, file: &str) -> Result<PathBuf, String> {
     // contains a separator.
     if path.is_empty() || !path.contains(std::path::MAIN_SEPARATOR) {
         return Err(format!(
-            "`{cc} -print-file-name {file}` returned `{path}` (not found); \
+            "`{cc} -print-file-name={file}` returned `{path}` (not found); \
              install the C runtime development files (e.g. libc6-dev)"
         ));
     }
     let candidate = PathBuf::from(path);
     if !candidate.is_file() {
         return Err(format!(
-            "`{cc} -print-file-name {file}` returned `{}` which does not exist",
+            "`{cc} -print-file-name={file}` returned `{}` which does not exist",
             candidate.display()
         ));
     }
@@ -13965,27 +13998,28 @@ fn cc_print_file_name(cc: &str, file: &str) -> Result<PathBuf, String> {
 }
 
 fn cc_print_prog_name(cc: &str, prog: &str) -> Result<PathBuf, String> {
+    let arg = format!("-print-prog-name={prog}");
     let output = std::process::Command::new(cc)
-        .args(["-print-prog-name", prog])
+        .args([arg.as_str()])
         .output()
-        .map_err(|e| format!("failed to invoke `{cc} -print-prog-name {prog}`: {e}"))?;
+        .map_err(|e| format!("failed to invoke `{cc} -print-prog-name={prog}`: {e}"))?;
     if !output.status.success() {
         return Err(format!(
-            "`{cc} -print-prog-name {prog}` exited with status {}",
+            "`{cc} -print-prog-name={prog}` exited with status {}",
             output.status
         ));
     }
     let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if path.is_empty() || !path.contains(std::path::MAIN_SEPARATOR) {
         return Err(format!(
-            "`{cc} -print-prog-name {prog}` returned `{path}` (not found); \
+            "`{cc} -print-prog-name={prog}` returned `{path}` (not found); \
              install binutils or set ORI_SYSTEM_LINKER"
         ));
     }
     let candidate = PathBuf::from(path);
     if !candidate.is_file() {
         return Err(format!(
-            "`{cc} -print-prog-name {prog}` returned `{}` which does not exist",
+            "`{cc} -print-prog-name={prog}` returned `{}` which does not exist",
             candidate.display()
         ));
     }
@@ -14001,8 +14035,9 @@ fn discover_linux_dynamic_linker(cc: &str) -> Result<PathBuf, String> {
         "ld-linux-aarch64.so.1",
     ];
     for &name in &candidates {
+        let arg = format!("-print-file-name={name}");
         let output = match std::process::Command::new(cc)
-            .args(["-print-file-name", name])
+            .args([arg.as_str()])
             .output()
         {
             Ok(output) => output,

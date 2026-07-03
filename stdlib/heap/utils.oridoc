@@ -1,0 +1,57 @@
+oridoc 1
+
+namespace ori.heap.utils
+
+doc module self
+    summary:
+        Integer-heap helpers over the native `ori.heap` runtime.
+end
+
+doc func from_list_int
+    summary:
+        Builds a min-heap from `items`.
+    param items:
+        Integers to heapify.
+    returns:
+        A new `Heap<int>`.
+end
+
+doc func peek_or_int
+    summary:
+        Returns the smallest element, or `fallback` when empty.
+    param h:
+        Source heap.
+    param fallback:
+        Value returned when the heap is empty.
+    returns:
+        The smallest element, or `fallback`.
+end
+
+doc func pop_or_int
+    summary:
+        Removes and returns the smallest element, or `fallback` when empty.
+    param h:
+        Source heap.
+    param fallback:
+        Value returned when the heap is empty.
+    returns:
+        The removed smallest element, or `fallback`.
+end
+
+doc func into_sorted_int
+    summary:
+        Drains `h` and returns its elements in ascending order.
+    param h:
+        Source heap.
+    returns:
+        Sorted list of integers.
+end
+
+doc func is_singleton_int
+    summary:
+        Reports whether `h` contains exactly one element.
+    param h:
+        Source heap.
+    returns:
+        `true` when the heap has exactly one element.
+end

@@ -2216,10 +2216,8 @@ fn classify_stdlib_import(import: &str, has_selected_items: bool) -> StdlibImpor
         return StdlibImportStatus::NotStdlib;
     }
     if ori_types::stdlib::is_implemented_stdlib_module(import) {
-        if has_selected_items {
-            if let Some(sources) = find_stdlib_selective_sources(import) {
-                return StdlibImportStatus::StdlibSources(sources);
-            }
+        if let Some(sources) = find_stdlib_selective_sources(import) {
+            return StdlibImportStatus::StdlibSources(sources);
         }
         return StdlibImportStatus::Implemented;
     }

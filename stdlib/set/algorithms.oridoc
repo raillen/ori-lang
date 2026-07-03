@@ -1,0 +1,85 @@
+oridoc 1
+
+namespace ori.set.algorithms
+
+doc module self
+    summary:
+        Set-theoretic algorithms over the native `ori.set` runtime.
+end
+
+doc func union_string
+    summary:
+        Returns the union of two string sets.
+    param a:
+        First set.
+    param b:
+        Second set.
+    returns:
+        A new set with elements from both.
+end
+
+doc func intersection_string
+    summary:
+        Returns the intersection of two string sets.
+    param a:
+        First set.
+    param b:
+        Second set.
+    returns:
+        A new set with elements present in both.
+end
+
+doc func difference_string
+    summary:
+        Returns the elements of `a` that are not in `b`.
+    param a:
+        Source set.
+    param b:
+        Set to subtract.
+    returns:
+        A new set with elements in `a` but not in `b`.
+end
+
+doc func intersection_size_string
+    summary:
+        Returns the number of elements common to `a` and `b`.
+    param a:
+        First set.
+    param b:
+        Second set.
+    returns:
+        Size of the intersection.
+end
+
+doc func is_disjoint_string
+    summary:
+        Reports whether `a` and `b` share no elements.
+    param a:
+        First set.
+    param b:
+        Second set.
+    returns:
+        `true` when the intersection is empty.
+end
+
+doc func union_int
+    summary:
+        Returns the union of two integer sets.
+    param a:
+        First set.
+    param b:
+        Second set.
+    returns:
+        A new set with elements from both.
+end
+
+doc func intersection_int
+    summary:
+        Returns the intersection of two integer sets.
+    param a:
+        First set.
+    param b:
+        Second set.
+    returns:
+        A new set with elements present in both.
+end

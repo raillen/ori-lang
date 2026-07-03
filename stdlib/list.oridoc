@@ -1,0 +1,87 @@
+oridoc 1
+
+namespace ori.list
+
+doc module self
+    summary:
+        Compositional helpers over the native `ori.list` runtime surface.
+    details:
+        Provides fallback-returning accessors and integer list algorithms.
+        Import with `import ori.list only (get_or, sum_int)` for helper-only
+        names without pulling the runtime surface.
+end
+
+doc func get_or
+    summary:
+        Returns the element at `index`, or `fallback` when out of bounds.
+    param items:
+        Source list.
+    param index:
+        Zero-based position.
+    param fallback:
+        Value returned when the index is invalid.
+    returns:
+        The element at `index`, or `fallback`.
+end
+
+doc func first_or
+    summary:
+        Returns the first element, or `fallback` when the list is empty.
+    param items:
+        Source list.
+    param fallback:
+        Value returned when the list is empty.
+    returns:
+        The first element, or `fallback`.
+end
+
+doc func last_or
+    summary:
+        Returns the last element, or `fallback` when the list is empty.
+    param items:
+        Source list.
+    param fallback:
+        Value returned when the list is empty.
+    returns:
+        The last element, or `fallback`.
+end
+
+doc func singleton
+    summary:
+        Builds a single-element list containing `item`.
+    param item:
+        Value to wrap.
+    returns:
+        A new list with exactly one element.
+end
+
+doc func sum_int
+    summary:
+        Sums every integer in `items`.
+    param items:
+        Integers to add.
+    returns:
+        The total sum.
+end
+
+doc func binary_search_int
+    summary:
+        Searches `target` in a sorted integer list via binary search.
+    param items:
+        Ascending-sorted integers.
+    param target:
+        Value to locate.
+    returns:
+        Index of `target`, or `-1` when absent.
+end
+
+doc func all_equal_int
+    summary:
+        Reports whether every element equals `expected`.
+    param items:
+        Integers to test.
+    param expected:
+        Value each element must match.
+    returns:
+        `true` when all elements equal `expected`.
+end

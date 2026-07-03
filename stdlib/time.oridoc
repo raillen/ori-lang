@@ -1,0 +1,142 @@
+oridoc 1
+
+namespace ori.time
+
+doc module self
+    summary:
+        Typed `Instant`/`Duration` wrappers over millisecond runtime primitives.
+    details:
+        Value types that make time APIs read better without changing the
+        runtime ABI. Underlying storage is a Unix-millisecond `int`.
+end
+
+doc struct Instant
+    summary:
+        A point in time stored as Unix milliseconds.
+end
+
+doc struct Duration
+    summary:
+        A length of time stored as milliseconds.
+end
+
+doc func instant_now
+    summary:
+        Returns the current time as an `Instant`.
+    returns:
+        An `Instant` for the current wall clock.
+end
+
+doc func duration_millis
+    summary:
+        Builds a `Duration` of `value` milliseconds.
+    param value:
+        Number of milliseconds.
+    returns:
+        A `Duration` of that length.
+end
+
+doc func duration_seconds
+    summary:
+        Builds a `Duration` of `value` seconds.
+    param value:
+        Number of seconds.
+    returns:
+        A `Duration` of `value * 1000` milliseconds.
+end
+
+doc func duration_minutes
+    summary:
+        Builds a `Duration` of `value` minutes.
+    param value:
+        Number of minutes.
+    returns:
+        A `Duration` of `value * 60000` milliseconds.
+end
+
+doc func duration_hours
+    summary:
+        Builds a `Duration` of `value` hours.
+    param value:
+        Number of hours.
+    returns:
+        A `Duration` of `value * 3600000` milliseconds.
+end
+
+doc func instant_from_unix_ms
+    summary:
+        Builds an `Instant` from a Unix-millisecond value.
+    param value:
+        Unix milliseconds.
+    returns:
+        The corresponding `Instant`.
+end
+
+doc func instant_to_unix_ms
+    summary:
+        Converts an `Instant` back to Unix milliseconds.
+    param value:
+        Instant to convert.
+    returns:
+        The Unix-millisecond value.
+end
+
+doc func duration_to_millis
+    summary:
+        Converts a `Duration` to milliseconds.
+    param value:
+        Duration to convert.
+    returns:
+        The number of milliseconds.
+end
+
+doc func elapsed_since
+    summary:
+        Returns the `Duration` elapsed since `start`.
+    param start:
+        Reference instant.
+    returns:
+        Duration between `start` and now.
+end
+
+doc func between
+    summary:
+        Returns the `Duration` from `start` to `finish`.
+    param start:
+        Earlier instant.
+    param finish:
+        Later instant.
+    returns:
+        Duration between the two instants.
+end
+
+doc func add
+    summary:
+        Returns an `Instant` advanced by `duration`.
+    param value:
+        Base instant.
+    param duration:
+        Duration to add.
+    returns:
+        The advanced instant.
+end
+
+doc func sub
+    summary:
+        Returns an `Instant` moved back by `duration`.
+    param value:
+        Base instant.
+    param duration:
+        Duration to subtract.
+    returns:
+        The earlier instant.
+end
+
+doc func sleep_duration
+    summary:
+        Blocks the current task for `duration`.
+    param duration:
+        Amount of time to sleep.
+    returns:
+        Nothing; the call returns once the delay elapses.
+end

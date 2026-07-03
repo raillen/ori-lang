@@ -1,0 +1,46 @@
+oridoc 1
+
+namespace ori.queue.utils
+
+doc module self
+    summary:
+        Conversion and fallback helpers over `ori.queue`.
+end
+
+doc func from_list
+    summary:
+        Builds a queue from `items`, preserving FIFO order.
+    param items:
+        Values to enqueue.
+    returns:
+        A new queue containing every item.
+end
+
+doc func to_list
+    summary:
+        Returns a snapshot list of `q`'s contents.
+    param q:
+        Source queue.
+    returns:
+        List of elements in front-to-back order.
+end
+
+doc func peek_or
+    summary:
+        Returns the front element, or `fallback` when empty.
+    param q:
+        Source queue.
+    param fallback:
+        Value returned when the queue is empty.
+    returns:
+        The front element, or `fallback`.
+end
+
+doc func drain_count
+    summary:
+        Returns the number of elements pending in `q`.
+    param q:
+        Source queue.
+    returns:
+        Current queue length.
+end

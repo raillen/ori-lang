@@ -1,0 +1,84 @@
+oridoc 1
+
+namespace ori.iter.utils
+
+doc module self
+    summary:
+        Eager list helpers built on top of `ori.iter`.
+end
+
+doc func count
+    summary:
+        Returns the number of elements in `items`.
+    param items:
+        Source list.
+    returns:
+        Element count.
+end
+
+doc func is_empty
+    summary:
+        Reports whether `items` has no elements.
+    param items:
+        Source list.
+    returns:
+        `true` when the list is empty.
+end
+
+doc func first
+    summary:
+        Returns the first element of `items`.
+    param items:
+        Source list.
+    returns:
+        `some(first)` or `none` when empty.
+end
+
+doc func sum_int
+    summary:
+        Sums every integer in `items`.
+    param items:
+        Integers to add.
+    returns:
+        The total sum.
+end
+
+doc func contains_int
+    summary:
+        Reports whether `items` contains `target`.
+    param items:
+        Integers to search.
+    param target:
+        Value to locate.
+    returns:
+        `true` when `target` is present.
+end
+
+doc func all_equal_int
+    summary:
+        Reports whether every element equals `expected`.
+    param items:
+        Integers to test.
+    param expected:
+        Value each element must match.
+    returns:
+        `true` when all elements equal `expected`.
+end
+
+doc func unique_count_int
+    summary:
+        Returns the number of distinct integers in `items`.
+    param items:
+        Integers to deduplicate.
+    returns:
+        Distinct element count.
+end
+
+doc func reversed_copy
+    summary:
+        Returns a new list with the elements of `items` in reverse order.
+    param items:
+        Source list.
+    returns:
+        A reversed copy.
+end

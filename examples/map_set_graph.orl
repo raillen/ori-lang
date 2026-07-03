@@ -1,0 +1,338 @@
+namespace app.map_set_graph
+
+--- Demonstra map, set, graph, heap e hash_table da stdlib Ori.
+--- Inclui cenários com Hashable/Equatable/Comparable customizados.
+
+import ori.core as core
+import ori.graph as graph
+import ori.hash_table as hash_table
+import ori.heap as heap
+import ori.io as io
+import ori.list as lists
+import ori.map as maps
+import ori.set as sets
+
+func section(title: string)
+    io.println("")
+    io.println(f"=== {title} ===")
+end
+
+-- ────────────── Map ──────────────
+func demo_map()
+    section("Map K V")
+
+    const scores: map<string, int> = maps.new()
+    maps.set(scores, "alice", 95)
+    maps.set(scores, "bob", 88)
+    maps.set(scores, "carol", 92)
+
+    io.println(f"  len: {maps.len(scores)}")
+    const alice_key: string = "alice"
+    io.println(f"  alice score: {maps.get(scores, alice_key)}")
+    const bob_key: string = "bob"
+    io.println(f"  contains bob: {maps.contains(scores, bob_key)}")
+
+    const dave_key: string = "dave"
+    match maps.try_get(scores, dave_key)
+    case some(value):
+        io.println(f"  dave: {value}")
+    case none:
+        io.println("  dave: not found (expected)")
+    end
+
+    const carol_key: string = "carol"
+    io.println(f"  get_or carol: {maps.get_or(scores, carol_key, 0)}")
+    io.println(f"  has_key alice: {maps.has_key(scores, alice_key)}")
+    io.println(f"  values_sum_int: {maps.values_sum_int(scores)}")
+    const has_all: bool = maps.has_all_keys(scores, ["alice", "bob"])
+    io.println(f"  has_all_keys: {has_all}")
+
+    -- Merge
+    const extra: map<string, int> = maps.new()
+    maps.set(extra, "alice", 100)
+    maps.set(extra, "eve", 77)
+    const merged: map<string, int> = maps.merge_string_int(scores, extra)
+    io.println(f"  merged alice (100): {maps.get(merged, alice_key)}")
+    io.println(f"  merged len: {maps.len(merged)}")
+
+    -- Invert
+    const inverted: map<int, string> = maps.invert_string_int(scores)
+    io.println(f"  inverted 95: {maps.get(inverted, 95)}")
+
+    -- Keys
+    const keys: list<string> = maps.keys(scores)
+    io.println(f"  keys count: {lists.len(keys)}")
+
+    -- Int-keyed map
+    const id_map: map<int, string> = {1: "one", 2: "two", 3: "three"}
+    io.println(f"  int-key map[2]: {maps.get(id_map, 2)}")
+
+    const bob_removed: optional<int> = maps.try_remove(scores, bob_key)
+    match bob_removed
+    case some(removed):
+        io.println(f"  removed bob: {removed}")
+    case none:
+        io.println("  bob not found for removal")
+    end
+    io.println(f"  after remove len: {maps.len(scores)}")
+end
+
+-- ────────────── Set ──────────────
+func demo_set()
+    section("Set T")
+
+    const tags: set<string> = sets.new()
+    sets.add(tags, "urgent")
+    sets.add(tags, "review")
+    sets.add(tags, "urgent")
+    io.println(f"  len (deduped): {sets.len(tags)}")
+    const urgent: string = "urgent"
+    const draft: string = "draft"
+    io.println(f"  contains urgent: {sets.contains(tags, urgent)}")
+    io.println(f"  contains draft: {sets.contains(tags, draft)}")
+
+    -- from_list + clone
+    const colors: set<string> = sets.from_list(["red", "green", "blue", "red"])
+    io.println(f"  from_list deduped len: {sets.len(colors)}")
+
+    const green: string = "green"
+    sets.remove(colors, green)
+    io.println(f"  after remove green len: {sets.len(colors)}")
+
+    const copy: set<string> = sets.clone(colors)
+    io.println(f"  clone len: {sets.len(copy)}")
+
+    -- Int set
+    const nums: set<int> = sets.new()
+    sets.add(nums, 10)
+    sets.add(nums, 20)
+    sets.add(nums, 30)
+    io.println(f"  int set len: {sets.len(nums)}")
+    io.println(f"  contains 20: {sets.contains(nums, 20)}")
+end
+
+-- ────────────── Hash Table ──────────────
+func demo_hash_table()
+    section("HashTable K V")
+
+    const cache: hash_table.HashTable<string, int> = hash_table.with_capacity(8)
+    const p1: string = "page_1"
+    const p2: string = "page_2"
+    const p3: string = "page_3"
+    hash_table.set(cache, p1, 200)
+    hash_table.set(cache, p2, 404)
+    hash_table.set(cache, p3, 301)
+
+    io.println(f"  len: {hash_table.len(cache)}")
+    io.println(f"  capacity >= 8: {hash_table.capacity(cache) >= 8}")
+
+    match hash_table.get(cache, p2)
+    case some(status):
+        io.println(f"  page_2 status: {status}")
+    case none:
+        io.println("  page_2: not found")
+    end
+
+    io.println(f"  contains page_3: {hash_table.contains(cache, p3)}")
+
+    match hash_table.remove(cache, p1)
+    case some(removed):
+        io.println(f"  removed page_1: {removed}")
+    case none:
+        io.println("  page_1 not found for removal")
+    end
+    io.println(f"  after remove len: {hash_table.len(cache)}")
+
+    -- Int-keyed hash table
+    const ht: hash_table.HashTable<int, string> = hash_table.new()
+    hash_table.set(ht, 42, "answer")
+    match hash_table.get(ht, 42)
+    case some(answer):
+        io.println(f"  int-key ht[42]: {answer}")
+    case none:
+        io.println("  int-key ht[42]: not found")
+    end
+end
+
+-- ────────────── Heap ──────────────
+func demo_heap()
+    section("Heap T — Min-Heap")
+
+    const priorities: heap.Heap<int> = heap.new()
+    heap.push(priorities, 30)
+    heap.push(priorities, 10)
+    heap.push(priorities, 50)
+    heap.push(priorities, 20)
+
+    io.println(f"  len: {heap.len(priorities)}")
+
+    match heap.peek(priorities)
+    case some(min_val):
+        io.println(f"  peek (min): {min_val}")
+    case none:
+        io.println("  peek: empty")
+    end
+
+    -- Pop all in sorted order
+    var sorted_output: string = "  sorted: "
+    var remaining: int = heap.len(priorities)
+    while remaining > 0
+        match heap.pop(priorities)
+        case some(value):
+            sorted_output = ori.string.concat(sorted_output, f"{value} ")
+        case none:
+            sorted_output = ori.string.concat(sorted_output, "? ")
+        end
+        remaining = remaining - 1
+    end
+    io.println(sorted_output)
+
+    -- String heap
+    const words: heap.Heap<string> = heap.new()
+    heap.push(words, "cherry")
+    heap.push(words, "apple")
+    heap.push(words, "banana")
+
+    match heap.pop(words)
+    case some(first):
+        io.println(f"  string heap pop: {first}")
+    case none:
+        io.println("  string heap: empty")
+    end
+
+    -- from_list + into_sorted_list
+    const batch: heap.Heap<int> = heap.from_list([9, 3, 7, 1, 5])
+    const sorted: list<int> = heap.into_sorted_list(batch)
+    io.println(f"  sorted list: [{sorted[0]}, {sorted[1]}, {sorted[2]}, {sorted[3]}, {sorted[4]}]")
+end
+
+-- ──────── Heap com Comparable customizado ────────
+struct Priority
+    level: int
+end
+
+implement core.Comparable for Priority
+    func compare(self, other: Priority) -> int
+        return self.level - other.level
+    end
+end
+
+func demo_custom_comparable_heap()
+    section("Heap Priority — Custom Comparable")
+
+    const pq: heap.Heap<Priority> = heap.new()
+    heap.push(pq, Priority(level: 5))
+    heap.push(pq, Priority(level: 1))
+    heap.push(pq, Priority(level: 3))
+
+    match heap.pop(pq)
+    case some(p):
+        io.println(f"  lowest priority: {p.level}")
+    case none:
+        io.println("  empty")
+    end
+    match heap.pop(pq)
+    case some(p):
+        io.println(f"  next priority: {p.level}")
+    case none:
+        io.println("  empty")
+    end
+end
+
+-- ────────────── Graph ──────────────
+func demo_graph()
+    section("Graph T")
+
+    const routes: graph.Graph<string> = graph.new(true)
+    graph.add_edge(routes, "NY", "London")
+    graph.add_edge(routes, "London", "Paris")
+    graph.add_edge(routes, "Paris", "Berlin")
+    graph.add_edge(routes, "NY", "Tokyo")
+
+    io.println(f"  is_directed: {graph.is_directed(routes)}")
+    io.println(f"  node count: {graph.len(routes)}")
+    io.println(f"  edge count: {graph.edge_len(routes)}")
+
+    const ny: string = "NY"
+    const london: string = "London"
+    io.println(f"  has_edge NY->London: {graph.has_edge(routes, ny, london)}")
+    io.println(f"  has_edge London->NY: {graph.has_edge(routes, london, ny)}")
+
+    const bfs_order: list<string> = graph.bfs(routes, ny)
+    io.println(f"  BFS from NY[0]: {bfs_order[0]}")
+
+    const topo: list<string> = graph.topological_sort(routes)
+    io.println(f"  topo sort count: {lists.len(topo)}")
+
+    const berlin: string = "Berlin"
+    match graph.shortest_path(routes, ny, berlin)
+    case some(path):
+        io.println(f"  shortest path NY->Berlin hops: {lists.len(path)}")
+    case none:
+        io.println("  no path found")
+    end
+
+    -- Int-node graph
+    const dag: graph.Graph<int> = graph.new(true)
+    graph.add_edge(dag, 1, 2)
+    graph.add_edge(dag, 1, 3)
+    graph.add_edge(dag, 2, 4)
+    graph.add_edge(dag, 3, 4)
+    io.println(f"  int dag has_cycle: {graph.has_cycle(dag)}")
+
+    graph.add_weighted_edge(dag, 1, 3, 10)
+    match graph.edge_weight(dag, 1, 3)
+    case some(w):
+        io.println(f"  weighted edge 1->3: {w}")
+    case none:
+        io.println("  no weight")
+    end
+end
+
+-- ──────── Map/Set com Hashable/Equatable ────────
+struct Player
+    id: int
+end
+
+implement core.Hashable for Player
+end
+
+implement core.Equatable for Player
+    func equals(self, other: Player) -> bool
+        return self.id == other.id
+    end
+end
+
+func demo_custom_hashable()
+    section("User-defined Hashable/Equatable")
+
+    const player_scores: map<Player, int> = maps.new()
+    const p1: Player = Player(id: 1)
+    const p2: Player = Player(id: 2)
+    maps.set(player_scores, p1, 1500)
+    maps.set(player_scores, p2, 2200)
+    io.println(f"  player 1 score: {maps.get(player_scores, p1)}")
+
+    const roster: set<Player> = sets.new()
+    sets.add(roster, p1)
+    sets.add(roster, p2)
+    sets.add(roster, p1)
+    io.println(f"  roster len (deduped): {sets.len(roster)}")
+    io.println(f"  contains player 2: {sets.contains(roster, p2)}")
+end
+
+-- ──────────────── Main ──────────────────────────
+func main()
+    io.println("Ori Language — Map, Set, Graph, Heap and HashTable Showcase")
+    io.println("=============================================================")
+
+    demo_map()
+    demo_set()
+    demo_hash_table()
+    demo_heap()
+    demo_custom_comparable_heap()
+    demo_graph()
+    demo_custom_hashable()
+
+    section("All keyed/hashed collection tests passed!")
+end

@@ -1,0 +1,48 @@
+oridoc 1
+
+namespace ori.log
+
+doc module self
+    summary:
+        Minimal CLI logging helpers.
+    details:
+        Intentionally simple: `info`, `warn`, and `debug` write to stdout;
+        `error_message` writes to stderr. Each line is prefixed with the
+        level in brackets.
+end
+
+doc func info
+    summary:
+        Writes an informational message to stdout.
+    param message:
+        Text to log.
+    returns:
+        Nothing.
+end
+
+doc func warn
+    summary:
+        Writes a warning message to stdout.
+    param message:
+        Text to log.
+    returns:
+        Nothing.
+end
+
+doc func error_message
+    summary:
+        Writes an error message to stderr.
+    param message:
+        Text to log.
+    returns:
+        Nothing.
+end
+
+doc func debug
+    summary:
+        Writes a debug message to stdout.
+    param message:
+        Text to log.
+    returns:
+        Nothing.
+end

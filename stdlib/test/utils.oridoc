@@ -1,0 +1,73 @@
+oridoc 1
+
+namespace ori.test.utils
+
+doc module self
+    summary:
+        Single-value assertion helpers over `ori.test`.
+    details:
+        Thin wrappers around `test.assert`/`assert_eq`/`assert_ne` with
+        messages baked in. Use inside `@test` functions.
+end
+
+doc func is_true
+    summary:
+        Asserts that `value` is `true`.
+    param value:
+        Boolean to assert.
+    returns:
+        Nothing; fails the test when `value` is `false`.
+end
+
+doc func is_false
+    summary:
+        Asserts that `value` is `false`.
+    param value:
+        Boolean to assert.
+    returns:
+        Nothing; fails the test when `value` is `true`.
+end
+
+doc func equal_int
+    summary:
+        Asserts that `actual` equals `expected`.
+    param actual:
+        Observed integer.
+    param expected:
+        Expected integer.
+    returns:
+        Nothing; fails the test on mismatch.
+end
+
+doc func equal_text
+    summary:
+        Asserts that `actual` equals `expected`.
+    param actual:
+        Observed string.
+    param expected:
+        Expected string.
+    returns:
+        Nothing; fails the test on mismatch.
+end
+
+doc func not_equal_int
+    summary:
+        Asserts that `actual` differs from `expected`.
+    param actual:
+        Observed integer.
+    param expected:
+        Value that must not match.
+    returns:
+        Nothing; fails the test when equal.
+end
+
+doc func not_equal_text
+    summary:
+        Asserts that `actual` differs from `expected`.
+    param actual:
+        Observed string.
+    param expected:
+        Value that must not match.
+    returns:
+        Nothing; fails the test when equal.
+end

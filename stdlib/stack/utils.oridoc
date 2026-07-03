@@ -1,0 +1,46 @@
+oridoc 1
+
+namespace ori.stack.utils
+
+doc module self
+    summary:
+        Conversion and fallback helpers over `ori.stack`.
+end
+
+doc func from_list
+    summary:
+        Builds a stack from `items`, pushing in order so the last item is on top.
+    param items:
+        Values to push.
+    returns:
+        A new stack containing every item.
+end
+
+doc func to_list
+    summary:
+        Returns a snapshot list of `s`'s contents.
+    param s:
+        Source stack.
+    returns:
+        List of elements.
+end
+
+doc func peek_or
+    summary:
+        Returns the top element, or `fallback` when empty.
+    param s:
+        Source stack.
+    param fallback:
+        Value returned when the stack is empty.
+    returns:
+        The top element, or `fallback`.
+end
+
+doc func is_singleton
+    summary:
+        Reports whether `s` contains exactly one element.
+    param s:
+        Source stack.
+    returns:
+        `true` when the stack has exactly one element.
+end

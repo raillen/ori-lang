@@ -15,19 +15,11 @@ public func coin() -> bool
     return rnd.bool()
 end
 
-public func pick_string(items: list<string>) -> optional<string>
+public func pick<T>(items: list<T>) -> optional<T>
     return rnd.choice(items)
 end
 
-public func pick_int(items: list<int>) -> optional<int>
-    return rnd.choice(items)
-end
-
-public func shuffle_strings(items: list<string>) -> list<string>
-    return rnd.shuffle(items)
-end
-
-public func shuffle_ints(items: list<int>) -> list<int>
+public func shuffle<T>(items: list<T>) -> list<T>
     return rnd.shuffle(items)
 end
 
@@ -36,11 +28,11 @@ public func seeded_int(seed: int, min_val: int, max_val: int) -> int
     return rnd.int(min_val, max_val)
 end
 
-public func seeded_pick_string(seed: int, items: list<string>) -> optional<string>
+public func seeded_pick<T>(seed: int, items: list<T>) -> optional<T>
     rnd.seed(seed)
     return rnd.choice(items)
 end
 
-public func is_empty_choice(items: list<string>) -> bool
+public func is_empty_choice<T>(items: list<T>) -> bool
     return lists.len(items) == 0
 end

@@ -1,0 +1,39 @@
+oridoc 1
+
+namespace ori.json.utils
+
+doc module self
+    summary:
+        File-oriented JSON helpers over `ori.json` and `ori.fs`.
+end
+
+doc func read
+    summary:
+        Reads and parses a JSON file.
+    param file_path:
+        File to read and parse.
+    returns:
+        `result` with a `json.Value` or an error message.
+end
+
+doc func write
+    summary:
+        Serializes `value` as compact JSON and writes it to `file_path`.
+    param file_path:
+        Destination file.
+    param value:
+        JSON value to write.
+    returns:
+        `result` with the path on success or an error message.
+end
+
+doc func write_pretty
+    summary:
+        Serializes `value` as pretty-printed JSON and writes it to `file_path`.
+    param file_path:
+        Destination file.
+    param value:
+        JSON value to write.
+    returns:
+        `result` with the path on success or an error message.
+end

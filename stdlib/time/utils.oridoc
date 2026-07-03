@@ -1,0 +1,125 @@
+oridoc 1
+
+namespace ori.time.utils
+
+doc module self
+    summary:
+        Millisecond-oriented time arithmetic over `ori.time`.
+    details:
+        Plain-integer helpers for callers that do not need the typed
+        `Instant`/`Duration` wrappers.
+end
+
+doc func milliseconds
+    summary:
+        Returns `n` unchanged (identity helper for milliseconds).
+    param n:
+        Millisecond count.
+    returns:
+        The same millisecond count.
+end
+
+doc func seconds
+    summary:
+        Converts `n` seconds to milliseconds.
+    param n:
+        Second count.
+    returns:
+        `n * 1000` milliseconds.
+end
+
+doc func minutes
+    summary:
+        Converts `n` minutes to milliseconds.
+    param n:
+        Minute count.
+    returns:
+        `n * 60000` milliseconds.
+end
+
+doc func hours
+    summary:
+        Converts `n` hours to milliseconds.
+    param n:
+        Hour count.
+    returns:
+        `n * 3600000` milliseconds.
+end
+
+doc func since
+    summary:
+        Returns milliseconds elapsed since `start`.
+    param start:
+        Start timestamp in milliseconds.
+    returns:
+        Elapsed milliseconds.
+end
+
+doc func until
+    summary:
+        Returns milliseconds remaining until `target`.
+    param target:
+        Target timestamp in milliseconds.
+    returns:
+        `target - now` in milliseconds.
+end
+
+doc func add
+    summary:
+        Returns `at` advanced by `duration` milliseconds.
+    param at:
+        Base timestamp.
+    param duration:
+        Milliseconds to add.
+    returns:
+        The advanced timestamp.
+end
+
+doc func sub
+    summary:
+        Returns `at` moved back by `duration` milliseconds.
+    param at:
+        Base timestamp.
+    param duration:
+        Milliseconds to subtract.
+    returns:
+        The earlier timestamp.
+end
+
+doc func diff
+    summary:
+        Returns the absolute difference between `a` and `b`.
+    param a:
+        First timestamp.
+    param b:
+        Second timestamp.
+    returns:
+        `abs(a - b)` in milliseconds.
+end
+
+doc func from_unix_ms
+    summary:
+        Identity helper marking `ts` as a Unix-millisecond timestamp.
+    param ts:
+        Unix milliseconds.
+    returns:
+        The same value.
+end
+
+doc func to_unix_ms
+    summary:
+        Identity helper returning `at` as Unix milliseconds.
+    param at:
+        Timestamp to convert.
+    returns:
+        The same value.
+end
+
+doc func sleep_ms
+    summary:
+        Blocks the current task for `duration` milliseconds.
+    param duration:
+        Milliseconds to sleep.
+    returns:
+        Nothing.
+end

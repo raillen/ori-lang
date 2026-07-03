@@ -1,4 +1,4 @@
-﻿# Ori Standard Library
+# Ori Standard Library
 
 The stdlib has three layers: a Rust manifest + native runtime (Layer 1),
 `.orl` compositional wrappers (Layer 2), and `.orl` pure algorithms (Layer 3).
@@ -27,8 +27,8 @@ Current flattened parents:
 
 | Module | File | Notes |
 |--------|------|-------|
-| `ori.string` | `stdlib/string.orl` | Flattened text helpers and string algorithms; old `ori.string.utils`/`ori.string.algorithms` stay valid |
-| `ori.list` | `stdlib/list.orl` | Flattened list helpers and integer list algorithms; old `ori.list.utils`/`ori.list.algorithms` stay valid |
+| `ori.string` | `stdlib/string.orl` | Flattened text helpers and string algorithms |
+| `ori.list` | `stdlib/list.orl` | Flattened list helpers and integer list algorithms |
 | `ori.fs` | `stdlib/fs.orl` | Flattened FS convenience wrappers; old `ori.fs.utils` stays valid |
 | `ori.time` | `stdlib/time.orl` | Typed `Instant`/`Duration` helpers over millisecond runtime primitives |
 
@@ -41,32 +41,32 @@ Current flattened parents:
 | `ori.log` | `stdlib/log.orl` | Minimal CLI logging helpers |
 | `ori.validate` | `stdlib/validate.orl` | `between`, `even`, `blank`, `one_of`, string length checks, … |
 | `ori.path` | `stdlib/path.orl` | `join`, `normalize`, `relative`, `parent`, `extension`, … |
-| `ori.format.utils` | `stdlib/format/utils.orl` | Wrappers `number`, `hex`, `bytes_size`, `date`, … |
-| `ori.iter.utils` | `stdlib/iter/utils.orl` | `sum_int`, `contains_int`, `unique_count_int`, … |
-| `ori.net.utils` | `stdlib/net/utils.orl` | `connect`, `connect_tls`, `read_text`, `write_text`, `listen_local`, `connect_*_in_background` |
-| `ori.os.utils` | `stdlib/os/utils.orl` | `env_or`, `is_windows`/`linux`/`macos`, `current_dir_or` |
-| `ori.random.utils` | `stdlib/random/utils.orl` | `seeded_int`, `pick_*`, `shuffle_*` |
-| `ori.string.utils` | `stdlib/string/utils.orl` | Text helpers (see gap parity doc) |
-| `ori.list.utils` | `stdlib/list/utils.orl` | `get_or`, `first_or`, `last_or`, `singleton` |
-| `ori.convert.utils` | `stdlib/convert/utils.orl` | `parse_*_or` |
-| `ori.map.utils` | `stdlib/map/utils.orl` | `get_or`, `has_key`, `is_empty` |
-| `ori.set.utils` | `stdlib/set/utils.orl` | `contains_all`, `from_list`, `is_subset` |
-| `ori.bytes.utils` | `stdlib/bytes/utils.orl` | Prefix/suffix, hex, list conversion |
-| `ori.math.utils` | `stdlib/math/utils.orl` | `approx_eq`, `lerp`, trig helpers |
-| `ori.json.utils` | `stdlib/json/utils.orl` | `read`, `write`, `write_pretty` |
-| `ori.io.utils` | `stdlib/io/utils.orl` | `print_line`, `try_read_line` |
-| `ori.fs.utils` | `stdlib/fs/utils.orl` | `result` wrappers over Layer 1 FS |
-| `ori.time.utils` | `stdlib/time/utils.orl` | Durations ms, `since`/`until`, `sleep_ms` |
-| `ori.test.utils` | `stdlib/test/utils.orl` | Assertion helpers |
-| `ori.process.utils` | `stdlib/process/utils.orl` | Parse `run_capture` map |
-| `ori.concurrent.utils` | `stdlib/concurrent/utils.orl` | `copy_*`, `transfer_*` aliases |
-| `ori.queue.utils` | `stdlib/queue/utils.orl` | `from_list_*`, `peek_or_*` |
-| `ori.stack.utils` | `stdlib/stack/utils.orl` | Idem |
-| `ori.deque.utils` | `stdlib/deque/utils.orl` | Idem |
-| `ori.heap.utils` | `stdlib/heap/utils.orl` | `from_list_int`, `into_sorted_int` |
-| `ori.hash_table.utils` | `stdlib/hash_table/utils.orl` | `get_or`, `from_map_string_int` |
-| `ori.linked_list.utils` | `stdlib/linked_list/utils.orl` | List ↔ linked list |
-| `ori.doubly_linked_list.utils` | `stdlib/doubly_linked_list/utils.orl` | Idem |
+| `ori.format` | `stdlib/format.orl` | Wrappers `number`, `hex`, `bytes_size`, `date`, … |
+| `ori.iter` | `stdlib/iter.orl` | `sum_int`, `contains_int`, `unique_count_int`, … |
+| `ori.net` | `stdlib/net.orl` | `connect`, `connect_tls`, `read_text`, `write_text`, `listen_local`, `connect_*_in_background` |
+| `ori.os` | `stdlib/os.orl` | `env_or`, `is_windows`/`linux`/`macos`, `current_dir_or` |
+| `ori.random` | `stdlib/random.orl` | `seeded_int`, `pick_*`, `shuffle_*` |
+| `ori.string` | `stdlib/string.orl` | Text helpers (see gap parity doc) |
+| `ori.list` | `stdlib/list.orl` | `get_or`, `first_or`, `last_or`, `singleton` |
+| `ori.convert` | `stdlib/convert.orl` | `parse_*_or` |
+| `ori.map` | `stdlib/map.orl` | `get_or`, `has_key`, `is_empty` |
+| `ori.set` | `stdlib/set.orl` | `contains_all`, `from_list`, `is_subset` |
+| `ori.bytes` | `stdlib/bytes.orl` | Prefix/suffix, hex, list conversion |
+| `ori.math` | `stdlib/math.orl` | `approx_eq`, `lerp`, trig helpers |
+| `ori.json` | `stdlib/json.orl` | `read`, `write`, `write_pretty` |
+| `ori.io` | `stdlib/io.orl` | `print_line`, `try_read_line` |
+| `ori.fs` | `stdlib/fs.orl` | `result` wrappers over Layer 1 FS |
+| `ori.time` | `stdlib/time.orl` | Durations ms, `since`/`until`, `sleep_ms` |
+| `ori.test` | `stdlib/test.orl` | Assertion helpers |
+| `ori.process` | `stdlib/process.orl` | Parse `run_capture` map |
+| `ori.concurrent` | `stdlib/concurrent.orl` | `copy_*`, `transfer_*` aliases |
+| `ori.queue` | `stdlib/queue.orl` | `from_list_*`, `peek_or_*` |
+| `ori.stack` | `stdlib/stack.orl` | Idem |
+| `ori.deque` | `stdlib/deque.orl` | Idem |
+| `ori.heap` | `stdlib/heap.orl` | `from_list_int`, `into_sorted_int` |
+| `ori.hash_table` | `stdlib/hash_table.orl` | `get_or`, `from_map_string_int` |
+| `ori.linked_list` | `stdlib/linked_list.orl` | List ↔ linked list |
+| `ori.doubly_linked_list` | `stdlib/doubly_linked_list.orl` | Idem |
 
 Path convention: `ori.X.Y` → `stdlib/X/Y.orl`. Functions must be `public`.
 
@@ -78,14 +78,14 @@ Path convention: `ori.X.Y` → `stdlib/X/Y.orl`. Functions must be `public`.
 
 | Module | File | Functions |
 |--------|------|-----------|
-| `ori.list.algorithms` | `stdlib/list/algorithms.orl` | `sum_int`, `binary_search_int`, `all_equal_int` |
-| `ori.tree.algorithms` | `stdlib/tree/algorithms.orl` | `is_leaf`, `values_preorder`, `leaf_count`, `max_depth_from` |
-| `ori.graph.algorithms` | `stdlib/graph/algorithms.orl` | BFS `has_path`, `reachable_count`, … |
-| `ori.map.algorithms` | `stdlib/map/algorithms.orl` | `merge_string_int`, `values_sum_int`, `invert_string_int` |
-| `ori.set.algorithms` | `stdlib/set/algorithms.orl` | `union_*`, `intersection_*`, `is_disjoint_string` |
-| `ori.string.algorithms` | `stdlib/string/algorithms.orl` | `join_non_empty`, `repeated`, `equals_any`, `truncate` |
-| `ori.bytes.algorithms` | `stdlib/bytes/algorithms.orl` | `compare_lex`, `is_prefix_of` |
-| `ori.math.algorithms` | `stdlib/math/algorithms.orl` | `hypot`, `clamp_float`, `is_approx_zero` |
+| `ori.list` | `stdlib/list.orl` | `sum_int`, `binary_search_int`, `all_equal_int` |
+| `ori.tree` | `stdlib/tree.orl` | `is_leaf`, `values_preorder`, `leaf_count`, `max_depth_from` |
+| `ori.graph` | `stdlib/graph.orl` | BFS `has_path`, `reachable_count`, … |
+| `ori.map` | `stdlib/map.orl` | `merge_string_int`, `values_sum_int`, `invert_string_int` |
+| `ori.set` | `stdlib/set.orl` | `union_*`, `intersection_*`, `is_disjoint_string` |
+| `ori.string` | `stdlib/string.orl` | `join_non_empty`, `repeated`, `equals_any`, `truncate` |
+| `ori.bytes` | `stdlib/bytes.orl` | `compare_lex`, `is_prefix_of` |
+| `ori.math` | `stdlib/math.orl` | `hypot`, `clamp_float`, `is_approx_zero` |
 
 **Known limitations:** recursive generic functions are rejected by the
 typechecker — tree algorithms use iterative stacks.
@@ -114,11 +114,32 @@ rede async nativa).
 5. Avoid keywords as function names (`repeat`, `and`, …).
 6. Prefer indexed iteration over `for item in list<string>` when unsure about ARC loops.
 7. Add regression test in `multifile_imports.rs`.
+8. Add a sidecar `.oridoc` (same name, `.oridoc` extension) documenting the
+   module (`doc module self`) and each `public func` with `summary`/`param`/`returns`.
+   Validate with `ori doc check stdlib/<module>.orl`. Layer 1 runtime symbols
+   (no `.orl`) stay documented in `docs/spec/12-stdlib.md` + `ori doc export`.
 
 No manifest changes needed for Layer 2/3 — the compiler discovers modules by
 scanning `stdlib/` at compile time. Opaque types used in Layer 2 signatures
 must be registered in `ori-types/src/lower.rs` (e.g. `ori.net.Connection`,
 `ori.net.Listener`, `ori.net.UdpSocket`, `ori.io.Input`, `ori.io.Output`).
+
+## Stdlib documentation (`.oridoc`)
+
+Every Layer 2/3 `.orl` ships a sidecar `.oridoc` (40 files total) following
+the sidecar-first philosophy of `docs/spec/17-project-and-docs.md`. Each file
+documents the module (`doc module self`) and all `public func` symbols with
+`summary`/`param`/`returns` in English. The sidecars are consumed by:
+
+- `ori doc check stdlib/<m>.orl` — validates syntax, symbol existence, and
+  parameter names against the loaded `.orl` (exit 0 for all 40 modules).
+- `ori doc file <m>.orl` — renders Markdown/HTML including sidecar entries.
+- The LSP hover for stdlib Layer 2/3 symbols.
+- Release packages (`stdlib/*.oridoc` are copied into the dist archive).
+
+Layer 1 runtime symbols (no `.orl` parent) are not covered by `.oridoc` —
+`ori doc check` only knows symbols defined in loaded `.orl`. Their contract
+lives in `docs/spec/12-stdlib.md` (normative) and `ori doc export` (JSON).
 
 ## Stdlib root resolution
 

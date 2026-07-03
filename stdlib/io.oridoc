@@ -1,0 +1,98 @@
+oridoc 1
+
+namespace ori.io
+
+doc module self
+    summary:
+        Stream helpers over the native `ori.io.Input`/`Output` runtime types.
+    details:
+        Text-oriented wrappers around byte streams plus thin aliases for
+        the standard console functions.
+end
+
+doc func print_line
+    summary:
+        Prints `value` followed by a newline to stdout.
+    param value:
+        Text to print.
+    returns:
+        Nothing.
+end
+
+doc func try_read_line
+    summary:
+        Reads a line from stdin.
+    returns:
+        `some(line)` when available, or `none` on EOF.
+end
+
+doc func read_bytes
+    summary:
+        Reads up to `max_bytes` from `input`.
+    param input:
+        Stream to read from.
+    param max_bytes:
+        Maximum number of bytes to read.
+    returns:
+        `result` with `some(bytes)` (or `none` on EOF) or an error.
+end
+
+doc func read_text
+    summary:
+        Reads up to `max_chars` bytes from `input` and decodes them as UTF-8.
+    param input:
+        Stream to read from.
+    param max_chars:
+        Maximum number of bytes to read.
+    returns:
+        `result` with `some(string)` (or `none` on EOF) or an error.
+end
+
+doc func write_bytes
+    summary:
+        Writes `data` to `output`.
+    param output:
+        Stream to write to.
+    param data:
+        Bytes to write.
+    returns:
+        `result` with the byte count written, or an error.
+end
+
+doc func write_text
+    summary:
+        Encodes `text` as UTF-8 and writes it to `output`.
+    param output:
+        Stream to write to.
+    param text:
+        Text to write.
+    returns:
+        `result` with the byte count written, or an error.
+end
+
+doc func flush
+    summary:
+        Flushes `output`.
+    param output:
+        Stream to flush.
+    returns:
+        `result` indicating success or an error.
+end
+
+doc func close_input
+    summary:
+        Closes `input`; further reads will error.
+    param input:
+        Stream to close.
+    returns:
+        Nothing.
+end
+
+doc func close_output
+    summary:
+        Closes `output`; further writes will error.
+    param output:
+        Stream to close.
+    returns:
+        Nothing.
+end

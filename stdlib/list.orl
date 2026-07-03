@@ -38,7 +38,7 @@ public func binary_search_int(items: list<int>, target: int) -> int
     var hi: int = ori.list.len(items) - 1
     while lo <= hi
         const mid: int = (lo + hi) / 2
-        const value: int = ori.list.get(items, mid)
+        const value: int = items[mid]
         if value == target
             return mid
         else if value < target

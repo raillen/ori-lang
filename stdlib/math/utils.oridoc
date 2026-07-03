@@ -1,0 +1,101 @@
+oridoc 1
+
+namespace ori.math.utils
+
+doc module self
+    summary:
+        Small numeric helpers over `ori.math`.
+end
+
+doc func sign
+    summary:
+        Returns the sign of `n`.
+    param n:
+        Integer to inspect.
+    returns:
+        `-1`, `0`, or `1`.
+end
+
+doc func approx_eq
+    summary:
+        Reports whether `a` and `b` differ by at most `eps`.
+    param a:
+        First float.
+    param b:
+        Second float.
+    param eps:
+        Inclusive tolerance.
+    returns:
+        `true` when `abs(a - b) <= eps`.
+end
+
+doc func clamp_int
+    summary:
+        Clamps `value` to the inclusive range `[min_val, max_val]`.
+    param value:
+        Integer to clamp.
+    param min_val:
+        Inclusive lower bound.
+    param max_val:
+        Inclusive upper bound.
+    returns:
+        The clamped integer.
+end
+
+doc func lerp
+    summary:
+        Linearly interpolates from `a` to `b` by `t`.
+    param a:
+        Start value.
+    param b:
+        End value.
+    param t:
+        Interpolation factor. `0` yields `a`, `1` yields `b`.
+    returns:
+        The interpolated value.
+end
+
+doc func deg_to_rad
+    summary:
+        Converts degrees to radians.
+    param degrees:
+        Angle in degrees.
+    returns:
+        Angle in radians.
+end
+
+doc func rad_to_deg
+    summary:
+        Converts radians to degrees.
+    param radians:
+        Angle in radians.
+    returns:
+        Angle in degrees.
+end
+
+doc func trunc_float
+    summary:
+        Truncates `value` toward zero.
+    param value:
+        Float to truncate.
+    returns:
+        The truncated value.
+end
+
+doc func log10
+    summary:
+        Returns the base-10 logarithm of `value`.
+    param value:
+        Positive float.
+    returns:
+        The base-10 logarithm.
+end
+
+doc func abs_float
+    summary:
+        Returns the absolute value of `value`.
+    param value:
+        Float to inspect.
+    returns:
+        `value` when non-negative, otherwise `-value`.
+end

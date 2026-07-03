@@ -3,8 +3,8 @@ namespace ori.queue.utils
 import ori.list as lists
 import ori.queue as queue
 
-public func from_list_int(items: list<int>) -> queue.Queue<int>
-    var q: queue.Queue<int> = queue.new()
+public func from_list<T>(items: list<T>) -> queue.Queue<T>
+    var q: queue.Queue<T> = queue.new()
     var i: int = 0
     const n: int = lists.len(items)
     while i < n
@@ -16,30 +16,17 @@ public func from_list_int(items: list<int>) -> queue.Queue<int>
     return q
 end
 
-public func from_list_string(items: list<string>) -> queue.Queue<string>
-    var q: queue.Queue<string> = queue.new()
-    var i: int = 0
-    const n: int = lists.len(items)
-    while i < n
-        if some(item) = lists.try_get(items, i)
-            queue.enqueue(q, item)
-        end
-        i = i + 1
-    end
-    return q
-end
-
-public func to_list_int(q: queue.Queue<int>) -> list<int>
+public func to_list<T>(q: queue.Queue<T>) -> list<T>
     return queue.to_list(q)
 end
 
-public func peek_or_int(q: queue.Queue<int>, fallback: int) -> int
+public func peek_or<T>(q: queue.Queue<T>, fallback: T) -> T
     if some(value) = queue.peek(q)
         return value
     end
     return fallback
 end
 
-public func drain_count_int(q: queue.Queue<int>) -> int
+public func drain_count<T>(q: queue.Queue<T>) -> int
     return queue.len(q)
 end

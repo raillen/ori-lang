@@ -20,6 +20,7 @@ func main()
         io.print(fruit)
     end
 
+
     const scores: map<int, int> = {1: 95, 2: 88, 3: 92}
     maps.reserve(scores, 8)
     io.print(string(maps.get(scores, 2)))
@@ -28,20 +29,20 @@ func main()
     queue.enqueue(todo, "first")
     queue.enqueue(todo, "second")
     match queue.dequeue(todo)
-        case some(item):
-            io.print(item)
-        case none:
-            io.print("empty")
+    case some(item):
+        io.print(item)
+    case none:
+        io.print("empty")
     end
 
     const history: stack.Stack<string> = stack.new()
     stack.push(history, "open")
     stack.push(history, "save")
     match stack.pop(history)
-        case some(action):
-            io.print(action)
-        case none:
-            io.print("empty")
+    case some(action):
+        io.print(action)
+    case none:
+        io.print("empty")
     end
 
     const window: deque.Deque<int> = deque.new()
@@ -54,20 +55,20 @@ func main()
     ll.push_back(names, "draft")
     ll.push_front(names, "idea")
     match ll.front(names)
-        case some(item):
-            io.print(item)
-        case none:
-            io.print("empty")
+    case some(item):
+        io.print(item)
+    case none:
+        io.print("empty")
     end
 
     const path: dll.DoublyLinkedList<int> = dll.new()
     dll.push_front(path, 10)
     dll.push_back(path, 20)
     match dll.back(path)
-        case some(step):
-            io.print(string(step))
-        case none:
-            io.print("empty")
+    case some(step):
+        io.print(string(step))
+    case none:
+        io.print("empty")
     end
 
     const outline: tree.Tree<string> = tree.new("book")
@@ -82,9 +83,10 @@ func main()
     const cache: hash_table.HashTable<string, int> = hash_table.with_capacity(4)
     hash_table.set(cache, "pages", 120)
     match hash_table.get(cache, "pages")
-        case some(count):
-            io.print(string(count))
-        case none:
-            io.print("missing")
+    case some(count):
+        io.print(string(count))
+    case none:
+        io.print("missing")
     end
 end
+

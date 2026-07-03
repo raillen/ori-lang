@@ -1,0 +1,59 @@
+oridoc 1
+
+namespace ori.deque.utils
+
+doc module self
+    summary:
+        Conversion and fallback helpers over the native `ori.deque` runtime.
+end
+
+doc func from_list
+    summary:
+        Builds a deque from `items`, preserving order.
+    param items:
+        Values to enqueue at the back.
+    returns:
+        A new deque containing every item.
+end
+
+doc func to_list
+    summary:
+        Returns a snapshot list of `d`'s contents.
+    param d:
+        Source deque.
+    returns:
+        List of elements in front-to-back order.
+end
+
+doc func front_or
+    summary:
+        Returns the front element of `d`, or `fallback` when empty.
+    param d:
+        Source deque.
+    param fallback:
+        Value returned when the deque is empty.
+    returns:
+        The front element, or `fallback`.
+end
+
+doc func back_or
+    summary:
+        Returns the back element of `d`, or `fallback` when empty.
+    param d:
+        Source deque.
+    param fallback:
+        Value returned when the deque is empty.
+    returns:
+        The back element, or `fallback`.
+end
+
+doc func push_all
+    summary:
+        Appends every item of `items` to the back of `d`.
+    param d:
+        Target deque.
+    param items:
+        Values to append.
+    returns:
+        Nothing.
+end

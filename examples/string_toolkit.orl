@@ -1,0 +1,186 @@
+namespace app.string_toolkit
+
+--- Demonstra todas as funções utilitárias de string da stdlib Ori.
+--- Cobre: manipulação de texto, busca, formatação e validação.
+
+import ori.io as io
+import ori.list as lists
+import ori.string as su
+import ori.validate as val
+
+func section(title: string)
+    io.println("")
+    io.println(f"--- {title} ---")
+end
+
+func demo_basic_operations()
+    section("Basic String Operations")
+
+    const empty: string = ""
+    const hello: string = "hello"
+    const spaces: string = "   "
+    io.println(f"  is_empty empty: {su.is_empty(empty)}")
+    io.println(f"  is_empty hello: {su.is_empty(hello)}")
+    io.println(f"  blank spaces: {su.blank(spaces)}")
+    io.println(f"  blank hello: {su.blank(hello)}")
+
+    const ori_str: string = "Ori"
+    io.println(f"  reverse Ori: {su.reverse(ori_str)}")
+    io.println(f"  capitalize: {su.capitalize(hello)}")
+    const hw: string = "hello world"
+    io.println(f"  title: {su.title(hw)}")
+    const mixed: string = "Hello"
+    io.println(f"  swap_case: {su.swap_case(mixed)}")
+end
+
+func demo_search_and_count()
+    section("Search and Count")
+
+    const text: string = "banana"
+    const needle: string = "an"
+    io.println(f"  count banana/an: {su.count(text, needle)}")
+    io.println(f"  last_index_of banana/an: {su.last_index_of(text, needle)}")
+
+    const hw: string = "hello_world"
+    const prefix: string = "hello"
+    io.println(f"  has_prefix: {su.has_prefix(hw, prefix)}")
+
+    const report: string = "report.pdf"
+    const suffix: string = ".pdf"
+    io.println(f"  has_suffix: {su.has_suffix(report, suffix)}")
+end
+
+func demo_formatting()
+    section("Formatting and Padding")
+
+    const sep: string = "=-"
+    io.println(f"  replicate 5x: {su.replicate(sep, 5)}")
+
+    const ori: string = "Ori"
+    const centered: string = su.center(ori, 11)
+    io.print("  center: '")
+    io.print(centered)
+    io.println("'")
+
+    const empty: string = ""
+    const fb: string = "fallback"
+    io.println(f"  default empty: {su.default(empty, fb)}")
+    const val_str: string = "value"
+    io.println(f"  default value: {su.default(val_str, fb)}")
+end
+
+func demo_splitting()
+    section("Splitting and Lines")
+
+    const csv: string = "alpha,beta,gamma"
+    const parts: list<string> = ori.string.split(csv, ",")
+    io.println(f"  split count: {lists.len(parts)}")
+    io.println(f"  parts[1]: {parts[1]}")
+
+    const multiline: string = "line1\nline2\nline3"
+    const line_list: list<string> = su.lines(multiline)
+    io.println(f"  lines count: {lists.len(line_list)}")
+
+    const messy: string = "  too   many   spaces  "
+    io.println(f"  trim_all: {su.trim_all(messy)}")
+
+    const words_list: list<string> = su.words(messy)
+    io.println(f"  words count: {lists.len(words_list)}")
+end
+
+func demo_extraction()
+    section("Extraction")
+
+    const sample: string = "Hello, World!"
+    io.println(f"  left 5: {su.left(sample, 5)}")
+    io.println(f"  right 6: {su.right(sample, 6)}")
+    io.println(f"  limit 8: {su.limit(sample, 8)}")
+    io.println(f"  truncate 5: {su.truncate(sample, 5)}")
+end
+
+func demo_replacement()
+    section("Replace and Transform")
+
+    const text: string = "foo bar foo"
+    const from: string = "foo"
+    const to: string = "baz"
+    io.println(f"  replace_all: {su.replace_all(text, from, to)}")
+
+    const ab: string = "ab"
+    io.println(f"  repeated 3x: {su.repeated(ab, 3)}")
+
+    const upper: string = "ORI"
+    const lower: string = "ori"
+    io.println(f"  equals_ignore_case: {su.equals_ignore_case(upper, lower)}")
+
+    const options: list<string> = ["dev", "staging", "prod"]
+    const staging: string = "staging"
+    const local: string = "local"
+    io.println(f"  equals_any staging: {su.equals_any(staging, options)}")
+    io.println(f"  equals_any local: {su.equals_any(local, options)}")
+
+    const sep: string = "/"
+    const jne_parts: list<string> = ["", "a", "", "b", "c"]
+    const jne_result: string = su.join_non_empty(jne_parts, sep)
+    io.println(f"  join_non_empty: {jne_result}")
+end
+
+func demo_char_checks()
+    section("Character Checks")
+
+    const digits: string = "12345"
+    const mixed: string = "12abc"
+    io.println(f"  is_digits digits: {su.is_digits(digits)}")
+    io.println(f"  is_digits mixed: {su.is_digits(mixed)}")
+
+    const with_space: string = "hello world"
+    const no_space: string = "helloworld"
+    io.println(f"  has_whitespace with: {su.has_whitespace(with_space)}")
+    io.println(f"  has_whitespace without: {su.has_whitespace(no_space)}")
+end
+
+func demo_validation()
+    section("Validation (ori.validate)")
+
+    io.println(f"  positive 5: {val.positive(5)}")
+    io.println(f"  positive -1: {val.positive(-1)}")
+    io.println(f"  non_negative 0: {val.non_negative(0)}")
+    io.println(f"  negative -3: {val.negative(-3)}")
+    io.println(f"  non_zero 0: {val.non_zero(0)}")
+    io.println(f"  even 4: {val.even(4)}")
+    io.println(f"  odd 7: {val.odd(7)}")
+    io.println(f"  between 5 1 10: {val.between(5, 1, 10)}")
+    io.println(f"  between 15 1 10: {val.between(15, 1, 10)}")
+    io.println(f"  one_of 3: {val.one_of(3, [1, 2, 3])}")
+    const hi: string = "hi"
+    io.println(f"  not_empty hi: {val.not_empty(hi)}")
+    const spaces: string = "  "
+    io.println(f"  blank spaces: {val.blank(spaces)}")
+    const x: string = "x"
+    io.println(f"  string_not_blank x: {val.string_not_blank(x)}")
+    const word: string = "hello"
+    io.println(f"  min_len 3: {val.min_len(word, 3)}")
+    io.println(f"  max_len 5: {val.max_len(hi, 5)}")
+    const abc: string = "abc"
+    io.println(f"  length_between 2 5: {val.length_between(abc, 2, 5)}")
+    const test: string = "test"
+    io.println(f"  length_equal 4: {val.length_equal(test, 4)}")
+    const num: string = "42"
+    io.println(f"  all_digits 42: {val.all_digits(num)}")
+end
+
+func main()
+    io.println("Ori Language — String and Validation Stdlib Showcase")
+    io.println("=====================================================")
+
+    demo_basic_operations()
+    demo_search_and_count()
+    demo_formatting()
+    demo_splitting()
+    demo_extraction()
+    demo_replacement()
+    demo_char_checks()
+    demo_validation()
+
+    section("All string and validation tests passed!")
+end

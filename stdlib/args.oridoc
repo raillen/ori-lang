@@ -1,0 +1,42 @@
+oridoc 1
+
+namespace ori.args
+
+doc module self
+    summary:
+        Thin CLI argument helpers over `ori.os.args`.
+end
+
+doc func all
+    summary:
+        Returns the full process argument vector.
+    returns:
+        List of command-line arguments.
+end
+
+doc func count
+    summary:
+        Returns the number of command-line arguments.
+    returns:
+        Argument count.
+end
+
+doc func get_or
+    summary:
+        Returns the argument at `index`, or `fallback` when absent.
+    param index:
+        Zero-based argument position.
+    param fallback:
+        Value returned when the index is out of range.
+    returns:
+        The argument, or `fallback`.
+end
+
+doc func program_name_or
+    summary:
+        Returns the program name (argument `0`), or `fallback` when absent.
+    param fallback:
+        Value returned when no program name is available.
+    returns:
+        The program name, or `fallback`.
+end

@@ -3,7 +3,7 @@ namespace ori.path
 import ori.bytes as bytes_mod
 import ori.list as lists
 import ori.string as str
-import ori.string.utils as su
+import ori.string as su
 
 func normalize_separators(value: string) -> string
     var backslash: string = "/"

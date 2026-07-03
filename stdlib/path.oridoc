@@ -1,0 +1,128 @@
+oridoc 1
+
+namespace ori.path
+
+doc module self
+    summary:
+        Path manipulation helpers normalized to forward slashes.
+    details:
+        Cross-platform: backslashes are rewritten to `/` so the same
+        helpers work on Windows and POSIX paths. Import with
+        `import ori.path as path` for the full surface.
+end
+
+doc func join
+    summary:
+        Joins non-empty `parts` with `/` separators and normalizes slashes.
+    param parts:
+        Path fragments to join. Empty fragments are skipped.
+    returns:
+        The joined, slash-normalized path.
+end
+
+doc func normalize
+    summary:
+        Trims surrounding whitespace and rewrites backslashes to `/`.
+    param value:
+        Raw path to normalize.
+    returns:
+        The normalized path.
+end
+
+doc func is_absolute
+    summary:
+        Reports whether `value` is an absolute path.
+    param value:
+        Path to test.
+    returns:
+        `true` for POSIX `/`-roots and Windows drive roots (`C:`).
+end
+
+doc func is_relative
+    summary:
+        Reports whether `value` is not absolute.
+    param value:
+        Path to test.
+    returns:
+        `true` when the path is relative.
+end
+
+doc func base_name
+    summary:
+        Returns the final component of the path.
+    param value:
+        Path to inspect.
+    returns:
+        The segment after the last `/`, or the whole path when none.
+end
+
+doc func extension
+    summary:
+        Returns the extension of the final path component.
+    param value:
+        Path to inspect.
+    returns:
+        Text after the last `.` of the base name, or the empty string.
+end
+
+doc func name_without_extension
+    summary:
+        Returns the base name without its extension.
+    param value:
+        Path to inspect.
+    returns:
+        Base name up to (but excluding) the final `.`.
+end
+
+doc func parent
+    summary:
+        Returns the directory containing the path.
+    param value:
+        Path to inspect.
+    returns:
+        Text before the last `/`, `/` for root, or the empty string.
+end
+
+doc func has_extension
+    summary:
+        Reports whether the path extension equals `expected`.
+    param value:
+        Path to inspect.
+    param expected:
+        Extension to compare against (without the leading dot).
+    returns:
+        `true` when the extensions match.
+end
+
+doc func change_extension
+    summary:
+        Replaces the extension of `value` with `new_ext`.
+    param value:
+        Path to modify.
+    param new_ext:
+        New extension (without the leading dot).
+    returns:
+        A new path with the replaced extension.
+end
+
+doc func absolute
+    summary:
+        Resolves `value` against `base` when it is relative.
+    param value:
+        Path to resolve.
+    param base:
+        Base directory used when `value` is relative.
+    returns:
+        The normalized absolute path.
+end
+
+doc func relative
+    summary:
+        Computes a relative path from `from` to `value`.
+    param value:
+        Target path.
+    param from:
+        Base path.
+    returns:
+        Relative path using `..` segments, or `.` when equal.
+end

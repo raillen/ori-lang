@@ -1,0 +1,88 @@
+oridoc 1
+
+namespace ori.random.utils
+
+doc module self
+    summary:
+        Seeded and convenience wrappers over `ori.random`.
+end
+
+doc func int_range
+    summary:
+        Returns a random integer in the inclusive range `[min_val, max_val]`.
+    param min_val:
+        Inclusive lower bound.
+    param max_val:
+        Inclusive upper bound.
+    returns:
+        A random integer in the range.
+end
+
+doc func float_range
+    summary:
+        Returns a random float inside `[min_val, max_val]`.
+    param min_val:
+        Lower bound.
+    param max_val:
+        Upper bound.
+    returns:
+        A random float in the range.
+end
+
+doc func coin
+    summary:
+        Returns a random boolean.
+    returns:
+        `true` or `false` with equal probability.
+end
+
+doc func pick
+    summary:
+        Returns a random element from `items`.
+    param items:
+        Values to choose from.
+    returns:
+        `some(value)` or `none` when the list is empty.
+end
+
+doc func shuffle
+    summary:
+        Returns a shuffled copy of `items`.
+    param items:
+        Values to shuffle.
+    returns:
+        A new list with elements reordered.
+end
+
+doc func seeded_int
+    summary:
+        Seeds the generator with `seed` then returns a random integer.
+    param seed:
+        Seed value.
+    param min_val:
+        Inclusive lower bound.
+    param max_val:
+        Inclusive upper bound.
+    returns:
+        A deterministic random integer in the range.
+end
+
+doc func seeded_pick
+    summary:
+        Seeds the generator with `seed` then returns a random element.
+    param seed:
+        Seed value.
+    param items:
+        Values to choose from.
+    returns:
+        `some(value)` or `none` when the list is empty.
+end
+
+doc func is_empty_choice
+    summary:
+        Reports whether `items` is empty (so `pick` would return `none`).
+    param items:
+        Values to check.
+    returns:
+        `true` when the list is empty.
+end

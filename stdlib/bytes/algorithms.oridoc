@@ -1,0 +1,30 @@
+oridoc 1
+
+namespace ori.bytes.algorithms
+
+doc module self
+    summary:
+        Byte-comparison algorithms over `ori.bytes.utils`.
+end
+
+doc func compare_lex
+    summary:
+        Lexicographically compares `a` and `b` byte by byte.
+    param a:
+        First bytes.
+    param b:
+        Second bytes.
+    returns:
+        `-1` when `a < b`, `1` when `a > b`, `0` when equal.
+end
+
+doc func is_prefix_of
+    summary:
+        Reports whether `value` starts with `prefix`.
+    param prefix:
+        Candidate prefix.
+    param value:
+        Bytes to test.
+    returns:
+        `true` when `value` starts with `prefix`.
+end

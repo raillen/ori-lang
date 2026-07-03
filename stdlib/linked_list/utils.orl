@@ -3,8 +3,8 @@ namespace ori.linked_list.utils
 import ori.linked_list as linked_list
 import ori.list as lists
 
-public func from_list_int(items: list<int>) -> linked_list.LinkedList<int>
-    var node: linked_list.LinkedList<int> = linked_list.new()
+public func from_list<T>(items: list<T>) -> linked_list.LinkedList<T>
+    var node: linked_list.LinkedList<T> = linked_list.new()
     var i: int = 0
     const n: int = lists.len(items)
     while i < n
@@ -16,21 +16,21 @@ public func from_list_int(items: list<int>) -> linked_list.LinkedList<int>
     return node
 end
 
-public func to_list_int(node: linked_list.LinkedList<int>) -> list<int>
+public func to_list<T>(node: linked_list.LinkedList<T>) -> list<T>
     return linked_list.to_list(node)
 end
 
-public func front_or_int(node: linked_list.LinkedList<int>, fallback: int) -> int
+public func front_or<T>(node: linked_list.LinkedList<T>, fallback: T) -> T
     if some(value) = linked_list.front(node)
         return value
     end
     return fallback
 end
 
-public func len_int(node: linked_list.LinkedList<int>) -> int
+public func len<T>(node: linked_list.LinkedList<T>) -> int
     return linked_list.len(node)
 end
 
-public func is_empty_int(node: linked_list.LinkedList<int>) -> bool
+public func is_empty<T>(node: linked_list.LinkedList<T>) -> bool
     return linked_list.is_empty(node)
 end

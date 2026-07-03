@@ -80,19 +80,10 @@ fn build_catalog() -> StdlibCatalog {
         scan_stdlib_dir(&root, &root, &mut catalog);
     }
 
-    register_stdlib_flatten_aliases(&mut catalog);
-
     catalog
 }
 
-fn register_stdlib_flatten_aliases(catalog: &mut StdlibCatalog) {
-    let keys: Vec<String> = catalog.by_qualified.keys().cloned().collect();
-    for qualified in keys {
-        if let Some(flat) = ori_types::stdlib::flatten_parent_symbol(&qualified) {
-            catalog.insert_alias(&flat, &qualified);
-        }
-    }
-}
+
 
 impl StdlibCatalog {
     fn insert(&mut self, entry: StdlibEntry) {
@@ -333,39 +324,39 @@ fn stdlib_documentation(path: &str) -> Option<String> {
         "ori.random.next_float" => "Gera um número de ponto flutuante pseudo-aleatório entre `0.0` e `1.0`.",
 
         // string utils (Layer 2)
-        "ori.string.utils.is_empty" => "Verifica se a string fornecida está vazia (comprimento zero).",
-        "ori.string.utils.blank" => "Verifica se a string fornecida está vazia ou contém apenas caracteres de espaço em branco.",
-        "ori.string.utils.replicate" => "Cria uma nova string repetindo a string original `n` vezes.",
-        "ori.string.utils.default" => "Retorna a string original se não estiver vazia, ou a string de fallback caso esteja.",
-        "ori.string.utils.equals_ignore_case" => "Verifica se duas strings são iguais, ignorando a diferença entre maiúsculas e minúsculas.",
-        "ori.string.utils.center" => "Centraliza a string dentro de um espaço de largura especificada, preenchendo as laterais com espaços.",
-        "ori.string.utils.count" => "Conta o número de ocorrências não sobrepostas de uma substring dentro da string.",
-        "ori.string.utils.reverse" => "Retorna uma nova string com a ordem dos caracteres invertida.",
-        "ori.string.utils.capitalize" => "Retorna uma cópia da string com a primeira letra maiúscula e as restantes minúsculas.",
-        "ori.string.utils.title" => "Retorna a string com a primeira letra de cada palavra em maiúscula.",
-        "ori.string.utils.trim_all" => "Remove todos os espaços em branco extras do início, do fim e entre as palavras da string.",
-        "ori.string.utils.left" => "Retorna os primeiros `n` caracteres da string.",
-        "ori.string.utils.right" => "Retorna os últimos `n` caracteres da string.",
-        "ori.string.utils.limit" => "Limita o tamanho da string, cortando-a se exceder `max_len`.",
-        "ori.string.utils.lines" => "Divide a string em uma lista de linhas.",
-        "ori.string.utils.words" => "Divide a string em uma lista de palavras (separadas por espaços).",
-        "ori.string.utils.replace_all" => "Substitui todas as ocorrências de uma substring por outra string de substituição.",
+        "ori.string.is_empty" => "Verifica se a string fornecida está vazia (comprimento zero).",
+        "ori.string.blank" => "Verifica se a string fornecida está vazia ou contém apenas caracteres de espaço em branco.",
+        "ori.string.replicate" => "Cria uma nova string repetindo a string original `n` vezes.",
+        "ori.string.default" => "Retorna a string original se não estiver vazia, ou a string de fallback caso esteja.",
+        "ori.string.equals_ignore_case" => "Verifica se duas strings são iguais, ignorando a diferença entre maiúsculas e minúsculas.",
+        "ori.string.center" => "Centraliza a string dentro de um espaço de largura especificada, preenchendo as laterais com espaços.",
+        "ori.string.count" => "Conta o número de ocorrências não sobrepostas de uma substring dentro da string.",
+        "ori.string.reverse" => "Retorna uma nova string com a ordem dos caracteres invertida.",
+        "ori.string.capitalize" => "Retorna uma cópia da string com a primeira letra maiúscula e as restantes minúsculas.",
+        "ori.string.title" => "Retorna a string com a primeira letra de cada palavra em maiúscula.",
+        "ori.string.trim_all" => "Remove todos os espaços em branco extras do início, do fim e entre as palavras da string.",
+        "ori.string.left" => "Retorna os primeiros `n` caracteres da string.",
+        "ori.string.right" => "Retorna os últimos `n` caracteres da string.",
+        "ori.string.limit" => "Limita o tamanho da string, cortando-a se exceder `max_len`.",
+        "ori.string.lines" => "Divide a string em uma lista de linhas.",
+        "ori.string.words" => "Divide a string em uma lista de palavras (separadas por espaços).",
+        "ori.string.replace_all" => "Substitui todas as ocorrências de uma substring por outra string de substituição.",
 
         // list utils
-        "ori.list.utils.first_or" => "Retorna o primeiro elemento da lista, ou um valor padrão caso a lista esteja vazia.",
-        "ori.list.utils.last_or" => "Retorna o último elemento da lista, ou um valor padrão caso a lista esteja vazia.",
-        "ori.list.utils.get_or" => "Retorna o elemento no índice especificado, ou um valor padrão caso o índice esteja fora dos limites.",
-        "ori.list.utils.singleton" => "Cria uma nova lista contendo apenas um único elemento.",
+        "ori.list.first_or" => "Retorna o primeiro elemento da lista, ou um valor padrão caso a lista esteja vazia.",
+        "ori.list.last_or" => "Retorna o último elemento da lista, ou um valor padrão caso a lista esteja vazia.",
+        "ori.list.get_or" => "Retorna o elemento no índice especificado, ou um valor padrão caso o índice esteja fora dos limites.",
+        "ori.list.singleton" => "Cria uma nova lista contendo apenas um único elemento.",
 
         // math utils
-        "ori.math.utils.sign" => "Retorna o sinal do número: `1` para positivo, `-1` para negativo e `0` para zero.",
-        "ori.math.utils.clamp_int" => "Limita o valor inteiro dentro de um intervalo mínimo e máximo especificado.",
-        "ori.math.utils.lerp" => "Realiza a interpolação linear entre dois valores com base em um fator `t`.",
-        "ori.math.utils.approx_eq" => "Verifica se dois valores de ponto flutuante são aproximadamente iguais dentro de uma tolerância.",
+        "ori.math.sign" => "Retorna o sinal do número: `1` para positivo, `-1` para negativo e `0` para zero.",
+        "ori.math.clamp_int" => "Limita o valor inteiro dentro de um intervalo mínimo e máximo especificado.",
+        "ori.math.lerp" => "Realiza a interpolação linear entre dois valores com base em um fator `t`.",
+        "ori.math.approx_eq" => "Verifica se dois valores de ponto flutuante são aproximadamente iguais dentro de uma tolerância.",
 
         // map utils
-        "ori.map.utils.get_or" => "Retorna o valor associado à chave no mapa, ou um valor padrão caso a chave não exista.",
-        "ori.map.utils.contains_key" => "Verifica se o mapa contém a chave especificada.",
+        "ori.map.get_or" => "Retorna o valor associado à chave no mapa, ou um valor padrão caso a chave não exista.",
+        "ori.map.contains_key" => "Verifica se o mapa contém a chave especificada.",
 
         // validate
         "ori.validate.even" => "Verifica se um número é par.",
@@ -547,7 +538,7 @@ mod tests {
     fn catalog_includes_layer1_and_layer2() {
         let catalog = stdlib_catalog();
         assert!(catalog.lookup("ori.io.print").is_some());
-        assert!(catalog.lookup("ori.string.utils.is_empty").is_some());
+        assert!(catalog.lookup("ori.string.is_empty").is_some());
     }
 
     #[test]
