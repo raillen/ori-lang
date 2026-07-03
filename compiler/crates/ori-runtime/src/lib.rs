@@ -8464,6 +8464,16 @@ pub unsafe extern "C" fn ori_net_is_closed(conn: *mut u8) -> c_uchar {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn ori_mem_string_as_ptr(ptr: *const u8) -> i64 {
+    ptr as i64
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_mem_string_len(ptr: *const u8) -> i64 {
+    cstr_byte_len(ptr) as i64
+}
+
+#[no_mangle]
 pub extern "C" fn ori_math_trunc(x: f64) -> f64 {
     x.trunc()
 }

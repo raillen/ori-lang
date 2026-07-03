@@ -64,6 +64,12 @@ static inline ori_string_t ori_string_get(ori_string_t s, int64_t index) {
     }
     return ori_string_slice(s, index, index + 1);
 }
+static inline int64_t ori_mem_string_as_ptr(ori_string_t s) {
+    return (int64_t)(intptr_t)s.data;
+}
+static inline int64_t ori_mem_string_len(ori_string_t s) {
+    return (int64_t)s.len;
+}
 
 typedef struct { uint8_t _; } ori_unit_t;
 typedef struct { int64_t __start; int64_t __end; } ori_range_t;

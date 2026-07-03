@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageManifest {
@@ -12,6 +13,7 @@ pub struct PackageManifest {
     pub ori_version: String,
     pub description: Option<String>,
     pub dependencies: Vec<PackageDependency>,
+    pub native_libs: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,12 +54,50 @@ pub struct InstallPackageOutput {
 }
 
 pub fn run_install_package(options: InstallPackageOptions) -> Result<InstallPackageOutput, String> {
-    let source = options.source.ok_or_else(|| {
-        format!(
-            "package.registry_unavailable: cannot fetch `{}` yet; use `ori install {} --path <local-package>` for local packages",
-            options.name, options.name
-        )
-    })?;
+    let source = match options.source {
+        Some(path) => path,
+        None => {
+            if options.name.starts_with("github.com/")
+                || options.name.starts_with("https://")
+                || options.name.starts_with("http://")
+            {
+                let url = if options.name.starts_with("github.com/") {
+                    format!("https://{}", options.name)
+                } else {
+                    options.name.clone()
+                };
+                let temp_dir = std::env::temp_dir().join(format!(
+                    "ori_git_clone_{}",
+                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                ));
+
+                eprintln!("ori: cloning {}...", url);
+                let status = Command::new("git")
+                    .arg("clone")
+                    .arg("--depth")
+                    .arg("1")
+                    .arg(&url)
+                    .arg(&temp_dir)
+                    .status()
+                    .map_err(|err| format!("package.git_clone_failed: failed to invoke git: {err}"))?;
+
+                if !status.success() {
+                    return Err(format!(
+                        "package.git_clone_failed: git clone failed with status: {}",
+                        status
+                    ));
+                }
+
+                temp_dir
+            } else {
+                return Err(format!(
+                    "package.registry_unavailable: cannot fetch `{}` yet; use `ori install {} --path <local-package>` or provide a GitHub URL",
+                    options.name, options.name
+                ));
+            }
+        }
+    };
+
     let cache_root = match options.cache_root {
         Some(path) => path,
         None => default_package_cache_root()?,
@@ -65,9 +105,15 @@ pub fn run_install_package(options: InstallPackageOptions) -> Result<InstallPack
 
     let mut seen = HashSet::new();
     let mut packages = Vec::new();
+    let expected_name = if options.name.starts_with("github.com/") || options.name.starts_with("http") {
+        None
+    } else {
+        Some(options.name.as_str())
+    };
+
     install_local_package(
         &package_root_from_path(&source)?,
-        Some(options.name.as_str()),
+        expected_name,
         &cache_root,
         &mut seen,
         &mut packages,
@@ -219,6 +265,7 @@ fn parse_package_manifest(
     let mut section = String::new();
     let mut package = HashMap::new();
     let mut dependencies = Vec::new();
+    let mut native_libs = Vec::new();
 
     for (line_index, raw_line) in source.lines().enumerate() {
         let line_no = line_index + 1;
@@ -248,6 +295,15 @@ fn parse_package_manifest(
             "package" => {
                 let key = normalize_key(key)?;
                 if key == "authors" {
+                    continue;
+                }
+                if key == "native_libs" {
+                    native_libs = parse_string_array_value(value).map_err(|err| {
+                        format!(
+                            "package.manifest_syntax: `{}` line {line_no}: {err}",
+                            manifest_path.display()
+                        )
+                    })?;
                     continue;
                 }
                 let value = parse_string_value(value).map_err(|err| {
@@ -326,6 +382,7 @@ fn parse_package_manifest(
         ori_version,
         description,
         dependencies,
+        native_libs,
     })
 }
 
@@ -531,6 +588,27 @@ fn normalize_key(raw: &str) -> Result<String, String> {
         return Err("empty keys are not allowed".to_string());
     }
     Ok(key.to_string())
+}
+
+fn parse_string_array_value(raw: &str) -> Result<Vec<String>, String> {
+    let value = raw.trim();
+    if !value.starts_with('[') || !value.ends_with(']') {
+        return Err("expected an array".to_string());
+    }
+    let inner = value[1..value.len() - 1].trim();
+    if inner.is_empty() {
+        return Ok(Vec::new());
+    }
+    
+    let mut items = Vec::new();
+    for part in inner.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        items.push(parse_string_value(part)?);
+    }
+    Ok(items)
 }
 
 fn parse_string_value(raw: &str) -> Result<String, String> {

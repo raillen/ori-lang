@@ -160,6 +160,8 @@ macro_rules! stdlib {
 pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.io.print" => "ori_io_print", c_backend),
     stdlib!("ori.io.println" => "ori_io_print", c_backend),
+    stdlib!("ori.mem.string_as_ptr" => "ori_mem_string_as_ptr", c_backend),
+    stdlib!("ori.mem.string_len" => "ori_mem_string_len", c_backend),
     stdlib!("ori.io.eprint" => "ori_io_eprint"),
     stdlib!("ori.io.eprintln" => "ori_io_eprint"),
     stdlib!("ori.io.read_line" => "ori_io_read_line"),
@@ -830,6 +832,7 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         ),
         "ori.bytes.get" => (vec![Ty::Bytes, Ty::Int], Ty::U8),
         "ori.mem.size_of" | "ori.mem.align_of" => (vec![Ty::Infer(0)], Ty::Int),
+        "ori.mem.string_as_ptr" | "ori.mem.string_len" => (vec![Ty::String], Ty::Int),
         "ori.time.now" => (vec![], Ty::Int),
         "ori.time.sleep" => (vec![Ty::Int], Ty::Void),
         "ori.time.duration_ms" => (vec![Ty::Int, Ty::Int], Ty::Int),
@@ -1972,11 +1975,12 @@ pub fn stdlib_native_abi(
         "ori_files_read" => (vec![Ptr, I64], Some(Ptr)),
         "ori_files_write" => (vec![Ptr, Ptr], Some(Ptr)),
         "ori_files_close" => (vec![Ptr], None),
-        "ori_files_file_size" | "ori_files_modified_at" | "ori_files_created_at" => {
+        | "ori_files_file_size" | "ori_files_modified_at" | "ori_files_created_at" => {
             (vec![Ptr], Some(Ptr))
         }
         "ori_os_current_dir" => (vec![], Some(Ptr)),
         "ori_os_change_dir" => (vec![Ptr], Some(Ptr)),
+        "ori_mem_string_as_ptr" | "ori_mem_string_len" => (vec![Ptr], Some(I64)),
         "ori_random_seed" => (vec![I64], None),
         "ori_test_skip" => (vec![Ptr], None),
         "ori_bytes_from_list" => (vec![Ptr], Some(Ptr)),
@@ -2243,6 +2247,8 @@ mod tests {
         // Rows documented as "yes" (every function carries the flag).
         assert!(flagged("ori.io.print"), "io.print should be c_backend");
         assert!(flagged("ori.io.println"), "io.println should be c_backend");
+        assert!(flagged("ori.mem.string_as_ptr"), "mem.string_as_ptr should be c_backend");
+        assert!(flagged("ori.mem.string_len"), "mem.string_len should be c_backend");
         assert!(flagged("ori.math.sqrt"), "math should be c_backend");
         assert!(flagged("ori.time.now"), "time should be c_backend");
         assert!(flagged("ori.format.number"), "format should be c_backend");

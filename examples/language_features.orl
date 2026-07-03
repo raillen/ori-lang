@@ -35,7 +35,7 @@ func demo_structs()
     section("Structs and Struct Update")
 
     const origin: Point = Point(x: 0, y: 0)
-    const moved: Point = Point(x: 5, y: 10)
+    const moved: Point = .{x: 5, y: 10}
     io.println(f"  origin: ({origin.x}, {origin.y})")
     io.println(f"  moved: ({moved.x}, {moved.y})")
 

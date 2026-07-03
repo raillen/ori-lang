@@ -5836,7 +5836,8 @@ end
     );
 
     let out = run_build(&dir.path("main.orl")).unwrap();
-    assert!(!out.c_source.contains("ori_mem_"), "{}", out.c_source);
+    assert!(!out.c_source.contains("ori_mem_size_of"), "{}", out.c_source);
+    assert!(!out.c_source.contains("ori_mem_align_of"), "{}", out.c_source);
     compile_c_source(&dir, "c_backend_mem_stdlib", &out.c_source);
 }
 

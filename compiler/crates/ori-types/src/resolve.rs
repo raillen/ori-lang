@@ -662,6 +662,55 @@ pub fn resolve_many<S: Into<SmolStr>>(
                         value_sigs.push(ValueSig { def_id, ty });
                     }
                 }
+                Item::Extern(ext) => {
+                    for member in &ext.members {
+                        match member {
+                            ori_ast::item::ExternMember::Func { name, params, return_ty, .. } => {
+                                let path = format!("{}.{}", namespace, name.text);
+                                if let Some(def_id) = def_map.lookup(&path) {
+                                    let resolved_params: Vec<Ty> = params
+                                        .iter()
+                                        .map(|p| {
+                                            lower_type_with_aliases(
+                                                &p.ty, &namespace, &[], &def_map, *file_id, sink, &aliases,
+                                            )
+                                        })
+                                        .collect();
+                                    let resolved_return_ty = return_ty
+                                        .as_ref()
+                                        .map(|t| {
+                                            lower_type_with_aliases(
+                                                t, &namespace, &[], &def_map, *file_id, sink, &aliases,
+                                            )
+                                        })
+                                        .unwrap_or(Ty::Void);
+                                    func_sigs.push(FuncSig {
+                                        def_id,
+                                        param_names: param_names(params),
+                                        params: resolved_params,
+                                        param_defaults: param_default_flags(params),
+                                        param_variadic: param_variadic_flags(params),
+                                        where_constraints: Vec::new(),
+                                        return_ty: resolved_return_ty,
+                                        is_mut: false,
+                                    });
+                                }
+                            }
+                            ori_ast::item::ExternMember::Var { name, ty, .. } => {
+                                let path = format!("{}.{}", namespace, name.text);
+                                if let Some(def_id) = def_map.lookup(&path) {
+                                    let resolved_ty = lower_type_with_aliases(
+                                        ty, &namespace, &[], &def_map, *file_id, sink, &aliases,
+                                    );
+                                    value_sigs.push(ValueSig {
+                                        def_id,
+                                        ty: resolved_ty,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
                 Item::Alias(a) => {
                     let path = format!("{}.{}", namespace, a.name.text);
                     if let Some(def_id) = def_map.lookup(&path) {

@@ -46,7 +46,7 @@ enum Commands {
     },
     /// Install an Ori package into the local package cache.
     Install {
-        /// Package name (e.g. `example.demo`).
+        /// Package name or GitHub URL (e.g. `github.com/raillen/ori-imgui`).
         name: String,
         /// Local package directory or `ori.pkg.toml` path.
         #[arg(long)]
@@ -295,40 +295,30 @@ fn main() {
         },
 
         Commands::Install { name, path, cache } => {
-            if path.is_some() {
-                match package::run_install_package(package::InstallPackageOptions {
-                    name: name.clone(),
-                    source: path.clone(),
-                    cache_root: cache.clone(),
-                }) {
-                    Err(e) => {
-                        eprintln!("ori: {}", e);
-                        process::exit(2);
-                    }
-                    Ok(out) => {
-                        eprintln!("cache: {}", out.cache_root.display());
-                        for installed in out.packages {
-                            let status = if installed.already_installed {
-                                "already installed"
-                            } else {
-                                "installed"
-                            };
-                            eprintln!(
-                                "{status}: {} {} -> {}",
-                                installed.name,
-                                installed.version,
-                                installed.installed_root.display()
-                            );
-                        }
+            match package::run_install_package(package::InstallPackageOptions {
+                name: name.clone(),
+                source: path.clone(),
+                cache_root: cache.clone(),
+            }) {
+                Err(e) => {
+                    eprintln!("ori: {}", e);
+                    process::exit(2);
+                }
+                Ok(out) => {
+                    eprintln!("cache: {}", out.cache_root.display());
+                    for installed in out.packages {
+                        let status = if installed.already_installed {
+                            "already installed"
+                        } else {
+                            "installed"
+                        };
+                        eprintln!(
+                            "  + {} v{} ({})",
+                            installed.name, installed.version, status
+                        );
                     }
                 }
-                return;
             }
-            eprintln!(
-                "ori: remote registry install is not available yet\n\
-                 package `{name}` cannot be fetched; use `ori install {name} --path <local-package>` for local packages"
-            );
-            process::exit(2);
         }
 
         Commands::Publish { path } => {

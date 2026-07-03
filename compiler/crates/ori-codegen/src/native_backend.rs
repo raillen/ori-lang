@@ -285,6 +285,7 @@ impl NativeHirValidator {
         for ext in &hir.externs {
             match ext {
                 HirExtern::Func {
+                    path: _,
                     params,
                     return_ty,
                     span,
@@ -299,7 +300,7 @@ impl NativeHirValidator {
                     }
                     self.reject_error_ty(return_ty, "extern function return type", *span)?;
                 }
-                HirExtern::Var { ty, span, .. } => {
+                HirExtern::Var { ty, span, path: _, .. } => {
                     self.reject_error_ty(ty, "extern variable type", *span)?;
                 }
             }
@@ -3262,6 +3263,13 @@ impl<M: Module> NativeBackend<M> {
         // ori_len(ptr: *u8) -> i64
         let id = decl("ori_len", &[pt], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_len"), id);
+        
+        let id = decl("ori_mem_string_as_ptr", &[pt], vec![], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_mem_string_as_ptr"), id);
+        
+        let id = decl("ori_mem_string_len", &[pt], vec![], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_mem_string_len"), id);
+        
         // ori_math_abs(n: i64) -> i64
         let id = decl("ori_math_sqrt", &[types::F64], vec![], Some(types::F64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_sqrt"), id);
@@ -4201,6 +4209,25 @@ impl<M: Module> NativeBackend<M> {
                 .declare_function(&native_func_symbol(&f.name), link, &sig)
                 .map_err(|e| format!("declare '{}': {e}", f.name))?;
             self.func_ids.insert(f.name.clone(), id);
+        }
+        for ext in &hir.externs {
+            if let HirExtern::Func { path, name, params, return_ty, .. } = ext {
+                let mut sig = self.module.make_signature();
+                for p in params {
+                    if let Some(t) = cl_type(&p.ty, self.ptr_ty) {
+                        sig.params.push(AbiParam::new(t));
+                    }
+                }
+                if let Some(t) = cl_type(return_ty, self.ptr_ty) {
+                    sig.returns.push(AbiParam::new(t));
+                }
+                let id = self
+                    .module
+                    .declare_function(name, Linkage::Import, &sig)
+                    .map_err(|e| format!("declare extern '{}': {e}", name))?;
+                
+                self.func_ids.insert(path.clone(), id);
+            }
         }
         for f in &hir.funcs {
             let has_plan = f.is_async

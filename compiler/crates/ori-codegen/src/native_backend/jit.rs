@@ -26,11 +26,18 @@ use ori_hir::HirModule;
 /// `os.exit(code)`, the runtime invokes `std::process::exit(code)` and this
 /// function never returns — the driver process terminates with that code,
 /// matching AOT `ori run` semantics.
-pub fn run_jit(hir: &HirModule, cdylib_path: &Path) -> Result<i32, String> {
-    // 1. Load the runtime cdylib. Kept alive for the entire lifetime of the
-    //    JIT'd code, since the latter holds raw pointers into it.
-    let library = unsafe { Library::new(cdylib_path) }
+pub fn run_jit(hir: &HirModule, cdylib_path: &Path, native_libs_paths: &[std::path::PathBuf]) -> Result<i32, String> {
+    // 1. Load the runtime cdylib and any package-provided native cdylibs.
+    let mut libraries = Vec::with_capacity(1 + native_libs_paths.len());
+    let runtime_lib = unsafe { Library::new(cdylib_path) }
         .map_err(|e| format!("load runtime cdylib `{}`: {e}", cdylib_path.display()))?;
+    libraries.push(runtime_lib);
+    
+    for lib_path in native_libs_paths {
+        let lib = unsafe { Library::new(lib_path) }
+            .map_err(|e| format!("load native cdylib `{}`: {e}", lib_path.display()))?;
+        libraries.push(lib);
+    }
 
     // 2. Build the JIT module with a symbol-lookup callback that resolves any
     //    `ori_*` import (as well as `strlen`/`strcmp` from the C runtime) on
@@ -45,15 +52,15 @@ pub fn run_jit(hir: &HirModule, cdylib_path: &Path) -> Result<i32, String> {
     struct SendLibrary(Library);
     unsafe impl Send for SendLibrary {}
 
-    let send_lib = SendLibrary(library);
+    let send_libs: Vec<SendLibrary> = libraries.into_iter().map(SendLibrary).collect();
     let lookup: Box<dyn Fn(&str) -> Option<*const u8> + Send> =
         Box::new(move |name: &str| unsafe {
-            send_lib
-                .0
-                .get::<unsafe extern "C" fn()>(name.as_bytes())
-                .ok()
-                .map(|sym| *sym as *const ())
-                .map(|p| p as *const u8)
+            for lib in &send_libs {
+                if let Ok(sym) = lib.0.get::<unsafe extern "C" fn()>(name.as_bytes()) {
+                    return Some(*sym as *const () as *const u8);
+                }
+            }
+            None
         });
     let mut builder = JITBuilder::new(cranelift_module::default_libcall_names())
         .map_err(|e| format!("JITBuilder: {e}"))?;
@@ -117,7 +124,7 @@ mod tests {
     fn run_jit_reports_missing_cdylib_with_descriptive_error() {
         let hir = empty_hir();
         let bogus = Path::new("/nonexistent/ori_runtime.so");
-        let err = run_jit(&hir, bogus).unwrap_err();
+        let err = run_jit(&hir, bogus, &[]).unwrap_err();
         assert!(
             err.contains("load runtime cdylib") || err.contains("runtime cdylib"),
             "expected descriptive cdylib load error, got: {err}"

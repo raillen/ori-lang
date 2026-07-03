@@ -1560,14 +1560,14 @@ impl<'a> Checker<'a> {
                         crate::def::DefKind::Const | crate::def::DefKind::Var => {
                             self.value_ty(id).unwrap_or(Ty::Infer(id.0))
                         }
-                        crate::def::DefKind::Func => self
+                        crate::def::DefKind::Func | crate::def::DefKind::Extern => self
                             .func_sig(id)
                             .map(|sig| Ty::Func {
                                 params: sig.params,
                                 ret: Box::new(sig.return_ty),
                             })
                             .unwrap_or(Ty::Infer(id.0)),
-                        _ => Ty::Infer(0),
+                        _ => Ty::Infer(id.0),
                     }
                 } else if let Some(first) = q.parts.first() {
                     if let Some((mut ty, scope_idx, mutable)) =
@@ -1994,7 +1994,7 @@ impl<'a> Checker<'a> {
                     if let Some(def_id) = self.resolve_def_id(&path) {
                         self.check_visibility(def_id, q.span);
                         let def = self.def_map.get(def_id);
-                        if def.kind == DefKind::Func {
+                        if def.kind == DefKind::Func || def.kind == DefKind::Extern {
                             if let Some(sig) = self.func_sig(def_id) {
                                 let mut params = sig.params.clone();
                                 let mut ret = self

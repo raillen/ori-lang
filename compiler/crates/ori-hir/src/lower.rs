@@ -2006,6 +2006,7 @@ pub fn lower(
                                 .map(|t| l.lower_ast_ty(t, &[]))
                                 .unwrap_or(Ty::Void);
                             externs.push(HirExtern::Func {
+                                path: SmolStr::new(format!("{}.{}", namespace, name.text)),
                                 name: name.text.clone(),
                                 params: hir_params,
                                 return_ty: ret,
@@ -2015,6 +2016,7 @@ pub fn lower(
                         }
                         ori_ast::item::ExternMember::Var { name, ty, span, .. } => {
                             externs.push(HirExtern::Var {
+                                path: SmolStr::new(format!("{}.{}", namespace, name.text)),
                                 name: name.text.clone(),
                                 ty: l.lower_ast_ty(ty, &[]),
                                 abi: abi.clone(),

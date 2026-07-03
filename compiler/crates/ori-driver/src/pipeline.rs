@@ -140,6 +140,13 @@ struct ProjectDependency {
 #[derive(Clone, Debug, Default)]
 struct ImportContext {
     dependencies: Vec<ImportDependency>,
+    native_libs: Vec<NativeLibContext>,
+}
+
+#[derive(Clone, Debug)]
+struct NativeLibContext {
+    name: String,
+    package_root: PathBuf,
 }
 
 #[derive(Clone, Debug)]
@@ -283,7 +290,7 @@ pub fn run_compile_with_options(
 ) -> Result<CompileOutput, String> {
     let mut cache = SourceCache::default();
     let mut sink = DiagnosticSink::default();
-    let (loaded, resolved) = load_and_resolve(source_path, &mut cache, &mut sink)?;
+    let (loaded, resolved, import_context) = load_and_resolve(source_path, &mut cache, &mut sink)?;
 
     if !sink.has_errors() {
         check_loaded_sources(&loaded, &resolved, &mut sink);
@@ -292,7 +299,14 @@ pub fn run_compile_with_options(
     if !sink.has_errors() {
         let hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
         let obj_path = output.with_extension("o");
-        let runtime_link = find_native_runtime_link()?;
+        let mut runtime_link = find_native_runtime_link()?;
+        let target = native_target_triple();
+        for lib in import_context.native_libs {
+            let lib_name = native_lib_static_name(&target, &lib.name);
+            let lib_path = lib.package_root.join("lib").join(&target).join(lib_name);
+            runtime_link.native_static_libs.push(lib_path.to_string_lossy().to_string());
+        }
+        
         ori_codegen::emit_native(&hir, &obj_path)?;
         let extra = runtime_link.link_args();
         ori_codegen::link_with_options(
@@ -344,7 +358,7 @@ pub struct JitRunOutput {
 pub fn run_jit(source_path: &Path) -> Result<JitRunOutput, String> {
     let mut cache = SourceCache::default();
     let mut sink = DiagnosticSink::default();
-    let (loaded, resolved) = load_and_resolve(source_path, &mut cache, &mut sink)?;
+    let (loaded, resolved, import_context) = load_and_resolve(source_path, &mut cache, &mut sink)?;
 
     if !sink.has_errors() {
         check_loaded_sources(&loaded, &resolved, &mut sink);
@@ -355,7 +369,16 @@ pub fn run_jit(source_path: &Path) -> Result<JitRunOutput, String> {
         let hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
         if !sink.has_errors() {
             let cdylib = find_native_runtime_cdylib()?;
-            exit_code = ori_codegen::run_jit(&hir, &cdylib)?;
+            
+            let target = native_target_triple();
+            let mut native_libs = Vec::new();
+            for lib in import_context.native_libs {
+                let lib_name = native_lib_cdylib_name(&target, &lib.name);
+                let lib_path = lib.package_root.join("lib").join(&target).join(lib_name);
+                native_libs.push(lib_path);
+            }
+            
+            exit_code = ori_codegen::run_jit(&hir, &cdylib, &native_libs)?;
         }
     }
 
@@ -743,6 +766,24 @@ fn native_runtime_cdylib_name(target: &str) -> &'static str {
         "libori_runtime.dylib"
     } else {
         "libori_runtime.so"
+    }
+}
+
+fn native_lib_cdylib_name(target: &str, name: &str) -> String {
+    if target.contains("windows-msvc") {
+        format!("{}.dll", name)
+    } else if target.contains("apple-darwin") {
+        format!("lib{}.dylib", name)
+    } else {
+        format!("lib{}.so", name)
+    }
+}
+
+fn native_lib_static_name(target: &str, name: &str) -> String {
+    if target.contains("windows-msvc") {
+        format!("{}.lib", name)
+    } else {
+        format!("lib{}.a", name)
     }
 }
 
@@ -1134,7 +1175,7 @@ mod tests {
 pub fn run_check(path: &Path) -> Result<CheckOutput, String> {
     let mut cache = SourceCache::default();
     let mut sink = DiagnosticSink::default();
-    let (loaded, resolved) = load_and_resolve(path, &mut cache, &mut sink)?;
+    let (loaded, resolved, _import_context) = load_and_resolve(path, &mut cache, &mut sink)?;
 
     // Type checking â€” only if no fatal parse errors so far
     if !sink.has_errors() {
@@ -1238,7 +1279,7 @@ pub fn run_doc(path: &Path) -> Result<DocOutput, String> {
 pub fn run_doc_with_options(path: &Path, options: DocOptions) -> Result<DocOutput, String> {
     let mut cache = SourceCache::default();
     let mut sink = DiagnosticSink::default();
-    let (loaded, resolved) = load_and_resolve(path, &mut cache, &mut sink)?;
+    let (loaded, resolved, _import_context) = load_and_resolve(path, &mut cache, &mut sink)?;
     let mut external_docs = crate::oridoc::OridocIndex::default();
     let mut config = None;
 
@@ -1282,7 +1323,7 @@ pub fn run_doc_with_options(path: &Path, options: DocOptions) -> Result<DocOutpu
 pub fn run_doc_check(path: &Path) -> Result<DocCheckOutput, String> {
     let mut cache = SourceCache::default();
     let mut sink = DiagnosticSink::default();
-    let (loaded, resolved) = load_and_resolve(path, &mut cache, &mut sink)?;
+    let (loaded, resolved, _import_context) = load_and_resolve(path, &mut cache, &mut sink)?;
 
     if !sink.has_errors() {
         check_loaded_sources(&loaded, &resolved, &mut sink);
@@ -1317,7 +1358,7 @@ pub fn run_test_with_options(path: &Path, options: TestOptions) -> Result<TestOu
         .filter
         .map(|filter| filter.trim().to_string())
         .filter(|filter| !filter.is_empty());
-    let (loaded, resolved) = load_and_resolve(path, &mut cache, &mut sink)?;
+    let (loaded, resolved, _import_context) = load_and_resolve(path, &mut cache, &mut sink)?;
 
     if !sink.has_errors() {
         check_loaded_sources(&loaded, &resolved, &mut sink);
@@ -1375,7 +1416,7 @@ pub fn run_build(path: &Path) -> Result<BuildOutput, String> {
 pub fn run_emit_c(path: &Path) -> Result<BuildOutput, String> {
     let mut cache = SourceCache::default();
     let mut sink = DiagnosticSink::default();
-    let (loaded, resolved) = load_and_resolve(path, &mut cache, &mut sink)?;
+    let (loaded, resolved, _import_context) = load_and_resolve(path, &mut cache, &mut sink)?;
 
     if !sink.has_errors() {
         check_loaded_sources(&loaded, &resolved, &mut sink);
@@ -1870,6 +1911,12 @@ fn add_package_manifest_dependencies(
             add_import_dependency(context, import_dependency);
         }
     }
+    for lib in manifest.native_libs {
+        context.native_libs.push(NativeLibContext {
+            name: lib,
+            package_root: manifest.root.clone(),
+        });
+    }
     Ok(())
 }
 
@@ -1952,10 +1999,11 @@ fn load_and_resolve(
     path: &Path,
     cache: &mut SourceCache,
     sink: &mut DiagnosticSink,
-) -> Result<(Vec<LoadedSource>, ResolvedModule), String> {
+) -> Result<(Vec<LoadedSource>, ResolvedModule, ImportContext), String> {
     let entry = resolve_entry_path(path)?;
     let context = import_context_for_entry(&entry)?;
-    load_and_resolve_entry(&entry, None, &context, cache, sink)
+    let (loaded, resolved) = load_and_resolve_entry(&entry, None, &context, cache, sink)?;
+    Ok((loaded, resolved, context))
 }
 
 fn load_and_resolve_with_entry_source(
@@ -4895,6 +4943,7 @@ fn lower_loaded_sources(
         merged.trait_impls.append(&mut hir.trait_impls);
         merged.funcs.append(&mut hir.funcs);
         merged.consts.append(&mut hir.consts);
+        merged.externs.append(&mut hir.externs);
     }
 
     // Automatically append stdlib enums (e.g. ori.json.Value) to the HirModule

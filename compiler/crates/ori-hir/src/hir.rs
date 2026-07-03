@@ -121,6 +121,7 @@ pub struct HirConst {
 #[derive(Debug, Clone)]
 pub enum HirExtern {
     Func {
+        path: SmolStr,
         name: SmolStr,
         params: Vec<HirParam>,
         return_ty: Ty,
@@ -128,6 +129,7 @@ pub enum HirExtern {
         span: Span,
     },
     Var {
+        path: SmolStr,
         name: SmolStr,
         ty: Ty,
         abi: SmolStr,
