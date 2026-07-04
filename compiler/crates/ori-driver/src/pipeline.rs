@@ -173,6 +173,7 @@ pub enum NewProjectKind {
 pub struct NewProjectOptions {
     pub name: Option<String>,
     pub kind: NewProjectKind,
+    pub is_init: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -1216,21 +1217,36 @@ pub fn run_new_project(
     root: &Path,
     options: NewProjectOptions,
 ) -> Result<NewProjectOutput, String> {
-    if root.exists() {
-        let mut entries = std::fs::read_dir(root)
-            .map_err(|e| format!("cannot inspect `{}`: {e}", root.display()))?;
-        if entries.next().is_some() {
+    if !options.is_init {
+        if root.exists() {
+            let mut entries = std::fs::read_dir(root)
+                .map_err(|e| format!("cannot inspect `{}`: {e}", root.display()))?;
+            if entries.next().is_some() {
+                return Err(format!(
+                    "project.new_exists: `{}` already exists and is not empty",
+                    root.display()
+                ));
+            }
+        }
+        std::fs::create_dir_all(root)
+            .map_err(|e| format!("cannot create project `{}`: {e}", root.display()))?;
+    } else {
+        if root.join("ori.pkg.toml").exists() {
             return Err(format!(
-                "project.new_exists: `{}` already exists and is not empty",
+                "project.init_exists: `{}` already contains an ori.pkg.toml",
                 root.display()
             ));
         }
+        std::fs::create_dir_all(root)
+            .map_err(|e| format!("cannot create project `{}`: {e}", root.display()))?;
     }
 
-    std::fs::create_dir_all(root)
-        .map_err(|e| format!("cannot create project `{}`: {e}", root.display()))?;
     std::fs::create_dir_all(root.join("src"))
         .map_err(|e| format!("cannot create `{}`: {e}", root.join("src").display()))?;
+    std::fs::create_dir_all(root.join("lib"))
+        .map_err(|e| format!("cannot create `{}`: {e}", root.join("lib").display()))?;
+    std::fs::create_dir_all(root.join("bin"))
+        .map_err(|e| format!("cannot create `{}`: {e}", root.join("bin").display()))?;
     std::fs::create_dir_all(root.join("docs/api"))
         .map_err(|e| format!("cannot create `{}`: {e}", root.join("docs/api").display()))?;
 
@@ -1238,7 +1254,7 @@ pub fn run_new_project(
         .name
         .filter(|name| !name.trim().is_empty())
         .unwrap_or_else(|| default_project_name(root));
-    let (kind, entry_rel, source) = match options.kind {
+    let (_, entry_rel, source) = match options.kind {
         NewProjectKind::App => (
             "app",
             "src/main.orl",
@@ -1251,19 +1267,20 @@ pub fn run_new_project(
         ),
     };
 
-    let manifest = root.join("ori.proj");
+    let manifest = root.join("ori.pkg.toml");
     let entry = root.join(entry_rel);
     let manifest_source = format!(
-        "-- Ori project file\nmanifest = 1\nname = \"{}\"\nversion = \"0.1.0\"\nkind = \"{}\"\nentry = \"{}\"\n\n[source]\nroot = \"src\"\nroot_namespace = \"app\"\n\n[docs]\npaths = [\"docs/api\"]\nmode = \"sidecar-first\"\nrequire_public = \"off\"\n\n[dependencies]\n",
-        escape_manifest_string(&name),
-        kind,
-        entry_rel
+        "[package]\nname = \"{}\"\nversion = \"0.1.0\"\n\n[build]\n# native_libs = []\n",
+        escape_manifest_string(&name)
     );
 
     std::fs::write(&manifest, manifest_source)
         .map_err(|e| format!("cannot write `{}`: {e}", manifest.display()))?;
-    std::fs::write(&entry, source)
-        .map_err(|e| format!("cannot write `{}`: {e}", entry.display()))?;
+    
+    if !entry.exists() {
+        std::fs::write(&entry, source)
+            .map_err(|e| format!("cannot write `{}`: {e}", entry.display()))?;
+    }
 
     Ok(NewProjectOutput {
         root: root.to_path_buf(),

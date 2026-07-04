@@ -25,9 +25,21 @@ struct Cli {
 enum Commands {
     /// Create a new Ori project.
     New {
-        /// Directory to create or initialize when empty.
+        /// Directory to create.
         path: PathBuf,
-        /// Project name written to `ori.proj` (default: directory name).
+        /// Project name written to `ori.pkg.toml` (default: directory name).
+        #[arg(long)]
+        name: Option<String>,
+        /// Create a library project instead of an app project.
+        #[arg(long)]
+        lib: bool,
+    },
+    /// Initialize a new Ori project in an existing directory.
+    Init {
+        /// Directory to initialize (default: current directory).
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Project name written to `ori.pkg.toml` (default: directory name).
         #[arg(long)]
         name: Option<String>,
         /// Create a library project instead of an app project.
@@ -196,6 +208,33 @@ fn main() {
                 pipeline::NewProjectOptions {
                     name: name.clone(),
                     kind,
+                    is_init: false,
+                },
+            ) {
+                Err(e) => {
+                    eprintln!("ori: {}", e);
+                    process::exit(2);
+                }
+                Ok(out) => {
+                    eprintln!("project: {}", out.root.display());
+                    eprintln!("manifest: {}", out.manifest.display());
+                    eprintln!("entry: {}", out.entry.display());
+                }
+            }
+        }
+
+        Commands::Init { path, name, lib } => {
+            let kind = if *lib {
+                pipeline::NewProjectKind::Lib
+            } else {
+                pipeline::NewProjectKind::App
+            };
+            match pipeline::run_new_project(
+                path,
+                pipeline::NewProjectOptions {
+                    name: name.clone(),
+                    kind,
+                    is_init: true,
                 },
             ) {
                 Err(e) => {
