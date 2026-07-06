@@ -162,6 +162,8 @@ pub enum TokenKind {
     Tuple,
     #[token("lazy")]
     Lazy,
+    #[token("handle")]
+    Handle,
 
     // ── Primitive type names (also reserved) ─────────────────────────────────
     #[token("bool")]
@@ -385,6 +387,7 @@ impl TokenKind {
             TokenKind::Then => "`then`",
             TokenKind::Tuple => "`tuple`",
             TokenKind::Lazy => "`lazy`",
+            TokenKind::Handle => "`handle`",
             TokenKind::BoolTy => "`bool`",
             TokenKind::IntTy => "`int`",
             TokenKind::Int8Ty => "`int8`",

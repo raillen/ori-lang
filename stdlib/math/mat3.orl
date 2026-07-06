@@ -1,0 +1,109 @@
+namespace ori.math.mat3
+
+import ori.math as math
+import ori.math.vec2 as vec2
+
+public struct Mat3
+    m00: float
+    m01: float
+    m02: float
+    m10: float
+    m11: float
+    m12: float
+    m20: float
+    m21: float
+    m22: float
+end
+
+public func identity() -> Mat3
+    return Mat3(
+        m00: 1.0, m01: 0.0, m02: 0.0,
+        m10: 0.0, m11: 1.0, m12: 0.0,
+        m20: 0.0, m21: 0.0, m22: 1.0
+    )
+end
+
+public func zero() -> Mat3
+    return Mat3(
+        m00: 0.0, m01: 0.0, m02: 0.0,
+        m10: 0.0, m11: 0.0, m12: 0.0,
+        m20: 0.0, m21: 0.0, m22: 0.0
+    )
+end
+
+public func translate(tx: float, ty: float) -> Mat3
+    return Mat3(
+        m00: 1.0, m01: 0.0, m02: tx,
+        m10: 0.0, m11: 1.0, m12: ty,
+        m20: 0.0, m21: 0.0, m22: 1.0
+    )
+end
+
+public func rotate(angle_rad: float) -> Mat3
+    const c: float = math.cos(angle_rad)
+    const s: float = math.sin(angle_rad)
+    return Mat3(
+        m00: c,   m01: -s,  m02: 0.0,
+        m10: s,   m11: c,   m12: 0.0,
+        m20: 0.0, m21: 0.0, m22: 1.0
+    )
+end
+
+public func scale(sx: float, sy: float) -> Mat3
+    return Mat3(
+        m00: sx,  m01: 0.0, m02: 0.0,
+        m10: 0.0, m11: sy,  m12: 0.0,
+        m20: 0.0, m21: 0.0, m22: 1.0
+    )
+end
+
+public func multiply(a: Mat3, b: Mat3) -> Mat3
+    return Mat3(
+        m00: a.m00*b.m00 + a.m01*b.m10 + a.m02*b.m20,
+        m01: a.m00*b.m01 + a.m01*b.m11 + a.m02*b.m21,
+        m02: a.m00*b.m02 + a.m01*b.m12 + a.m02*b.m22,
+        m10: a.m10*b.m00 + a.m11*b.m10 + a.m12*b.m20,
+        m11: a.m10*b.m01 + a.m11*b.m11 + a.m12*b.m21,
+        m12: a.m10*b.m02 + a.m11*b.m12 + a.m12*b.m22,
+        m20: a.m20*b.m00 + a.m21*b.m10 + a.m22*b.m20,
+        m21: a.m20*b.m01 + a.m21*b.m11 + a.m22*b.m21,
+        m22: a.m20*b.m02 + a.m21*b.m12 + a.m22*b.m22
+    )
+end
+
+public func transform_point(m: Mat3, p: vec2.Vec2) -> vec2.Vec2
+    return vec2.Vec2(
+        x: m.m00 * p.x + m.m01 * p.y + m.m02,
+        y: m.m10 * p.x + m.m11 * p.y + m.m12
+    )
+end
+
+public func transpose(m: Mat3) -> Mat3
+    return Mat3(
+        m00: m.m00, m01: m.m10, m02: m.m20,
+        m10: m.m01, m11: m.m11, m12: m.m21,
+        m20: m.m02, m21: m.m12, m22: m.m22
+    )
+end
+
+public func determinant(m: Mat3) -> float
+    return m.m00 * (m.m11 * m.m22 - m.m12 * m.m21)
+         - m.m01 * (m.m10 * m.m22 - m.m12 * m.m20)
+         + m.m02 * (m.m10 * m.m21 - m.m11 * m.m20)
+end
+
+public func inverse(m: Mat3) -> Mat3
+    const det: float = determinant(m)
+    const inv_det: float = 1.0 / det
+    return Mat3(
+        m00: (m.m11 * m.m22 - m.m12 * m.m21) * inv_det,
+        m01: (m.m02 * m.m21 - m.m01 * m.m22) * inv_det,
+        m02: (m.m01 * m.m12 - m.m02 * m.m11) * inv_det,
+        m10: (m.m12 * m.m20 - m.m10 * m.m22) * inv_det,
+        m11: (m.m00 * m.m22 - m.m02 * m.m20) * inv_det,
+        m12: (m.m02 * m.m10 - m.m00 * m.m12) * inv_det,
+        m20: (m.m10 * m.m21 - m.m11 * m.m20) * inv_det,
+        m21: (m.m01 * m.m20 - m.m00 * m.m21) * inv_det,
+        m22: (m.m00 * m.m11 - m.m01 * m.m10) * inv_det
+    )
+end

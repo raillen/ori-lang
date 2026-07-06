@@ -1,0 +1,14 @@
+namespace ori.buffer
+
+public struct Buffer<T>
+    _ptr: handle<T>
+    _len: int
+end
+
+public func buffer_len<T>(buf: Buffer<T>) -> int
+    return buf._len
+end
+
+public func buffer_is_empty<T>(buf: Buffer<T>) -> bool
+    return buf._len == 0
+end

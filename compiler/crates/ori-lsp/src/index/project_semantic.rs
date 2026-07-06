@@ -525,6 +525,7 @@ fn ty_to_str(ty: &Ty, resolved: &ResolvedModule) -> String {
         Ty::Set(inner) => format!("set<{}>", ty_to_str(inner, resolved)),
         Ty::Range(inner) => format!("range<{}>", ty_to_str(inner, resolved)),
         Ty::Lazy(inner) => format!("lazy<{}>", ty_to_str(inner, resolved)),
+        Ty::Handle(inner) => format!("handle<{}>", ty_to_str(inner, resolved)),
         Ty::Future(inner) => format!("future<{}>", ty_to_str(inner, resolved)),
         Ty::TaskJob(inner) => format!("task.Job<{}>", ty_to_str(inner, resolved)),
         Ty::Channel(inner) => format!("channel<{}>", ty_to_str(inner, resolved)),

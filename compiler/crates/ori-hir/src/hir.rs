@@ -26,6 +26,7 @@ pub struct HirStruct {
     pub name: SmolStr,
     pub fields: Vec<HirField>,
     pub is_public: bool,
+    pub repr_c: bool,
     pub span: Span,
 }
 

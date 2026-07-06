@@ -2028,7 +2028,7 @@ pub fn stdlib_entry_for_path(path: &str) -> Option<&'static StdlibRuntimeFunctio
 /// module set; keep it small and document why each entry cannot be derived
 /// from `STDLIB_RUNTIME_FUNCTIONS`.
 const STDLIB_MODULE_ONLY_PATHS: &[&str] =
-    &["ori", "ori.core", "ori.Error", "ori.mem", "ori.concurrent"];
+    &["ori", "ori.core", "ori.Error", "ori.mem", "ori.concurrent", "ori.buffer"];
 
 /// Extracts the module prefix from a canonical stdlib path.
 /// `"ori.io.print"` -> `Some("ori.io")`. Returns `None` for unqualified names

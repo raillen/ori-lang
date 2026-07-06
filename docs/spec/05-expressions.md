@@ -39,8 +39,8 @@ All literal forms are expressions. Their types are:
 ```ori
 a + b       -- addition (requires Addable)
 a - b       -- subtraction (requires Subtractable)
-a * b       -- multiplication
-a / b       -- division
+a * b       -- multiplication (requires Multiplicable)
+a / b       -- division (requires Divisible)
 a % b       -- modulo
 -a          -- negation
 ```
@@ -48,9 +48,9 @@ a % b       -- modulo
 Integer division truncates toward zero. Division by zero is a runtime panic.
 Float division by zero produces `Infinity` or `NaN` per IEEE 754.
 
-Operator `+` and `-` require the operands to implement `Addable` and
-`Subtractable` respectively when applied to user-defined types.
-On primitives, these operators work directly.
+Operators `+`, `-`, `*`, `/` require the operands to implement `Addable`,
+`Subtractable`, `Multiplicable`, and `Divisible` respectively when applied
+to user-defined types. On primitives, these operators work directly.
 
 ---
 

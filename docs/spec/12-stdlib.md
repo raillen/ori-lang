@@ -197,14 +197,15 @@ For diagnostics with messages, use `ori.string.parse_int` and
 
 ### Built-in Traits (in `ori.core`)
 
-`Displayable`, `Addable`, `Subtractable`, `Equatable`, `Comparable`,
-`Hashable`, `Disposable`, `Iterable`, `Default`, `Error`, `Cloneable`,
-`Transferable`
+`Displayable`, `Addable`, `Subtractable`, `Multiplicable`, `Divisible`,
+`Equatable`, `Comparable`, `Hashable`, `Disposable`, `Iterable`, `Default`,
+`Error`, `Cloneable`, `Transferable`
 
 Status: these names are registered as real `ori.core` traits. `Disposable`
 is enforced by `using`. `Transferable` is enforced for values that cross task
-or channel boundaries. `Addable`, `Subtractable`, `Equatable`, and
-`Comparable` are used by operator overloading for user-defined concrete types.
+or channel boundaries. `Addable`, `Subtractable`, `Multiplicable`, `Divisible`,
+`Equatable`, and `Comparable` are used by operator overloading for user-defined
+concrete types.
 `Iterable` is recognized by `for` when the implementation exposes
 `mut func next() -> optional<T>`. `Displayable` is used by `string(value)` and
 interpolated strings for user-defined concrete values that provide

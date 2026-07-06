@@ -3244,6 +3244,108 @@ end
 }
 
 #[test]
+fn build_lowers_mul_div_operator_overloads_through_core_traits() {
+    let dir = TestDir::new("mul_div_operator_overload_traits");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.core as core
+
+struct Vec2
+    x: float
+    y: float
+end
+
+implement core.Multiplicable for Vec2
+    func multiply(self, other: Vec2) -> Vec2
+        return Vec2(x: self.x * other.x, y: self.y * other.y)
+    end
+end
+
+implement core.Divisible for Vec2
+    func divide(self, other: Vec2) -> Vec2
+        return Vec2(x: self.x / other.x, y: self.y / other.y)
+    end
+end
+
+func main()
+    const a: Vec2 = Vec2(x: 2.0, y: 3.0)
+    const b: Vec2 = Vec2(x: 4.0, y: 6.0)
+    const product: Vec2 = a * b
+    const quotient: Vec2 = b / a
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(out
+        .c_source
+        .contains("ORI__app_dot_main_dot_Vec2_dot_Multiplicable_dot_multiply"));
+    assert!(out
+        .c_source
+        .contains("ORI__app_dot_main_dot_Vec2_dot_Divisible_dot_divide"));
+}
+
+#[test]
+fn compile_runs_mul_div_operator_overloads_native() {
+    let dir = TestDir::new("mul_div_operator_overload_traits_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.core as core
+import ori.io as io
+
+struct Value
+    x: int
+    y: int
+end
+
+implement core.Multiplicable for Value
+    func multiply(self, other: Value) -> Value
+        return Value(x: self.x * other.x, y: self.y * other.y)
+    end
+end
+
+implement core.Divisible for Value
+    func divide(self, other: Value) -> Value
+        return Value(x: self.x / other.x, y: self.y / other.y)
+    end
+end
+
+func main()
+    const a: Value = Value(x: 2, y: 3)
+    const b: Value = Value(x: 4, y: 6)
+    const product: Value = a * b
+    const quotient: Value = b / a
+    io.print(string(product.x))
+    io.print(string(product.y))
+    io.print(string(quotient.x))
+    io.print(string(quotient.y))
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "mul_div_overloads.exe"
+    } else {
+        "mul_div_overloads"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(
+        stdout.replace("\r\n", "\n"),
+        "8\n18\n2\n2\n"
+    );
+}
+
+#[test]
 fn compile_runs_managed_operator_overloads_native() {
     let dir = TestDir::new("managed_operator_overload_traits_native");
     dir.write(
@@ -10542,4 +10644,124 @@ end
     assert!(output.status.success(), "{:?}", output);
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert_eq!(stdout, "utils ok\n");
+}
+
+#[test]
+fn compile_runs_vec2_stdlib_native() {
+    let dir = TestDir::new("vec2_stdlib_native");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.math.vec2 as vec2
+import ori.io as io
+
+func main()
+    const a: vec2.Vec2 = vec2.Vec2(x: 1.0, y: 2.0)
+    const b: vec2.Vec2 = vec2.Vec2(x: 3.0, y: 4.0)
+    const sum: vec2.Vec2 = a + b
+    const diff: vec2.Vec2 = b - a
+    const product: vec2.Vec2 = a * b
+    const quotient: vec2.Vec2 = b / a
+    const d: float = vec2.dot(a, b)
+    io.print(string(sum.x))
+    io.print(string(sum.y))
+    io.print(string(diff.x))
+    io.print(string(diff.y))
+    io.print(string(product.x))
+    io.print(string(product.y))
+    io.print(string(quotient.x))
+    io.print(string(quotient.y))
+    io.print(string(d))
+end
+"#,
+    );
+
+    let exe = dir.path(if cfg!(windows) {
+        "vec2_test.exe"
+    } else {
+        "vec2_test"
+    });
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    // a = (1,2), b = (3,4)
+    // sum = (4,6), diff = (2,2), product = (3,8), quotient = (3,2)
+    // dot = 1*3 + 2*4 = 11
+    assert_eq!(
+        stdout.replace("\r\n", "\n"),
+        "4\n6\n2\n2\n3\n8\n3\n2\n11\n"
+    );
+}
+
+#[test]
+fn build_accepts_repr_c_attribute() {
+    let dir = TestDir::new("repr_c_attribute");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+@repr("C")
+struct SDL_Rect
+    x: int
+    y: int
+    w: int
+    h: int
+end
+
+func main()
+    const r: SDL_Rect = SDL_Rect(x: 0, y: 0, w: 100, h: 200)
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn build_accepts_handle_type() {
+    let dir = TestDir::new("handle_type");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+func return_handle() -> handle<int>
+    return return_handle()
+end
+
+func use_handle(h: handle<int>) -> handle<int>
+    return h
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn build_accepts_buffer_type() {
+    let dir = TestDir::new("buffer_type");
+    dir.write(
+        "main.orl",
+        r#"namespace app.main
+
+import ori.buffer as buf
+
+struct MyBuffer
+    data: buf.Buffer<int>
+end
+
+func main()
+    const length: int = 0
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
 }

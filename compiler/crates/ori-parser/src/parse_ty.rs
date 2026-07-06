@@ -47,6 +47,7 @@ impl<'src> Parser<'src> {
             TokenKind::Set => single_generic_type!(self, span, Set),
             TokenKind::Range => single_generic_type!(self, span, Range),
             TokenKind::Lazy => single_generic_type!(self, span, Lazy),
+            TokenKind::Handle => single_generic_type!(self, span, Handle),
 
             // ── Multi-arg generic built-in types ──────────────────────────────
             TokenKind::ResultKw => {

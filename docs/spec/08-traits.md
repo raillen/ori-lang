@@ -170,6 +170,8 @@ Ori allows operator overloading only for the following fixed set:
 |---|---|---|
 | `+` | `Addable` | `func add(other: Self) -> Self` |
 | `-` | `Subtractable` | `func subtract(other: Self) -> Self` |
+| `*` | `Multiplicable` | `func multiply(other: Self) -> Self` |
+| `/` | `Divisible` | `func divide(other: Self) -> Self` |
 | `<`, `<=`, `>`, `>=` | `Comparable` | `func compare(other: Self) -> int` |
 | `==`, `!=` | `Equatable` | `func equals(other: Self) -> bool` |
 

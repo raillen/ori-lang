@@ -95,6 +95,7 @@ pub enum Ty {
     Set(Box<Ty>),
     Range(Box<Ty>),
     Lazy(Box<Ty>),
+    Handle(Box<Ty>),
     Future(Box<Ty>),
     TaskJob(Box<Ty>),
     Channel(Box<Ty>),
@@ -238,6 +239,7 @@ impl Ty {
             | Ty::Set(t)
             | Ty::Range(t)
             | Ty::Lazy(t)
+            | Ty::Handle(t)
             | Ty::Future(t)
             | Ty::TaskJob(t)
             | Ty::Channel(t) => t.contains_infer(),
@@ -385,6 +387,7 @@ impl Ty {
             Ty::Set(t) => format!("set<{}>", t.display()),
             Ty::Range(t) => format!("range<{}>", t.display()),
             Ty::Lazy(t) => format!("lazy<{}>", t.display()),
+            Ty::Handle(t) => format!("handle<{}>", t.display()),
             Ty::Future(t) => format!("future<{}>", t.display()),
             Ty::TaskJob(t) => format!("task.Job<{}>", t.display()),
             Ty::Channel(t) => format!("channel.Channel<{}>", t.display()),
@@ -476,6 +479,7 @@ pub fn substitute_ty_params(ty: &Ty, args: &[Ty]) -> Ty {
         Ty::Set(elem) => Ty::Set(Box::new(substitute_ty_params(elem, args))),
         Ty::Range(elem) => Ty::Range(Box::new(substitute_ty_params(elem, args))),
         Ty::Lazy(inner) => Ty::Lazy(Box::new(substitute_ty_params(inner, args))),
+        Ty::Handle(inner) => Ty::Handle(Box::new(substitute_ty_params(inner, args))),
         Ty::Future(inner) => Ty::Future(Box::new(substitute_ty_params(inner, args))),
         Ty::TaskJob(inner) => Ty::TaskJob(Box::new(substitute_ty_params(inner, args))),
         Ty::Channel(inner) => Ty::Channel(Box::new(substitute_ty_params(inner, args))),
@@ -557,6 +561,7 @@ where
         Ty::Set(elem) => Ty::Set(Box::new(normalize_ty_aliases_depth(*elem, lookup, depth))),
         Ty::Range(elem) => Ty::Range(Box::new(normalize_ty_aliases_depth(*elem, lookup, depth))),
         Ty::Lazy(inner) => Ty::Lazy(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth))),
+        Ty::Handle(inner) => Ty::Handle(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth))),
         Ty::Future(inner) => {
             Ty::Future(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth)))
         }

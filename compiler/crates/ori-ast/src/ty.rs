@@ -37,6 +37,7 @@ pub enum Type {
     Set(Box<Type>, Span),
     Range(Box<Type>, Span),
     Lazy(Box<Type>, Span),
+    Handle(Box<Type>, Span),
     /// `any<Trait>` — dynamic dispatch.
     Any(QualifiedName, Span),
     /// `tuple<A, B, …>` — always at least 2 type arguments.
@@ -84,6 +85,7 @@ impl Type {
             | Type::Set(_, s)
             | Type::Range(_, s)
             | Type::Lazy(_, s)
+            | Type::Handle(_, s)
             | Type::Any(_, s)
             | Type::Tuple(_, s)
             | Type::Result(_, _, s)

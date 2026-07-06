@@ -633,7 +633,7 @@ impl<'a> Checker<'a> {
                         "unknown attribute",
                     ))
                     .with_action(
-                        "use one of `@test`, `@deprecated`, `@inline`, `@no_inline`, or `@cfg`",
+                        "use one of `@test`, `@deprecated`, `@inline`, `@no_inline`, `@cfg`, or `@repr`",
                     ),
                 );
                 continue;
@@ -2445,7 +2445,7 @@ impl<'a> Checker<'a> {
                     lt.clone()
                 } else if op == Add && lt == &Ty::String && rt == &Ty::String {
                     Ty::String
-                } else if matches!(op, Add | Sub)
+                } else if matches!(op, Add | Sub | Mul | Div)
                     && self
                         .operator_trait_method_sig(
                             lt,
@@ -4764,7 +4764,7 @@ impl<'a> Checker<'a> {
                 self.user_type_implements_core_trait_id(*def_id, "Transferable")
             }
             Ty::Infer(_) | Ty::Param { .. } | Ty::Error => true,
-            Ty::Func { .. } | Ty::Lazy(_) | Ty::Any(_) => false,
+            Ty::Func { .. } | Ty::Lazy(_) | Ty::Handle(_) | Ty::Any(_) => false,
         }
     }
 
@@ -6066,13 +6066,14 @@ fn item_target_name(item: &Item) -> &'static str {
 }
 
 fn is_known_attr(name: &str) -> bool {
-    matches!(name, "test" | "deprecated" | "inline" | "no_inline" | "cfg")
+    matches!(name, "test" | "deprecated" | "inline" | "no_inline" | "cfg" | "repr")
 }
 
 fn attr_applies_to(name: &str, target: &str) -> bool {
     match name {
         "test" | "inline" | "no_inline" => target == "func",
         "deprecated" | "cfg" => true,
+        "repr" => target == "struct",
         _ => false,
     }
 }
@@ -6592,6 +6593,8 @@ fn operator_trait_name(op: BinaryOp) -> &'static str {
     match op {
         BinaryOp::Add => "Addable",
         BinaryOp::Sub => "Subtractable",
+        BinaryOp::Mul => "Multiplicable",
+        BinaryOp::Div => "Divisible",
         BinaryOp::Eq | BinaryOp::Ne => "Equatable",
         BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => "Comparable",
         _ => "",
@@ -6602,6 +6605,8 @@ fn operator_method_name(op: BinaryOp) -> &'static str {
     match op {
         BinaryOp::Add => "add",
         BinaryOp::Sub => "subtract",
+        BinaryOp::Mul => "multiply",
+        BinaryOp::Div => "divide",
         BinaryOp::Eq | BinaryOp::Ne => "equals",
         BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => "compare",
         _ => "",

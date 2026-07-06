@@ -116,6 +116,7 @@ pub fn lower_type_with_local_aliases(
         AstType::Set(elem, _) => Ty::Set(Box::new(rec!(elem))),
         AstType::Range(elem, _) => Ty::Range(Box::new(rec!(elem))),
         AstType::Lazy(inner, _) => Ty::Lazy(Box::new(rec!(inner))),
+        AstType::Handle(inner, _) => Ty::Handle(Box::new(rec!(inner))),
         AstType::Tuple(elems, _) => Ty::Tuple(elems.iter().map(|t| rec!(t)).collect()),
         AstType::Any(trait_name, span) => {
             let id = resolve_name(

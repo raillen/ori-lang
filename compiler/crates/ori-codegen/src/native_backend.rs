@@ -141,6 +141,7 @@ fn cl_type(ty: &Ty, ptr_ty: types::Type) -> Option<types::Type> {
         | Ty::Bytes
         | Ty::Func { .. }
         | Ty::Lazy(_)
+        | Ty::Handle(_)
         | Ty::Future(_)
         | Ty::TaskJob(_)
         | Ty::Channel(_)
@@ -632,6 +633,7 @@ fn contains_error_ty(ty: &Ty) -> bool {
         | Ty::Set(inner)
         | Ty::Range(inner)
         | Ty::Lazy(inner)
+        | Ty::Handle(inner)
         | Ty::Future(inner)
         | Ty::TaskJob(inner)
         | Ty::Channel(inner) => contains_error_ty(inner),
@@ -2439,14 +2441,18 @@ fn closure_env_layout(captures: &[HirClosureCapture], ptr_ty: types::Type) -> (V
     (offsets, total)
 }
 
-fn compute_struct_layout(fields: &[HirField], ptr_ty: types::Type) -> StructLayout {
+fn compute_struct_layout(fields: &[HirField], ptr_ty: types::Type, repr_c: bool) -> StructLayout {
     let mut offset = 0u32;
     let mut max_align = 1u8;
     let mut result = Vec::new();
     for f in fields {
         let (size, align) = field_size_align(&f.ty, ptr_ty);
-        // Align to field requirement
-        let aligned = (offset + align as u32 - 1) & !(align as u32 - 1);
+        // For repr(C), use natural alignment; for packed, skip alignment
+        let aligned = if repr_c {
+            (offset + align as u32 - 1) & !(align as u32 - 1)
+        } else {
+            offset
+        };
         result.push((
             f.name.clone(),
             FieldLayout {
@@ -2456,12 +2462,16 @@ fn compute_struct_layout(fields: &[HirField], ptr_ty: types::Type) -> StructLayo
             },
         ));
         offset = aligned + size;
-        if align > max_align {
+        if repr_c && align > max_align {
             max_align = align;
         }
     }
-    // Pad total to struct alignment
-    let total = ((offset + max_align as u32 - 1) & !(max_align as u32 - 1)).max(1);
+    // Pad total to struct alignment (only for repr(C))
+    let total = if repr_c {
+        ((offset + max_align as u32 - 1) & !(max_align as u32 - 1)).max(1)
+    } else {
+        offset.max(1)
+    };
     StructLayout {
         size: total,
         align: max_align,
@@ -2498,7 +2508,7 @@ fn compute_enum_layout(variants: &[ori_hir::hir::HirVariant], ptr_ty: types::Typ
     let mut max_payload_align = 1u8;
 
     for (tag_idx, v) in variants.iter().enumerate() {
-        let payload_layout = compute_struct_layout(&v.fields, ptr_ty);
+        let payload_layout = compute_struct_layout(&v.fields, ptr_ty, false);
         if payload_layout.size > max_payload_size {
             max_payload_size = payload_layout.size;
         }
@@ -2937,7 +2947,7 @@ impl<M: Module> NativeBackend<M> {
         validate_native_hir(hir)?;
         // Compute struct layouts before anything else
         for s in &hir.structs {
-            let layout = compute_struct_layout(&s.fields, self.ptr_ty);
+            let layout = compute_struct_layout(&s.fields, self.ptr_ty, s.repr_c);
             self.struct_layouts.insert(s.def_id, layout);
             self.type_names.insert(s.def_id, s.name.clone());
         }

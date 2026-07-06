@@ -66,6 +66,7 @@ fn ori_mem_size_of_ty(ty: &Ty) -> i64 {
         | Ty::Set(_)
         | Ty::Range(_)
         | Ty::Lazy(_)
+        | Ty::Handle(_)
         | Ty::Future(_)
         | Ty::TaskJob(_)
         | Ty::Channel(_)
@@ -1352,7 +1353,7 @@ impl<'a> Lowerer<'a> {
         let call = self.operator_method_call(method_path, return_ty.clone(), lhs, rhs, span);
 
         match op {
-            BinaryOp::Add | BinaryOp::Sub => Some(call),
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => Some(call),
             BinaryOp::Eq => Some(call),
             BinaryOp::Ne => Some(HirExpr {
                 kind: HirExprKind::Unary {
@@ -1665,6 +1666,7 @@ fn builtin_stdlib_structs(def_map: &DefMap) -> Vec<HirStruct> {
             },
         ],
         is_public: true,
+        repr_c: false,
         span: Span::DUMMY,
     }]
 }
@@ -1731,11 +1733,18 @@ pub fn lower(
                     .collect();
                 let path = format!("{}.{}", namespace, s.name.text);
                 let def_id = def_map.lookup(&path).unwrap_or(ori_types::DefId(u32::MAX));
+                let repr_c = item.attrs.iter().any(|a| {
+                    a.name.text == "repr"
+                        && a.args
+                            .iter()
+                            .any(|arg| matches!(arg, ori_ast::common::AttrArg::String(s, _) if *s == "C"))
+                });
                 structs.push(HirStruct {
                     def_id,
                     name: SmolStr::new(&path),
                     fields,
                     is_public: s.visibility == Visibility::Public,
+                    repr_c,
                     span: s.span,
                 });
 
@@ -4555,6 +4564,8 @@ fn operator_trait_method(op: BinaryOp) -> Option<(&'static str, &'static str)> {
     match op {
         BinaryOp::Add => Some(("Addable", "add")),
         BinaryOp::Sub => Some(("Subtractable", "subtract")),
+        BinaryOp::Mul => Some(("Multiplicable", "multiply")),
+        BinaryOp::Div => Some(("Divisible", "divide")),
         BinaryOp::Eq | BinaryOp::Ne => Some(("Equatable", "equals")),
         BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
             Some(("Comparable", "compare"))
