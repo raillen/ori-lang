@@ -1,0 +1,63 @@
+namespace test.ori_game
+
+import ori.game.shape as shape
+import ori.game.color as color
+import ori.game.collision as collision
+import ori.game.engine as engine
+import ori.math.vec2 as vec2
+
+func test_shape_creation() -> void
+    var rect = shape.Rectangle(x: 10.0, y: 20.0, width: 100.0, height: 50.0)
+    assert(rect.x == 10.0)
+    assert(rect.width == 100.0)
+
+    var circle = shape.Circle(x: 50.0, y: 50.0, radius: 25.0)
+    assert(circle.radius == 25.0)
+end
+
+func test_color_creation() -> void
+    var c = color.from_rgb(255, 128, 0)
+    assert(c.r == 255)
+    assert(c.g == 128)
+
+    var hex_color = color.from_hex(0xFF8000)
+    assert(hex_color.r == 255)
+end
+
+func test_collision() -> void
+    var rect_a = shape.Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
+    var rect_b = shape.Rectangle(x: 5.0, y: 5.0, width: 10.0, height: 10.0)
+    assert(collision.rects_collide(rect_a, rect_b))
+
+    var rect_c = shape.Rectangle(x: 20.0, y: 20.0, width: 10.0, height: 10.0)
+    assert(not collision.rects_collide(rect_a, rect_c))
+
+    var point = vec2.Vec2(x: 5.0, y: 5.0)
+    assert(collision.point_in_rect(point, rect_a))
+end
+
+func test_engine() -> void
+    var eng = engine.create_engine()
+    assert(eng.entities.len() == 0)
+
+    var e = engine.spawn_entity(eng, vec2.Vec2(x: 100.0, y: 200.0),
+        update_fn = do(e: Entity, dt: float) => end,
+        draw_fn = do(e: Entity) => end
+    )
+    assert(e.id == 0)
+    assert(e.pos.x == 100.0)
+    assert(eng.entities.len() == 1)
+end
+
+func test_timer() -> void
+    var completed = false
+    var t = ori.game.timer.create_timer(1.0, false, do() =>
+        completed = true
+    end)
+
+    ori.game.timer.tick_timer(t, 0.5)
+    assert(not completed)
+
+    ori.game.timer.tick_timer(t, 0.6)
+    assert(completed)
+end

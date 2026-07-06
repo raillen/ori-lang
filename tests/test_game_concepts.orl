@@ -1,0 +1,161 @@
+namespace test.game_concepts
+
+import ori.math.vec2 as vec2
+import ori.math as math
+
+// ── Shape Structs ─────────────────────────────────────────
+
+struct Rectangle
+    x: float
+    y: float
+    width: float
+    height: float
+end
+
+struct Circle
+    x: float
+    y: float
+    radius: float
+end
+
+// ── Color Struct ──────────────────────────────────────────
+
+struct Color
+    r: u8
+    g: u8
+    b: u8
+    a: u8
+end
+
+// ── Collision Functions ───────────────────────────────────
+
+func rects_collide(a: Rectangle, b: Rectangle) -> bool
+    return a.x < b.x + b.width
+       and a.x + a.width > b.x
+       and a.y < b.y + b.height
+       and a.y + a.height > b.y
+end
+
+func point_in_rect(point: vec2.Vec2, rect: Rectangle) -> bool
+    return point.x >= rect.x and point.x <= rect.x + rect.width
+       and point.y >= rect.y and point.y <= rect.y + rect.height
+end
+
+func circles_collide(a: Circle, b: Circle) -> bool
+    var dx = a.x - b.x
+    var dy = a.y - b.y
+    var dist = a.radius + b.radius
+    return dx * dx + dy * dy <= dist * dist
+end
+
+// ── Timer ─────────────────────────────────────────────────
+
+struct Timer
+    duration: float
+    elapsed: float = 0.0
+    active: bool = true
+    repeat: bool = false
+    on_complete: func() -> void
+end
+
+func tick_timer(t: Timer, dt: float) -> void
+    if not t.active
+        return
+    end
+    t.elapsed = t.elapsed + dt
+    if t.elapsed >= t.duration
+        t.on_complete()
+        if t.repeat
+            t.elapsed = t.elapsed - t.duration
+        else
+            t.active = false
+        end
+    end
+end
+
+// ── Entity ────────────────────────────────────────────────
+
+struct Entity
+    id: int
+    pos: vec2.Vec2
+    vel: vec2.Vec2
+    alive: bool = true
+end
+
+// ── Test Functions ────────────────────────────────────────
+
+func test_rectangles() -> void
+    var a = Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
+    var b = Rectangle(x: 5.0, y: 5.0, width: 10.0, height: 10.0)
+    var c = Rectangle(x: 20.0, y: 20.0, width: 10.0, height: 10.0)
+
+    assert(rects_collide(a, b))
+    assert(not rects_collide(a, c))
+end
+
+func test_point_in_rect() -> void
+    var rect = Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
+    var inside = vec2.Vec2(x: 5.0, y: 5.0)
+    var outside = vec2.Vec2(x: 15.0, y: 15.0)
+
+    assert(point_in_rect(inside, rect))
+    assert(not point_in_rect(outside, rect))
+end
+
+func test_circles() -> void
+    var a = Circle(x: 0.0, y: 0.0, radius: 5.0)
+    var b = Circle(x: 8.0, y: 0.0, radius: 5.0)
+    var c = Circle(x: 20.0, y: 0.0, radius: 5.0)
+
+    assert(circles_collide(a, b))
+    assert(not circles_collide(a, c))
+end
+
+func test_timer() -> void
+    var completed = false
+    var t = Timer(
+        duration: 1.0,
+        on_complete = do() =>
+            completed = true
+        end
+    )
+
+    tick_timer(t, 0.5)
+    assert(not completed)
+
+    tick_timer(t, 0.6)
+    assert(completed)
+end
+
+func test_entity() -> void
+    var e = Entity(
+        id: 1,
+        pos: vec2.Vec2(x: 100.0, y: 200.0),
+        vel: vec2.Vec2(x: 10.0, y: 0.0)
+    )
+
+    assert(e.id == 1)
+    assert(e.pos.x == 100.0)
+    assert(e.alive)
+
+    // Simulate movement
+    var dt = 0.016
+    e.pos.x = e.pos.x + e.vel.x * dt
+    assert(e.pos.x > 100.0)
+end
+
+func test_vec2_operations() -> void
+    var a = vec2.Vec2(x: 1.0, y: 2.0)
+    var b = vec2.Vec2(x: 3.0, y: 4.0)
+
+    var sum = a + b
+    assert(sum.x == 4.0)
+    assert(sum.y == 6.0)
+
+    var diff = b - a
+    assert(diff.x == 2.0)
+    assert(diff.y == 2.0)
+
+    var d = vec2.dot(a, b)
+    assert(d == 11.0)
+end

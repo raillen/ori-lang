@@ -1,0 +1,79 @@
+namespace test.game_final
+
+import ori.math.vec2 as vec2
+import ori.test as test
+
+struct Rectangle
+    x: float
+    y: float
+    width: float
+    height: float
+end
+
+struct Circle
+    x: float
+    y: float
+    radius: float
+end
+
+func rects_collide(a: Rectangle, b: Rectangle) -> bool
+    return a.x < b.x + b.width
+       and a.x + a.width > b.x
+       and a.y < b.y + b.height
+       and a.y + a.height > b.y
+end
+
+func point_in_rect(point: vec2.Vec2, rect: Rectangle) -> bool
+    return point.x >= rect.x and point.x <= rect.x + rect.width
+       and point.y >= rect.y and point.y <= rect.y + rect.height
+end
+
+func circles_collide(a: Circle, b: Circle) -> bool
+    const dx: float = a.x - b.x
+    const dy: float = a.y - b.y
+    const dist: float = a.radius + b.radius
+    return dx * dx + dy * dy <= dist * dist
+end
+
+func test_rectangles() -> void
+    const a: Rectangle = Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
+    const b: Rectangle = Rectangle(x: 5.0, y: 5.0, width: 10.0, height: 10.0)
+    const c: Rectangle = Rectangle(x: 20.0, y: 20.0, width: 10.0, height: 10.0)
+
+    test.assert(rects_collide(a, b), "rects a and b should collide")
+    test.assert(not rects_collide(a, c), "rects a and c should not collide")
+end
+
+func test_point_in_rect() -> void
+    const rect: Rectangle = Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
+    const inside: vec2.Vec2 = vec2.Vec2(x: 5.0, y: 5.0)
+    const outside: vec2.Vec2 = vec2.Vec2(x: 15.0, y: 15.0)
+
+    test.assert(point_in_rect(inside, rect), "point should be in rect")
+    test.assert(not point_in_rect(outside, rect), "point should not be in rect")
+end
+
+func test_circles() -> void
+    const a: Circle = Circle(x: 0.0, y: 0.0, radius: 5.0)
+    const b: Circle = Circle(x: 8.0, y: 0.0, radius: 5.0)
+    const c: Circle = Circle(x: 20.0, y: 0.0, radius: 5.0)
+
+    test.assert(circles_collide(a, b), "circles a and b should collide")
+    test.assert(not circles_collide(a, c), "circles a and c should not collide")
+end
+
+func test_vec2_operations() -> void
+    const a: vec2.Vec2 = vec2.Vec2(x: 1.0, y: 2.0)
+    const b: vec2.Vec2 = vec2.Vec2(x: 3.0, y: 4.0)
+
+    const sum: vec2.Vec2 = a + b
+    test.assert(sum.x == 4.0, "sum.x should be 4.0")
+    test.assert(sum.y == 6.0, "sum.y should be 6.0")
+
+    const diff: vec2.Vec2 = b - a
+    test.assert(diff.x == 2.0, "diff.x should be 2.0")
+    test.assert(diff.y == 2.0, "diff.y should be 2.0")
+
+    const d: float = vec2.dot(a, b)
+    test.assert(d == 11.0, "dot product should be 11.0")
+end
