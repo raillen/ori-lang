@@ -2,12 +2,36 @@
 
 > Ori is a reading-first, explicitly typed programming language. Compiler written in Rust.
 
-## Skills Globais (sempre ativas)
+## Skills (Grok / agentes)
 
-Este projeto segue as skills universais de qualidade:
-- **`clean-code`** — Nomenclatura, funções, tratamento de erros, organização
-- **`project-documentation`** — Documentação incremental (implementação + uso)
-- **`semantic-html-a11y`** — HTML semântico e acessibilidade (quando aplicável)
+Precedência: **este `AGENTS.md` > skills globais > defaults**.
+
+### Obrigatórias em toda tarefa de código
+
+| Skill | Quando / o que exige |
+|-------|----------------------|
+| **`clean-code`** | Modularização, nomes (verbo+domínio), DRY/KISS (Rule of Three), anti-primitivos, funções stepdown, sem `utils` lixeira. Refs: `naming`, `modularization`, `types-and-primitives`, `adherence-checklist`. |
+| **`rust`** | Newtypes/IDs, `Result` tipado, `pub` mínimo, API Guidelines, fmt/clippy/test. Script: `rust_quality.sh`. |
+| **`living-docs`** | Docs com o código; spec normativa vs planning; CHANGELOG; sem duplicar escopos. |
+| **`compiler-dev`** | Front-end e processo: fase correta, diagnostics no catálogo, stdlib sync. |
+| **`lang-compiled`** | AOT: IR/SSA, multi-backend (native+C), ABI/link/runtime, opts, JIT-as-run, parity. |
+| **`ori-testing`** | Feature/fix: L1 `check` → L2 `compile` → L3 run → regressão em `ori-driver` + `diagnostic_catalog`. |
+
+### Sob demanda
+
+| Skill | Quando |
+|-------|--------|
+| **`lang-interpreted`** | Só se houver experimentação de VM/bytecode (produto Ori é AOT-first) |
+| **`code-review`** | Review estrutural ambicioso / code judo |
+| **`check-work`** | Verificar trabalho antes de fechar slice grande |
+| **`semantic-web`** | UI/docs web pontuais |
+| **`astro-docs-site`** | Site em `ori-website` (repo irmão) |
+
+### Convenção local que sobrescreve clean-code
+
+- **Identificadores e comentários no código: inglês** (esta matriz do projeto).
+- **Documentação de usuário/spec/planning: português (Brasil)** quando o doc já estiver em PT, ou inglês se o arquivo for EN — manter o idioma do documento existente.
+- Comentários `// SAFETY:` em `unsafe`: inglês, invariantes explícitas.
 
 ## Architecture
 
