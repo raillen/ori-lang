@@ -27,29 +27,28 @@
 | ARC + ciclos | aproximar mais de Nim ORC do que de Pony ORCA |
 | Generics | monomorfizacao por padrao; medir code bloat antes de criar type erasure |
 
-## Erros: `try` e `?`
+## Erros: `try` (S3)
 
-Decisao: adicionar `try expr` a linguagem e documentar como forma preferida.
+> **Histórico pré-S3:** este bloco originalmente documentava `try` *e* `expr?`
+> como dual. No corte **S3 / `0.3.0`**, **só `try expr`** permanece; `expr?` é
+> erro (`parse.question_propagate_removed`). Ver banner no topo e o registro S3.
 
-`expr?` continua existindo porque e compacto e ja encaixa no pipeline atual.
-Mas `try expr` combina melhor com a filosofia da Ori:
+Decisao (vigente): **`try expr`** é a **única** forma de propagação.
+
+Motivos (ainda válidos):
 
 - le melhor em codigo longo;
 - aparece antes da expressao, entao o leitor sabe cedo que ha saida antecipada;
 - e mais facil de ensinar para iniciantes;
 - fica mais parecido com Zig sem copiar o modelo inteiro de Zig.
 
-Regra de escrita recomendada:
+Regra de escrita canônica:
 
 ```ori
 const config: Config = try read_config(path)
 ```
 
-Forma compacta permitida:
-
-```ori
-const config: Config = read_config(path)?
-```
+~~Forma compacta `expr?`~~ — **removida** no `0.3.0`.
 
 ## Mutabilidade + ARC
 

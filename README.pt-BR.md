@@ -36,8 +36,9 @@ contrato estável 1.0.
 
 ## O que é Ori
 
-Ori é uma linguagem estaticamente tipada com namespaces explícitos, tipos
-explícitos, erros estruturados, limpeza determinística e geração de código
+Ori é uma linguagem estaticamente tipada com módulos explícitos (`module`),
+tipos explícitos (`optional[T]`, `result[T, E]`), erros estruturados (`try`),
+traits via `apply`/`use`, limpeza determinística (`using`) e geração de código
 nativo.
 
 Pipeline atual do compilador:
@@ -67,8 +68,8 @@ precisa delas:
 |---|---|
 | Onde este arquivo pertence? | `module` no topo de cada arquivo |
 | Qual é o tipo deste valor? | anotações de tipo explícitas |
-| Este valor pode estar ausente? | `optional[T>` |
-| Esta operação pode falhar? | `result[T, E>` |
+| Este valor pode estar ausente? | `optional[T]` |
+| Esta operação pode falhar? | `result[T, E]` |
 | Quando um recurso é liberado? | `using` |
 | De onde vem este comportamento? | `trait` e `apply` / `use` |
 | O que deu errado? | códigos de diagnóstico estruturados |
@@ -81,7 +82,7 @@ inferência menores e mensagens de erro mais claras.
 | Área | Status |
 |---|---|
 | Versão | **Superfície de linguagem `0.3.0` (corte S3)**; pacote Cargo pode permanecer `0.2.0` até a tag de release |
-| Estabilidade | pre-1.0; compatibilidade de código-fonte ainda pode mudar |
+| Estabilidade | pre-1.0; S3 quebra a sintaxe 0.2; mudanças futuras ainda possíveis |
 | Compilador | workspace Rust com lexer, parser, HIR, checker, codegen, diagnósticos, LSP, driver e runtime |
 | Backend nativo | código objeto Cranelift mais runtime nativo Ori |
 | `ori run` | JIT por padrão quando a cdylib do runtime está disponível; AOT pode ser forçado |
@@ -91,8 +92,10 @@ inferência menores e mensagens de erro mais claras.
 | Ferramentas | CLI, formatter, catálogo de diagnósticos, export de docs, LSP, extensão VS Code |
 | Testes | suíte do workspace e smoke de release nativa fazem parte do gate do projeto |
 
-O versionamento é conservador. `0.3.0` fica reservado para uma quebra real
-visível ao usuário, não para cada marco interno.
+S3 **foi** essa quebra visível ao usuário (documentada no
+[CHANGELOG.md](CHANGELOG.md) `[0.3.0]`). Inferência local estilo Nim é **`0.3.1`**.
+Migração mecânica: `ori migrate-syntax`. O número do pacote Cargo pode permanecer
+`0.2.0` até a tag de release.
 
 ## Primeiros passos
 
@@ -163,7 +166,7 @@ A CLI `ori` é implementada em `compiler/crates/ori-driver`.
 | `ori doc export` | exporta símbolos stdlib, diagnósticos e keywords como JSON |
 | `ori doctor` | reporta saúde da stdlib, runtime, linker, target e JIT |
 | `ori explain <code]` | explica um código de diagnóstico |
-| `ori summary [path]` | imprime entry file, namespaces, imports e contagem de diagnósticos |
+| `ori summary [path]` | imprime entry file, módulos, imports e contagem de diagnósticos |
 | `ori build <file.orl>` | emite C pelo backend de debug |
 | `ori lex <file.orl>` | imprime tokens para debug do compilador |
 | `ori parse <file.orl>` | imprime AST para debug do compilador |
@@ -190,13 +193,13 @@ A matriz completa de ambiente está em [AGENTS.md](AGENTS.md).
 O modelo central de Ori é pequeno:
 
 - todo arquivo começa com `module`;
-- imports criam aliases locais;
+- imports: `import path (A)`, `import path = alias`, ou `import path` nu;
 - declarações top-level são privadas, exceto quando marcadas como `public`;
 - `struct` e `enum` definem dados;
 - `trait` e `apply` / `use` definem comportamento;
-- `optional[T>` modela ausência;
-- `result[T, E>` modela falha recuperável;
-- `?` propaga valores `result` ou `optional`;
+- `optional[T]` modela ausência;
+- `result[T, E]` modela falha recuperável;
+- só `try expr` propaga (postfix `?` removido no S3);
 - `using` deixa limpeza explícita;
 - diagnósticos usam códigos estáveis como `name.undefined` e
   `project.circular_import`.
@@ -208,7 +211,7 @@ module app.errors
 
 import ori.io = io
 
-divide(a: int, b: int) -> result[int, string>
+divide(a: int, b: int) -> result[int, string]
     if b == 0
         return error("division by zero")
     end
@@ -217,7 +220,7 @@ divide(a: int, b: int) -> result[int, string>
 end
 
 main() -> result[void, string]
-    const value: int = divide(84, 2)?
+    const value: int = try divide(84, 2)
     io.print(f"value: {value}")
     return success()
 end

@@ -1,6 +1,6 @@
 # Como reportar bugs
 
-Status: politica pratica para Ori `0.2.x`.
+Status: politica pratica para Ori **S3 / `0.3.0`**.
 
 Um bom bug report deve permitir reproduzir o problema com poucos comandos.
 
@@ -15,7 +15,7 @@ Inclua:
 - saida completa do diagnostico.
 
 Use esta categoria para parser, type checker, imports, generics, traits,
-matching, `try`, `?`, ARC ou regras de ownership.
+matching, `try`, ARC ou regras de ownership.
 
 ## Stdlib ou runtime
 

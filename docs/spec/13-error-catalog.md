@@ -52,8 +52,8 @@ when the compiler starts producing it.
 | `parse.fstring_unclosed_expr` | error | Interpolated string expression is not closed |
 | `parse.fstring_unmatched_brace` | error | Interpolated string contains an unmatched brace |
 | `parse.import_after_declaration` | error | Import appears after a top-level declaration |
-| `parse.import_as_removed` | error | Source used removed `import path = alias`; use `import path = alias` |
-| `parse.import_only_removed` | error | Source used removed `import path (…)`; use `import path (…)` |
+| `parse.import_as_removed` | error | Source used removed `import path as alias`; use `import path = alias` |
+| `parse.import_only_removed` | error | Source used removed `import path only (…)`; use `import path (…)` |
 | `parse.invalid_escape` | error | String or byte literal contains an invalid escape |
 | `parse.invalid_lvalue` | error | Assignment target is not assignable |
 | `parse.invalid_range` | error | Range expression has a non-integer boundary |
@@ -158,7 +158,7 @@ when the compiler starts producing it.
 | Code | Severity | Description |
 |---|---|---|
 | `async.capture_not_transferable` | error | Closure passed to `task.spawn` captures a value that is not `Transferable` |
-| `async.await_outside_async` | error | `await` was used outside an `async func` |
+| `async.await_outside_async` | error | `await` was used outside an `async` function (`async name(...)`) |
 | `async.await_non_future` | error | `await` was used on a value that is not `future[T]` |
 
 ### `backend`

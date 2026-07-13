@@ -1,12 +1,13 @@
 # Errors, Null, Void — mapa mental Ori
 
-> Guia pedagógico. Normativo: caps. [04-expressions](../spec/04-expressions.md) e [09-types](../spec/09-types.md).
+> Guia pedagógico (superfície **S3 / `0.3.0`**).  
+> Normativo: [09-errors](../spec/09-errors.md), [04-types](../spec/04-types.md), [01-overview](../spec/01-overview.md).
 
 ## Quatro conceitos, quatro papéis
 
 | Conceito | Papel | Quando usar |
 |----------|--------|-------------|
-| **`void`** | “Nada útil retornado” | Tipo de retorno de `func main() -> void`, side effects only |
+| **`void`** | “Nada útil retornado” | Tipo de retorno de `main() -> void`, side effects only |
 | **`optional[T]`** | “Pode não haver valor” | Parsing, lookup, EOF — ausência **não** é erro |
 | **`result[T, E]`** | “Sucesso ou falha explícita” | I/O, validação, APIs que podem falhar com motivo |
 | **`check`** | Pré-condição / contrato | Invariantes em runtime (`check cond, "msg"`) |
@@ -31,14 +32,14 @@ find_user(id: int) -> optional[string]
     if id == 0
         return none
     end
-    return success("alice")
+    return some("alice")
 end
 ```
 
 - `none` = ausência esperada.
-- `if some x in expr` desempacota com segurança.
-- `try valor` em `optional` propaga `none` (ver cap. 09).
-- `valor?` existe como forma compacta de `try valor`.
+- `if some(x) = expr` / `match` desempacota com segurança.
+- **`try expr`** em `optional` propaga `none` (ver cap. 09). Postfix `expr?` foi
+  **removido** no S3 (`parse.question_propagate_removed`).
 
 ## `result[T, E]`
 
@@ -49,8 +50,8 @@ end
 ```
 
 - `success(value)` ou `error(reason)`.
-- Trate com `match`, `try`, `?`, ou Layer 2 helpers (`parse_int_or`, `get_or`).
-- Preferir `result` a `bool` para operações que falham (migração FS em andamento — ver `PENDENTES.md`).
+- Trate com `match`, **`try expr`**, ou helpers Layer 2 (`parse_int_or`, `get_or`).
+- Preferir `result` a `bool` para operações que falham.
 
 ## `check`
 
