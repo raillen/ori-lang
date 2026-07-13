@@ -22,18 +22,18 @@ main()
     
     -- Decoding back to string
     match combined.decode_utf8()
-        case success(s):
+        case ok(s):
             io.print(f"Decoded: {s}")
-        case error(e):
+        case err(e):
             io.print(f"Decode Error: {e}")
     end
 
     -- Slicing
     const sub: bytes = combined.slice(0, 3)
     match sub.decode_utf8()
-        case success(s):
+        case ok(s):
             io.print(f"Sliced (0-3): {s}")
-        case error(_):
+        case err(_):
             io.print("Slice error")
     end
 end

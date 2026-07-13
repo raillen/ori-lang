@@ -151,7 +151,7 @@ native_static_libs() {
     fi
 
     set +e
-    output=$(cd "$repo_root" && cargo rustc -p ori-runtime --lib --target "$target" $profile_args -- --print native-static-libs 2>&1)
+    output=$(cd "$repo_root/compiler" && cargo rustc -p ori-runtime --lib --target "$target" $profile_args -- --print native-static-libs 2>&1)
     status=$?
     set -e
     if [ "$status" -eq 0 ]; then
@@ -206,7 +206,7 @@ if [ "$profile" = "release" ]; then
 fi
 
 if [ "$skip_build" -eq 0 ]; then
-    (cd "$repo_root" && cargo build -p ori-runtime --lib --target "$target" $profile_args)
+    (cd "$repo_root/compiler" && cargo build -p ori-runtime --lib --target "$target" $profile_args)
 fi
 
 target_root="${CARGO_TARGET_DIR:-$repo_root/target}"

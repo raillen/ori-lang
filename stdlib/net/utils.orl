@@ -14,17 +14,17 @@ end
 
 public read_text(conn: net.Connection, max_bytes: int) -> result[string, string]
     match net.read_some(conn, max_bytes)
-        case success(payload):
+        case ok(payload):
             match str.from_bytes(payload)
-                case success(text):
-                    return success(text)
-                case error(msg):
-                    return error(msg)
+                case ok(text):
+                    return ok(text)
+                case err(msg):
+                    return err(msg)
             end
-        case error(msg):
-            return error(msg)
+        case err(msg):
+            return err(msg)
     end
-    return error("read failed")
+    return err("read failed")
 end
 
 public write_text(conn: net.Connection, text: string) -> result[void, string]

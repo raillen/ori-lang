@@ -16,20 +16,20 @@ end
 
 public read_text(input: ori.io.Input, max_chars: int) -> result[optional[string], string]
     match ori.io.read(input, max_chars)
-        case success(payload):
+        case ok(payload):
             if some(raw) = payload
                 match str.from_bytes(raw)
-                    case success(text):
-                        return success(some(text))
-                    case error(msg):
-                        return error(msg)
+                    case ok(text):
+                        return ok(some(text))
+                    case err(msg):
+                        return err(msg)
                 end
             end
-            return success(none)
-        case error(msg):
-            return error(msg)
+            return ok(none)
+        case err(msg):
+            return err(msg)
     end
-    return error("read failed")
+    return err("read failed")
 end
 
 public write_bytes(output: ori.io.Output, data: bytes) -> result[int, string]

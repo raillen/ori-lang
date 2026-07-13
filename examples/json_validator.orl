@@ -7,9 +7,9 @@ import ori.log = log
 
 is_valid_json(text: string) -> bool
     match json.parse(text)
-        case success(_):
+        case ok(_):
             return true
-        case error(_):
+        case err(_):
             return false
     end
     return false

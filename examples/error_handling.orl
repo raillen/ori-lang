@@ -4,9 +4,9 @@ import ori.io = io
 
 divide(a: int, b: int) -> result[int, string]
     if b == 0
-        return error("Division by zero")
+        return err("Division by zero")
     end
-    return success(a / b)
+    return ok(a / b)
 end
 
 calculate(numerator: int, denominator: int) -> result[int, string]
@@ -16,7 +16,7 @@ calculate(numerator: int, denominator: int) -> result[int, string]
     const val: int = try divide(numerator, denominator)
     
     -- If we get here, the division succeeded
-    return success(val * 2)
+    return ok(val * 2)
 end
 
 main()
@@ -25,9 +25,9 @@ main()
 
     -- Test case 1: Success
     match calculate(10, 2)
-        case success(val):
+        case ok(val):
             io.print(f"Success! Doubled result: {val}")
-        case error(msg):
+        case err(msg):
             io.print(f"Error occurred: {msg}")
     end
     
@@ -35,9 +35,9 @@ main()
 
     -- Test case 2: Failure
     match calculate(10, 0)
-        case success(val):
+        case ok(val):
             io.print(f"Success! Doubled result: {val}")
-        case error(msg):
+        case err(msg):
             io.print(f"Error occurred: {msg}")
     end
 end

@@ -29,22 +29,42 @@ impl<'src> Parser<'src> {
                 Some(Pattern::Some(Box::new(inner), span.cover(end)))
             }
 
-            // `success(pat)`
-            TokenKind::Success => {
+            // `ok(pat)` — result success pattern
+            TokenKind::OkKw => {
                 self.advance();
                 self.expect(&TokenKind::LParen)?;
                 let inner = self.parse_pattern()?;
                 let end = self.expect(&TokenKind::RParen)?;
-                Some(Pattern::Success(Box::new(inner), span.cover(end)))
+                Some(Pattern::Ok(Box::new(inner), span.cover(end)))
             }
 
-            // `error(pat)`
-            TokenKind::ErrorKw => {
+            // `err(pat)` — result failure pattern
+            TokenKind::ErrKw => {
                 self.advance();
                 self.expect(&TokenKind::LParen)?;
                 let inner = self.parse_pattern()?;
                 let end = self.expect(&TokenKind::RParen)?;
-                Some(Pattern::Error(Box::new(inner), span.cover(end)))
+                Some(Pattern::Err(Box::new(inner), span.cover(end)))
+            }
+
+            // Removed: `success(...)` / `error(...)` patterns
+            TokenKind::SuccessRemoved | TokenKind::ErrorRemoved => {
+                let removed = self.advance().unwrap();
+                let old = self.slice(removed.span);
+                let new = if old == "success" { "ok" } else { "err" };
+                self.error(
+                    "parse.result_ctor_renamed",
+                    format!("`{old}` was renamed to `{new}`; write `case {new}(...)`"),
+                    removed.span,
+                );
+                self.expect(&TokenKind::LParen)?;
+                let inner = self.parse_pattern()?;
+                let end = self.expect(&TokenKind::RParen)?;
+                if new == "ok" {
+                    Some(Pattern::Ok(Box::new(inner), span.cover(end)))
+                } else {
+                    Some(Pattern::Err(Box::new(inner), span.cover(end)))
+                }
             }
 
             // `tuple(pat, pat, ...)`

@@ -163,8 +163,8 @@ impl<'a> Checker<'a> {
                         continue;
                     };
                     match pattern {
-                        Pattern::Success(_, _) => seen_success = true,
-                        Pattern::Error(_, _) => seen_error = true,
+                        Pattern::Ok(_, _) => seen_success = true,
+                        Pattern::Err(_, _) => seen_error = true,
                         _ => {}
                     }
                 }
@@ -298,10 +298,10 @@ impl<'a> Checker<'a> {
                 .match_duplicate_key(inner, true)
                 .map(|key| format!("some({key})")),
             Pattern::None(_) => Some("none".to_string()),
-            Pattern::Success(inner, _) => self
+            Pattern::Ok(inner, _) => self
                 .match_duplicate_key(inner, true)
                 .map(|key| format!("success({key})")),
-            Pattern::Error(inner, _) => self
+            Pattern::Err(inner, _) => self
                 .match_duplicate_key(inner, true)
                 .map(|key| format!("error({key})")),
             Pattern::Tuple(patterns, _) => {

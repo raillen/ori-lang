@@ -357,8 +357,10 @@ impl<'src> Parser<'src> {
                     | TokenKind::False
                     | TokenKind::None
                     | TokenKind::Some
-                    | TokenKind::Success
-                    | TokenKind::ErrorKw
+                    | TokenKind::OkKw
+                    | TokenKind::ErrKw
+                    | TokenKind::SuccessRemoved
+                    | TokenKind::ErrorRemoved
                     | TokenKind::SelfKw
                     | TokenKind::LParen
                     | TokenKind::LBracket
@@ -416,13 +418,29 @@ impl<'src> Parser<'src> {
                 Some(Expr::None(span))
             }
 
-            // Builtin wrappers: some(x), success(x), error(x)
-            TokenKind::Some | TokenKind::Success | TokenKind::ErrorKw => {
+            // Builtin wrappers: some(x), ok(x), err(x)
+            TokenKind::Some | TokenKind::OkKw | TokenKind::ErrKw => {
                 let tok = self.advance().unwrap();
                 let name = ori_ast::common::Name::new(
                     smol_str::SmolStr::new(self.slice(tok.span)),
                     tok.span,
                 );
+                Some(Expr::QualifiedIdent(
+                    ori_ast::common::QualifiedName::single(name),
+                ))
+            }
+
+            // Removed: success(...) / error(...) — recover as ok/err names after error
+            TokenKind::SuccessRemoved | TokenKind::ErrorRemoved => {
+                let tok = self.advance().unwrap();
+                let old = self.slice(tok.span);
+                let new = if old == "success" { "ok" } else { "err" };
+                self.error(
+                    "parse.result_ctor_renamed",
+                    format!("`{old}` was renamed to `{new}`; write `{new}(...)`"),
+                    tok.span,
+                );
+                let name = ori_ast::common::Name::new(smol_str::SmolStr::new(new), tok.span);
                 Some(Expr::QualifiedIdent(
                     ori_ast::common::QualifiedName::single(name),
                 ))

@@ -1,20 +1,16 @@
--- Ori project file
--- This file defines the project structure and dependencies.
+-- Monorepo language checkout is not a typical user app.
+-- Entry points for smoke live under examples/ as mini-projects.
 
-name = "my-project"
-version = "0.1.0"
 manifest = 1
+name = "ori-lang"
+version = "0.3.1"
 kind = "app"
-entry = "examples/hello_world.orl"
+entry = "examples/hello/main.orl"
 
 [source]
-root = "examples"
 root_namespace = "app"
 
 [docs]
-paths = ["docs/api"]
+paths = ["docs"]
 mode = "sidecar-first"
 require_public = "off"
-
-[dependencies]
--- ori add <package> to add dependencies

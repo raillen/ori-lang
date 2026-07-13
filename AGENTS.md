@@ -37,7 +37,8 @@ Precedência: **este `AGENTS.md` > skills globais > defaults**.
 
 ```
 ori-lang/
-├── compiler/crates/           # Rust compiler (Cargo workspace)
+├── compiler/                  # Rust compiler Cargo workspace
+│   └── crates/                #   ori-* crates
 │   ├── ori-lexer/             #   Lexer + tokenizer (logos-based)
 │   ├── ori-ast/               #   AST definitions (all nodes)
 │   ├── ori-parser/            #   Parser (recursive descent)
@@ -93,6 +94,9 @@ ori-lang/
 ## Build & Test Commands
 
 ```bash
+# Compiler workspace lives under compiler/ (M2.layout)
+cd compiler
+
 # Check entire workspace
 cargo check --workspace
 
@@ -104,15 +108,15 @@ cargo test -p ori-driver --test ori_spec
 
 # Build runtime (for native backend staging)
 cargo build -p ori-runtime --lib
-cp target/debug/libori_runtime.a runtime/x86_64-unknown-linux-gnu/
+cp target/debug/libori_runtime.a ../runtime/x86_64-unknown-linux-gnu/
 
 # Run diagnostic catalog consistency test
 cargo test -p ori-driver --test diagnostic_catalog
 
-# Ori CLI (from workspace root)
-cargo run -p ori-driver -- check <file.orl>
-cargo run -p ori-driver -- compile <file.orl>
-cargo run -p ori-driver -- run <file.orl>
+# Ori CLI
+cargo run -p ori-driver -- check ../examples/hello
+cargo run -p ori-driver -- compile ../examples/hello
+cargo run -p ori-driver -- run ../examples/hello
 ```
 
 ## Environment Variables

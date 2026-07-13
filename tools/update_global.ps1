@@ -11,14 +11,14 @@ if (-not (Test-Path $stdlibDir)) { New-Item -ItemType Directory -Force -Path $st
 if (-not (Test-Path $runtimeDir)) { New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null }
 
 Write-Host "Building ori-driver (release)..."
-cargo build -p ori-driver --release
+cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") build -p ori-driver --release
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to build ori-driver."
     exit 1
 }
 
 Write-Host "Building ori-runtime (release)..."
-cargo build -p ori-runtime --release --lib
+cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") build -p ori-runtime --release --lib
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to build ori-runtime."
     exit 1

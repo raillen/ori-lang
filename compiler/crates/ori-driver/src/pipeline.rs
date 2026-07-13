@@ -1239,9 +1239,9 @@ pub fn run_new_project(
         std::fs::create_dir_all(root)
             .map_err(|e| format!("cannot create project `{}`: {e}", root.display()))?;
     } else {
-        if root.join("ori.pkg.toml").exists() {
+        if root.join("ori.proj").exists() || root.join("ori.pkg.toml").exists() {
             return Err(format!(
-                "project.init_exists: `{}` already contains an ori.pkg.toml",
+                "project.init_exists: `{}` already contains an ori.proj or ori.pkg.toml",
                 root.display()
             ));
         }
@@ -1249,39 +1249,37 @@ pub fn run_new_project(
             .map_err(|e| format!("cannot create project `{}`: {e}", root.display()))?;
     }
 
-    std::fs::create_dir_all(root.join("src"))
-        .map_err(|e| format!("cannot create `{}`: {e}", root.join("src").display()))?;
-    std::fs::create_dir_all(root.join("lib"))
-        .map_err(|e| format!("cannot create `{}`: {e}", root.join("lib").display()))?;
-    std::fs::create_dir_all(root.join("bin"))
-        .map_err(|e| format!("cannot create `{}`: {e}", root.join("bin").display()))?;
-    std::fs::create_dir_all(root.join("docs/api"))
-        .map_err(|e| format!("cannot create `{}`: {e}", root.join("docs/api").display()))?;
+    // Optional docs tree for sidecars (`docs/<domain>/file.oridoc`). Domains
+    // under the project root (`kanban-app/`, …) are user-created, not scaffolded.
+    std::fs::create_dir_all(root.join("docs"))
+        .map_err(|e| format!("cannot create `{}`: {e}", root.join("docs").display()))?;
 
     let name = options
         .name
         .filter(|name| !name.trim().is_empty())
         .unwrap_or_else(|| default_project_name(root));
-    let (_, entry_rel, source) = match options.kind {
+    let (kind_label, entry_rel, source) = match options.kind {
+        // Layout (M2.layout): only `ori.proj` is required; `main.orl` at project
+        // root is the recommended default entry. No forced `src/` / `app/`.
         NewProjectKind::App => (
             "app",
-            "src/main.orl",
+            "main.orl",
             "module app.main\n\nimport ori.io = io\n\nmain()\n    io.println(\"Hello, Ori!\")\nend\n",
         ),
         NewProjectKind::Lib => (
             "lib",
-            "src/lib.orl",
+            "lib.orl",
             "module app.lib\n\npublic answer() -> int\n    return 42\nend\n",
         ),
     };
 
-    let manifest = root.join("ori.pkg.toml");
+    let manifest = root.join("ori.proj");
     let entry = root.join(entry_rel);
     let manifest_source = format!(
-        "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nentry = \"{}\"\nori_version = \"{}\"\n\n[build]\n# native_libs = []\n",
+        "manifest = 1\nname = \"{}\"\nversion = \"0.1.0\"\nkind = \"{}\"\nentry = \"{}\"\n\n[source]\nroot_namespace = \"app\"\n\n[docs]\npaths = [\"docs\"]\nmode = \"sidecar-first\"\nrequire_public = \"off\"\n",
         escape_manifest_string(&name),
+        kind_label,
         escape_manifest_string(entry_rel),
-        ORI_VERSION,
     );
 
     std::fs::write(&manifest, manifest_source)

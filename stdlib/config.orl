@@ -9,9 +9,9 @@ end
 
 public read_text_or(path: string, fallback: string) -> string
     match fs.read_text(path)
-        case success(text):
+        case ok(text):
             return text
-        case error(_):
+        case err(_):
             return fallback
     end
     return fallback
@@ -23,12 +23,12 @@ end
 
 public read_json(path: string) -> result[json.Value, string]
     match fs.read_text(path)
-        case success(text):
+        case ok(text):
             return json.parse(text)
-        case error(message):
-            return error(message)
+        case err(message):
+            return err(message)
     end
-    return error("failed to read config")
+    return err("failed to read config")
 end
 
 public write_json(path: string, value: json.Value) -> result[string, string]

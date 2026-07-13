@@ -104,7 +104,7 @@ trap cleanup EXIT
 
 if [ "$skip_cargo_build" -eq 0 ]; then
     run_checked "cargo build -p ori-driver -p ori-lsp" \
-        sh -c "cd '$repo_root' && cargo build -p ori-driver -p ori-lsp"
+        sh -c "cd '$repo_root/compiler' && cargo build -p ori-driver -p ori-lsp"
 fi
 
 if [ ! -f "$ori_exe" ]; then
@@ -127,7 +127,7 @@ assert_json_file "$extension_root/syntaxes/ori.tmLanguage.json"
 
 if [ "$skip_lsp_e2e" -eq 0 ]; then
     run_checked "cargo test -p ori-lsp --test e2e" \
-        sh -c "cd '$repo_root' && cargo test -p ori-lsp --test e2e"
+        sh -c "cd '$repo_root/compiler' && cargo test -p ori-lsp --test e2e"
 fi
 
 rm -rf "$workspace_root"

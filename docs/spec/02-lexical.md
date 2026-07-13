@@ -11,7 +11,7 @@
 Ori source files are UTF-8 encoded. The `.orl` extension is canonical.
 
 A byte order mark (BOM) at the start of a file is accepted and ignored.
-A BOM anywhere else is a lexical error (`lex.unexpected_character`).
+A BOM anywhere else is a lexical err(`lex.unexpected_character`).
 
 ---
 
@@ -47,7 +47,7 @@ It spans multiple lines.
 `--|` opens a block comment. `|--` closes it. Block comments do not nest.
 The tokens `--|` and `|--` are mirrored by design — they cannot appear inside
 normal code because `|--` is not valid syntax anywhere else.
-An unclosed block comment is a lexical error (`lex.unclosed_block_comment`).
+An unclosed block comment is a lexical err(`lex.unclosed_block_comment`).
 
 ### Documentation Comments
 
@@ -102,7 +102,7 @@ while      for        in         repeat     break     continue
 match      case       loop
 struct     trait      apply      use        enum
 alias      and        or         not
-true       false      none       success    error     some
+true       false      none       ok         err       some
 mut        self       attr       extern
 any        optional   result     list       map       set
 range      void

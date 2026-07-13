@@ -2,9 +2,9 @@ module ori.fs
 
 public read_text_or(path: string, fallback: string) -> string
     match ori.fs.read_text(path)
-        case success(text):
+        case ok(text):
             return text
-        case error(_):
+        case err(_):
             return fallback
     end
     return fallback

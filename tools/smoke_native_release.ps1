@@ -81,7 +81,7 @@ $stdlibDir = Join-Path $packageRootPath "stdlib"
 Push-Location $repoRoot
 try {
     if (-not $SkipBuild) {
-        Invoke-Checked { cargo build -p ori-driver -p ori-lsp --release } "cargo build -p ori-driver -p ori-lsp --release"
+        Invoke-Checked { cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") build -p ori-driver -p ori-lsp --release } "cargo build -p ori-driver -p ori-lsp --release"
     }
 
     if (-not (Test-Path -LiteralPath $sourceOri -PathType Leaf)) {

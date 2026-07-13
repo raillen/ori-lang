@@ -134,10 +134,16 @@ pub enum TokenKind {
     False,
     #[token("none")]
     None,
+    #[token("ok")]
+    OkKw,
+    #[token("err")]
+    ErrKw,
+    /// Removed result ctor (`success`); emits `parse.result_ctor_renamed`.
     #[token("success")]
-    Success,
+    SuccessRemoved,
+    /// Removed result ctor (`error`); emits `parse.result_ctor_renamed`.
     #[token("error")]
-    ErrorKw,
+    ErrorRemoved,
     #[token("some")]
     Some,
     #[token("mut")]
@@ -386,8 +392,10 @@ impl TokenKind {
             TokenKind::True => "`true`",
             TokenKind::False => "`false`",
             TokenKind::None => "`none`",
-            TokenKind::Success => "`success`",
-            TokenKind::ErrorKw => "`error`",
+            TokenKind::OkKw => "`ok`",
+            TokenKind::ErrKw => "`err`",
+            TokenKind::SuccessRemoved => "`success`",
+            TokenKind::ErrorRemoved => "`error`",
             TokenKind::Some => "`some`",
             TokenKind::Mut => "`mut`",
             TokenKind::SelfKw => "`self`",

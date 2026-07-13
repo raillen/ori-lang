@@ -35,11 +35,11 @@ pub enum Pattern {
     /// `none` — optional absence.
     None(Span),
 
-    /// `success(inner)` — result success.
-    Success(Box<Pattern>, Span),
+    /// `ok(inner)` — result success.
+    Ok(Box<Pattern>, Span),
 
-    /// `error(inner)` — result failure.
-    Error(Box<Pattern>, Span),
+    /// `err(inner)` — result failure.
+    Err(Box<Pattern>, Span),
 
     /// `tuple(a, b, c)` — tuple destructuring.
     Tuple(Vec<Pattern>, Span),
@@ -52,7 +52,7 @@ impl Pattern {
             Pattern::Literal(e) => e.span(),
             Pattern::Binding(n) => n.span,
             Pattern::VariantUnit { span, .. } | Pattern::VariantNamed { span, .. } => *span,
-            Pattern::Some(_, s) | Pattern::Success(_, s) | Pattern::Error(_, s) => *s,
+            Pattern::Some(_, s) | Pattern::Ok(_, s) | Pattern::Err(_, s) => *s,
             Pattern::Tuple(_, s) => *s,
         }
     }

@@ -1322,27 +1322,27 @@ main()
             io.print("float:none")
     end
     match str.parse_int("42")
-        case success(n):
+        case ok(n):
             io.print(string(n + 1))
-        case error(message):
+        case err(message):
             io.print(message)
     end
     match str.parse_int("not a number")
-        case success(n):
+        case ok(n):
             io.print(string(n))
-        case error(message):
+        case err(message):
             io.print(message)
     end
     match str.parse_float("6.25")
-        case success(f):
+        case ok(f):
             io.print(conv.float_to_string(f))
-        case error(message):
+        case err(message):
             io.print(message)
     end
     match str.parse_float("not a number")
-        case success(f):
+        case ok(f):
             io.print(conv.float_to_string(f))
-        case error(message):
+        case err(message):
             io.print(message)
     end
 end
@@ -1846,7 +1846,7 @@ maybe() -> optional[int]
 end
 
 parse() -> result[int, string]
-    return success(1)
+    return ok(1)
 end
 
 main()
@@ -1892,9 +1892,9 @@ end
 
 parse(flag: bool) -> result[int, string]
     if flag
-        return success(9)
+        return ok(9)
     end
-    return error("bad")
+    return err("bad")
 end
 
 unexpected() -> int
@@ -1931,9 +1931,9 @@ end
 
 parse(flag: bool) -> result[int, string]
     if flag
-        return success(2)
+        return ok(2)
     end
-    return error("bad")
+    return err("bad")
 end
 
 main()
@@ -1961,9 +1961,9 @@ import ori.io = io
 
 parse(flag: bool) -> result[int, string]
     if flag
-        return success(7)
+        return ok(7)
     end
-    return error("bad")
+    return err("bad")
 end
 
 wrapped(flag: bool) -> result[int, string]
@@ -1972,16 +1972,16 @@ end
 
 main()
     match wrapped(true)
-    case success(value):
+    case ok(value):
         io.print(string(value))
-    case error(message):
+    case err(message):
         io.print(message)
     end
 
     match wrapped(false)
-    case success(value):
+    case ok(value):
         io.print(string(value))
-    case error(message):
+    case err(message):
         io.print(message)
     end
 end
@@ -2001,9 +2001,9 @@ fn build_c_backend_result_or_wrap_helper() {
 
 parse(flag: bool) -> result[int, string]
     if flag
-        return success(1)
+        return ok(1)
     end
-    return error("bad")
+    return err("bad")
 end
 
 main()
@@ -3206,11 +3206,11 @@ fn compile_runs_optional_result_inequality_native() {
 import ori.io = io
 
 fail_a() -> result[int, string]
-    return error("a")
+    return err("a")
 end
 
 fail_b() -> result[int, string]
-    return error("b")
+    return err("b")
 end
 
 main()
@@ -3222,8 +3222,8 @@ main()
     io.print(string(maybe_one != missing))
     io.print(string(missing != none))
 
-    const ok_one: result[int, string] = success(1)
-    const ok_two: result[int, string] = success(2)
+    const ok_one: result[int, string] = ok(1)
+    const ok_two: result[int, string] = ok(2)
     const err_a: result[int, string] = fail_a()
     const err_b: result[int, string] = fail_b()
 
@@ -3790,13 +3790,13 @@ use_return() -> int
 end
 
 fail() -> result[int, string]
-    return error("fail")
+    return err("fail")
 end
 
 use_propagate() -> result[int, string]
     using fourth: Resource = Resource { id: 4 }
     const value: int = try fail()
-    return success(value)
+    return ok(value)
 end
 
 use_break()
@@ -3827,9 +3827,9 @@ main()
     io.print(string(disposed))
 
     match use_propagate()
-    case success(ok):
+    case ok(ok):
         io.print(string(ok))
-    case error(message):
+    case err(message):
         io.print(message)
     end
     io.print(string(disposed))
@@ -3965,28 +3965,28 @@ import ori.io = io
 
 parse(flag: bool) -> result[int, string]
     if flag
-        return success(7)
+        return ok(7)
     end
-    return error("no value")
+    return err("no value")
 end
 
 add_one(flag: bool) -> result[int, string]
     const value: int = try parse(flag)
-    return success(value + 1)
+    return ok(value + 1)
 end
 
 main()
     match add_one(true)
-    case success(value):
+    case ok(value):
         io.print(string(value))
-    case error(message):
+    case err(message):
         io.print(message)
     end
 
     match add_one(false)
-    case success(value):
+    case ok(value):
         io.print(string(value))
-    case error(message):
+    case err(message):
         io.print(message)
     end
 end
@@ -4266,9 +4266,9 @@ fn build_c_backend_compiles_propagation() {
 
 parse(flag: bool) -> result[int, string]
     if flag
-        return success(7)
+        return ok(7)
     end
-    return error("no value")
+    return err("no value")
 end
 
 maybe(flag: bool) -> optional[int]
@@ -4280,7 +4280,7 @@ end
 
 add_one(flag: bool) -> result[int, string]
     const value: int = try parse(flag)
-    return success(value + 1)
+    return ok(value + 1)
 end
 
 unwrap_optional(flag: bool) -> optional[int]
@@ -4675,7 +4675,7 @@ fn check_warns_when_result_expression_is_discarded() {
         r#"module app.main
 
 fail() -> result[int, string]
-    return error("fail")
+    return err("fail")
 end
 
 main()
@@ -5231,7 +5231,7 @@ main()
     const xs: list[int] = [1, 2]
     const m: map[string, int] = {"a": 1}
     const o: optional[int] = some(1)
-    const r: result[int, string] = success(1)
+    const r: result[int, string] = ok(1)
     const u: User = User { name: "Ada" }
     const s: string = show(u)
     const id: int = identity(42)
@@ -5257,12 +5257,12 @@ fn check_reports_question_propagate_removed() {
         r#"module app.main
 
 produce() -> result[int, string]
-    return success(1)
+    return ok(1)
 end
 
 wrapped() -> result[int, string]
     const x: int = produce()?
-    return success(x)
+    return ok(x)
 end
 
 main()
@@ -6415,18 +6415,18 @@ import ori.json = json
 main()
     const parsed: result[json.Value, string] = json.parse("{\"name\":\"ori\",\"ok\":true}")
     match parsed
-    case success(value):
+    case ok(value):
         io.print(json.stringify(value))
         io.print(json.stringify_pretty(value))
-    case error(message):
+    case err(message):
         io.print(message)
     end
 
     const invalid: result[json.Value, string] = json.parse("{")
     match invalid
-    case success(value):
+    case ok(value):
         io.print(json.stringify(value))
-    case error(message):
+    case err(message):
         io.print("invalid")
     end
 end
@@ -7525,9 +7525,9 @@ end
 
 parse(flag: bool) -> result[int, string]
     if flag
-        return success(11)
+        return ok(11)
     end
-    return error("no value")
+    return err("no value")
 end
 
 main()
@@ -7543,9 +7543,9 @@ main()
     end
 
     match parse(false)
-    case success(value):
+    case ok(value):
         const ok: int = value
-    case error(message):
+    case err(message):
         const err: string = message
     end
 end
@@ -8353,14 +8353,14 @@ end
 }
 
 #[test]
-fn check_reports_success_void_mismatch() {
-    let dir = TestDir::new("success_void_mismatch");
+fn check_reports_ok_void_mismatch() {
+    let dir = TestDir::new("ok_void_mismatch");
     dir.write(
         "main.orl",
         r#"module app.main
 
 make() -> result[int, string]
-    return success()
+    return ok()
 end
 "#,
     );
@@ -8368,7 +8368,7 @@ end
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors, "{:?}", out.diagnostics);
     assert!(
-        diagnostic_codes(&out).contains(&"contract.success_void_mismatch"),
+        diagnostic_codes(&out).contains(&"contract.ok_void_mismatch"),
         "{:?}",
         out.diagnostics
     );
@@ -8560,57 +8560,57 @@ main()
     const bytes_output_path: string = "{bytes_output}"
 
     match fs.read_text(input_path)
-        case success(text):
+        case ok(text):
             io.print(text)
-        case error(e):
+        case err(e):
             io.print("read failed: " + e)
     end
 
     match fs.exists(input_path)
-        case success(exists):
+        case ok(exists):
             io.print(if exists then "exists" else "missing")
-        case error(_):
+        case err(_):
             io.print("missing")
     end
 
     match files.exists(input_path)
-        case success(exists):
+        case ok(exists):
             io.print(if exists then "compat" else "no compat")
-        case error(_):
+        case err(_):
             io.print("no compat")
     end
 
     match fs.read_text(output_path)
-        case success(_):
+        case ok(_):
             io.print("unexpected")
-        case error(_):
+        case err(_):
             io.print("missing ok")
     end
 
     match fs.write_text(output_path, "new fs")
-        case success(_):
+        case ok(_):
             io.print("wrote")
-        case error(e):
+        case err(e):
             io.print("write failed: " + e)
     end
 
     match fs.read_all(input_path)
-        case success(text):
+        case ok(text):
             io.print(text + " all")
-        case error(e):
+        case err(e):
             io.print("read_all failed: " + e)
     end
 
     match fs.read_bytes(input_path)
-        case success(raw):
+        case ok(raw):
             io.print(string(bytes_mod.len(raw)))
             match fs.write_bytes(bytes_output_path, raw)
-                case success(_):
+                case ok(_):
                     io.print("bytes wrote")
-                case error(e):
+                case err(e):
                     io.print("bytes write failed: " + e)
             end
-        case error(e):
+        case err(e):
             io.print("bytes read failed: " + e)
     end
 end
@@ -8657,16 +8657,16 @@ import ori.io = io
 
 main()
     match fs.read_bytes("{input}")
-        case success(raw):
+        case ok(raw):
             io.print("len=" + string(raw.len()))
             io.print(raw.to_hex())
             match fs.write_bytes("{output}", raw)
-                case success(_):
+                case ok(_):
                     io.print("wrote")
-                case error(e):
+                case err(e):
                     io.print("write_error=" + e)
             end
-        case error(e):
+        case err(e):
             io.print("read_error=" + e)
     end
 end
@@ -8703,9 +8703,9 @@ main()
 
     const raw: bytes = b"\x68\x69\x21"
     match raw.decode_utf8()
-        case success(text):
+        case ok(text):
             io.print(text)
-        case error(e):
+        case err(e):
             io.print(e)
     end
 
@@ -8956,14 +8956,14 @@ end
 
 make_resource(id: int) -> result[Resource, AppError]
     if id > 0
-        return success(Resource {id: id, name: "item-" + string(id)})
+        return ok(Resource {id: id, name: "item-" + string(id)})
     end
-    return error(AppError.Validation(message: "bad id"))
+    return err(AppError.Validation(message: "bad id"))
 end
 
 load() -> result[Resource, AppError]
     const resource: Resource = try make_resource(util.seed())
-    return success(resource)
+    return ok(resource)
 end
 
 describe for T: Named (item: T) -> string
@@ -8972,7 +8972,7 @@ end
 
 main()
     match load()
-    case success(resource):
+    case ok(resource):
         using cleanup: Resource = resource
         io.print(describe(resource))
         io.print(resource.kind())
@@ -8995,7 +8995,7 @@ main()
         case else:
             io.print("low")
         end
-    case error(err):
+    case err(err):
         match err
         case Validation(message):
             io.print(message)
@@ -9217,9 +9217,9 @@ main()
     io.print("Combined: " + string(combined.len()))
 
     match combined.decode_utf8()
-        case success(s):
+        case ok(s):
             io.print("Decoded: " + s)
-        case error(e):
+        case err(e):
             io.print("Failed: " + e)
     end
 
@@ -9227,36 +9227,36 @@ main()
     io.print("Hex: " + hex)
 
     match hex.from_hex()
-        case success(b):
+        case ok(b):
             match b.decode_utf8()
-                case success(s):
+                case ok(s):
                     io.print("FromHex: " + s)
-                case error(_):
+                case err(_):
                     io.print("Err1")
             end
-        case error(e):
+        case err(e):
             io.print("Err2: " + e)
     end
 
     match str.from_bytes(b1)
-        case success(s):
+        case ok(s):
             io.print("FromBytes: " + s)
-        case error(_):
+        case err(_):
             io.print("ErrBytes")
     end
 
     match "abc".from_hex()
-        case success(_):
+        case ok(_):
             io.print("BadHex")
-        case error(_):
+        case err(_):
             io.print("HexErr")
     end
 
     const sliced: bytes = combined.slice(0, 5)
     match sliced.decode_utf8()
-        case success(s):
+        case ok(s):
             io.print("Sliced: " + s)
-        case error(_):
+        case err(_):
             io.print("Err3")
     end
 
@@ -9297,24 +9297,24 @@ main()
     io.print(raw.to_hex())
 
     match raw.decode_utf8()
-        case success(_):
+        case ok(_):
             io.print("decode_unexpected")
-        case error(_):
+        case err(_):
             io.print("decode_nul_error")
     end
 
     match str.from_bytes(raw)
-        case success(_):
+        case ok(_):
             io.print("from_bytes_unexpected")
-        case error(_):
+        case err(_):
             io.print("from_bytes_nul_error")
     end
 
     match "410042".from_hex()
-        case success(decoded):
+        case ok(decoded):
             io.print("decoded_len=" + string(decoded.len()))
             io.print(decoded.to_hex())
-        case error(e):
+        case err(e):
             io.print("error=" + e)
     end
 end
@@ -10436,19 +10436,19 @@ import ori.json.utils = ju
 main()
     const path: string = "{json_path}"
     match json.parse("{{}}")
-        case success(doc):
+        case ok(doc):
             match ju.write(path, doc)
-                case success(_):
+                case ok(_):
                     match ju.read(path)
-                        case success(_):
+                        case ok(_):
                             io.print("true")
-                        case error(_):
+                        case err(_):
                             io.print("false")
                     end
-                case error(_):
+                case err(_):
                     io.print("false")
             end
-        case error(_):
+        case err(_):
             io.print("false")
     end
 end
@@ -10499,20 +10499,20 @@ import ori.io = io
 
 main()
     match fu.create_dir_all("{dir_path}")
-        case success(_):
+        case ok(_):
             match fu.write_text_result("{data_path}", "payload")
-                case success(_):
+                case ok(_):
                     io.print(fu.read_text_or("{data_path}", "missing"))
                     match fu.exists_result("{data_path}")
-                        case success(exists):
+                        case ok(exists):
                             io.print(string(exists))
-                        case error(_):
+                        case err(_):
                             io.print("false")
                     end
-                case error(_):
+                case err(_):
                     io.print("fail")
             end
-        case error(_):
+        case err(_):
             io.print("fail")
     end
 end
@@ -10646,9 +10646,9 @@ import ori.string = string_mod
 
 main()
     match os_mod.current_dir()
-        case success(cwd):
+        case ok(cwd):
             io.print(string(string_mod.len(cwd) > 0))
-        case error(_):
+        case err(_):
             io.print("false")
     end
     const delayed: lazy[int] = lz.once(() => 7)
@@ -10702,16 +10702,16 @@ import ori.string = string_mod
 main()
     var c_flag: string = "c"
     match string_mod.from_bytes(bytes_mod.from_list([47, 99]))
-        case success(flag):
+        case ok(flag):
             c_flag = flag
-        case error(_):
+        case err(_):
             c_flag = "c"
     end
     match proc.run_capture("cmd", [c_flag, "echo", "hi"])
-        case success(capture):
+        case ok(capture):
             io.print(pu.stdout(capture))
             io.print(string(pu.exit_code(capture) == 0))
-        case error(_):
+        case err(_):
             io.print("fail")
     end
 end
@@ -10725,10 +10725,10 @@ import ori.process.utils = pu
 
 main()
     match proc.run_capture("echo", ["hi"])
-        case success(capture):
+        case ok(capture):
             io.print(pu.stdout(capture))
             io.print(string(pu.exit_code(capture) == 0))
-        case error(_):
+        case err(_):
             io.print("fail")
     end
 end
@@ -11116,13 +11116,13 @@ main()
     const out: ori.io.Output = io.stdout()
     const payload: bytes = str.to_bytes("stream\n")
     match write_bytes(out, payload)
-        case success(_):
+        case ok(_):
             match flush(out)
-                case success(_):
+                case ok(_):
                     close_output(out)
-                case error(_):
+                case err(_):
             end
-        case error(_):
+        case err(_):
     end
 end
 "#,
@@ -11155,55 +11155,55 @@ import ori.task = task
 
 serve_once(listener: net.Listener)
     match net.accept(listener)
-        case success(server_conn):
+        case ok(server_conn):
             match net.read_some(server_conn, 64)
-                case success(_):
+                case ok(_):
                     match net.write_all(server_conn, str.to_bytes("pong"))
-                        case success(_):
+                        case ok(_):
                             net.close(server_conn)
-                        case error(_):
+                        case err(_):
                     end
-                case error(_):
+                case err(_):
             end
-        case error(_):
+        case err(_):
     end
     net.close_listener(listener)
 end
 
 main()
     match net.listen("127.0.0.1", 0)
-        case success(listener):
+        case ok(listener):
             const port: int = net.listener_port(listener)
             const server_job: task.Job[void] = task.run_blocking(() -> void
                 serve_once(listener)
             end)
             match net.connect("127.0.0.1", port, 5000)
-                case success(client):
+                case ok(client):
                     match net.write_all(client, str.to_bytes("ping"))
-                        case success(_):
+                        case ok(_):
                             match net.read_some(client, 64)
-                                case success(data):
+                                case ok(data):
                                     match str.from_bytes(data)
-                                        case success(text):
+                                        case ok(text):
                                             io.print(text)
-                                        case error(_):
+                                        case err(_):
                                             io.print("decode_err")
                                     end
-                                case error(_):
+                                case err(_):
                                     io.print("read_err")
                             end
-                        case error(_):
+                        case err(_):
                             io.print("write_err")
                     end
                     net.close(client)
-                case error(_):
+                case err(_):
                     io.print("connect_err")
             end
             match task.join(server_job)
-                case success(_):
-                case error(_):
+                case ok(_):
+                case err(_):
             end
-        case error(_):
+        case err(_):
             io.print("listen_err")
     end
 end
@@ -11227,26 +11227,26 @@ import ori.string = str
 
 main()
     match net.udp_bind("127.0.0.1", 0)
-        case success(sock):
+        case ok(sock):
             const port: int = net.udp_local_port(sock)
             match net.udp_send_to(sock, "127.0.0.1", port, str.to_bytes("udp"))
-                case success(_):
+                case ok(_):
                     match net.udp_recv_from(sock, 64)
-                        case success(data):
+                        case ok(data):
                             match str.from_bytes(data)
-                                case success(text):
+                                case ok(text):
                                     io.print(text)
-                                case error(_):
+                                case err(_):
                                     io.print("decode_err")
                             end
-                        case error(_):
+                        case err(_):
                             io.print("recv_err")
                     end
-                case error(_):
+                case err(_):
                     io.print("send_err")
             end
             net.udp_close(sock)
-        case error(_):
+        case err(_):
             io.print("bind_err")
     end
 end
@@ -11269,9 +11269,9 @@ import ori.net = net
 
 main()
     match net.connect_tls("127.0.0.1", 59999, 500)
-        case success(_):
+        case ok(_):
             io.print("unexpected_success")
-        case error(_):
+        case err(_):
             io.print("tls_err")
     end
 end
@@ -11315,13 +11315,13 @@ main()
     const out: ori.io.Output = io.stdout()
     const payload: bytes = str.to_bytes("utils ok\n")
     match iu.write_bytes(out, payload)
-        case success(_):
+        case ok(_):
             match iu.flush(out)
-                case success(_):
+                case ok(_):
                     iu.close_output(out)
-                case error(_):
+                case err(_):
             end
-        case error(_):
+        case err(_):
     end
 end
 "#,

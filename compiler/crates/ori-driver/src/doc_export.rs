@@ -209,7 +209,7 @@ const KEYWORDS: &[&str] = &[
     // Callable-type keyword only; declarations use bare `name(...)`.
     "func", "struct", "enum", "trait", "const", "var", "public", "async", "if", "else", "then",
     "end", "match", "case", "while", "for", "loop", "break", "continue", "return", "async",
-    "await", "try", "using", "some", "none", "success", "error", "true", "false", "is", "as",
+    "await", "try", "using", "some", "none", "ok", "err", "true", "false", "is", "as",
     "only", "where", "type", "lazy", "spawn", "defer",
 ];
 

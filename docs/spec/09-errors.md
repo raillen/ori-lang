@@ -68,7 +68,7 @@ const name: string = find_name(id).or("Anonymous")
 
 Current status: `.or(fallback)` is accepted for `optional[T]` and
 `result[T, E]` in the checker, native backend, and C backend. The fallback is
-evaluated only when the receiver is `none` or `error(_)`.
+evaluated only when the receiver is `none` or `err(_)`.
 
 **`.or_return()`** — unwrap or propagate from the enclosing function:
 
@@ -105,26 +105,26 @@ fails with error `E`.
 ```ori
 read_config(path: string) -> result[Config, string]
     if path == ""
-        return error("empty path")
+        return err("empty path")
     end
     const raw: string = try ori.fs.read_text(path)
-    return success(try parse_config(raw))
+    return ok(try parse_config(raw))
 end
 ```
 
 Constructors:
-- `success(value)` — the success variant.
-- `error(value)` — the failure variant.
+- `ok(value)` — the success variant.
+- `err(value)` — the failure variant.
 
 ### `try` Propagation on `result[T, E]`
 
 ```ori
 start(path: string) -> result[void, string]
     const config: Config = try read_config(path)
-    -- If error(e): return error(e) from start
-    -- If success(v): bind v to config
+    -- If err(e): return err(e) from start
+    -- If ok(v): bind v to config
     apply_config(config)
-    return success()
+    return ok()
 end
 ```
 
@@ -145,22 +145,22 @@ Adds a context string to an existing error without losing the original:
 const config: Config = try read_config(path).or_wrap("loading configuration")
 ```
 
-If `read_config` returns `error("empty path")`, the result becomes
-`error("loading configuration: empty path")`.
+If `read_config` returns `err("empty path")`, the result becomes
+`err("loading configuration: empty path")`.
 
 Current status: `.or_wrap(...)` is accepted for `result[T, string]` in the
-checker, HIR lowering, native backend, and C backend. It keeps `success(v)`
+checker, HIR lowering, native backend, and C backend. It keeps `ok(v)`
 unchanged and evaluates the context expression only when the receiver is
-`error(_)`. For non-string error types, use explicit conversion or handle the
+`err(_)`. For non-string error types, use explicit conversion or handle the
 error with `match`.
 
 ### Pattern Match on `result[T, E]`
 
 ```ori
 match load_data(path)
-case success(data):
+case ok(data):
     process(data)
-case error(msg):
+case err(msg):
     io.print(f"failed: {msg}")
 end
 ```
@@ -178,7 +178,7 @@ end
 | Type | On success | On failure |
 |---|---|---|
 | `optional[T]` | Unwraps to `T` | Returns `none` from enclosing function |
-| `result[T, E]` | Unwraps to `T` | Returns `error(e)` from enclosing function |
+| `result[T, E]` | Unwraps to `T` | Returns `err(e)` from enclosing function |
 
 **Compatibility rules:**
 
@@ -316,7 +316,7 @@ process(path: string) -> result[Output, string]
     const raw: string = try ori.fs.read_text(path)
     const parsed: Input = try parse(raw)
     const output: Output = try transform(parsed)
-    return success(output)
+    return ok(output)
 end
 ```
 
@@ -327,11 +327,11 @@ run(path: string) -> result[void, AppError]
     -- result[Config, string] is not result[void, AppError].
     -- Explicit conversion is needed today.
     match read_config(path)
-    case success(c):
+    case ok(c):
         apply_config(c)
-        return success()
-    case error(msg):
-        return error(AppError.Parse(ParseError { message: msg }))
+        return ok()
+    case err(msg):
+        return err(AppError.Parse(ParseError { message: msg }))
     end
 end
 ```

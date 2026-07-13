@@ -53,9 +53,9 @@ end
 
 public current_dir_or(fallback: string) -> string
     match os_mod.current_dir()
-        case success(path):
+        case ok(path):
             return path
-        case error(_):
+        case err(_):
             return fallback
     end
     return fallback

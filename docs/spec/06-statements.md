@@ -328,7 +328,7 @@ other forms (see later chapters / S3 block 4).
 ```ori
 using file: ori.fs.File = try ori.fs.open_read(path)
 const content: string = try ori.fs.read_all(file)
-return success(content)
+return ok(content)
 ```
 
 `using` binds a resource and guarantees its cleanup function is called when

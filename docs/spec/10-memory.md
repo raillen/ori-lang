@@ -180,7 +180,7 @@ database connections), use `using`:
 read_file(path: string) -> result[string, string]
     using file: ori.fs.File = try ori.fs.open_read(path)
     const content: string = try ori.fs.read_all(file)
-    return success(content)
+    return ok(content)
 end
 ```
 

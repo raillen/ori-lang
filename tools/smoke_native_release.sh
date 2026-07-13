@@ -96,7 +96,7 @@ trap cleanup EXIT
 
 if [ "$skip_build" -eq 0 ]; then
     run_checked "cargo build -p ori-driver -p ori-lsp --release" \
-        sh -c "cd '$repo_root' && cargo build -p ori-driver -p ori-lsp --release"
+        sh -c "cd '$repo_root/compiler' && cargo build -p ori-driver -p ori-lsp --release"
 fi
 
 if [ ! -f "$source_ori" ]; then

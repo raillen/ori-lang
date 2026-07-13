@@ -154,9 +154,9 @@ end
 -- ──────────── Optional and Result ──────────────
 safe_divide(a: int, b: int) -> result[int, string]
     if b == 0
-        return error("division by zero")
+        return err("division by zero")
     end
-    return success(a / b)
+    return ok(a / b)
 end
 
 find_by_name(names: list[string], target: string) -> optional[int]
@@ -176,16 +176,16 @@ demo_optional_result()
     section("Optional and Result")
 
     match safe_divide(10, 3)
-    case success(val):
+    case ok(val):
         io.println(f"  10 / 3 = {val}")
-    case error(msg):
+    case err(msg):
         io.println(f"  error: {msg}")
     end
 
     match safe_divide(10, 0)
-    case success(val):
+    case ok(val):
         io.println(f"  10 / 0 = {val}")
-    case error(msg):
+    case err(msg):
         io.println(f"  10 / 0 error: {msg}")
     end
 

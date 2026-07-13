@@ -1,16 +1,16 @@
 [workspace]
 resolver = "2"
 members = [
-    "compiler/crates/ori-lexer",
-    "compiler/crates/ori-ast",
-    "compiler/crates/ori-parser",
-    "compiler/crates/ori-types",
-    "compiler/crates/ori-hir",
-    "compiler/crates/ori-codegen",
-    "compiler/crates/ori-runtime",
-    "compiler/crates/ori-diagnostics",
-    "compiler/crates/ori-lsp",
-    "compiler/crates/ori-driver",
+    "crates/ori-lexer",
+    "crates/ori-ast",
+    "crates/ori-parser",
+    "crates/ori-types",
+    "crates/ori-hir",
+    "crates/ori-codegen",
+    "crates/ori-runtime",
+    "crates/ori-diagnostics",
+    "crates/ori-lsp",
+    "crates/ori-driver",
 ]
 
 [workspace.package]
@@ -45,12 +45,12 @@ cranelift-jit      = "0.131"
 libloading         = "0.8"
 
 # Internal crates
-ori-diagnostics = { path = "compiler/crates/ori-diagnostics" }
-ori-lexer       = { path = "compiler/crates/ori-lexer" }
-ori-ast         = { path = "compiler/crates/ori-ast" }
-ori-parser      = { path = "compiler/crates/ori-parser" }
-ori-types       = { path = "compiler/crates/ori-types" }
-ori-hir         = { path = "compiler/crates/ori-hir" }
-ori-codegen     = { path = "compiler/crates/ori-codegen" }
-ori-runtime     = { path = "compiler/crates/ori-runtime" }
-ori-driver      = { path = "compiler/crates/ori-driver" }
+ori-diagnostics = { path = "crates/ori-diagnostics" }
+ori-lexer       = { path = "crates/ori-lexer" }
+ori-ast         = { path = "crates/ori-ast" }
+ori-parser      = { path = "crates/ori-parser" }
+ori-types       = { path = "crates/ori-types" }
+ori-hir         = { path = "crates/ori-hir" }
+ori-codegen     = { path = "crates/ori-codegen" }
+ori-runtime     = { path = "crates/ori-runtime" }
+ori-driver      = { path = "crates/ori-driver" }

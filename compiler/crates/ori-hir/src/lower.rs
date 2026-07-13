@@ -3479,7 +3479,7 @@ impl<'a> Lowerer<'a> {
                                 };
                             }
                         }
-                        "success" | "Success" => {
+                        "ok" | "Ok" => {
                             if let Some(a) = args.first() {
                                 let e = match &a.value {
                                     ori_ast::expr::ArgValue::Expr(e)
@@ -3507,7 +3507,7 @@ impl<'a> Lowerer<'a> {
                                 };
                             }
                         }
-                        "error" | "Error" => {
+                        "err" | "Err" => {
                             if let Some(a) = args.first() {
                                 let e = match &a.value {
                                     ori_ast::expr::ArgValue::Expr(e)
@@ -4343,7 +4343,7 @@ fn bind_pattern_names(pattern: &ori_ast::pattern::Pattern, bound: &mut HashSet<S
         Pattern::Binding(name) => {
             bound.insert(name.text.clone());
         }
-        Pattern::Some(inner, _) | Pattern::Success(inner, _) | Pattern::Error(inner, _) => {
+        Pattern::Some(inner, _) | Pattern::Ok(inner, _) | Pattern::Err(inner, _) => {
             bind_pattern_names(inner, bound);
         }
         Pattern::VariantNamed { fields, .. } => {
@@ -4400,7 +4400,7 @@ fn lower_pattern(
             };
             HirPattern::Some_(Box::new(lower_pattern(p, inner_ty, enum_sigs)))
         }
-        Pattern::Success(p, _) => {
+        Pattern::Ok(p, _) => {
             let ok_ty = if let Ty::Result(ok, _) = scr_ty {
                 &**ok
             } else {
@@ -4408,7 +4408,7 @@ fn lower_pattern(
             };
             HirPattern::Ok_(Box::new(lower_pattern(p, ok_ty, enum_sigs)))
         }
-        Pattern::Error(p, _) => {
+        Pattern::Err(p, _) => {
             let err_ty = if let Ty::Result(_, err) = scr_ty {
                 &**err
             } else {

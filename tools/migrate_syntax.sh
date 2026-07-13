@@ -32,4 +32,4 @@ if command -v ori >/dev/null 2>&1 && [[ -z "${ORI_MIGRATE_USE_CARGO:-}" ]]; then
   exec ori migrate-syntax "${ARGS[@]}" "${PATHS[@]}"
 fi
 
-exec cargo run -q -p ori-driver -- migrate-syntax "${ARGS[@]}" "${PATHS[@]}"
+exec cargo run --manifest-path "$ROOT/compiler/Cargo.toml" -q -p ori-driver -- migrate-syntax "${ARGS[@]}" "${PATHS[@]}"

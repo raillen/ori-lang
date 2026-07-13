@@ -304,9 +304,9 @@ import ori.task = task
 main()
     const job: task.Job[int] = task.spawn(() => 41)
     match task.join(job)
-        case success(value):
+        case ok(value):
             io.print(string(value))
-        case error(_):
+        case err(_):
             io.print("join-error")
     end
 end
@@ -772,20 +772,20 @@ fn compile_runs_async_result_question_mark_native() {
 import ori.io = io
 
 async compute() -> result[int, string]
-    return success(41)
+    return ok(41)
 end
 
 async use_value() -> result[int, string]
     const value: int = try (await compute())
-    return success(value)
+    return ok(value)
 end
 
 async main()
     const outcome: result[int, string] = await use_value()
     match outcome
-        case success(value):
+        case ok(value):
             io.print(string(value))
-        case error(err):
+        case err(err):
             io.print(err)
     end
 end
@@ -812,20 +812,20 @@ fn compile_runs_async_result_question_mark_error_state_machine_native() {
 import ori.io = io
 
 async fail() -> result[int, string]
-    return error("bad")
+    return err("bad")
 end
 
 async use_value() -> result[int, string]
     const value: int = try (await fail())
-    return success(value)
+    return ok(value)
 end
 
 async main()
     const outcome: result[int, string] = await use_value()
     match outcome
-        case success(value):
+        case ok(value):
             io.print(string(value))
-        case error(err):
+        case err(err):
             io.print(err)
     end
 end
@@ -1094,15 +1094,15 @@ async main()
     const read_result: result[string, string] = await fs.read_text_async("{input}")
     const write_result: result[string, string] = await fs.write_text_async("{output}", "written async")
     match read_result
-        case success(text):
+        case ok(text):
             io.print(text)
-        case error(err):
+        case err(err):
             io.print(err)
     end
     match write_result
-        case success(_):
+        case ok(_):
             io.print("write-ok")
-        case error(err):
+        case err(err):
             io.print(err)
     end
 end
@@ -1190,10 +1190,10 @@ main()
     const ch: channel.Channel[int] = channel.create()
     channel.send(ch, 29)
     match channel.receive(ch)
-        case success(value):
+        case ok(value):
             const counter: atomic.AtomicInt = atomic.new(value)
             io.print(string(atomic.add(counter, 12)))
-        case error(_):
+        case err(_):
             io.print("receive-error")
     end
     channel.close(ch)
@@ -1230,14 +1230,14 @@ main()
     const qch: channel.Channel[queue.Queue[int]] = channel.create()
     channel.send(qch, q)
     match channel.receive(qch)
-        case success(received):
+        case ok(received):
             match queue.dequeue(received)
                 case some(value):
                     io.print(string(value))
                 case none:
                     io.print("queue-empty")
             end
-        case error(_):
+        case err(_):
             io.print("queue-error")
     end
 
@@ -1246,14 +1246,14 @@ main()
     const dch: channel.Channel[deque.Deque[string]] = channel.create()
     channel.send(dch, d)
     match channel.receive(dch)
-        case success(received):
+        case ok(received):
             match deque.front(received)
                 case some(value):
                     io.print(value)
                 case none:
                     io.print("deque-empty")
             end
-        case error(_):
+        case err(_):
             io.print("deque-error")
     end
 end
@@ -1688,7 +1688,7 @@ async worker(token: task.CancelToken, path: string) -> result[int, string]
     const fut: future[void] = task.sleep(5000)
     task.associate(token, fut)
     await fut
-    return success(0)
+    return ok(0)
 end
 
 main()
@@ -1701,16 +1701,16 @@ main()
     task.cancel(token)
     task.join(job)
     match fs.open_read(path)
-        case success(file):
+        case ok(file):
             match fs.read(file, 8)
-                case success(data):
+                case ok(data):
                     fs.close(file)
                     io.print(string(bytes_mod.len(data)))
-                case error(err):
+                case err(err):
                     fs.close(file)
                     io.print("err:" + err)
             end
-        case error(err):
+        case err(err):
             io.print("open-err:" + err)
     end
 end
@@ -1905,12 +1905,12 @@ end
 process_file(path: string) -> result[int, string]
 using file: fs.File = try fs.open_read(path)
 match fs.read(file, 100)
-case success(data):
+case ok(data):
 using copy: fs.File = try fs.open_write(path)
 try fs.write(copy, data)
-return success(10)
-case error(msg):
-return error(msg)
+return ok(10)
+case err(msg):
+return err(msg)
 end
 end
 
@@ -1956,7 +1956,7 @@ end
     // labels at the same indent as `match` (switch/case style) with bodies one
     // level deeper.
     assert!(
-        once.contains("    using file: fs.File = try fs.open_read(path)\n    match fs.read(file, 100)\n    case success(data):\n        using copy: fs.File = try fs.open_write(path)\n        try fs.write(copy, data)\n        return success(10)\n    case error(msg):\n        return error(msg)\n    end\n"),
+        once.contains("    using file: fs.File = try fs.open_read(path)\n    match fs.read(file, 100)\n    case ok(data):\n        using copy: fs.File = try fs.open_write(path)\n        try fs.write(copy, data)\n        return ok(10)\n    case err(msg):\n        return err(msg)\n    end\n"),
         "nested using + match arm indentation: {once}"
     );
     // Multi-line match: `match` and `case` at 4, bodies at 8, `end` at 4.

@@ -540,12 +540,12 @@ fn type_rejects_local_inference_on_try() {
 alias TextResult = result[string, string]
 
 load() -> TextResult
-    return success("ok")
+    return ok("ok")
 end
 
 main() -> TextResult
     const raw = try load()
-    return success(raw)
+    return ok(raw)
 end
 "#,
     );
@@ -781,15 +781,15 @@ fn type_accepts_result_success_and_error() {
 import ori.io = io
 divide(a: int, b: int) -> result[int, string]
     if b == 0
-        return error("zero")
+        return err("zero")
     end
-    return success(a / b)
+    return ok(a / b)
 end
 main()
     match divide(10, 2)
-        case success(v):
+        case ok(v):
             io.print(string(v))
-        case error(m):
+        case err(m):
             io.print(m)
     end
 end
@@ -801,12 +801,12 @@ end
 
 #[test]
 fn type_rejects_success_without_payload_for_non_void_result() {
-    let dir = TestDir::new("type_success_void_mismatch");
+    let dir = TestDir::new("type_ok_void_mismatch");
     dir.write(
         "main.orl",
         r#"module app.main
 bad() -> result[int, string]
-    return success()
+    return ok()
 end
 main()
 end
@@ -815,7 +815,7 @@ end
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors, "{:?}", out.diagnostics);
     assert!(
-        diagnostic_codes(&out).contains(&"contract.success_void_mismatch"),
+        diagnostic_codes(&out).contains(&"contract.ok_void_mismatch"),
         "{:?}",
         out.diagnostics
     );
@@ -1029,7 +1029,7 @@ fn expr_rejects_propagate_on_non_result_in_void_function() {
         "main.orl",
         r#"module app.main
 produce() -> result[int, string]
-    return success(1)
+    return ok(1)
 end
 main()
     const x: int = try produce()
@@ -1052,11 +1052,11 @@ fn expr_rejects_propagate_err_type_mismatch() {
         "main.orl",
         r#"module app.main
 a() -> result[int, string]
-    return success(1)
+    return ok(1)
 end
 b() -> result[int, int]
     const x: int = try a()
-    return success(x)
+    return ok(x)
 end
 main()
 end
@@ -1078,11 +1078,11 @@ fn expr_accepts_try_prefix_for_result_propagation() {
         "main.orl",
         r#"module app.main
 produce() -> result[int, string]
-    return success(1)
+    return ok(1)
 end
 wrapped() -> result[int, string]
     const x: int = try produce()
-    return success(x + 1)
+    return ok(x + 1)
 end
 main()
 end
@@ -1121,7 +1121,7 @@ fn expr_rejects_try_prefix_on_non_result_or_optional() {
         r#"module app.main
 wrapped() -> result[int, string]
     const x: int = try 1
-    return success(x)
+    return ok(x)
 end
 main()
 end
@@ -2586,21 +2586,21 @@ fn error_accepts_result_with_propagation_chain() {
         r#"module app.main
 import ori.io = io
 step1() -> result[int, string]
-    return success(1)
+    return ok(1)
 end
 step2(x: int) -> result[int, string]
-    return success(x + 1)
+    return ok(x + 1)
 end
 pipeline() -> result[int, string]
     const a: int = try step1()
     const b: int = try step2(a)
-    return success(b)
+    return ok(b)
 end
 main()
     match pipeline()
-        case success(v):
+        case ok(v):
             io.print(string(v))
-        case error(e):
+        case err(e):
             io.print(e)
     end
 end
@@ -3154,20 +3154,20 @@ end
 
 validate_age(age: int) -> result[int, string]
     if age < 0
-        return error("age below zero")
+        return err("age below zero")
     end
-    return success(age)
+    return ok(age)
 end
 
 main()
     using session: Session = Session { user: User { name: "Ada", age: 30 } }
 
     match validate_age(30)
-        case success(age):
+        case ok(age):
             const log: string = session.user.to_log()
             io.print(log)
             io.print(string(age))
-        case error(msg):
+        case err(msg):
             io.print(msg)
     end
 
@@ -3423,7 +3423,14 @@ fn tooling_new_project_creates_checkable_app_skeleton() {
 
     assert!(out.manifest.is_file());
     assert!(out.entry.is_file());
-    assert!(root.join("docs/api").is_dir());
+    assert_eq!(
+        out.manifest.file_name().and_then(|n| n.to_str()),
+        Some("ori.proj")
+    );
+    assert!(root.join("main.orl").is_file());
+    assert!(root.join("docs").is_dir());
+    // No forced src/app/lib/bin layout (M2.layout).
+    assert!(!root.join("src").exists());
 
     let check = run_check(&out.manifest).unwrap();
     assert!(!check.has_errors, "{:?}", check.diagnostics);
@@ -3786,27 +3793,27 @@ write_helper(path: string) -> result[void, string]
     using file: fs.File = try fs.open_write(path)
     const n: int = try fs.write(file, b"hello using file")
     io.println(f"written: {{n}}")
-    return success()
+    return ok()
 end
 
 read_helper(path: string) -> result[string, string]
     using file: fs.File = try fs.open_read(path)
     const data: bytes = try fs.read(file, 20)
     const s: string = try bytes_mod.decode_utf8(data)
-    return success(s)
+    return ok(s)
 end
 
 main()
     const path: string = "{test_file}"
     match write_helper(path)
-        case success(_):
+        case ok(_):
             match read_helper(path)
-                case success(s):
+                case ok(s):
                     io.println(s)
-                case error(err):
+                case err(err):
                     io.println(f"read error: {{err}}")
             end
-        case error(err):
+        case err(err):
             io.println(f"write error: {{err}}")
     end
 end
@@ -3854,9 +3861,9 @@ main()
     task.cancel(token)
 
     match task.join(job)
-        case success(_):
+        case ok(_):
             io.println("job joined successfully")
-        case error(_):
+        case err(_):
             io.println("join error")
     end
 end

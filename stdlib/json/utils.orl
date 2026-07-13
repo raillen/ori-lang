@@ -5,12 +5,12 @@ import ori.json = json
 
 public read(file_path: string) -> result[json.Value, string]
     match fs.read_text(file_path)
-        case success(text):
+        case ok(text):
             return json.parse(text)
-        case error(_):
-            return error("failed to read json file")
+        case err(_):
+            return err("failed to read json file")
     end
-    return error("failed to read json file")
+    return err("failed to read json file")
 end
 
 public write(file_path: string, value: json.Value) -> result[string, string]

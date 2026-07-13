@@ -12,7 +12,7 @@
 | **`result[T, E]`** | “Sucesso ou falha explícita” | I/O, validação, APIs que podem falhar com motivo |
 | **`check`** | Pré-condição / contrato | Invariantes em runtime (`check cond, "msg"`) |
 
-Ori **não tem null**. Use `none` dentro de `optional[T]` ou `error(...)` dentro de `result[T, E]`.
+Ori **não tem null**. Use `none` dentro de `optional[T]` ou `err(...)` dentro de `result[T, E]`.
 
 ## `void`
 
@@ -49,7 +49,7 @@ read_config(path: string) -> result[string, string]
 end
 ```
 
-- `success(value)` ou `error(reason)`.
+- `ok(value)` ou `err(reason)`.
 - Trate com `match`, **`try expr`**, ou helpers Layer 2 (`parse_int_or`, `get_or`).
 - Preferir `result` a `bool` para operações que falham.
 

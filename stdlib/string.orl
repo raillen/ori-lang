@@ -109,17 +109,17 @@ swap_char(ch: string) -> string
     const code: int = int(bytes_mod.get(raw, 0))
     if code >= 65 and code <= 90
         match ori.string.from_bytes(bytes_mod.from_list([code + 32]))
-            case success(out):
+            case ok(out):
                 return out
-            case error(_):
+            case err(_):
                 return ch
         end
     end
     if code >= 97 and code <= 122
         match ori.string.from_bytes(bytes_mod.from_list([code - 32]))
-            case success(out):
+            case ok(out):
                 return out
-            case error(_):
+            case err(_):
                 return ch
         end
     end

@@ -4,9 +4,9 @@ import ori.fs = fs
 
 public read_text_or(path: string, fallback: string) -> string
     match fs.read_text(path)
-        case success(text):
+        case ok(text):
             return text
-        case error(_):
+        case err(_):
             return fallback
     end
     return fallback

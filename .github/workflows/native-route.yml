@@ -36,6 +36,9 @@ jobs:
             toolchain: stable
             smoke: sh
 
+    defaults:
+      run:
+        working-directory: compiler
     steps:
       - uses: actions/checkout@v4
 
@@ -71,18 +74,20 @@ jobs:
       - name: Native release package (Windows)
         if: matrix.smoke == 'powershell'
         shell: pwsh
+        working-directory: ${{ github.workspace }}
         run: |
           .\tools\package_native_release.ps1 `
-            -PackageRoot "target\dist\ori-${{ matrix.name }}" `
-            -ArchivePath "target\dist\ori-${{ matrix.name }}.zip" `
+            -PackageRoot "compiler\target\dist\ori-${{ matrix.name }}" `
+            -ArchivePath "compiler\target\dist\ori-${{ matrix.name }}.zip" `
             -Force
 
       - name: Native release package (Unix)
         if: matrix.smoke == 'sh'
+        working-directory: ${{ github.workspace }}
         run: |
           sh tools/package_native_release.sh \
-            --package-root "target/dist/ori-${{ matrix.name }}" \
-            --archive "target/dist/ori-${{ matrix.name }}.tar.gz" \
+            --package-root "compiler/target/dist/ori-${{ matrix.name }}" \
+            --archive "compiler/target/dist/ori-${{ matrix.name }}.tar.gz" \
             --force
 
       - name: Upload native release package
@@ -90,8 +95,8 @@ jobs:
         with:
           name: ori-${{ matrix.name }}
           path: |
-            target/dist/ori-${{ matrix.name }}.zip
-            target/dist/ori-${{ matrix.name }}.tar.gz
+            compiler/target/dist/ori-${{ matrix.name }}.zip
+            compiler/target/dist/ori-${{ matrix.name }}.tar.gz
           if-no-files-found: error
 
   # ------------------------------------------------------------------
@@ -122,12 +127,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ori-linux-gnu
-          path: target/dist
+          path: dist
 
       - name: Extract release package
         run: |
           mkdir -p ~/ori-smoke
-          tar -xzf target/dist/ori-linux-gnu.tar.gz -C ~/ori-smoke
+          tar -xzf dist/ori-linux-gnu.tar.gz -C ~/ori-smoke
           ls -la ~/ori-smoke/
 
       - name: Smoke — ori doctor
@@ -182,13 +187,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ori-windows-msvc
-          path: target/dist
+          path: dist
 
       - name: Extract release package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path ~\ori-smoke
-          Expand-Archive -Path target\dist\ori-windows-msvc.zip -DestinationPath ~\ori-smoke -Force
+          Expand-Archive -Path dist\ori-windows-msvc.zip -DestinationPath ~\ori-smoke -Force
           Get-ChildItem ~\ori-smoke
 
       - name: Smoke — ori doctor
@@ -234,12 +239,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ori-macos-x86_64
-          path: target/dist
+          path: dist
 
       - name: Extract release package
         run: |
           mkdir -p ~/ori-smoke
-          tar -xzf target/dist/ori-macos-x86_64.tar.gz -C ~/ori-smoke
+          tar -xzf dist/ori-macos-x86_64.tar.gz -C ~/ori-smoke
           ls -la ~/ori-smoke/
 
       - name: Smoke — ori doctor

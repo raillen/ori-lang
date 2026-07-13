@@ -1,6 +1,6 @@
 # M2.result-ctors — `success`/`error` → `ok`/`err`
 
-> **Status:** aceito no plano (2026-07-13); **implementação pendente**  
+> **Status:** **entregue** (2026-07-13) — corte seco + `parse.result_ctor_renamed` + migrate  
 > **Pai:** M2 (superfície + stdlib + layout)  
 > **Breaking:** sim (nomes de construção/padrão de `result`)
 
@@ -90,3 +90,4 @@ end
 | Data | Evento |
 |------|--------|
 | 2026-07-13 | Pedido de produto; viabilidade confirmada; item **M2.result-ctors** no plano |
+| 2026-07-13 | Implementado: tokens `ok`/`err`, patterns, checker/HIR, migrate-syntax, stdlib/examples/tests/docs |

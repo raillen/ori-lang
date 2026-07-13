@@ -1,36 +1,77 @@
 # Projeto e documentação externa
 
-Status: atual.
+Status: atual (layout **M2.layout** — 2026-07-13).
 
-Este capítulo define dois arquivos de projeto:
+Este capítulo define:
 
-- `ori.proj`: manifesto do projeto.
-- `ori.pkg.toml`: manifesto de pacote reutilizavel.
+- `ori.proj`: manifesto do **projeto** (obrigatório na raiz).
+- `ori.pkg.toml`: manifesto de **pacote** reutilizável / cache (opcional).
 - `.oridoc`: documentação externa de símbolos Ori.
 
+Layout de produto: `docs/planning/repo-and-project-layout.md`.
+
 A ideia é manter o código legível sem obrigar comentários longos dentro do
-arquivo `.orl`.
+arquivo `.orl`, e **não** forçar uma pasta mágica (`src/`, `app/`) no projeto.
+
+---
+
+## Layout canônico de projeto
+
+**Obrigatório:** `ori.proj` na raiz.
+
+**Recomendado:** `main.orl` na raiz (`entry = "main.orl"`). O `entry` pode
+apontar para outro caminho.
+
+**Opcional:** pastas de domínio com mais `.orl` e árvore de docs espelhada.
+
+```text
+meu-projeto/
+  ori.proj
+  main.orl
+  kanban-app/                 -- domínio opcional (nome à escolha)
+    board.orl
+    cards.orl
+  notes-app/
+    stickys.orl
+  docs/                       -- sidecars opcionais
+    kanban-app/
+      board.oridoc
+      cards.oridoc
+```
+
+`ori new <path>` cria:
+
+```text
+<path>/
+  ori.proj
+  main.orl          -- app (lib: lib.orl)
+  docs/             -- pasta vazia para sidecars
+```
+
+Não cria `src/`, `lib/` ou `bin/` por padrão.
+
+---
 
 ## `ori.proj`
 
-`ori.proj` fica na raiz do projeto. O formato é simples e explícito:
+`ori.proj` fica na **raiz** do projeto. Formato simples e explícito:
 
 ```ini
 manifest = 1
 name = "demo"
 version = "0.1.0"
 kind = "app"
-entry = "src/main.orl"
+entry = "main.orl"
 
 [source]
-root = "src"
 root_namespace = "app"
+-- source.root é opcional; omitido = raiz do projeto (todas as subpastas são domínio)
 
 [dependencies]
 demo.math = { path = "../math", version = "0.1.0" }
 
 [docs]
-paths = ["docs/api"]
+paths = ["docs"]
 mode = "sidecar-first"
 require_public = "off"
 ```
@@ -43,50 +84,45 @@ Campos atuais:
 | `name` | nao | Nome humano do projeto. |
 | `version` | nao | Versao do projeto. |
 | `kind` | nao | `app` ou `lib`. Padrao: `app`. |
-| `entry` | sim | Arquivo `.orl` de entrada. |
-| `source.root` | nao | Pasta principal de codigo. |
-| `source.root_namespace` | nao | Namespace esperado para a raiz de codigo. |
-| `dependencies.<name>` | nao | Dependencia local por `{ path = "..." }`; versao opcional. |
-| `docs.paths` | nao | Arquivos ou pastas com `.oridoc`. |
+| `entry` | **sim** | Arquivo `.orl` de entrada (recomendado: `main.orl` na raiz). |
+| `source.root` | nao | Pasta raiz de codigo; **omitido = diretorio do `ori.proj`**. |
+| `source.root_namespace` | nao | Prefixo de module esperado (ex.: `app`). |
+| `dependencies.<name>` | nao | Dependencia local `{ path = "..." }`; versao opcional. |
+| `docs.paths` | nao | Pastas/arquivos com `.oridoc`. |
 | `docs.mode` | nao | `sidecar-first` ou `inline-first`. Padrao: `sidecar-first`. |
 | `docs.require_public` | nao | `off`, `warn` ou `error`. Padrao: `off`. |
 
-Compatibilidade: manifestos antigos com apenas `entry = "main.orl"` continuam
-validos.
+Compatibilidade: `entry = "src/main.orl"` e `source.root = "src"` continuam
+validos se o usuario preferir esse layout.
 
-Dependencias locais declaradas em `[dependencies]` participam da resolucao de
-imports. O compilador procura primeiro os arquivos do projeto atual. Se nao
-encontrar o import, procura nas dependencias por `path`.
+Dependencias locais em `[dependencies]` participam da resolucao de imports.
 
 ```ori
 import demo.math (double)
 ```
 
 Para `demo.math = { path = "../math" }`, o path deve apontar para um projeto com
-`ori.proj` ou um pacote com `ori.pkg.toml`. Dependencias apenas por versao ficam
-reservadas para registry remoto; elas nao sao resolvidas localmente.
+`ori.proj` ou um pacote com `ori.pkg.toml`.
+
+---
 
 ## `ori.pkg.toml`
 
-`ori.pkg.toml` descreve um pacote instalavel no cache local. Ele nao substitui
-`ori.proj`: `ori.proj` organiza o projeto em desenvolvimento; `ori.pkg.toml`
+`ori.pkg.toml` descreve um pacote instalavel no cache local. **Nao substitui**
+`ori.proj` no dia a dia de apps: `ori.proj` organiza o projeto; `ori.pkg.toml`
 define o contrato de distribuicao.
-
-Formato atual:
 
 ```toml
 [package]
 name = "demo.app"
 version = "0.1.0"
-entry = "src/main.orl"
-ori_version = "0.2.0"
+entry = "main.orl"
+ori_version = "0.3.1"
 description = "Demo app"
 
 [dependencies]
 demo.math = { path = "../demo-math", version = "0.1.0" }
 ```
-
-Campos obrigatorios:
 
 | Campo | Descricao |
 |---|---|
@@ -95,129 +131,68 @@ Campos obrigatorios:
 | `package.entry` | Arquivo `.orl` de entrada do pacote. |
 | `package.ori_version` | Versao minima esperada do compilador Ori. |
 
-Dependencias locais usam `{ path = "../outro-pacote" }`. O manifesto apontado
-pelo path deve declarar o mesmo nome usado na chave da dependencia.
-Dependencias somente por versao ficam reservadas para registry remoto ou pacote
-ja presente no cache.
-
 `ori check`, `ori run`, `ori test` e `ori doc` aceitam `ori.pkg.toml` como
-entrada. Quando o pacote declara dependencias locais, o resolvedor usa esses
-paths para carregar imports do pacote antes de emitir `bind.import_not_found`.
+entrada quando usado como pacote.
+
+---
 
 ## `.oridoc`
 
-Um arquivo `.oridoc` documenta simbolos de um module. Ele pode ficar ao lado
-do `.orl`:
+Um arquivo `.oridoc` documenta simbolos de um module. Preferencia de layout:
 
 ```text
-src/math.orl
-src/math.oridoc
+kanban-app/board.orl
+docs/kanban-app/board.oridoc
 ```
 
-Ou em uma pasta configurada:
+Tambem e valido lado a lado:
 
 ```text
-docs/api/math.oridoc
+board.orl
+board.oridoc
 ```
 
-Exemplo:
+Ou qualquer pasta listada em `[docs].paths`.
+
+### Formato (resumo)
 
 ```text
 oridoc 1
 
-module app.math
+module app.kanban.board
 
-doc func add
-    summary:
-        Soma dois numeros.
-    param left:
-        Primeiro valor.
-    param right:
-        Segundo valor.
-    returns:
-        Soma de `left` e `right`.
+doc load_board
+  summary:
+    Carrega o board.
+  returns:
+    `result[Board, string]`
+end
+
+doc module self
+  summary:
+    Dominio de board do kanban.
 end
 ```
 
-Regras:
+Prioridade inline vs sidecar: `[docs].mode` (`sidecar-first` default).
 
-- `module` deve ser o mesmo module do codigo documentado.
-- `doc func add` documenta `app.math.add`.
-- `doc method User.name` documenta `app.math.User.name`.
-- `doc module self` documenta o modulo `app.math`.
-- Cada bloco termina com `end`.
-
-Secoes reconhecidas:
-
-| Secao | Uso |
-|---|---|
-| `summary:` | Texto principal. |
-| `details:` | Texto adicional. |
-| `param nome:` | Parametro documentado. |
-| `returns:` | Valor retornado. |
+---
 
 ## Comandos
 
-Criar um projeto novo:
-
 ```bash
-ori new demo
+ori new meu-projeto
+ori new meu-lib --lib
+ori check .                 # sobe ate achar ori.proj
+ori check ori.proj
+ori run .
+ori doc
+ori doc check
 ```
 
-O comando cria `ori.proj`, `src/main.orl` e `docs/api/`. Ele falha quando o
-diretorio de destino ja existe e nao esta vazio.
+---
 
-Instalar um pacote local no cache:
+## Monorepo da linguagem
 
-```bash
-ori install demo.app --path .
-```
-
-O cache padrao fica em `~/.ori/packages/<name>/<version>/`. Use
-`ORI_PACKAGE_CACHE` ou `--cache` para escolher outra pasta. O comando valida o
-manifesto, valida dependencias locais por path e copia os arquivos. Ele nao
-executa codigo do pacote.
-
-Gerar Markdown:
-
-```bash
-ori doc file ori.proj
-```
-
-Validar docs sem gerar arquivo:
-
-```bash
-ori doc check ori.proj
-```
-
-O LSP usa `.oridoc` no hover quando encontra uma entrada para o simbolo local.
-
-## REPL
-
-`ori repl` inicia um loop interativo pequeno apoiado no JIT nativo. O recorte
-inicial aceita:
-
-- `import ...`;
-- bindings simples com `const` e `var`;
-- chamadas como `io.println("ola")`;
-- literais e expressoes simples, impressas automaticamente.
-
-Comandos multi-linha e estado mutavel persistente entre comandos ainda nao sao
-parte do contrato do REPL.
-
-## Diagnosticos
-
-`ori doc check` valida:
-
-- sintaxe do `.oridoc`;
-- simbolo inexistente;
-- parametro documentado que nao existe na assinatura;
-- retorno ausente em funcao nao-`void`;
-- ausencia de doc publica quando `docs.require_public` for `warn` ou `error`.
-
-## Limitacoes atuais
-
-- O hover inicial cobre simbolos locais. Hovers complexos de metodo por tipo do
-  receptor podem ser ampliados depois.
-- `docs.require_public` e opcional. O padrao e `off` para nao quebrar projetos
-  existentes.
+O repositorio `ori-lang` nao e um app de usuario. O workspace Cargo vive em
+`compiler/`. Ver `docs/planning/repo-and-project-layout.md`.

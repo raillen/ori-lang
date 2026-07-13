@@ -196,8 +196,8 @@ On `result[T, E]`:
 
 ```ori
 const value: T = try fallible_operation()
--- If error(e): returns error(e) from the enclosing function
--- If success(v): unwraps to v
+-- If err(e): returns err(e) from the enclosing function
+-- If ok(v): unwraps to v
 ```
 
 On `optional[T]`:

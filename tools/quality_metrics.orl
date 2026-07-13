@@ -9,18 +9,18 @@ import ori.time = time
 
 write_file(path: string, content: string)
     match fs.write_text(path, content)
-        case success(_):
+        case ok(_):
             return
-        case error(message):
+        case err(message):
             io.print("failed to write " + path + ": " + message)
     end
 end
 
 append_file(path: string, content: string)
     match fs.append_text(path, content)
-        case success(_):
+        case ok(_):
             return
-        case error(message):
+        case err(message):
             io.print("failed to append " + path + ": " + message)
     end
 end
@@ -81,9 +81,9 @@ end
 
 log_size(path: string) -> int
     match fs.read_text(path)
-        case success(content):
+        case ok(content):
             return str.len(content)
-        case error(_):
+        case err(_):
             return 0
     end
     return 0
@@ -118,9 +118,9 @@ run_metric(
     var exit_code: int = -1
 
     match proc.run(shell_program(), shell_args(command_label, log_path))
-        case success(code):
+        case ok(code):
             exit_code = code
-        case error(message):
+        case err(message):
             write_file(log_path, "failed to start command: " + message + "\n")
     end
 
@@ -145,8 +145,8 @@ end
 main()
     const report_dir: string = "target/ori-quality-metrics"
     match fs.create_dir_all(report_dir)
-        case success(_):
-        case error(message):
+        case ok(_):
+        case err(message):
             io.print("failed to create report directory: " + message)
             return
     end

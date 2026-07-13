@@ -302,6 +302,10 @@ fn apply_line_rewrites(source: &str, rewrites: &mut Vec<String>, notes: &mut Vec
                 push_tag(rewrites, "else if→elif");
             }
         }
+        // Result constructors: success/error → ok/err (M2.result-ctors)
+        if rewrite_result_ctors(&mut code) {
+            push_tag(rewrites, "success/error→ok/err");
+        }
         if rewrite_import_as(&mut code) {
             push_tag(rewrites, "import as→=");
         }
@@ -412,6 +416,40 @@ fn replace_word(code: &mut String, from: &str, to: &str) -> bool {
     }
     if changed {
         *code = out;
+    }
+    changed
+}
+
+/// Rewrite `success`/`error` result constructors and match cases to `ok`/`err`.
+fn rewrite_result_ctors(code: &mut String) -> bool {
+    let mut changed = false;
+    let mut next = code.replace("case success", "case ok");
+    if next != *code {
+        changed = true;
+    }
+    let n2 = next.replace("case error", "case err");
+    if n2 != next {
+        changed = true;
+        next = n2;
+    }
+    // Word-boundary replacements for constructors (and capitalized forms).
+    if replace_word(&mut next, "success", "ok") {
+        changed = true;
+    }
+    if replace_word(&mut next, "Success", "ok") {
+        changed = true;
+    }
+    // Only rewrite `error` when used as result ctor-ish keyword at word boundary.
+    // `replace_word` turns every bare `error` into `err` on a code line — acceptable
+    // for migrate of Ori sources where `error` was the result ctor keyword.
+    if replace_word(&mut next, "error", "err") {
+        changed = true;
+    }
+    if replace_word(&mut next, "Error", "err") {
+        changed = true;
+    }
+    if changed {
+        *code = next;
     }
     changed
 }

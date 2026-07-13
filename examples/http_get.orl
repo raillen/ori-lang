@@ -9,43 +9,43 @@ read_http_headers(conn: net.Connection) -> result[string, string]
     var acc: string = ""
     loop
         match net.read_some(conn, 1024)
-            case success(chunk):
+            case ok(chunk):
                 if bytes_mod.len(chunk) == 0
                     break
                 end
                 match str.from_bytes(chunk)
-                    case success(text):
+                    case ok(text):
                         acc = str.concat(acc, text)
                         if str.contains(acc, "\r\n\r\n")
-                            return success(acc)
+                            return ok(acc)
                         end
-                    case error(msg):
-                        return error(msg)
+                    case err(msg):
+                        return err(msg)
                 end
-            case error(msg):
-                return error(msg)
+            case err(msg):
+                return err(msg)
         end
     end
-    return success(acc)
+    return ok(acc)
 end
 
 main()
     match net.connect_tls("example.com", 443, 5000)
-        case success(conn):
+        case ok(conn):
             const request: string = "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n"
             match net.write_all(conn, str.to_bytes(request))
-                case success(_):
+                case ok(_):
                     match read_http_headers(conn)
-                        case success(headers):
+                        case ok(headers):
                             io.println(headers)
-                        case error(msg):
+                        case err(msg):
                             io.println(str.concat("read error: ", msg))
                     end
-                case error(msg):
+                case err(msg):
                     io.println(str.concat("write error: ", msg))
             end
             net.close(conn)
-        case error(msg):
+        case err(msg):
             io.println(str.concat("connect error: ", msg))
     end
 end

@@ -8,9 +8,9 @@ import ori.string = su
 normalize_separators(value: string) -> string
     var backslash: string = "/"
     match str.from_bytes(bytes_mod.from_list([92]))
-        case success(sep):
+        case ok(sep):
             backslash = sep
-        case error(_):
+        case err(_):
             backslash = "/"
     end
     var out: string = ""

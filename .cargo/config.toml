@@ -1,6 +1,0 @@
-# Build configuration for the Ori compiler workspace.
-
-# The ori-runtime static library must be compiled with PIC so it can be
-# linked into PIE executables (the default on Linux targets).
-[build]
-rustflags = ["-C", "relocation-model=pic"]

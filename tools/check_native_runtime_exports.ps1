@@ -114,9 +114,9 @@ $targetArgs = @("--target", $Target)
 Push-Location $repoRoot
 try {
     if (-not $SkipBuild) {
-        & cargo build -p ori-runtime --lib @targetArgs @profileArgs
+        & cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") build -p ori-runtime --lib @targetArgs @profileArgs
         if ($LASTEXITCODE -ne 0) {
-            throw "cargo build -p ori-runtime --lib failed."
+            throw "cargo build -p ori-runtime --lib failed. failed."
         }
     }
 

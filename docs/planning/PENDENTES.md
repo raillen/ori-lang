@@ -34,7 +34,7 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 | **M4** | Self-hosting | **última** discussão de linguagem | Só depois de tudo o resto já funcional |
 
 > **Ordem acordada (2026-07-13):** **M2 → M3 → M1 → M4**.  
-> **M2 mesclagem:** API canônica `ori.X`; `.utils`/`.algorithms` = alias silencioso; docs ✅ (`stdlib-merge-policy.md`); código de merge em lotes.
+> **M2 inclui:** (1) mesclagem stdlib `ori.X`, (2) layout monorepo/projetos, (3) **`success`/`error` → `ok`/`err`** ([`result-ctors-ok-err.md`](result-ctors-ok-err.md)).
 
 ### Explicitamente fora da fila agora
 

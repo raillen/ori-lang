@@ -103,10 +103,10 @@ demo_os()
     io.println(f"  pid > 0: {pid > 0}")
 
     match os.current_dir()
-    case success(cwd):
+    case ok(cwd):
         const display: string = su.limit(cwd, 60)
         io.println(f"  current dir: {display}...")
-    case error(msg):
+    case err(msg):
         io.println(f"  current dir error: {msg}")
     end
 end
@@ -120,17 +120,17 @@ demo_fs()
 
     -- Write
     match fs.write_text_result(test_path, content)
-    case success(_):
+    case ok(_):
         io.println("  write_text: OK")
-    case error(msg):
+    case err(msg):
         io.println(f"  write_text error: {msg}")
     end
 
     -- Exists
     match fs.exists_result(test_path)
-    case success(found):
+    case ok(found):
         io.println(f"  exists: {found}")
-    case error(msg):
+    case err(msg):
         io.println(f"  exists error: {msg}")
     end
 
@@ -142,17 +142,17 @@ demo_fs()
 
     -- Delete
     match fs.remove_file(test_path)
-    case success(_):
+    case ok(_):
         io.println("  remove_file: OK")
-    case error(msg):
+    case err(msg):
         io.println(f"  remove_file error: {msg}")
     end
 
     -- Confirm deletion
     match fs.exists_result(test_path)
-    case success(found):
+    case ok(found):
         io.println(f"  after delete exists: {found}")
-    case error(msg):
+    case err(msg):
         io.println(f"  after delete exists error: {msg}")
     end
 end

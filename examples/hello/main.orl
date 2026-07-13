@@ -1,0 +1,14 @@
+module app.hello
+
+import ori.io = io
+
+main()
+    io.print("Hello, Ori Language!")
+    
+    const name: string = "Developer"
+    io.print(f"Welcome, {name}!")
+    
+    io.print("Calculating something...")
+    const ans: int = 21 * 2
+    io.print(f"The answer is: {ans}")
+end

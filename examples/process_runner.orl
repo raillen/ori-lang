@@ -42,11 +42,11 @@ end
 
 main()
     match process.run_capture(echo_command(), echo_args("hello from ori"))
-        case success(capture):
+        case ok(capture):
             const out: string = trim_all(capture_stdout(capture))
             io.print("stdout: " + out)
             io.print(f"exit: {capture_exit_code(capture)}")
-        case error(message):
+        case err(message):
             io.print("process failed: " + message)
     end
 end

@@ -1,16 +1,27 @@
 # Ori Examples
 
-This directory contains small examples that are expected to type-check with the
-current compiler.
+Examples are **mini-projects** (or legacy single-file scripts still migrating).
+
+**Project layout (M2.layout):** see `docs/planning/repo-and-project-layout.md`.
+
+```text
+hello/
+  ori.proj      # required
+  main.orl      # recommended default entry
+```
 
 **Stdlib import style (M2):** use canonical **`ori.X`** modules
 (`import ori.io = io`, `import ori.fs = fs`). Do **not** teach
-`ori.X.utils` / `ori.X.algorithms` in new examples — those paths remain as
-silent compatibility only. Policy: `docs/planning/stdlib-merge-policy.md`.
+`ori.X.utils` / `ori.X.algorithms` in new examples. Policy:
+`docs/planning/stdlib-merge-policy.md`.
 
-## Examples
+## Canonical project example
 
-- [hello_world.orl](hello_world.orl): Basic output and variable usage.
+- [hello/](hello/): minimal app (`ori.proj` + `main.orl`)
+
+## Single-file examples (legacy; still checkable as files)
+
+- [hello_world.orl](hello_world.orl): Basic output (prefer `hello/`).
 - [calculator.orl](calculator.orl): Function declarations and arithmetic operations.
 - [bytes_usage.orl](bytes_usage.orl): Bytes conversion, concatenation, slicing, and UTF-8 decoding.
 - [collections_demo.orl](collections_demo.orl): Lists, maps, and collection helpers.

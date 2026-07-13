@@ -107,13 +107,15 @@ Prerequisites for compiler development:
 - PowerShell on Windows for the release smoke scripts
 - A C toolchain on Linux/macOS when using system discovery paths
 
-From the repository root:
+Compiler workspace lives under `compiler/` (see
+`docs/planning/repo-and-project-layout.md`):
 
 ```bash
+cd compiler
 cargo check --workspace
 cargo test --workspace
-cargo run -p ori-driver -- check examples/hello_world.orl
-cargo run -p ori-driver -- run examples/hello_world.orl
+cargo run -p ori-driver -- check ../examples/hello
+cargo run -p ori-driver -- run ../examples/hello
 ```
 
 On Windows, validate a release-style package with:
@@ -271,16 +273,16 @@ import ori.io = io
 
 divide(a: int, b: int) -> result[int, string]
     if b == 0
-        return error("division by zero")
+        return err("division by zero")
     end
 
-    return success(a / b)
+    return ok(a / b)
 end
 
 main() -> result[void, string]
     const value: int = try divide(84, 2)
     io.print(f"value: {value}")
-    return success()
+    return ok()
 end
 ```
 

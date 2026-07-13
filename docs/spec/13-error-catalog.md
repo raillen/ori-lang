@@ -62,6 +62,7 @@ when the compiler starts producing it.
 | `parse.module_not_first` | error | `module` declaration appears after another declaration |
 | `parse.namespace_removed` | error | Source used removed `namespace` keyword; use `module` |
 | `parse.func_removed` | error | Source used removed `func` on a declaration; write `name(...)` directly |
+| `parse.result_ctor_renamed` | error | `success`/`error` result constructors were renamed to `ok`/`err` |
 | `parse.removed_angle_type` | error | Angle-bracket type arguments `Type<…>` are removed; use `Type[…]` |
 | `parse.removed_of_type` | error | `of` / `map of K to V` type forms are removed; use `list[T]`, `map[K, V]`, … |
 | `parse.removed_struct_call_literal` | error | Struct construction via `Type(...)`, `.{…}`, or guided `(…)` is removed; use `Type { … }` or `{ … }` |
@@ -152,7 +153,7 @@ when the compiler starts producing it.
 
 | Code | Severity | Description |
 |---|---|---|
-| `contract.success_void_mismatch` | error | `success()` without a payload is used where the result success type is not `void` |
+| `contract.ok_void_mismatch` | error | `ok()` without a payload is used where the result success type is not `void` |
 
 ### `async`
 

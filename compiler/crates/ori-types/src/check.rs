@@ -4664,19 +4664,19 @@ impl<'a> Checker<'a> {
         args: &[Arg],
         span: ori_diagnostics::Span,
     ) -> Option<Ty> {
-        if (name == "success" || name == "Success") && args.is_empty() {
+        if (name == "ok" || name == "Ok") && args.is_empty() {
             if let Some(Ty::Result(ok_ty, err_ty)) = self.current_return_ty.clone() {
                 if !self.unify(&Ty::Void, &ok_ty) {
                     self.sink.emit(
                         Diagnostic::error(
-                            "contract.success_void_mismatch",
+                            "contract.ok_void_mismatch",
                             format!(
-                                "`success()` is only valid for `result[void, E]`, found success type `{}`",
+                                "`ok()` is only valid for `result[void, E]`, found ok type `{}`",
                                 ok_ty.display()
                             ),
                         )
-                        .with_label(Label::primary(self.file_id, span, "`success()` used here"))
-                        .with_action("pass a success value, or change the result success type to `void`"),
+                        .with_label(Label::primary(self.file_id, span, "`ok()` used here"))
+                        .with_action("pass an ok value, or change the result ok type to `void`"),
                     );
                 }
                 return Some(Ty::Result(ok_ty, err_ty));
@@ -4686,7 +4686,7 @@ impl<'a> Checker<'a> {
         }
 
         let arg_ty = match name {
-            "some" | "Some" | "success" | "Success" | "error" | "Error" => {
+            "some" | "Some" | "ok" | "Ok" | "err" | "Err" => {
                 self.infer_single_wrapper_arg(args, span)
             }
             _ => return None,
@@ -4705,7 +4705,7 @@ impl<'a> Checker<'a> {
                     Ty::Optional(Box::new(arg_ty))
                 }
             }
-            "success" | "Success" => {
+            "ok" | "Ok" => {
                 if let Some(Ty::Result(ok_ty, err_ty)) = self.current_return_ty.clone() {
                     self.expect_assignable(&arg_ty, &ok_ty, args.first().map_or(span, |a| a.span));
                     Ty::Result(ok_ty.clone(), err_ty.clone())
@@ -4713,7 +4713,7 @@ impl<'a> Checker<'a> {
                     Ty::Result(Box::new(arg_ty), Box::new(Ty::String))
                 }
             }
-            "error" | "Error" => {
+            "err" | "Err" => {
                 if let Some(Ty::Result(ok_ty, err_ty)) = self.current_return_ty.clone() {
                     self.expect_assignable(&arg_ty, &err_ty, args.first().map_or(span, |a| a.span));
                     Ty::Result(ok_ty.clone(), err_ty.clone())
@@ -6071,14 +6071,14 @@ impl<'a> Checker<'a> {
                 self.check_pattern_type(inner, &inner_ty);
             }
             Pattern::None(_) => {}
-            Pattern::Success(inner, _) => {
+            Pattern::Ok(inner, _) => {
                 let ok_ty = match scr_ty {
                     Ty::Result(ok, _) => *ok.clone(),
                     _ => Ty::Infer(0),
                 };
                 self.check_pattern_type(inner, &ok_ty);
             }
-            Pattern::Error(inner, _) => {
+            Pattern::Err(inner, _) => {
                 let err_ty = match scr_ty {
                     Ty::Result(_, err) => *err.clone(),
                     _ => Ty::Infer(0),

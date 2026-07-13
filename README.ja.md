@@ -209,16 +209,16 @@ import ori.io = io
 
 divide(a: int, b: int) -> result[int, string]
     if b == 0
-        return error("division by zero")
+        return err("division by zero")
     end
 
-    return success(a / b)
+    return ok(a / b)
 end
 
 main() -> result[void, string]
     const value: int = try divide(84, 2)
     io.print(f"value: {value}")
-    return success()
+    return ok()
 end
 ```
 
