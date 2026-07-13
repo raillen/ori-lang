@@ -11,7 +11,8 @@
 | Testing | [testing.md](testing.md) | [testing.pt-BR.md](testing.pt-BR.md) |
 | Report bugs | [report-bugs.md](report-bugs.md) | [report-bugs.pt-BR.md](report-bugs.pt-BR.md) |
 | Bootstrapping (contributors) | [bootstrapping.md](bootstrapping.md) | — |
-| Language comparison notes | — | [language-comparison.md](language-comparison.md) |
+| **Performance microbench** (Ori / Python / Rust) | [performance.md](performance.md) | [performance.pt-BR.md](performance.pt-BR.md) |
+| Language comparison notes (older suite) | — | [language-comparison.md](language-comparison.md) |
 
 Language learning path: [../language/tour.md](../language/tour.md) ·
 [../language/tour.pt-BR.md](../language/tour.pt-BR.md).

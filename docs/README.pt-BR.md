@@ -10,6 +10,7 @@
 |---------|-------------|
 | **Usuário novo** | [Instalação](install.pt-BR.md) → [Tour da linguagem](language/tour.pt-BR.md) → [Primeiro projeto](guides/first-project.pt-BR.md) |
 | **Uso diário** | [Cookbook](guides/cookbook.pt-BR.md) · [Erros / optional / result](guides/errors-null-void.pt-BR.md) · [Exemplos](../examples/) |
+| **Performance** | [Microbench Ori / Python / Rust](guides/performance.pt-BR.md) · [EN](guides/performance.md) |
 | **Contrato da linguagem** | [Especificação](spec/README.md) (normativa, **em inglês**) |
 | **Mantenedores** | **[BACKLOG](planning/BACKLOG.md)** · [Planejamento](planning/README.md) · [AGENTS.md](../AGENTS.md) |
 

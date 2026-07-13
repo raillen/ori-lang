@@ -1,0 +1,7 @@
+bin/
+results/*.times
+results/*.out
+results/*.time
+results/compile_times.txt
+rust_*/target/
+rust_*/Cargo.lock

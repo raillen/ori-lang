@@ -1,0 +1,14 @@
+module app.bench_sum
+
+import ori.io = io
+
+main()
+    const n: int = 10000000
+    var s: int = 0
+    var i: int = 0
+    while i < n
+        s = s + i
+        i = i + 1
+    end
+    io.print(f"{s}")
+end

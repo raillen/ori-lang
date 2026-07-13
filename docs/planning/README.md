@@ -20,6 +20,7 @@
 | [pr-plan-ori-surface-s3.md](pr-plan-ori-surface-s3.md) | PR plan (completed) |
 | [package-ecosystem-guidelines.md](package-ecosystem-guidelines.md) | Package conventions |
 | [roadtov1.md](roadtov1.md) | Long-horizon 1.0 sketch |
+| [perf-baseline-2026-07-13.md](perf-baseline-2026-07-13.md) | LANG-PERF baselines + polyglot Ori/Py/Rust snapshot |
 
 ## Historical / archive
 

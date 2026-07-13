@@ -3,13 +3,27 @@
 
 # Comparacao da Ori com outras linguagens
 
+> **Atualização 2026-07-13:** a comparação **viva** de runtime (Ori AOT vs
+> CPython vs Rust release, com timer de alta resolução e ressalvas honestas)
+> está em:
+>
+> - **[performance.md](performance.md)** (EN) · **[performance.pt-BR.md](performance.pt-BR.md)** (PT)
+> - Harness: [`tools/bench/polyglot/`](../../tools/bench/polyglot/)
+> - Snapshot no README: [../../README.md#performance-snapshot](../../README.md#performance-snapshot)
+>
+> **Nesta página:** suite mais antiga (Ori / Rust / C / Node / Python via
+> PowerShell). Os números abaixo **não** substituem o polyglot atual — em
+> especial, medições antigas em que Python aparecia “mais rápido que Ori” foram
+> superadas no polyglot 2026-07-13 (Ori ~4–46× à frente do CPython nesses
+> kernels). Mantenha este arquivo como **histórico / suite alternativa**.
+
 Este guia compara a Ori com outras linguagens usando funcoes e entradas equivalentes.
 
-Status: medicao local de referencia.
+Status: **histórico** — medicao local de referencia (suite PowerShell).
 
 ## Resumo rapido
 
-Resultado da medicao local com 5 iteracoes.
+Resultado da medicao local com 5 iteracoes (**histórico**, ~2026-06-30).
 
 Execucao de referencia local, gerada pelo runner e nao versionada:
 

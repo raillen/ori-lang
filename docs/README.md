@@ -10,6 +10,7 @@ This tree is the product documentation for Ori. Use it by audience:
 |----------|------------|
 | **New user** | [Install](install.md) → [Language tour](language/tour.md) → [First project](guides/first-project.md) |
 | **Everyday coding** | [Cookbook](guides/cookbook.md) · [Errors / optional / result](guides/errors-null-void.md) · [Examples](../examples/) |
+| **Performance** | [Performance microbench](guides/performance.md) (Ori vs Python vs Rust) · [PT](guides/performance.pt-BR.md) |
 | **Language contract** | [Specification](spec/README.md) (normative, English) |
 | **Maintainers / planning** | **[BACKLOG](planning/BACKLOG.md)** (only open-work list) · [Planning](planning/README.md) · [AGENTS.md](../AGENTS.md) |
 
@@ -56,11 +57,14 @@ docs/
 │   ├── testing.md
 │   ├── report-bugs.md
 │   ├── bootstrapping.md
-│   └── language-comparison.md
+│   ├── performance.md     # Ori / Python / Rust microbench (EN + .pt-BR)
+│   └── language-comparison.md  # older multi-lang suite (historical notes)
 ├── spec/                  # normative language + ABI (EN)
 └── planning/              # maintainers only (not a tutorial)
     └── historico/         # completed / archived plans
 ```
+
+Polyglot harness (sources + runner): [`tools/bench/polyglot/`](../tools/bench/polyglot/).
 
 ---
 

@@ -15,6 +15,7 @@ contrato estável 1.0.
 
 **Documentação:** [Índice de docs](docs/README.pt-BR.md) · [Instalação](docs/install.pt-BR.md) ·
 [Tour da linguagem](docs/language/tour.pt-BR.md) · [Guias](docs/guides/README.md) ·
+[Performance](docs/guides/performance.pt-BR.md) ·
 [Especificação](docs/spec/README.md) (normativa em inglês) ·
 [Planejamento](docs/planning/README.md)
 
@@ -27,6 +28,7 @@ contrato estável 1.0.
 - [O que é Ori](#o-que-é-ori)
 - [Por que Ori existe](#por-que-ori-existe)
 - [Status atual](#status-atual)
+- [Snapshot de performance](#snapshot-de-performance)
 - [Primeiros passos](#primeiros-passos)
 - [Primeiro programa](#primeiro-programa)
 - [Visão geral da CLI](#visão-geral-da-cli)
@@ -101,6 +103,32 @@ inferência menores e mensagens de erro mais claras.
 
 S3: [CHANGELOG.md](CHANGELOG.md) `[0.3.0]`. Inferência: `[0.3.1]`. Package sem
 Rust: `[0.3.2]`. Migrar: `ori migrate-syntax`.
+
+## Snapshot de performance
+
+Microbench local de **Ori AOT** vs **CPython 3.12** vs **Rust release** nos
+mesmos formatos de `while` (2026-07-13, Linux x86_64, mediana de 5 runs). Texto
+completo e ressalvas:
+**[docs/guides/performance.pt-BR.md](docs/guides/performance.pt-BR.md)**
+([EN](docs/guides/performance.md)).
+
+| Workload | Ori AOT | Python 3 | Rust release | Py / Ori | Ori / Rust |
+|----------|---------|----------|--------------|----------|------------|
+| soma `0..10⁷` | **0.95 s** | 7.41 s | 0.005 s\* | **7.8×** | 184×\* |
+| fib 2·10⁷ passos (wrap i64) | **1.16 s** | 25.1 s | 0.012 s | **21.7×** | **98×** |
+| lista push+soma 10⁶ | **0.030 s** | 1.41 s | 0.020 s | **46×** | **1.54×** |
+| nested 2000×2000 | **0.485 s** | 1.84 s | 0.006 s | **3.8×** | 86× |
+
+\* Rust `sum_loop` **não escala** com N (forma fechada no LLVM) — prefira
+`fib_iter` / `list_sum` para Ori↔Rust.
+
+**Leitura (pre-1.0):** Ori fica **acima do CPython** nestes kernels e só
+**~1.5×** atrás do Rust em churn de lista; loops inteiros tight ainda têm gap
+grande de codegen vs LLVM. Reproduzir:
+
+```bash
+SAMPLES=5 ./tools/bench/polyglot/run_polyglot_bench.sh
+```
 
 ## Primeiros passos
 
@@ -313,6 +341,7 @@ ori-lang/
   tests/                  fixtures E2E e documentação de testes
   extensions/             DX local (vscode-orl, zed-ori)
   tools/                  scripts de staging, smoke, export e validação
+  tools/bench/polyglot/   microbench runtime Ori / Python / Rust
   branding/               assets de marca
   _reversa_sdd/           auditorias históricas de engenharia reversa
 ```

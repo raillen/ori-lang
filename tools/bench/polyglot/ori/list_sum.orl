@@ -1,0 +1,22 @@
+module app.bench_list
+
+import ori.io = io
+import ori.list = lists
+
+main()
+    const n: int = 1000000
+    var xs: list[int] = []
+    var i: int = 0
+    while i < n
+        lists.push(xs, i)
+        i = i + 1
+    end
+    var s: int = 0
+    i = 0
+    const n_items: int = lists.len(xs)
+    while i < n_items
+        s = s + xs[i]
+        i = i + 1
+    end
+    io.print(f"{s}")
+end

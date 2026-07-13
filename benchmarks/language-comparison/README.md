@@ -1,5 +1,14 @@
 # Comparacao de linguagens
 
+> **Comparação viva (2026-07-13+):** Ori AOT vs CPython vs Rust release —
+> [`tools/bench/polyglot/`](../../tools/bench/polyglot/) ·
+> docs [performance.md](../../docs/guides/performance.md) /
+> [performance.pt-BR.md](../../docs/guides/performance.pt-BR.md).
+>
+> Este diretório é a **suite PowerShell alternativa** (também C e Node).
+> Números antigos em [docs/guides/language-comparison.md](../../docs/guides/language-comparison.md)
+> são históricos.
+
 Este diretorio contem workloads equivalentes em Ori, Rust, C, Python e Node.js.
 
 Cada arquivo implementa as mesmas funcoes:
