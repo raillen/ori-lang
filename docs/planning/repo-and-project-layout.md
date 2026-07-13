@@ -110,11 +110,11 @@ require_public = "off"
 
 | Fase | Trabalho | Status |
 |------|----------|--------|
-| **L.docs** | Este arquivo + spec 17 + PENDENTES + READMEs | em curso |
-| **L.scaffold** | `ori new` / `ori init` → layout acima | em curso |
-| **L.cargo** | Mover workspace para `compiler/` + CI/tools | em curso |
-| **L.examples** | Migrar `examples/*` para pastas-projeto | em curso (hello + guia) |
-| **L.hygiene** | Remover/arquivar patches e scratch da raiz | backlog curto |
+| **L.docs** | Este arquivo + spec 17 + PENDENTES + READMEs | ✅ |
+| **L.scaffold** | `ori new` / `ori init` → layout acima | ✅ |
+| **L.cargo** | Mover workspace para `compiler/` + CI/tools | ✅ |
+| **L.examples** | Migrar `examples/*` para pastas-projeto | ✅ |
+| **L.hygiene** | Remover/arquivar patches e scratch da raiz | ✅ `_archive/` |
 
 ---
 
