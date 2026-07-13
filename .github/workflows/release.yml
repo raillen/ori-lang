@@ -61,15 +61,21 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $root = Resolve-Path .
+          $PSNativeCommandUseErrorActionPreference = $false
+          $root = (Resolve-Path .).Path
           $pkg = Join-Path $root "compiler\target\dist\ori-${{ matrix.name }}"
           $archive = Join-Path $root "compiler\target\dist\ori-${{ github.ref_name }}-${{ matrix.name }}.zip"
           Write-Host "PackageRoot=$pkg"
           Write-Host "ArchivePath=$archive"
-          Write-Host "rustc: $(rustc -Vv | Out-String)"
-          & "$root\tools\package_native_release.ps1" -PackageRoot $pkg -ArchivePath $archive -Force
-          if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
-            throw "package_native_release.ps1 failed: $LASTEXITCODE"
+          Write-Host "PSVersion=$($PSVersionTable.PSVersion)"
+          rustc -Vv
+          cargo -V
+          try {
+            & "$root\tools\package_native_release.ps1" -PackageRoot $pkg -ArchivePath $archive -Force
+          } catch {
+            Write-Host "ERROR: $($_.Exception.Message)"
+            Write-Host $_.ScriptStackTrace
+            throw
           }
           if (-not (Test-Path -LiteralPath $archive)) {
             throw "Archive not produced: $archive"

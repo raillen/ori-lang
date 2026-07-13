@@ -6,20 +6,19 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $false
 
 function Get-HostTriple {
-    $rustcVersion = & rustc -Vv
+    $text = (& rustc -Vv | Out-String)
     if ($LASTEXITCODE -ne 0) {
-        throw "rustc -Vv failed; install Rust before running the native release smoke test."
+        throw "rustc -Vv failed; install Rust before running the native release smoke test. Output: $text"
     }
-
-    foreach ($line in $rustcVersion) {
-        if ($line -like "host:*") {
-            return $line.Substring(5).Trim()
+    foreach ($line in ($text -split "`r?`n")) {
+        if ($line -match '^host:\s*(.+)$') {
+            return $Matches[1].Trim()
         }
     }
-
-    throw "Could not detect the Rust host target from rustc -Vv."
+    throw "Could not detect the Rust host target from rustc -Vv. Output: $text"
 }
 
 function Get-OriExeName {
