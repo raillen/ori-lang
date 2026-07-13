@@ -81,8 +81,8 @@ if ($LASTEXITCODE -ne 0) {
     throw "smoke_native_release.ps1 failed with exit code $LASTEXITCODE."
 }
 
-if ((Test-Path -LiteralPath $ArchivePath) -and -not $Force) {
-    throw "Archive already exists at $ArchivePath. Pass -Force to replace it."
+if ((Test-Path -LiteralPath $ArchivePath) -and -not $Overwrite) {
+    throw "Archive already exists at $ArchivePath. Pass -Overwrite to replace it."
 }
 if (Test-Path -LiteralPath $ArchivePath) {
     Remove-Item -LiteralPath $ArchivePath -Force

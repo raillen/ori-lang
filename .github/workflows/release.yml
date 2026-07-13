@@ -51,53 +51,71 @@ jobs:
             --package-root "compiler/target/dist/ori-${{ matrix.name }}" \
             --archive "compiler/target/dist/ori-${{ github.ref_name }}-${{ matrix.name }}.tar.gz" \
             --force
-          # normalize name if tag empty (workflow_dispatch)
-          if [ ! -f "compiler/target/dist/ori-${{ github.ref_name }}-${{ matrix.name }}.tar.gz" ]; then
-            ls -la compiler/target/dist/ || true
-          fi
+          ls -la compiler/target/dist/ || true
 
       - name: Package (Windows)
         if: matrix.smoke == 'powershell'
         shell: pwsh
+        env:
+          ORI_REQUIRE_PACKAGED_RUNTIME: "1"
         run: |
-          $ErrorActionPreference = "Continue"
+          $ErrorActionPreference = "Stop"
           $PSNativeCommandUseErrorActionPreference = $false
-          $log = Join-Path $env:RUNNER_TEMP "ori-windows-package.log"
-          Start-Transcript -Path $log -Force | Out-Null
-          try {
-            $ErrorActionPreference = "Stop"
-            $root = (Resolve-Path .).Path
-            $pkg = Join-Path $root "compiler\target\dist\ori-${{ matrix.name }}"
-            $archive = Join-Path $root "compiler\target\dist\ori-${{ github.ref_name }}-${{ matrix.name }}.zip"
-            Write-Host "PackageRoot=$pkg"
-            Write-Host "ArchivePath=$archive"
-            Write-Host "PSVersion=$($PSVersionTable.PSVersion)"
-            Write-Host "PWD=$root"
-            Get-ChildItem "$root\tools\*.ps1" | ForEach-Object { Write-Host "tool: $($_.FullName)" }
-            rustc -Vv
-            cargo -V
-            # Dot-source free: invoke with explicit args
-            $script = Join-Path $root "tools\package_native_release.ps1"
-            if (-not (Test-Path -LiteralPath $script)) { throw "missing $script" }
-            & $script -PackageRoot $pkg -ArchivePath $archive -Overwrite
-            if (-not (Test-Path -LiteralPath $archive)) {
-              throw "Archive not produced: $archive"
-            }
-            Get-Item $archive | Format-List FullName, Length
-          } catch {
-            Write-Host "ERROR: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
-            Write-Host "ScriptStackTrace:`n$($_.ScriptStackTrace)"
-            Write-Host "InvocationInfo: $($_.InvocationInfo.PositionMessage)"
-            throw
-          } finally {
-            Stop-Transcript | Out-Null
-            if (Test-Path -LiteralPath $log) {
-              Copy-Item -LiteralPath $log -Destination "compiler\target\dist\ori-windows-package.log" -Force -ErrorAction SilentlyContinue
-              New-Item -ItemType Directory -Force -Path "compiler\target\dist" | Out-Null
-              Copy-Item -LiteralPath $log -Destination "compiler\target\dist\ori-windows-package.log" -Force
-              Get-Content $log | Select-Object -Last 80
-            }
+          $root = $env:GITHUB_WORKSPACE
+          if (-not $root) { $root = (Get-Location).Path }
+          Write-Host "root=$root ps=$($PSVersionTable.PSVersion)"
+          rustc -Vv
+          cargo -V
+
+          $manifest = Join-Path $root "compiler\Cargo.toml"
+          Write-Host "Building release CLI..."
+          cargo --manifest-path $manifest build -p ori-driver -p ori-lsp --release
+          if ($LASTEXITCODE -ne 0) { throw "cargo build failed: $LASTEXITCODE" }
+
+          $hostTriple = "x86_64-pc-windows-msvc"
+          $pkg = Join-Path $root "compiler\target\dist\ori-$hostTriple"
+          $archive = Join-Path $root "compiler\target\dist\ori-${{ github.ref_name }}-$hostTriple.zip"
+          $runtimeDir = Join-Path $pkg "runtime"
+          $examplesDir = Join-Path $pkg "examples"
+          $stdlibDir = Join-Path $pkg "stdlib"
+          $oriExe = Join-Path $root "compiler\target\release\ori.exe"
+          $lspExe = Join-Path $root "compiler\target\release\ori-lsp.exe"
+
+          if (-not (Test-Path $oriExe)) { throw "missing $oriExe" }
+          if (-not (Test-Path $lspExe)) { throw "missing $lspExe" }
+
+          if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $examplesDir, $runtimeDir | Out-Null
+          Copy-Item $oriExe (Join-Path $pkg "ori.exe")
+          Copy-Item $lspExe (Join-Path $pkg "ori-lsp.exe")
+          Copy-Item (Join-Path $root "stdlib") $stdlibDir -Recurse
+          Copy-Item (Join-Path $root "examples\hello_world\main.orl") (Join-Path $examplesDir "hello_world.orl")
+
+          Write-Host "Staging runtime..."
+          & (Join-Path $root "tools\stage_native_runtime.ps1") -Target $hostTriple -Profile release -OutputRoot $runtimeDir
+          if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
+            # stage script may not set LASTEXITCODE on throw; rethrow if runtime missing
           }
+          $staticLib = Join-Path $runtimeDir "$hostTriple\ori_runtime.lib"
+          if (-not (Test-Path $staticLib)) { throw "runtime not staged at $staticLib" }
+
+          Write-Host "Smoke compile hello_world..."
+          Push-Location $pkg
+          try {
+            & ".\ori.exe" compile "examples\hello_world.orl" --out "hello_world.exe"
+            if ($LASTEXITCODE -ne 0) { throw "ori compile failed: $LASTEXITCODE" }
+            $out = & ".\hello_world.exe"
+            if (($out -join "`n") -notmatch "The answer is: 42") { throw "unexpected hello output: $out" }
+            $jit = & ".\ori.exe" run "examples\hello_world.orl"
+            if (($jit -join "`n") -notmatch "The answer is: 42") { throw "unexpected jit output: $jit" }
+            & ".\ori.exe" doctor
+          } finally {
+            Pop-Location
+          }
+
+          if (Test-Path $archive) { Remove-Item $archive -Force }
+          Compress-Archive -Path $pkg -DestinationPath $archive -Force
+          Write-Host "archive=$archive size=$((Get-Item $archive).Length)"
 
       - name: Upload package artifact
         if: always() && matrix.smoke == 'powershell' || matrix.smoke == 'sh'
@@ -140,7 +158,13 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Ori ${{ github.ref_name }}
-          generate_release_notes: true
+          body: |
+            Ori **${{ github.ref_name }}** native packages.
+
+            - Linux: `ori-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz`
+            - Windows: `ori-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip`
+
+            Install notes: `docs/install.md`. ABI: `ori-native-abi-1`.
           prerelease: true
           fail_on_unmatched_files: false
           make_latest: true
