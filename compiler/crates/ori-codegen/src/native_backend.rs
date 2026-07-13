@@ -14615,6 +14615,12 @@ fn link_with_system_linker(
     let mut cmd = std::process::Command::new(linker);
     let cc_driver = !cfg!(windows) && is_unix_cc_link_driver(linker);
 
+    // Cargo/rustup often leave LIBRARY_PATH pointing at the Rust sysroot. That
+    // shadows Debian multiarch paths and makes both `ld` and `cc` fail with
+    // `cannot find -lc` on GitHub Actions. Clear it for the system link step.
+    cmd.env_remove("LIBRARY_PATH");
+    cmd.env_remove("LIBPATH");
+
     if cfg!(windows) {
         cmd.arg(format!("/OUT:{}", exe_path.display()));
     } else {
@@ -14629,7 +14635,6 @@ fn link_with_system_linker(
         }
     }
     for arg in extra_args {
-        // Skip -no-pie duplication issues — still pass through for both drivers.
         cmd.arg(arg);
     }
     if !cc_driver {
@@ -14642,17 +14647,8 @@ fn link_with_system_linker(
         }
         // Bare `ld` on Debian/Ubuntu multiarch often needs these for `-lc`.
         if cfg!(target_os = "linux") {
-            for extra in [
-                "/usr/lib/x86_64-linux-gnu",
-                "/lib/x86_64-linux-gnu",
-                "/usr/lib64",
-                "/lib64",
-                "/usr/lib",
-                "/lib",
-            ] {
-                if Path::new(extra).is_dir() {
-                    cmd.arg(format!("-L{extra}"));
-                }
+            for extra in linux_multiarch_lib_dirs() {
+                cmd.arg(format!("-L{extra}"));
             }
         }
         for crt in crt_pre {
@@ -14660,8 +14656,20 @@ fn link_with_system_linker(
         }
     }
     cmd.arg(obj_path);
+    // `extra_libs` mixes the runtime staticlib path with flag-like entries from
+    // runtime-link.json (`-lpthread`, `-lc`, `-no-pie`). Pass flags as raw
+    // strings; skip `-lc`/`-no-pie` when `cc` already provides them.
     for lib in extra_libs {
-        cmd.arg(lib);
+        let s = lib.to_string_lossy();
+        if s.starts_with('-') {
+            if cc_driver && (s == "-lc" || s == "-no-pie") {
+                continue;
+            }
+            // Avoid PathBuf turning flags into relative paths on some platforms.
+            cmd.arg(s.as_ref());
+        } else {
+            cmd.arg(lib);
+        }
     }
     if !cfg!(windows) && !cc_driver {
         cmd.arg("-lc");
@@ -14690,6 +14698,20 @@ fn link_with_system_linker(
             options,
         ))
     }
+}
+
+fn linux_multiarch_lib_dirs() -> Vec<&'static str> {
+    [
+        "/usr/lib/x86_64-linux-gnu",
+        "/lib/x86_64-linux-gnu",
+        "/usr/lib64",
+        "/lib64",
+        "/usr/lib",
+        "/lib",
+    ]
+    .into_iter()
+    .filter(|p| Path::new(p).is_dir())
+    .collect()
 }
 
 fn link_with_raw_native_command(

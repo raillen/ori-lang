@@ -44,17 +44,31 @@ jobs:
           set -eu
           set -o pipefail
           sudo apt-get update
-          # libc6-dev is required for bare `ld -lc` (SystemLinker) on multiarch.
-          sudo apt-get install -y build-essential dpkg-dev binutils libc6-dev gcc
+          # libc6-dev is required for SystemLinker / cc -lc on multiarch.
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential dpkg-dev binutils libc6-dev gcc g++
+          # Preflight: prove the runner can link C (catches missing -lc early).
+          printf 'int main(void){return 0;}\n' > /tmp/ori_link_preflight.c
+          cc /tmp/ori_link_preflight.c -o /tmp/ori_link_preflight
+          /tmp/ori_link_preflight
+          echo "cc finds libc at: $(cc -print-file-name=libc.so)"
+          ls -la "$(cc -print-file-name=libc.so)"
+          # Rustup may export LIBRARY_PATH; system link must not inherit a broken one.
+          unset LIBRARY_PATH || true
+          unset LIBPATH || true
           tag="${{ github.ref_name }}"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             tag="${{ inputs.tag }}"
           fi
           version=$(printf '%s' "$tag" | sed 's/^v//')
           echo "tag=$tag version=$version"
+          echo "ORI_USE_SYSTEM_LINKER=${ORI_USE_SYSTEM_LINKER:-}"
+          echo "ORI_SYSTEM_LINKER=${ORI_SYSTEM_LINKER:-}"
+          which cc gcc ld
           mkdir -p compiler/target/dist
           # Stream full package log; pipefail keeps the package script exit code.
-          if ! bash tools/package_native_release.sh \
+          if ! env -u LIBRARY_PATH -u LIBPATH \
+            bash tools/package_native_release.sh \
             --package-root "compiler/target/dist/ori-x86_64-unknown-linux-gnu" \
             --archive "compiler/target/dist/ori-${tag}-x86_64-unknown-linux-gnu.tar.gz" \
             --deb "compiler/target/dist/ori_${version}_amd64.deb" \

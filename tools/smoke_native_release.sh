@@ -47,6 +47,10 @@ compiler_root="$repo_root/compiler"
 # End-user package AOT path is SystemLinker (no portable rust-lld). Force it for
 # smoke so CI with a Rust sysroot does not pick BundledRustLld accidentally.
 export ORI_USE_SYSTEM_LINKER="${ORI_USE_SYSTEM_LINKER:-1}"
+# rustup/cargo may leave LIBRARY_PATH pointing at the Rust sysroot, which
+# shadows multiarch libc and breaks `ld`/`cc` with `cannot find -lc`.
+unset LIBRARY_PATH || true
+unset LIBPATH || true
 
 host_triple() {
     rustc -Vv | awk -F': ' '/^host:/ { print $2; exit }'
