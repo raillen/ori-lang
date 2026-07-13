@@ -583,6 +583,68 @@ end
     );
 }
 
+/// Option B local inference: field / index / call / pipe with known return.
+#[test]
+fn type_accepts_local_inference_option_b_field_index_call_pipe() {
+    let dir = TestDir::new("type_local_infer_b");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io = io
+import ori.string = str
+
+struct User
+    name: string
+    age: int
+end
+
+double(x: int) -> int
+    return x * 2
+end
+
+main()
+    const u = User { name: "Ada", age: 36 }
+    const n = u.name
+    const a = u.age
+    const d = double(21)
+    const xs = [10, 20, 30]
+    const first = xs[0]
+    const upper = str.to_upper("hi")
+    const via_pipe = 21 |> double
+    io.print(f"{n} {a} {d} {first} {upper} {via_pipe}")
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn type_rejects_local_inference_on_void_call() {
+    let dir = TestDir::new("type_local_infer_void");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io = io
+
+main()
+    const x = io.print("hi")
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "expected inference failure on void");
+    assert!(
+        out.diagnostics
+            .iter()
+            .any(|d| d.code == "type.local_inference_failed"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
 #[test]
 fn type_accepts_enum_named_variants() {
     let dir = TestDir::new("type_enum_named");

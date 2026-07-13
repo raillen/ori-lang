@@ -23,7 +23,7 @@ Declares an immutable binding.
 const name: string = "Ada"
 const max: int = 100
 
--- 0.3.1 Nim-local: omit type when the RHS is obvious on the same line
+-- 0.3.1 + B: omit type when the RHS is obvious (literal, field, index, call, pipe)
 const n = 1
 const label = "ready"
 const user = User { name: "Ada", age: 36 }

@@ -1157,9 +1157,11 @@ impl<'a> Checker<'a> {
 
     /// Resolve the type of a local `const`/`var` binding.
     ///
-    /// With an explicit annotation, behave as before. Without one (`0.3.1`
-    /// Nim-local inference), accept only RHS shapes that are obvious on the
-    /// same line; otherwise emit `type.local_inference_failed`.
+    /// With an explicit annotation, behave as before. Without one (`0.3.1` +
+    /// option B): accept RHS whose type is obvious on the same line — literals,
+    /// typed struct/list/map forms, **field/index on a typed receiver**, and
+    /// **calls (including `|>`) with a known return type**. Reject `try`, empty
+    /// collections, bare `none`, `void` results, and non-concrete types.
     fn resolve_local_binding_ty(
         &mut self,
         name: &Name,
@@ -2912,6 +2914,19 @@ impl<'a> Checker<'a> {
                     params: param_tys,
                     ret: Box::new(ret_ty),
                 }
+            }
+            // `value |> func` desugars to `func(value)` for typing (matches HIR lower).
+            Expr::Pipe { value, func, span } => {
+                let call = Expr::Call {
+                    callee: func.clone(),
+                    args: vec![Arg {
+                        label: None,
+                        value: ArgValue::Expr(value.clone()),
+                        span: value.span(),
+                    }],
+                    span: *span,
+                };
+                self.infer_expr(&call)
             }
             _ => Ty::Infer(0),
         }
@@ -6432,7 +6447,7 @@ fn expr_blocks_local_inference(expr: &Expr) -> bool {
 /// Whether a fully inferred type is concrete enough to omit a local annotation.
 fn ty_is_locally_inferable(ty: &Ty) -> bool {
     match ty {
-        Ty::Error | Ty::Infer(_) | Ty::Never => false,
+        Ty::Error | Ty::Infer(_) | Ty::Never | Ty::Void => false,
         Ty::Optional(inner)
         | Ty::List(inner)
         | Ty::Set(inner)

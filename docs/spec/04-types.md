@@ -12,22 +12,32 @@ Ori is statically typed. Every binding, parameter, and return position has a
 type known at compile time. There is **no global** (Hindley–Milner) type
 inference for bindings.
 
-**Local Nim-style inference (`0.3.1`):** inside function bodies, `const`/`var`
-may omit the type annotation when the right-hand side is obvious on the same
-line:
+**Local Nim-style inference (`0.3.1` + option B):** inside function bodies,
+`const`/`var` may omit the type annotation when the right-hand side is obvious
+on the same line:
 
 ```ori
 const n = 1
 const name = "Ada"
 const u = User { name: "Ada", age: 36 }
 const xs = [1, 2, 3]
+
+-- Option B (accepted 2026-07-13): field / index / call / pipe with known type
+const label = u.name
+const first = xs[0]
+const d = double(21)
+const e = 21 |> double
 ```
 
 If inference fails, the compiler emits `type.local_inference_failed` and asks
 for an explicit annotation. Still **required** to write types on:
 
 - `pub` items, parameters, and API return types;
-- `try expr`, empty `[]`/`{}`, bare `none`, and other non-obvious RHS.
+- `try expr`, empty `[]`/`{}`, bare `none`, `void` results, and other
+  non-obvious RHS;
+- types inferred only from *later* uses in the block (no “context from use”).
+
+**Not in scope:** Hindley–Milner global inference; block-wide solvers.
 
 **Design decision (2026-07-01, restated):** global inference remains out of
 scope permanently.

@@ -21,7 +21,7 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 | 5 | Corrigir falhas ARC (`list_push` ownership + enum layout) | feito (suite multifile verde) | Re-stage runtime se `_Unwind_Resume` / symbols |
 | 6 | Warning `classify_stdlib_import` | feito | `_has_selected_items` |
 | 7 | LSP + VS Code para inference local | feito (índice local + bump 0.3.1) | Inlay sintático; checker já em 0.3.1 |
-| 8 | Inferência **mais ampla** | **decidido B** | 0.3.1 = 8b; próxima fatia = B (calls retorno único + campo/index tipados). Sem C/D/HM |
+| 8 | Inferência **mais ampla** | **B entregue** | Calls + campo/index + pipe; rejeita void/try/empty. Sem C/D/HM |
 | 9 | Pipe `\|\>` | **confirmado** | **Permanece** na Ori (já implementado) |
 
 ### Médio prazo

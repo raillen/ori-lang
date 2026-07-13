@@ -529,14 +529,18 @@ Quando a superfície S3 estiver definida (e na implementação/`0.3.0`):
 | **8b.3** | Global HM | **Continua proibida** (decisão Ori 2026-07-01) |
 | **8b.4** | API pública | **`pub`, params e retornos de API: anotar** (aliases ok; não esconder `result` difícil) |
 | **8b.5** | Quando implementar | **`0.3.1` entregue** (2026-07-13) — omissão local no checker + testes + docs |
-| **8b.6** | Ampliação pós-0.3.1 | **Opção B** — RHS “óbvio” estendido (decisão 2026-07-13); **não** C/D/E |
-| **8b.7** | Escopo da B | **Chamadas com retorno único conhecido** + **campo/index** em receptor já tipado; **não** contexto de uso (C) nem HM |
+| **8b.6** | Ampliação pós-0.3.1 | **Opção B aceita** (2026-07-13); **não** C/D/E |
+| **8b.7** | Escopo da B | Calls com retorno conhecido + campo/index tipados + **pipe `\|\>`** como call; rejeitar `void` |
+| **8b.8** | Status B | **Entregue** (checker via `infer_expr` + tipagem de `Pipe` + testes) |
 
-### Pode omitir (lista inicial de implementação)
+### Pode omitir (lista — 8b + B)
 
 - Literais com tipo único: `1`, `"x"`, `true`, floats óbvios, etc.
 - Struct com tipo no literal: `User { name: "Ada", age: 36 }`
-- (Na fatia de impl.) listas/maps literais **não vazios** com elementos de tipo único, se o checker fixar com segurança
+- Listas/maps literais **não vazios** com elementos de tipo único
+- **Campo / index** em receptor já tipado: `u.name`, `xs[0]`
+- **Chamada** com retorno monomórfico conhecido (user + stdlib)
+- **Pipe** `value |> f` (equivalente a `f(value)` no checker)
 
 ### Não omitir (regra dura de design)
 
@@ -627,6 +631,7 @@ rodar e pular PR11 até a tag 0.3.0.
 | 2026-07-12 | 7.4 B `(u)=>`; (ata errada: “pipe fora do 0.3”); bloco 7 fechado; abertura do bloco 8 |
 | 2026-07-13 | **7.5 corrigido:** pipe `\|\>` **permanece** na Ori; Auk9 arquivada como produto; prioridade curto/médio prazo redefinida |
 | 2026-07-13 | Pipe confirmado pelo usuário; inferência ampla = **B** (calls + campo/index); push tags 0.3.x |
+| 2026-07-13 | B aceita e entregue: tipagem `Pipe`, testes field/index/call/pipe, reject void |
 | 2026-07-12 | Bloco 8 fechado; abertura 8b (inferência local) antes do 9 |
 | 2026-07-12 | 8b fechado (Nim-local, API explícita, impl após S3); abertura do bloco 9 |
 | 2026-07-12 | Bloco 9 fechado; ADR + PR plan para execute-plan criados |
