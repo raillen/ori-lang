@@ -190,15 +190,14 @@ Source (.orl)
 - **Package** (zip/tar + smoke release) só após fechar pendências de runtime/stdlib/tooling — não bloqueia tags de superfície.
 - Patch versions (`0.3.2`, …) para correções e small additive features.
 - `0.4+` só com breaking real ou marco grande acordado.
-- `1.0` é critério de maturidade (anos, não dias):
-  1. **Independência do Rust para o usuário final** (crítico — smoke em máquina sem Rust, SystemLinker/JIT estáveis).
-  2. Stdlib corrigida/consolidada (Layer 2+3; mesclagem de módulos a discutir).
-  3. **ABI estável documentada** — **após** integração das funcionalidades finais (não antes).
-  4. Self-hosting = **última** discussão de linguagem (só depois de tudo funcional).
-  5. ~~Usuários reais~~ — **ignorado** como critério de produto por agora.
-  6. Sem breaking changes por ≥6 meses quando se aproximar de 1.0.
+- `1.0` é critério de maturidade (anos, não dias), na **ordem tática**:
+  1. **Stdlib** corrigida/consolidada (Layer 2+3; mesclagem a discutir) — **M2**
+  2. **ABI estável documentada** — **após** features finais — **M3**
+  3. **Independência do Rust** para quem instala Ori sem toolchain Rust — **M1** (depois de M2+M3)
+  4. Self-hosting = **última** discussão de linguagem (**M4**)
+  5. Estabilidade de contrato (ex.: sem breaking prolongado) quando se aproximar de 1.0
 
-**Prioridade tática (2026-07-13):** ver `docs/planning/PENDENTES.md` seção “Prioridade 2026-07-13”.
+**Prioridade tática (2026-07-13):** **M2 → M3 → M1 → M4**. Ver `docs/planning/PENDENTES.md`.
 
 ## Rust Independence Strategy (2026-07-02)
 
@@ -212,7 +211,7 @@ Source (.orl)
 | **Phase 1 — BundledRustLld** | Invoca `rust-lld` direto, sem `rustc` driver | ✅ Completo (3 OSes) | Ainda precisa do binário `rust-lld` (vem do Rust toolchain) |
 | **Phase 2 — SystemLinker** | Invoca linker nativo do sistema (`link.exe`/`ld`/`ld64`) direto | ✅ Completo (3 OSes) | Requer toolchain do OS (VS Build Tools, build-essential, Xcode CLT) |
 | **Phase 3 — JIT Cranelift** | `ori run` sem `.o`, sem linker, sem subprocesso | ✅ Completo | `ori compile`/`ori test` ainda usam AOT (precisam de linker) |
-| **Phase 4 — Self-hosting** | Compilador escrito em Ori | ❌ Não iniciado | Anos de trabalho; adiado até haver usuários reais |
+| **Phase 4 — Self-hosting** | Compilador escrito em Ori | ❌ Não iniciado | Anos de trabalho; **última** discussão de linguagem (M4) |
 
 ### Pré-requisitos do sistema por OS (para AOT)
 
@@ -228,27 +227,26 @@ Para `ori run` (JIT): **nenhum linker é necessário** — apenas o cdylib do ru
 
 ### Decisões arquiteturais fechadas
 
-1. **Self-hosting adiado indefinidamente.** Não é pré-requisito para utilidade. Python, Ruby, Lua nunca foram self-hosted. Zig está em 0.14 após ~10 anos. Self-hosting será reconsiderado quando houver usuários reais estáveis.
-2. **Runtime Layer 1 permanece Rust.** ARC, async executor, FFI, I/O e rede são hot paths que beneficiam da safety do Rust. A ABI C é o contrato público; a implementação interna pode mudar no futuro.
-3. **SystemLinker é o default para AOT.** A partir de 2026-07-02, `NativeLinker::discover()` tenta `SystemLinker` antes de `BundledRustLld` no caminho default. Isso elimina a dependência de `rust-lld` (binário do Rust toolchain) para usuários finais que já têm o linker do sistema.
-4. **Rust continua necessário apenas para *desenvolver* o compilador.** Quem clona o repo e trabalha no código do compilador precisa de `cargo` + `rustc`. Quem instala via release package não precisa.
+1. **Self-hosting adiado** até o restante da linguagem estar funcional (M4 — última discussão). Não é pré-requisito para utilidade. Python, Ruby, Lua nunca foram self-hosted; Zig está em 0.14 após ~10 anos.
+2. **Runtime Layer 1 permanece Rust.** ARC, async executor, FFI, I/O e rede são hot paths. A ABI C é o contrato público.
+3. **SystemLinker é o default para AOT.** Elimina dependência de `rust-lld` para AOT quando o linker do OS existe.
+4. **Rust continua necessário apenas para *desenvolver* o compilador.** Quem instala via release package não precisa de `cargo`/`rustc`.
 
-### Critérios para 1.0 (mantidos, sem mudança)
+### Critérios técnicos para 1.0 (ordem: M2 → M3 → M1 → M4)
 
-1. Rust dependency totalmente removida para usuários finais
-2. Stdlib portada em `.orl` (Layer 2+3 substantivas; Layer 1 permanece Rust)
-3. Compiler self-hosting **ou** bootstrapping documentado
-4. ABI estável documentada
-5. Usuários reais
-6. Sem breaking changes por ≥6 meses
+1. Stdlib consolidada (Layer 2+3; Layer 1 Rust por design) — **M2**
+2. ABI estável documentada — **M3**
+3. Independência do Rust no caminho do instalador final — **M1**
+4. Self-hosting **ou** bootstrapping documentado — **M4** (última)
+5. Estabilidade de contrato (ex. janela sem breaking) ao aproximar 1.0
 
 ### Próximos passos táticos
 
-- [ ] Smoke em máquina Windows sem Rust instalado (apenas VS Build Tools)
-- [ ] Smoke em máquina Linux sem Rust instalado (apenas build-essential)
-- [ ] Smoke em máquina macOS sem Rust instalado (apenas Xcode CLT)
-- [ ] CI job que valida release package em runner sem Rust
-- [ ] Documentar instalação de prereqs do sistema (`docs/install.md`)
+**Ordem:** M2 stdlib → M3 ABI → **depois** M1 (itens abaixo) → M4 self-host.
+
+- [ ] *(M1, após M2+M3)* Smoke Windows/Linux/macOS sem Rust toolchain
+- [ ] *(M1)* CI job que valida release package em runner sem Rust
+- [ ] *(M1)* Manter `docs/install.md` alinhado aos prereqs do sistema
 
 ## Known Pitfalls
 

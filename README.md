@@ -471,21 +471,17 @@ for the active backlog.
 
 ## Roadmap
 
-Ori's long-term 1.0 criteria are deliberately strict:
+Long-term technical criteria for 1.0 (execution order **stdlib → ABI →
+Rust-independence → self-host last**):
 
-1. remove the practical Rust dependency from end-user compilation paths —
-   **mostly done**: `ori run` uses JIT (no linker), and `ori compile` defaults
-   to the platform linker (no `rustc` or `rust-lld` required);
-2. keep substantive stdlib layers in `.orl` where it makes sense —
-   **in progress**: Layer 2/3 utilities and algorithms are already in `.orl`;
-3. prove a self-hosting path or a credible bootstrap path —
-   **deferred**: self-hosting is not a prerequisite for utility; a documented
-   bootstrap path is an acceptable alternative;
-4. document a stable ABI — **pending**;
-5. gain real users beyond repository tests — **pending**;
-6. avoid breaking changes for at least six months — **pending**.
+1. consolidate the stdlib (Layer 2/3 in `.orl`; merge discussion open) — **next**;
+2. document a stable ABI after final feature integration — **after stdlib work**;
+3. finish Rust-independence for installers without a Rust toolchain —
+   largely implemented (JIT + SystemLinker); validation smoke/CI later;
+4. self-hosting or a documented bootstrap path — **last** language discussion;
+5. contract stability (e.g. a long no-breaking window) when approaching 1.0.
 
-Until then, the project stays honest about its pre-1.0 status.
+Active backlog order: `docs/planning/PENDENTES.md` (M2 → M3 → M1 → M4).
 
 ## License
 

@@ -408,16 +408,17 @@ para o backlog ativo.
 
 ## Roadmap
 
-Os critérios de longo prazo para 1.0 são intencionalmente rígidos:
+Critérios técnicos de longo prazo para 1.0 (ordem **stdlib → ABI →
+independência do Rust → self-host por último**):
 
-1. remover a dependência prática de Rust dos caminhos de compilação para usuário final;
-2. manter camadas substantivas da stdlib em `.orl` quando fizer sentido;
-3. provar self-hosting ou um caminho de bootstrap crível;
-4. documentar ABI estável;
-5. ter usuários reais além dos testes do repositório;
-6. ficar pelo menos seis meses sem breaking changes.
+1. consolidar a stdlib (Layer 2/3 em `.orl`; mesclagem a discutir) — **próximo**;
+2. documentar ABI estável após integrar as features finais;
+3. fechar independência do Rust no caminho do instalador (JIT + SystemLinker
+   já cobrem a maior parte; smoke/CI sem Rust depois);
+4. self-hosting ou bootstrap documentado — **última** discussão de linguagem;
+5. estabilidade de contrato (ex. janela sem breaking) ao aproximar 1.0.
 
-Até lá, o projeto permanece honesto sobre seu status pre-1.0.
+Backlog ativo: `docs/planning/PENDENTES.md` (M2 → M3 → M1 → M4).
 
 ## Licença
 

@@ -399,16 +399,15 @@ active backlog は [docs/planning/PENDENTES.md](docs/planning/PENDENTES.md) と
 
 ## ロードマップ
 
-Ori の長期的な 1.0 条件は意図的に厳しくしています。
+1.0 に向けた技術的な順序は **stdlib → ABI → Rust 非依存 → self-host 最後** です。
 
-1. end-user compilation path から実質的な Rust dependency を取り除く。
-2. 意味がある範囲で stdlib の主要部分を `.orl` に保つ。
-3. self-hosting または信頼できる bootstrap path を示す。
-4. stable ABI を文書化する。
-5. repository tests 以外の実ユーザーを得る。
-6. 少なくとも 6 か月間 breaking changes を避ける。
+1. stdlib の整理・統合（Layer 2/3）— **次**
+2. 最終機能統合後に stable ABI を文書化
+3. インストーラ経路での Rust 非依存の仕上げ（JIT + SystemLinker は概ね済み）
+4. self-hosting または bootstrap の文書化 — **最後**
+5. 1.0 接近時の契約安定性（長期間 breaking を避ける等）
 
-それまでは、pre-1.0 であることを明確にします。
+バックログ順: `docs/planning/PENDENTES.md`（M2 → M3 → M1 → M4）。
 
 ## ライセンス
 

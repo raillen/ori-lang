@@ -14,32 +14,34 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 
 | # | Item | Status | Notas |
 |---|------|--------|-------|
-| 1 | Tags de release `v0.3.0` / `v0.3.1` + Cargo `0.3.1` | em curso | **Package** zip/tar **não** nesta fatia |
-| 2 | Package de distribuição | **adiado** | Depois de pendências (stdlib, tooling, Rust-indep) |
+| 1 | Tags de release `v0.3.0` / `v0.3.1` + Cargo `0.3.1` | **feito** | Package zip/tar **não** nesta fatia |
+| 2 | Package de distribuição | **adiado** | Depois de stdlib + ABI + (depois) Rust-indep |
 | 3 | Migrar `ori-game` / `ori-imgui` | **última** | Depois de tudo o resto |
 | 4 | Arquivar Auk9 como produto | feito | README no repo `auk9-lang` |
-| 5 | Corrigir falhas ARC (`list_push` ownership + enum layout) | feito (suite multifile verde) | Re-stage runtime se `_Unwind_Resume` / symbols |
+| 5 | Corrigir falhas ARC (`list_push` ownership + enum layout) | feito | Re-stage runtime se `_Unwind_Resume` / symbols |
 | 6 | Warning `classify_stdlib_import` | feito | `_has_selected_items` |
-| 7 | LSP + VS Code para inference local | feito (índice local + bump 0.3.1) | Inlay sintático; checker já em 0.3.1 |
-| 8 | Inferência **mais ampla** | **B entregue** | Calls + campo/index + pipe; rejeita void/try/empty. Sem C/D/HM |
-| 9 | Pipe `\|\>` | **confirmado** | **Permanece** na Ori (já implementado) |
+| 7 | LSP + VS Code para inference local | feito | Inlay sintático; checker 0.3.1 + B |
+| 8 | Inferência **mais ampla** (opção B) | **entregue** | Calls + campo/index + pipe; reject void/try/empty |
+| 9 | Pipe `\|\>` | **confirmado** | **Permanece** na Ori |
 
-### Médio prazo
+### Médio prazo (ordem de execução)
 
-| # | Item | Prioridade | Notas |
-|---|------|------------|-------|
-| M1 | **Independência do Rust para usuário final** | **crítica** | Smoke máquina sem Rust; SystemLinker/JIT; CI `smoke-no-rust` |
-| M2 | **Stdlib** corrigir + **discutir mesclagem** de módulos | alta | Gap parity + consolidar `utils`/`algorithms`/pais |
-| M3 | **ABI estável** documentada | após features finais | Não congelar ABI cedo demais |
-| M4 | Self-hosting | **última** discussão de linguagem | Só depois de tudo funcional |
-| M5 | “Usuários reais” como critério | **ignorar** | Não é gate de produto agora |
+| # | Item | Ordem | Notas |
+|---|------|-------|--------|
+| **M2** | **Stdlib** corrigir + **discutir mesclagem** de módulos | **1º** | Gap parity residual; consolidar `utils`/`algorithms`/pais; residual `path.relative` |
+| **M3** | **ABI estável** documentada | **2º** | Após integração das funcionalidades finais (não congelar cedo) |
+| **M1** | **Independência do Rust para usuário final** | **3º** | Depois de M2+M3: smoke sem Rust, SystemLinker/JIT, CI `smoke-no-rust` |
+| **M4** | Self-hosting | **última** discussão de linguagem | Só depois de tudo o resto já funcional |
+
+> **Ordem acordada (2026-07-13):** **M2 → M3 → M1 → M4**.  
+> Independência do Rust **não** é o próximo passo; vem **depois** de stdlib e ABI.
 
 ### Explicitamente fora da fila agora
 
-- Empacotar release binário
-- Migrar game/imgui
-- Self-hosting
-- Inferência global HM (continua proibida)
+- Empacotar release binário (até fechar M2/M3 e, se desejado, M1)
+- Migrar game/imgui (última migração de packages)
+- Self-hosting (M4 — última discussão)
+- Inferência global HM / opções C–D
 
 ---
 

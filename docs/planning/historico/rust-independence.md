@@ -78,8 +78,8 @@ O default é `SystemLinker`. O usuário final precisa ter instalado:
 
 ## 4. Decisões arquiteturais fechadas
 
-1. **Self-hosting adiado indefinidamente.**  
-   Não é pré-requisito para utilidade. Será reconsiderado quando houver usuários reais estáveis e recursos dedicados.
+1. **Self-hosting adiado** até o restante da linguagem estar funcional (última discussão, M4).  
+   Não é pré-requisito para utilidade.
 
 2. **Runtime Layer 1 permanece Rust.**  
    ARC, async executor, FFI, I/O e rede são hot paths que beneficiam da safety do Rust. A ABI C é o contrato público; a implementação interna pode mudar no futuro.
