@@ -39,25 +39,41 @@ jobs:
       - name: Package (Linux tar.gz + deb)
         env:
           ORI_USE_SYSTEM_LINKER: "1"
+          CARGO_TERM_COLOR: always
         run: |
-          set -eux
+          set -eu
+          set -o pipefail
           sudo apt-get update
-          sudo apt-get install -y build-essential dpkg-dev
-          version=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          # workflow_dispatch may not set github.ref_name to the tag; prefer input
+          sudo apt-get install -y build-essential dpkg-dev binutils
           tag="${{ github.ref_name }}"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             tag="${{ inputs.tag }}"
-            version=$(echo "$tag" | sed 's/^v//')
           fi
-          sh tools/package_native_release.sh \
+          version=$(printf '%s' "$tag" | sed 's/^v//')
+          echo "tag=$tag version=$version"
+          mkdir -p compiler/target/dist
+          # Stream full package log; pipefail keeps the package script exit code.
+          if ! bash tools/package_native_release.sh \
             --package-root "compiler/target/dist/ori-x86_64-unknown-linux-gnu" \
             --archive "compiler/target/dist/ori-${tag}-x86_64-unknown-linux-gnu.tar.gz" \
             --deb "compiler/target/dist/ori_${version}_amd64.deb" \
-            --force
+            --force 2>&1 | tee compiler/target/dist/package.log
+          then
+            echo "package_native_release failed; last 100 log lines:" >&2
+            tail -n 100 compiler/target/dist/package.log >&2 || true
+            exit 1
+          fi
           ls -la compiler/target/dist/ || true
           test -f "compiler/target/dist/ori-${tag}-x86_64-unknown-linux-gnu.tar.gz"
           test -f "compiler/target/dist/ori_${version}_amd64.deb"
+
+      - name: Upload package log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-log
+          path: compiler/target/dist/package.log
+          if-no-files-found: ignore
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
