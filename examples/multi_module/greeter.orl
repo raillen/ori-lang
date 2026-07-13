@@ -1,0 +1,10 @@
+module app.greeter
+
+-- Local domain module (same project directory).
+public hello(name: string) -> string
+    return "hello, " + name
+end
+
+public shout(name: string) -> string
+    return "HELLO, " + name + "!"
+end

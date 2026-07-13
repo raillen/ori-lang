@@ -13,6 +13,21 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Notas
 - Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package + M1/M3/stdlib = **`[0.3.2]`**.
 
+### Adicionado / refatorado (exemplos P1–P4)
+- **Catálogo enxuto (21 mini-projetos):** removidos/fundidos duplicatas
+  (`hello_world`, `scratch_interp`, `release_smoke`, demos de collection
+  isolados, `calculator`, `struct_demo`, `logic_and_matching`,
+  `generics_showcase`, `map_set_graph`); `task_cli` → `cli_args`.
+- **Novos:** `tests_demo` (`ori test` + `@test`), `using_fs` (streams +
+  `using`), `async_io` (FS async), `multi_module` (+ `greeter.orl`),
+  `concurrency` (spawn/join, channel, atomic), `random_format_iter`.
+- **Polidos:** `collections_demo` (tour único), `language_features`,
+  `native_showcase` (`Displayable` via `ori.core`), `async_demo`, `cli_args`.
+- **`examples/README.md`:** trilha de aprendizado + catálogo alinhado.
+- **Smoke/release:** `tools/smoke_native_release.*` passam a usar
+  `examples/hello` (em vez de `hello_world` removido).
+
+
 ---
 
 ## [0.3.2] — 2026-07-13

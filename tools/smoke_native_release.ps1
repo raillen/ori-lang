@@ -104,7 +104,7 @@ try {
     Copy-Item -LiteralPath $sourceOri -Destination $packageOri -Force
     Copy-Item -LiteralPath $sourceLsp -Destination $packageLsp -Force
     Copy-Item -LiteralPath (Join-Path $repoRoot "stdlib") -Destination $stdlibDir -Recurse -Force
-    Copy-Item -LiteralPath (Join-Path $repoRoot "examples/hello_world/main.orl") -Destination (Join-Path $examplesDir "hello_world.orl") -Force
+    Copy-Item -LiteralPath (Join-Path $repoRoot "examples/hello/main.orl") -Destination (Join-Path $examplesDir "hello.orl") -Force
     Copy-Item -LiteralPath (Join-Path $repoRoot "examples/async_demo/main.orl") -Destination (Join-Path $examplesDir "async_demo.orl") -Force
 
     $stageArgs = @{
@@ -162,14 +162,14 @@ try {
             throw "packaged stdlib was not copied to $stdlibDir."
         }
 
-        $helloExe = Join-Path $packageRootPath (Get-OutputExeName "hello_world")
-        Invoke-Checked { & $packageOri compile (Join-Path "examples" "hello_world.orl") --out $helloExe } "ori compile in packaged release folder"
+        $helloExe = Join-Path $packageRootPath (Get-OutputExeName "hello")
+        Invoke-Checked { & $packageOri compile (Join-Path "examples" "hello.orl") --out $helloExe } "ori compile in packaged release folder"
         $helloOutput = & $helloExe
         if ($LASTEXITCODE -ne 0) {
-            throw "compiled hello_world executable failed with exit code $LASTEXITCODE."
+            throw "compiled hello executable failed with exit code $LASTEXITCODE."
         }
         if (($helloOutput -join "`n") -notmatch "The answer is: 42") {
-            throw "compiled hello_world executable did not print the expected answer."
+            throw "compiled hello executable did not print the expected answer."
         }
 
         $asyncExe = Join-Path $packageRootPath (Get-OutputExeName "async_demo")
@@ -207,7 +207,7 @@ try {
             throw "packaged runtime cdylib was not staged at $cdylibPath."
         }
 
-        $jitOutput = & $packageOri run (Join-Path "examples" "hello_world.orl")
+        $jitOutput = & $packageOri run (Join-Path "examples" "hello.orl")
         if ($LASTEXITCODE -ne 0) {
             throw "ori run (JIT default) failed with exit code $LASTEXITCODE."
         }

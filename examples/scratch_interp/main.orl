@@ -1,9 +1,0 @@
-module app.interp
-
-import ori.io = io
-
-main()
-    const name: string = "World"
-    const val: int = 42
-    io.print(f"Hello {name}, value is {val}!")
-end

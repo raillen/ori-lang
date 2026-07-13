@@ -1,5 +1,5 @@
 manifest = 1
-name = "struct_demo"
+name = "tests_demo"
 version = "0.1.0"
 kind = "app"
 entry = "main.orl"

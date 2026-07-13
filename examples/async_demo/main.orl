@@ -1,5 +1,6 @@
-module examples.async_demo
+module app.async_demo
 
+-- Minimal async/await. For FS async see `async_io`.
 import ori.io = io
 import ori.task = task
 
@@ -8,7 +9,14 @@ async delayed_answer() -> int
     return 42
 end
 
+async double_after(n: int) -> int
+    const a: int = await delayed_answer()
+    return n + a
+end
+
 async main()
     const answer: int = await delayed_answer()
-    io.print(string(answer))
+    io.println(string(answer))
+    const summed: int = await double_after(8)
+    io.println(string(summed))
 end

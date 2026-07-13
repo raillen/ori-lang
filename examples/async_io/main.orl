@@ -1,0 +1,24 @@
+module app.async_io
+
+-- Async FS (STDLIB-4) + task sleep. Run: ori run examples/async_io
+import ori.fs = fs
+import ori.io = io
+import ori.task = task
+
+async main()
+    const path: string = "ori_async_io_demo.txt"
+    const payload: string = "async-fs-ok"
+
+    match await fs.write_text_async(path, payload)
+        case ok(_):
+            await task.sleep(1)
+            match await fs.read_text_async(path)
+                case ok(text):
+                    io.println(text)
+                case err(m):
+                    io.eprintln(m)
+            end
+        case err(m):
+            io.eprintln(m)
+    end
+end

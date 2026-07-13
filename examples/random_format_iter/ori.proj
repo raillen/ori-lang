@@ -1,5 +1,5 @@
 manifest = 1
-name = "stack_demo"
+name = "random_format_iter"
 version = "0.1.0"
 kind = "app"
 entry = "main.orl"

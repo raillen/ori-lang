@@ -1,5 +1,5 @@
 manifest = 1
-name = "graph_demo"
+name = "concurrency"
 version = "0.1.0"
 kind = "app"
 entry = "main.orl"

@@ -1,5 +1,6 @@
 module app.collections
 
+-- Single collections tour (queue/stack/deque/tree/… demos were merged here).
 import ori.deque = deque
 import ori.doubly_linked_list = dll
 import ori.hash_table = hash_table
@@ -12,7 +13,7 @@ import ori.stack = stack
 import ori.tree = tree
 
 main()
-    io.print("Collections")
+    io.print("Collections tour")
     const fruits: list[string] = ["Apple", "Banana", "Cherry"]
     io.print(string(lists.len(fruits)))
 

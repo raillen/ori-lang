@@ -1,14 +1,15 @@
 # Ori Examples
 
-Each example is a **mini-project** (M2.layout):
+Each example is a **mini-project**:
 
 ```text
 example-name/
   ori.proj      # required
-  main.orl      # recommended default entry
+  main.orl      # default entry (tests_demo: @test only, no main)
+  *.orl         # optional sibling modules (see multi_module)
 ```
 
-**Stdlib style:** import `ori.X` (not `ori.X.utils`). See `docs/planning/stdlib-merge-policy.md`.
+**Surface:** S3 + inference B · **`ok`/`err`** · imports `ori.X` (not `ori.X.utils`).
 
 ## Run
 
@@ -18,13 +19,72 @@ cargo run -p ori-driver -- check ../examples/hello
 cargo run -p ori-driver -- run ../examples/hello
 ```
 
-Or with a packaged `ori`:
+With a staged/packaged `ori`:
 
 ```bash
 ori check examples/hello
 ori run examples/hello
+ori test examples/tests_demo
 ```
 
-## Projects
+All examples under `examples/*/main.orl` pass `ori check`.  
+`http_get` needs network and TLS (runtime uses rustls + ring).  
+`using_fs` / `async_io` write a scratch file in the current working directory.
 
-See directories under `examples/*/`. Canonical minimal app: [`hello/`](hello/).
+## Learning trail
+
+Suggested order for newcomers:
+
+| Step | Example | What you learn |
+|------|---------|----------------|
+| 1 | [`hello/`](hello/) | Minimal app, `ori run` |
+| 2 | [`language_features/`](language_features/) | Structs, enums, traits, generics, match, pipe, `check` |
+| 3 | [`error_handling/`](error_handling/) | `result` / `ok` / `err` |
+| 4 | [`tests_demo/`](tests_demo/) | `@test` + `ori.test` (`ori test`) |
+| 5 | [`cli_args/`](cli_args/) | `ori.args` |
+| 6 | [`string_toolkit/`](string_toolkit/) · [`bytes_usage/`](bytes_usage/) | Text and bytes |
+| 7 | [`collections_demo/`](collections_demo/) | List, map, queue, stack, deque, linked lists, tree, hash table |
+| 8 | [`using_fs/`](using_fs/) | Streams `open_input` / `open_output` + `using` dispose |
+| 9 | [`path_time_io/`](path_time_io/) · [`file_organizer/`](file_organizer/) · [`log_analyzer/`](log_analyzer/) | Path, time, file workflows |
+| 10 | [`json_validator/`](json_validator/) | JSON |
+| 11 | [`process_runner/`](process_runner/) | Process |
+| 12 | [`async_demo/`](async_demo/) | `async` / `await` + `task.sleep` |
+| 13 | [`async_io/`](async_io/) | `fs.read_text_async` / `write_text_async` |
+| 14 | [`concurrency/`](concurrency/) | `task.spawn`/`join`, channel, atomic |
+| 15 | [`random_format_iter/`](random_format_iter/) | `ori.random`, `ori.format`, `ori.iter` |
+| 16 | [`http_get/`](http_get/) | `ori.net.http` + TLS |
+| 17 | [`multi_module/`](multi_module/) | Local modules (`import app.greeter`) |
+| 18 | [`native_showcase/`](native_showcase/) | Traits, `any[T]`, generics, `using`, `Displayable` |
+
+## Catalog (all 21)
+
+| Example | Topic |
+|---------|--------|
+| [`hello/`](hello/) | Minimal app (canonical start) |
+| [`language_features/`](language_features/) | Broad language surface tour |
+| [`error_handling/`](error_handling/) | `result` / match |
+| [`tests_demo/`](tests_demo/) | `@test` harness (`ori test`) |
+| [`cli_args/`](cli_args/) | CLI args + small task list |
+| [`string_toolkit/`](string_toolkit/) | `ori.string` |
+| [`bytes_usage/`](bytes_usage/) | `ori.bytes` |
+| [`collections_demo/`](collections_demo/) | Collections overview (merged former one-offs) |
+| [`using_fs/`](using_fs/) | File streams + `using` |
+| [`path_time_io/`](path_time_io/) | Path / time / IO |
+| [`file_organizer/`](file_organizer/) | FS organization sketch |
+| [`log_analyzer/`](log_analyzer/) | File + string processing |
+| [`json_validator/`](json_validator/) | JSON |
+| [`process_runner/`](process_runner/) | Process |
+| [`async_demo/`](async_demo/) | Minimal async/await |
+| [`async_io/`](async_io/) | Async FS |
+| [`concurrency/`](concurrency/) | Spawn/join, channel, atomic |
+| [`random_format_iter/`](random_format_iter/) | Random / format / iter |
+| [`http_get/`](http_get/) | HTTP GET + TLS |
+| [`multi_module/`](multi_module/) | Multi-file project (`greeter.orl`) |
+| [`native_showcase/`](native_showcase/) | Traits, generics, enums, dispose |
+
+## Policy
+
+- Prefer **`import ori.X = alias`** and selective imports on the parent.
+- Keep examples **runnable** and S3-clean; pre-S3 forms are hard errors (`ori migrate-syntax`).
+- One concern per example when possible; deep collection APIs live in `collections_demo`, not separate demos.
+- `tests_demo` has **no `main`** — required so the test harness can inject the entry point.

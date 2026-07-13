@@ -1,0 +1,44 @@
+module app.using_fs
+
+-- File streams + using dispose (STDLIB-3).
+import ori.io = io
+import ori.io (open_input, open_output, write_text, read_text, flush)
+
+main()
+    -- Relative path: run from the example dir or any cwd you can write to.
+    const base: string = "ori_using_fs_demo.txt"
+    match open_output(base)
+        case ok(out_raw):
+            using out: ori.io.Output = out_raw
+            match write_text(out, "using-ok")
+                case ok(_):
+                    match flush(out)
+                        case ok(_):
+                        case err(m):
+                            io.eprintln(m)
+                    end
+                case err(m):
+                    io.eprintln(m)
+            end
+        case err(m):
+            io.eprintln(m)
+    end
+
+    match open_input(base)
+        case ok(in_raw):
+            using input: ori.io.Input = in_raw
+            match read_text(input, 64)
+                case ok(maybe):
+                    match maybe
+                        case some(text):
+                            io.println(text)
+                        case none:
+                            io.println("empty")
+                    end
+                case err(m):
+                    io.eprintln(m)
+            end
+        case err(m):
+            io.eprintln(m)
+    end
+end

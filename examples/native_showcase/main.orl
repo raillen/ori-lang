@@ -1,5 +1,7 @@
 module app.native_showcase
 
+-- Custom traits, any[Trait], generics, enums, using+dispose.
+import ori.core = core
 import ori.io = io
 import ori.list = lists
 import ori.map = maps
@@ -31,6 +33,11 @@ apply User
     use Labelled
         label(self) -> string
             return self.name + ":" + self.role
+        end
+    end
+    use core.Displayable
+        display(self) -> string
+            return self.name + " <" + self.role + ">"
         end
     end
 end
@@ -78,6 +85,7 @@ main()
 
     io.print(lists.get(names, 1))
     io.print(maps.get(labels, "owner"))
+    io.print(string(user))
 
     match event(0, user)
     case Started(label):

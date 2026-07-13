@@ -114,7 +114,7 @@ mkdir -p "$examples_dir"
 cp "$source_ori" "$package_ori"
 cp "$source_lsp" "$package_lsp"
 cp -R "$repo_root/stdlib" "$stdlib_dir"
-cp "$repo_root/examples/hello_world/main.orl" "$examples_dir/hello_world.orl"
+cp "$repo_root/examples/hello/main.orl" "$examples_dir/hello.orl"
 cp "$repo_root/examples/async_demo/main.orl" "$examples_dir/async_demo.orl"
 
 stage_args="--target $host --profile release --output-root $runtime_dir"
@@ -190,17 +190,17 @@ if [ ! -f "$stdlib_dir/string.orl" ]; then
     exit 1
 fi
 
-hello_exe="$package_root/$(output_exe_name hello_world)"
+hello_exe="$package_root/$(output_exe_name hello)"
 (
     cd "$package_root"
-    ORI_REQUIRE_PACKAGED_RUNTIME=1 "$package_ori" compile "examples/hello_world.orl" --out "$hello_exe"
+    ORI_REQUIRE_PACKAGED_RUNTIME=1 "$package_ori" compile "examples/hello.orl" --out "$hello_exe"
 )
 
 hello_output=$("$hello_exe")
 case "$hello_output" in
     *"The answer is: 42"*) ;;
     *)
-        echo "compiled hello_world executable did not print expected answer" >&2
+        echo "compiled hello executable did not print expected answer" >&2
         echo "$hello_output" >&2
         exit 1
         ;;
@@ -272,7 +272,7 @@ fi
 
 jit_output=$(
     cd "$package_root"
-    ORI_REQUIRE_PACKAGED_RUNTIME=1 "$package_ori" run "examples/hello_world.orl"
+    ORI_REQUIRE_PACKAGED_RUNTIME=1 "$package_ori" run "examples/hello.orl"
 )
 case "$jit_output" in
     *"The answer is: 42"*) ;;

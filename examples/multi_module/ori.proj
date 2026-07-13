@@ -1,5 +1,5 @@
 manifest = 1
-name = "logic_and_matching"
+name = "multi_module"
 version = "0.1.0"
 kind = "app"
 entry = "main.orl"

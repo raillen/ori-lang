@@ -1,5 +1,5 @@
 manifest = 1
-name = "queue_demo"
+name = "async_io"
 version = "0.1.0"
 kind = "app"
 entry = "main.orl"

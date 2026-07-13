@@ -1,51 +1,21 @@
 module app.main
 
 import ori.io = io
-import ori.net = net
+import ori.net.http = http
 import ori.string = str
-import ori.bytes = bytes_mod
 
-read_http_headers(conn: net.Connection) -> result[string, string]
-    var acc: string = ""
-    loop
-        match net.read_some(conn, 1024)
-            case ok(chunk):
-                if bytes_mod.len(chunk) == 0
-                    break
-                end
-                match str.from_bytes(chunk)
-                    case ok(text):
-                        acc = str.concat(acc, text)
-                        if str.contains(acc, "\r\n\r\n")
-                            return ok(acc)
-                        end
-                    case err(msg):
-                        return err(msg)
-                end
-            case err(msg):
-                return err(msg)
-        end
-    end
-    return ok(acc)
-end
-
+-- STDLIB-2 thin client example (requires network).
 main()
-    match net.connect_tls("example.com", 443, 5000)
-        case ok(conn):
-            const request: string = "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n"
-            match net.write_all(conn, str.to_bytes(request))
-                case ok(_):
-                    match read_http_headers(conn)
-                        case ok(headers):
-                            io.println(headers)
-                        case err(msg):
-                            io.println(str.concat("read error: ", msg))
-                    end
-                case err(msg):
-                    io.println(str.concat("write error: ", msg))
+    match http.get_tls("example.com", "/", 8000)
+        case ok(resp):
+            io.println(string(resp.status))
+            io.println(resp.status_text)
+            if str.len(resp.body) > 200
+                io.println(str.slice(resp.body, 0, 200))
+            else
+                io.println(resp.body)
             end
-            net.close(conn)
         case err(msg):
-            io.println(str.concat("connect error: ", msg))
+            io.println(msg)
     end
 end

@@ -1,7 +1,0 @@
-module examples.release_smoke
-
-import ori.io = io
-
-main()
-    io.print("ori release smoke")
-end

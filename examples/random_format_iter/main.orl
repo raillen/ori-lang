@@ -1,0 +1,24 @@
+module app.random_format_iter
+
+-- random, format, iter helpers (stdlib Layer 1+2).
+import ori.format = fmt
+import ori.io = io
+import ori.iter = iter
+import ori.random = rnd
+
+main()
+    rnd.seed(42)
+    const n: int = rnd.int(1, 10)
+    const flag: bool = rnd.bool()
+    io.println(f"random int[1,10]={n} bool={flag}")
+
+    io.println(fmt.number(3.14159, 2))
+    io.println(fmt.hex(255))
+    io.println(fmt.percent(0.25, 0))
+
+    const nums: list[int] = [1, 2, 2, 3, 4]
+    io.println(f"count={iter.count(nums)}")
+    io.println(f"sum={iter.sum_int(nums)}")
+    io.println(f"unique={iter.unique_count_int(nums)}")
+    io.println(f"contains 3={iter.contains_int(nums, 3)}")
+end

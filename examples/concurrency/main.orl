@@ -1,0 +1,35 @@
+module app.concurrency
+
+-- task.spawn/join, channel, atomic (native).
+import ori.atomic = atomic
+import ori.channel = channel
+import ori.io = io
+import ori.task = task
+
+main()
+    const job: task.Job[int] = task.spawn(() => 41)
+    match task.join(job)
+        case ok(value):
+            io.println(f"spawn/join: {value}")
+        case err(_):
+            io.println("join-error")
+    end
+
+    const ch: channel.Channel[int] = channel.create()
+    match channel.send(ch, 7)
+        case ok(_):
+            match channel.receive(ch)
+                case ok(n):
+                    io.println(f"channel: {n}")
+                case err(_):
+                    io.println("recv-error")
+            end
+        case err(_):
+            io.println("send-error")
+    end
+    channel.close(ch)
+
+    const counter: atomic.AtomicInt = atomic.new(1)
+    atomic.store(counter, atomic.add(counter, 2))
+    io.println(f"atomic: {atomic.load(counter)}")
+end

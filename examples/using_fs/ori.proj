@@ -1,5 +1,5 @@
 manifest = 1
-name = "deque_demo"
+name = "using_fs"
 version = "0.1.0"
 kind = "app"
 entry = "main.orl"

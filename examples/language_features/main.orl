@@ -289,6 +289,15 @@ demo_structural_equality()
     io.println(f"  [1,2,3] == [1,2,4]: {a == c}")
 end
 
+-- ──────────── Runtime check ─────────────────
+demo_check()
+    section("check (runtime contract)")
+
+    const den: int = 2
+    check den != 0, "denominator must be non-zero"
+    io.println(f"  10 / {den} = {10 / den}")
+end
+
 -- ──────────── String Features ───────────────
 demo_strings()
     section("String Features")
@@ -322,7 +331,8 @@ main()
     demo_control_flow()
     demo_pipe()
     demo_structural_equality()
+    demo_check()
     demo_strings()
 
-    section("All language features validated!")
+    section("Language features showcase complete")
 end

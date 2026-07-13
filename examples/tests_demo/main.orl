@@ -1,0 +1,23 @@
+module app.tests_demo
+
+-- Run with: ori test examples/tests_demo
+-- No `main` — the test harness provides the entry point.
+import ori.test = test
+import ori.math = math
+
+@test
+adds_one_and_one()
+    test.assert(1 + 1 == 2, "1+1")
+    test.equal_int(2 + 2, 4)
+end
+
+@test
+math_abs_is_non_negative()
+    test.assert(math.abs(-7) >= 0, "abs")
+    test.equal_int(math.abs(-3), 3)
+end
+
+@test
+strings_differ()
+    test.not_equal_text("ori", "ORL")
+end

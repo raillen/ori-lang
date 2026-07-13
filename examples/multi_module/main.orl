@@ -1,0 +1,9 @@
+module app.main
+
+import app.greeter = greeter
+import ori.io = io
+
+main()
+    io.println(greeter.hello("Ori"))
+    io.println(greeter.shout("world"))
+end
