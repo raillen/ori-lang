@@ -2,11 +2,15 @@
   "name": "vscode-orl",
   "displayName": "Ori Language",
   "description": "Language support for Ori (.orl) — LSP, stdlib completion, doctor, and tooling",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "ori-lang",
   "license": "MIT OR Apache-2.0",
   "engines": {
     "vscode": "^1.85.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/raillen/ori-lang"
   },
   "categories": [
     "Programming Languages"
@@ -82,8 +86,13 @@
         },
         "ori.useJit": {
           "type": "boolean",
+          "default": true,
+          "description": "When true, set ORI_USE_JIT=1 for terminal `ori run` tasks. Product default is already JIT when a runtime cdylib is available; this only forces the env for extension-spawned terminals."
+        },
+        "ori.useAot": {
+          "type": "boolean",
           "default": false,
-          "description": "Set ORI_USE_JIT=1 for `ori run` tasks spawned by the extension."
+          "description": "When true, set ORI_USE_AOT=1 for terminal `ori run` tasks (force AOT compile+link instead of JIT)."
         },
         "ori.trace.server": {
           "type": "string",
@@ -168,8 +177,9 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "npm run compile && npx @vscode/vsce package --allow-missing-repository",
-    "install:cursor": "cursor --install-extension vscode-orl-0.2.2.vsix --force"
+    "package:vsix": "npm run compile && npx @vscode/vsce package --no-dependencies",
+    "install:local": "npm run package:vsix && code --install-extension ./vscode-orl-0.3.2.vsix --force",
+    "install:cursor": "npm run package:vsix && cursor --install-extension ./vscode-orl-0.3.2.vsix --force"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

@@ -93,7 +93,11 @@ function buildOriEnv(): NodeJS.ProcessEnv {
   setIf("ORI_STDLIB_ROOT", cfg.get<string>("stdlib.root"));
   setIf("ORI_RUNTIME_LIB", cfg.get<string>("runtime.lib"));
   setIf("ORI_RUNTIME_CDYLIB", cfg.get<string>("runtime.cdylib"));
-  if (cfg.get<boolean>("useJit")) {
+  // Prefer explicit AOT over JIT when both are set.
+  if (cfg.get<boolean>("useAot")) {
+    env["ORI_USE_AOT"] = "1";
+    delete env["ORI_USE_JIT"];
+  } else if (cfg.get<boolean>("useJit")) {
     env["ORI_USE_JIT"] = "1";
   }
   return env;
@@ -215,10 +219,21 @@ function resolveBinary(
       return found;
     }
   }
+  // Monorepo layouts: compiler/target (current) and legacy root target/
+  const relDirs = [
+    ["compiler", "target", "debug"],
+    ["compiler", "target", "release"],
+    ["target", "debug"],
+    ["target", "release"],
+  ];
   for (const root of workspaceRoots()) {
-    const dev = path.join(root, "target", "debug", names[0]);
-    if (fs.existsSync(dev)) {
-      return dev;
+    for (const parts of relDirs) {
+      for (const name of names) {
+        const candidate = path.join(root, ...parts, name);
+        if (fs.existsSync(candidate)) {
+          return candidate;
+        }
+      }
     }
   }
   return configured || undefined;

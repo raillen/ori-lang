@@ -1,0 +1,11 @@
+id = "ori"
+name = "Ori"
+description = "Ori language support (.orl) — syntax config + ori-lsp discovery"
+version = "0.3.2"
+schema_version = 1
+authors = ["Ori contributors"]
+repository = "https://github.com/raillen/ori-lang"
+
+[language_servers.ori-lsp]
+name = "Ori LSP"
+language = "Ori"

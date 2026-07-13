@@ -48,7 +48,8 @@ $extensionRoot = Join-Path $repoRoot "extensions/vscode-orl"
 $targetRoot = if ($env:CARGO_TARGET_DIR) {
     [System.IO.Path]::GetFullPath($env:CARGO_TARGET_DIR)
 } else {
-    Join-Path $repoRoot "target"
+    # Workspace crates live under compiler/
+    Join-Path $repoRoot "compiler/target"
 }
 
 if ([string]::IsNullOrWhiteSpace($WorkspaceRoot)) {

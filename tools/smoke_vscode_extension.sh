@@ -53,7 +53,8 @@ done
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 extension_root="$repo_root/extensions/vscode-orl"
-target_root="${CARGO_TARGET_DIR:-$repo_root/target}"
+# Workspace lives under compiler/; prefer that target unless CARGO_TARGET_DIR is set.
+target_root="${CARGO_TARGET_DIR:-$repo_root/compiler/target}"
 
 output_exe_name() {
     case "$(uname -s)" in
