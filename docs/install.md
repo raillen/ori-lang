@@ -3,7 +3,7 @@
 > **Audience:** end users who want to write Ori programs **without** cloning this
 > repository and **without** a Rust toolchain.  
 > **Portuguese:** [install.pt-BR.md](install.pt-BR.md)  
-> **Surface:** S3 · package **v0.3.3** · M1 (Rust-free install path) complete · FREEZE-1 on 0.3.x
+> **Surface:** S3 · package **v0.3.4** · M1 (Rust-free install path) complete · FREEZE-1 on 0.3.x
 
 ## System prerequisites
 
@@ -64,9 +64,9 @@ xcode-select --install
 > DIST-1/2). On those OSes, use **build from source** below.
 
 1. Download from [GitHub Releases](https://github.com/raillen/ori-lang/releases).
-   Example **v0.3.3**:
-   - **Linux tarball:** `ori-v0.3.3-x86_64-unknown-linux-gnu.tar.gz`
-   - **Linux Debian/Ubuntu:** `ori_0.3.3_amd64.deb`
+   Example **v0.3.4**:
+   - **Linux tarball:** `ori-v0.3.4-x86_64-unknown-linux-gnu.tar.gz`
+   - **Linux Debian/Ubuntu:** `ori_0.3.4_amd64.deb`
    - Windows / macOS: build from source (release packages not published yet)
 
 #### Option A — tarball
@@ -87,7 +87,7 @@ xcode-select --install
 #### Option B — `.deb` (Debian / Ubuntu)
 
 ```bash
-sudo dpkg -i ori_0.3.3_amd64.deb
+sudo dpkg -i ori_0.3.4_amd64.deb
 # installs /usr/lib/ori + /usr/bin/ori + /usr/bin/ori-lsp
 # AOT still needs: sudo apt install build-essential
 ```

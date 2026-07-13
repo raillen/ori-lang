@@ -11,9 +11,17 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Notas
-- Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package line **`[0.3.3]`**.
+- Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package line **`[0.3.4]`**.
 
-### Corrigido (living maintenance)
+---
+
+## [0.3.4] — 2026-07-13
+
+### Notas
+- Patch release: package smoke / linker living maintenance after `v0.3.3`.
+- FREEZE-1 still open on `0.3.x`.
+
+### Corrigido
 - **Package smoke linker:** always prefer **SystemLinker** for release packaging.
   Auto-picking `RustcDriver` when `rustc` is on PATH broke AOT smoke by
   double-linking libstd against `libori_runtime.a` (`duplicate symbol:

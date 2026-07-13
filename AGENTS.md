@@ -164,7 +164,7 @@ Source (.orl)
 
 - **Rust:** 1.95.0 (via `rust-toolchain.toml`)
 - **Language surface:** **`0.3.0` S3** + **`0.3.1`** Nim-local inference + **option B** (field/index/call/pipe). Manifesto: `docs/spec/00-manifesto.md`. Decisões: `docs/planning/ori-surface-s3-auk9.md`. Spec: `04-types`, `05-expressions` (pipe), `06-statements`.
-- **Cargo workspace package version:** **`0.3.3`**. Tags `v0.3.0` / `v0.3.1` / `v0.3.2` / **`v0.3.3`** (Linux tar.gz + deb).
+- **Cargo workspace package version:** **`0.3.4`**. Tags through **`v0.3.4`** (Linux tar.gz + deb; full AOT package smoke).
 - **Etapas 0–9** do `PLANO-MATURIDADE-COMPLETO.md` (ciclo 0.2) concluídas; S3 PRs 1–10 + PR11 + 11b (B) = superfície atual.
 - **Pipe `|>`:** **mantido** e tipado no checker como `f(value)`; entra na inferência local B.
 - **Auk9:** produto **arquivado** (README no repo auk9-lang). Living surface is Ori S3.
@@ -188,18 +188,18 @@ Source (.orl)
 
 ## Versioning policy (2026-07-13)
 
-**Histórico:** S3 = **`0.3.0`**. Inferência + opção B = **`0.3.1`**. Package + M1/M3 = **`0.3.2`**. Language-first + freeze docs + Linux deb = **`0.3.3`**.
+**Histórico:** S3 = **`0.3.0`**. Inferência + opção B = **`0.3.1`**. Package + M1/M3 = **`0.3.2`**. Language-first + freeze + deb = **`0.3.3`**. Living link/smoke fix = **`0.3.4`**.
 
 | Linguagem | Tempo em 0.x | Versão atual | Status |
 |-----------|-------------|--------------|--------|
 | Zig | ~10 anos | 0.14 | Consolidada, ainda sem 1.0 |
 | Rust | ~6 anos (pre-1.0) | 1.0 em 2015 | Estável após 0.12 |
-| Ori | dias | **0.3.3** (Linux tar.gz + deb) | Pre-1.0, FREEZE-1 em 0.3.x |
+| Ori | dias | **0.3.4** (Linux tar.gz + deb) | Pre-1.0, FREEZE-1 em 0.3.x |
 
 **Regras até 1.0:**
-- Superfície S3 = CHANGELOG **`[0.3.0]`**; inference = **`[0.3.1]`**; package/M1 = **`[0.3.2]`**; deb/freeze closeout = **`[0.3.3]`**.
-- Cargo/`runtime-link.json` = versão atual do workspace (**0.3.3**).
-- Patch versions (`0.3.4`, …) para correções e small additive features.
+- Superfície S3 = CHANGELOG **`[0.3.0]`**; inference = **`[0.3.1]`**; package/M1 = **`[0.3.2]`**; deb/freeze = **`[0.3.3]`**; link/smoke maintenance = **`[0.3.4]`**.
+- Cargo/`runtime-link.json` = versão atual do workspace (**0.3.4**).
+- Patch versions (`0.3.5`, …) para correções e small additive features.
 - `0.4+` só com breaking real ou marco grande acordado.
 - `1.0` é critério de maturidade (anos, não dias), na **ordem tática**:
   1. **Stdlib** consolidada (Layer 2+3; pais `ori.X` + `public alias` de domínio) — **M2 ✅**

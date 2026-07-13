@@ -3,7 +3,7 @@
 > **Público-alvo:** usuários finais que querem desenvolver em Ori **sem** clonar
 > o repositório e **sem** toolchain Rust.  
 > **English:** [install.md](install.md)  
-> **Superfície:** S3 · package **v0.3.3** · M1 (instalação sem Rust) fechada · FREEZE-1 em 0.3.x
+> **Superfície:** S3 · package **v0.3.4** · M1 (instalação sem Rust) fechada · FREEZE-1 em 0.3.x
 
 ## Requisitos do sistema
 
@@ -44,9 +44,9 @@ sudo apt update && sudo apt install build-essential
 > (BACKLOG DIST-1/2). Nesses OSes, use **build a partir do código-fonte**.
 
 1. Baixe em [GitHub Releases](https://github.com/raillen/ori-lang/releases)
-   (ex. **v0.3.3**):
-   - **Linux tarball:** `ori-v0.3.3-x86_64-unknown-linux-gnu.tar.gz`
-   - **Linux .deb:** `ori_0.3.3_amd64.deb`
+   (ex. **v0.3.4**):
+   - **Linux tarball:** `ori-v0.3.4-x86_64-unknown-linux-gnu.tar.gz`
+   - **Linux .deb:** `ori_0.3.4_amd64.deb`
    - Windows / macOS: compile do fonte (packages de release ainda não publicados)
 
 **Tarball:** extraia (ex. `~/ori`), layout `ori` + `ori-lsp` + `stdlib/` + `runtime/<triple>/`, coloque no `PATH`.
@@ -54,7 +54,7 @@ sudo apt update && sudo apt install build-essential
 **Debian/Ubuntu:**
 
 ```bash
-sudo dpkg -i ori_0.3.3_amd64.deb
+sudo dpkg -i ori_0.3.4_amd64.deb
 # AOT: sudo apt install build-essential
 ```
 

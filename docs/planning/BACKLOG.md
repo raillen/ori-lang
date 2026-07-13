@@ -1,8 +1,8 @@
 # Ori — single implementation backlog
 
 > **This file is the only active “what remains to implement” list.**  
-> Surface baseline: **S3 `0.3.0`** + inference B **`0.3.1`** + package **`0.3.3`**.  
-> Last consolidated: **2026-07-13** (language-first closed; FREEZE-1 + Linux deb).
+> Surface baseline: **S3 `0.3.0`** + inference B **`0.3.1`** + package **`0.3.4`**.  
+> Last consolidated: **2026-07-13** (language-first closed; FREEZE-1 + Linux deb; link smoke fix).
 
 ---
 
