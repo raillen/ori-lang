@@ -34,8 +34,8 @@ end
 demo_structs()
     section("Structs and Struct Update")
 
-    const origin: Point = Point(x: 0, y: 0)
-    const moved: Point = .{x: 5, y: 10}
+    const origin: Point = Point { x: 0, y: 0 }
+    const moved: Point = {x: 5, y: 10}
     io.println(f"  origin: ({origin.x}, {origin.y})")
     io.println(f"  moved: ({moved.x}, {moved.y})")
 
@@ -44,7 +44,7 @@ demo_structs()
     io.println(f"  shifted: ({shifted.x}, {shifted.y})")
 
     -- Nested struct
-    const px: Pixel = Pixel(pos: Point(x: 3, y: 7), color: Color(r: 255, g: 128, b: 0))
+    const px: Pixel = Pixel { pos: Point { x: 3, y: 7 }, color: Color { r: 255, g: 128, b: 0 } }
     io.println(f"  pixel at ({px.pos.x}, {px.pos.y}) color r={px.color.r}")
 end
 
@@ -109,9 +109,9 @@ end
 demo_traits()
     section("Traits (Equatable)")
 
-    const cat: Animal = Animal(name: "Cat", sound: "meow", legs: 4)
-    const dog: Animal = Animal(name: "Dog", sound: "woof", legs: 4)
-    const another_cat: Animal = Animal(name: "Cat", sound: "purr", legs: 4)
+    const cat: Animal = Animal { name: "Cat", sound: "meow", legs: 4 }
+    const dog: Animal = Animal { name: "Dog", sound: "woof", legs: 4 }
+    const another_cat: Animal = Animal { name: "Cat", sound: "purr", legs: 4 }
 
     io.println(f"  cat == dog: {cat == dog}")
     io.println(f"  cat == another_cat: {cat == another_cat}")
@@ -273,9 +273,9 @@ end
 demo_structural_equality()
     section("Structural Equality")
 
-    const p1: Point = Point(x: 1, y: 2)
-    const p2: Point = Point(x: 1, y: 2)
-    const p3: Point = Point(x: 3, y: 4)
+    const p1: Point = Point { x: 1, y: 2 }
+    const p2: Point = Point { x: 1, y: 2 }
+    const p3: Point = Point { x: 3, y: 4 }
     io.println(f"  p1 == p2: {p1 == p2}")
     io.println(f"  p1 == p3: {p1 == p3}")
     io.println(f"  p1 != p3: {p1 != p3}")
@@ -293,7 +293,7 @@ demo_strings()
 
     const name: string = "Ori"
     const version: int = 2
-    io.println(f"  {name} v0.{version}")
+    io.println(f"  {name} v0{version}")
 
     const block: string = """
     multi-line

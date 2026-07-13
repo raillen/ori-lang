@@ -64,13 +64,13 @@ pub enum Expr {
     },
 
     // ── Struct / enum construction ────────────────────────────────────────────
-    /// `Point(x: 0, y: 0)` — full form with explicit type.
+    /// `Point { x: 0, y: 0 }` — explicit type + braced fields (S3).
     StructLit {
         ty: QualifiedName,
         fields: Vec<FieldInit>,
         span: Span,
     },
-    /// `.{x: 0, y: 0}` — anonymous form; type resolved by checker.
+    /// `{ x: 0, y: 0 }` — anonymous form; type resolved by checker (S3).
     AnonStructLit {
         fields: Vec<FieldInit>,
         span: Span,

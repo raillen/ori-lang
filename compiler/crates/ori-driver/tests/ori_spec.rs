@@ -323,7 +323,7 @@ struct User
     name: string
 end
 main()
-    const user: User = User(name: "Ada")
+    const user: User = User { name: "Ada" }
     io.print(f"user: {user.name}")
 end
 "#,
@@ -493,7 +493,7 @@ struct Point
     y: int
 end
 main()
-    const p: Point = Point(x: 1, y: 2)
+    const p: Point = Point { x: 1, y: 2 }
     io.print(string(p.x + p.y))
 end
 "#,
@@ -733,8 +733,8 @@ id(x: int) -> int
     return x
 end
 main()
-    const a: Handler = Handler(run: id)
-    const b: Handler = Handler(run: id)
+    const a: Handler = Handler { run: id }
+    const b: Handler = Handler { run: id }
     const same: bool = a == b
 end
 "#,
@@ -1095,13 +1095,129 @@ struct Vec2
     y: float
 end
 main()
-    const v: Vec2 = .{x: 1.0, y: 2.0}
+    const v: Vec2 = {x: 1.0, y: 2.0}
     io.print(f"{v.x} {v.y}")
 end
 "#,
     );
     let check = run_check(&dir.path("main.orl")).unwrap();
     assert!(!check.has_errors, "{:?}", check.diagnostics);
+}
+
+#[test]
+fn expr_accepts_typed_struct_brace_literal() {
+    let dir = TestDir::new("expr_typed_struct_brace");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+struct User
+    name: string
+    age: int
+end
+main()
+    const u: User = User { name: "Ada", age: 36 }
+    io.print(u.name)
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn expr_disambiguates_map_literal_from_struct() {
+    let dir = TestDir::new("expr_map_vs_struct");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+struct User
+    name: string
+    age: int
+end
+main()
+    const u: User = { name: "Ada", age: 36 }
+    const ages: map[string, int] = { "Ada": 36, "Bo": 20 }
+    io.print(u.name)
+    io.print(string(ages["Ada"]))
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn expr_rejects_removed_dot_struct_literal() {
+    let dir = TestDir::new("expr_removed_dot_struct");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+struct Vec2
+    x: float
+    y: float
+end
+main()
+    const v: Vec2 = .{x: 1.0, y: 2.0}
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.removed_struct_call_literal"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn expr_rejects_removed_struct_call_literal() {
+    let dir = TestDir::new("expr_removed_struct_call");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+struct Point
+    x: int
+    y: int
+end
+main()
+    const p: Point = Point(x: 1, y: 2)
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.removed_struct_call_literal"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn expr_rejects_removed_guided_struct_literal() {
+    let dir = TestDir::new("expr_removed_guided_struct");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+struct Point
+    x: int
+    y: int
+end
+main()
+    const p: Point = (x: 1, y: 2)
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.removed_struct_call_literal"),
+        "{:?}",
+        out.diagnostics
+    );
 }
 
 #[test]
@@ -1115,7 +1231,7 @@ struct Vec2
     y: float
 end
 main()
-    const v: Vec2 = .{x: 1.0}
+    const v: Vec2 = {x: 1.0}
 end
 "#,
     );
@@ -1142,7 +1258,7 @@ struct Config
     verbose: bool
 end
 main()
-    const a: Config = Config(timeout: 30, retries: 3, verbose: false)
+    const a: Config = Config { timeout: 30, retries: 3, verbose: false }
     const b: Config = a with {
         verbose: true,
     } end
@@ -1622,7 +1738,7 @@ struct Counter
     end
 end
 main()
-    const c: Counter = Counter(value: 0)
+    const c: Counter = Counter { value: 0 }
     c.increment()
 end
 "#,
@@ -1741,7 +1857,7 @@ implement Disposable for Res
     end
 end
 async load() -> int
-    using res: Res = Res(id: 1)
+    using res: Res = Res { id: 1 }
     return 42
 end
 main()
@@ -1803,7 +1919,7 @@ implement Greetable for User
     end
 end
 main()
-    const u: User = User(n: "Ada")
+    const u: User = User { n: "Ada" }
     io.print(u.greet())
 end
 "#,
@@ -1870,8 +1986,8 @@ implement Drawable for Rect
     end
 end
 main()
-    const c: any[Drawable] = Circle(radius: 1.0)
-    const r: any[Drawable] = Rect(w: 2.0, h: 3.0)
+    const c: any[Drawable] = Circle { radius: 1.0 }
+    const r: any[Drawable] = Rect { w: 2.0, h: 3.0 }
     io.print(c.draw())
     io.print(r.draw())
 end
@@ -1900,9 +2016,9 @@ implement Drawable for Circle
     end
 end
 main()
-    const a: any[Drawable] = Circle(radius: 1.0)
-    const b: any[Drawable] = Circle(radius: 1.0)
-    const c: any[Drawable] = Circle(radius: 2.0)
+    const a: any[Drawable] = Circle { radius: 1.0 }
+    const b: any[Drawable] = Circle { radius: 1.0 }
+    const c: any[Drawable] = Circle { radius: 2.0 }
     io.println(string(a == b))
     io.println(string(a != c))
 end
@@ -2137,8 +2253,8 @@ struct Point
     y: int
 end
 main()
-    const a: Point = Point(x: 1, y: 2)
-    var b: Point = Point(x: a.x, y: a.y)
+    const a: Point = Point { x: 1, y: 2 }
+    var b: Point = Point { x: a.x, y: a.y }
     b.x = 99
     check a.x == 1, "value semantics: a is unaffected"
     io.print("ok")
@@ -2173,7 +2289,7 @@ implement Disposable for Res
     end
 end
 main()
-    using r: Res = Res(name: "test")
+    using r: Res = Res { name: "test" }
     io.print(r.name)
 end
 "#,
@@ -2201,9 +2317,9 @@ implement Disposable for Logger
     end
 end
 main()
-    using a: Logger = Logger(label: "A")
-    using b: Logger = Logger(label: "B")
-    using c: Logger = Logger(label: "C")
+    using a: Logger = Logger { label: "A" }
+    using b: Logger = Logger { label: "B" }
+    using c: Logger = Logger { label: "C" }
     io.print("body")
 end
 "#,
@@ -2289,7 +2405,7 @@ show for T: Labelled (value: T) -> string
     return value.label()
 end
 main()
-    const u: User = User(name: "Ada")
+    const u: User = User { name: "Ada" }
     io.print(show(u))
 end
 "#,
@@ -2315,7 +2431,7 @@ struct Point
     y: int
 end
 main()
-    const p: Point = max(Point(x: 1, y: 2), Point(x: 3, y: 4))
+    const p: Point = max(Point { x: 1, y: 2 }, Point { x: 3, y: 4 })
 end
 "#,
     );
@@ -2415,7 +2531,7 @@ end
 takes_int_string(p: Pair[int, string])
 end
 main()
-    const p: Pair[string, int] = Pair(first: "one", second: 1)
+    const p: Pair[string, int] = Pair { first: "one", second: 1 }
     takes_int_string(p)
 end
 "#,
@@ -2529,7 +2645,7 @@ validate_age(age: int) -> result[int, string]
 end
 
 main()
-    using session: Session = Session(user: User(name: "Ada", age: 30))
+    using session: Session = Session { user: User { name: "Ada", age: 30 } }
 
     match validate_age(30)
         case success(age):
@@ -3269,18 +3385,18 @@ check_generic_eq for T: core.Equatable (left: T, right: T) -> bool
 end
 
 main()
-    const p1: Pair[string, int] = .{ first: "hello", second: 42 }
-    const p2: Pair[string, int] = .{ first: "hello", second: 42 }
-    const p3: Pair[string, int] = .{ first: "world", second: 42 }
-    const p4: Pair[string, int] = .{ first: "hello", second: 43 }
+    const p1: Pair[string, int] = { first: "hello", second: 42 }
+    const p2: Pair[string, int] = { first: "hello", second: 42 }
+    const p3: Pair[string, int] = { first: "world", second: 42 }
+    const p4: Pair[string, int] = { first: "hello", second: 43 }
 
     io.println(string(p1 == p2))
     io.println(string(p1 != p3))
     io.println(string(p1 != p4))
 
     const map1: map[string, Pair[string, int]] = maps.new()
-    const item1: Pair[string, int] = .{ first: "hello", second: 1 }
-    const item2: Pair[string, int] = .{ first: "world", second: 2 }
+    const item1: Pair[string, int] = { first: "hello", second: 1 }
+    const item2: Pair[string, int] = { first: "world", second: 2 }
     maps.set(map1, "key1", item1)
     maps.set(map1, "key2", item2)
 
@@ -3289,7 +3405,7 @@ main()
     maps.set(map2, "key1", item1)
 
     const map3: map[string, Pair[string, int]] = maps.new()
-    const item3: Pair[string, int] = .{ first: "world", second: 3 }
+    const item3: Pair[string, int] = { first: "world", second: 3 }
     maps.set(map3, "key1", item1)
     maps.set(map3, "key2", item3)
 
@@ -3331,8 +3447,8 @@ struct Pair[A, B]
 end
 
 main()
-    const p1: Pair[string, int] = .{ first: "hello", second: 42 }
-    const p2: Pair[string, int] = .{ first: "hello", second: 42 }
+    const p1: Pair[string, int] = { first: "hello", second: 42 }
+    const p2: Pair[string, int] = { first: "hello", second: 42 }
     const is_equal: bool = p1 == p2
 end
 "#,

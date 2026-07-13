@@ -354,7 +354,7 @@ exercise() -> int
     const values: list[int] = lists.new()
     lists.push(values, 10)
     lists.push(values, 20)
-    const buffer: Buffer = Buffer(items: values)
+    const buffer: Buffer = Buffer {items: values}
     return lists.len(buffer.items)
 end
 

@@ -219,7 +219,7 @@ fn check_rejects_non_transferable_channel_value() {
 import ori.channel as channel
 
 main()
-    const ch: channel.Channel[func() -] int> = channel.create()
+    const ch: channel.Channel[func() -> int] = channel.create()
     const sent: result[void, channel.SendError] = channel.send(ch, do() => 1)
 end
 "#,
@@ -254,7 +254,7 @@ implement Disposable for Resource
 end
 
 async main()
-    using resource: Resource = Resource(id: 1)
+    using resource: Resource = Resource {id: 1}
     await task.sleep(1)
 end
 "#,
@@ -943,7 +943,7 @@ struct User
 end
 
 async main()
-    const user: User = User(name: "Ada")
+    const user: User = User { name: "Ada" }
 
     await task.sleep(1)
 
@@ -982,7 +982,7 @@ enum Event
 end
 
 async main()
-    const event: Event = Event.Ready(user: User(name: "Ada"))
+    const event: Event = Event.Ready(user: User { name: "Ada" })
 
     await task.sleep(1)
 
@@ -1497,7 +1497,7 @@ end
 
 async get_resource(id: int) -> Resource
     await task.sleep(1)
-    return Resource(id: id)
+    return Resource {id: id}
 end
 
 async test_using()
@@ -1564,7 +1564,7 @@ end
 
 async get_resource(id: int) -> Resource
     await task.sleep(1)
-    return Resource(id: id)
+    return Resource {id: id}
 end
 
 async worker(token: task.CancelToken)
@@ -1625,7 +1625,7 @@ end
 
 async get_resource(id: int) -> Resource
     await task.sleep(1)
-    return Resource(id: id)
+    return Resource {id: id}
 end
 
 async worker()
@@ -1894,7 +1894,7 @@ await task.sleep(1)
 return n * 2
 end
 
-handle(path: string) -> result[int, string]
+process_file(path: string) -> result[int, string]
 using file: fs.File = fs.open_read(path)?
 match fs.read(file, 100)
 case success(data):

@@ -22,10 +22,10 @@ main()
     io.print("Struct Demonstration")
     io.print("--------------------")
 
-    const p1: Point = Point(x: 0, y: 10)
-    const p2: Point = Point(x: 5, y: 0)
+    const p1: Point = Point { x: 0, y: 10 }
+    const p2: Point = Point { x: 5, y: 0 }
 
-    const rect: Rectangle = Rectangle(top_left: p1, bottom_right: p2)
+    const rect: Rectangle = Rectangle { top_left: p1, bottom_right: p2 }
     
     io.print("Rectangle created with corners at:")
     io.print(f"Top-Left: ({rect.top_left.x}, {rect.top_left.y})")

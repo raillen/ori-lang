@@ -221,9 +221,9 @@ demo_custom_comparable_heap()
     section("Heap Priority — Custom Comparable")
 
     const pq: heap.Heap[Priority] = heap.new()
-    heap.push(pq, Priority(level: 5))
-    heap.push(pq, Priority(level: 1))
-    heap.push(pq, Priority(level: 3))
+    heap.push(pq, Priority { level: 5 })
+    heap.push(pq, Priority { level: 1 })
+    heap.push(pq, Priority { level: 3 })
 
     match heap.pop(pq)
     case some(p):
@@ -307,8 +307,8 @@ demo_custom_hashable()
     section("User-defined Hashable/Equatable")
 
     const player_scores: map[Player, int] = maps.new()
-    const p1: Player = Player(id: 1)
-    const p2: Player = Player(id: 2)
+    const p1: Player = Player { id: 1 }
+    const p2: Player = Player { id: 2 }
     maps.set(player_scores, p1, 1500)
     maps.set(player_scores, p2, 2200)
     io.println(f"  player 1 score: {maps.get(player_scores, p1)}")

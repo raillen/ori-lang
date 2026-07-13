@@ -61,6 +61,7 @@ when the compiler starts producing it.
 | `parse.func_removed` | error | Source used removed `func` on a declaration; write `name(...)` directly |
 | `parse.removed_angle_type` | error | Angle-bracket type arguments `Type<…>` are removed; use `Type[…]` |
 | `parse.removed_of_type` | error | `of` / `map of K to V` type forms are removed; use `list[T]`, `map[K, V]`, … |
+| `parse.removed_struct_call_literal` | error | Struct construction via `Type(…)`, `.{…}`, or guided `(…)` is removed; use `Type { … }` or `{ … }` |
 | `parse.removed_where_bound` | error | `where T is Trait` / `where T is not Trait` bounds are removed; use `for T: Trait` |
 | `parse.tuple_arity` | error | Tuple type or expression has invalid arity |
 | `parse.unterminated_block` | error | End-delimited block reaches end of file before `end` |
