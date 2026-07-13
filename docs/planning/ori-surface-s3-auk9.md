@@ -417,7 +417,7 @@ end
 | **7.2** | Chamada poética | **Sim** | Um argumento na mesma linha; **proibido aninhar** poetic em poetic; ver exemplos |
 | **7.3** | `end` rotulado | **Sim** | `end` / `end if` / `end match` / … opcional; mismatch → **erro** |
 | **7.4** | Sintaxe de closure | **Opção B** — `(params) => expr` | Sem keyword `do` / `fn` / `given`; corpo longo: `(params)` + bloco + `end` |
-| **7.5** | Pipe `\|>` | **Não** no S3/0.3.0 | Ficou só como ideia ilustrativa; reavaliar depois se pipelines doerem |
+| **7.5** | Pipe `\|>` | **Manter** (já implementado na Ori) | Correção 2026-07-13: registro anterior “fora do 0.3” foi **equivoco de ata** (sem voto). Auk9 rejeitou pipe; **Ori conserva** `\|\>`. Teste: `compile_runs_pipe_operator_native` |
 
 ### 7.1 — Exemplos
 
@@ -622,7 +622,8 @@ rodar e pular PR11 até a tag 0.3.0.
 | 2026-07-12 | Bloco 5 fechado (formas Auk9 + alias `path = curto` + multi-import no bloco); abertura do bloco 6 |
 | 2026-07-12 | Bloco 6 fechado (6.1 B, 6.2 A, 6.3 A, 6.4 A); abertura do bloco 7 |
 | 2026-07-12 | 7.1 A, 7.2 A (+ `print greet("hello")`), 7.3 A; 7.4 em propostas |
-| 2026-07-12 | 7.4 B `(u)=>`; pipe fora do 0.3; bloco 7 fechado; abertura do bloco 8 |
+| 2026-07-12 | 7.4 B `(u)=>`; (ata errada: “pipe fora do 0.3”); bloco 7 fechado; abertura do bloco 8 |
+| 2026-07-13 | **7.5 corrigido:** pipe `\|\>` **permanece** na Ori; Auk9 arquivada como produto; prioridade curto/médio prazo redefinida |
 | 2026-07-12 | Bloco 8 fechado; abertura 8b (inferência local) antes do 9 |
 | 2026-07-12 | 8b fechado (Nim-local, API explícita, impl após S3); abertura do bloco 9 |
 | 2026-07-12 | Bloco 9 fechado; ADR + PR plan para execute-plan criados |

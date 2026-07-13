@@ -1,23 +1,59 @@
 # Recursos Pendentes e Plano de Correções — Ori Language
 
-> **Plano ativo:** para a próxima fase de uso real, use [`uso-real-pequeno-medio.md`](uso-real-pequeno-medio.md).
-> **Plano histórico:** para o ciclo de maturidade até `0.2.0`, use [`PLANO-MATURIDADE-COMPLETO.md`](historico/PLANO-MATURIDADE-COMPLETO.md).
-> Este arquivo mantém o backlog resumido das Etapas 1–6 originais **e o Backlog v2 pós-0.2.0** (paridade de referência + DX).
+> **Plano ativo:** prioridade abaixo + [`uso-real-pequeno-medio.md`](uso-real-pequeno-medio.md).
+> **Plano histórico:** ciclo até `0.2.0` em [`PLANO-MATURIDADE-COMPLETO.md`](historico/PLANO-MATURIDADE-COMPLETO.md).
+> Superfície: **S3 / 0.3.0** + inference **0.3.1**. Auk9 = arquivada.
 
 Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhorias necessárias para a maturidade da linguagem Ori.
 
 ---
 
+## Prioridade 2026-07-13 (curto / médio)
+
+### Curto prazo
+
+| # | Item | Status | Notas |
+|---|------|--------|-------|
+| 1 | Tags de release `v0.3.0` / `v0.3.1` + Cargo `0.3.1` | em curso | **Package** zip/tar **não** nesta fatia |
+| 2 | Package de distribuição | **adiado** | Depois de pendências (stdlib, tooling, Rust-indep) |
+| 3 | Migrar `ori-game` / `ori-imgui` | **última** | Depois de tudo o resto |
+| 4 | Arquivar Auk9 como produto | feito | README no repo `auk9-lang` |
+| 5 | Corrigir falhas ARC (`list_push` ownership + enum layout) | feito (suite multifile verde) | Re-stage runtime se `_Unwind_Resume` / symbols |
+| 6 | Warning `classify_stdlib_import` | feito | `_has_selected_items` |
+| 7 | LSP + VS Code para inference local | feito (índice local + bump 0.3.1) | Inlay sintático; checker já em 0.3.1 |
+| 8 | Inferência **mais ampla** | **em diálogo** | 8b Nim-local entregue; ampliar = decisão separada |
+| 9 | Pipe `\|\>` | **corrigido na ata** | **Permanece** na Ori (já implementado) |
+
+### Médio prazo
+
+| # | Item | Prioridade | Notas |
+|---|------|------------|-------|
+| M1 | **Independência do Rust para usuário final** | **crítica** | Smoke máquina sem Rust; SystemLinker/JIT; CI `smoke-no-rust` |
+| M2 | **Stdlib** corrigir + **discutir mesclagem** de módulos | alta | Gap parity + consolidar `utils`/`algorithms`/pais |
+| M3 | **ABI estável** documentada | após features finais | Não congelar ABI cedo demais |
+| M4 | Self-hosting | **última** discussão de linguagem | Só depois de tudo funcional |
+| M5 | “Usuários reais” como critério | **ignorar** | Não é gate de produto agora |
+
+### Explicitamente fora da fila agora
+
+- Empacotar release binário
+- Migrar game/imgui
+- Self-hosting
+- Inferência global HM (continua proibida)
+
+---
+
 ## Plano ativo atual
 
-O plano ativo para chegar a **100% de usabilidade em projetos pequenos e médios**
-está em [`uso-real-pequeno-medio.md`](uso-real-pequeno-medio.md).
+O plano de uso real pequeno/médio continua em
+[`uso-real-pequeno-medio.md`](uso-real-pequeno-medio.md), **subordinado** à tabela
+de prioridade acima quando houver conflito.
 
 Use este arquivo como backlog resumido e histórico operacional:
 
 - Etapas 1–6: histórico da estabilização até `0.2.0`;
 - Backlog v2: itens remanescentes de DX, stdlib e I/O;
-- Plano de uso real: fonte de verdade para a próxima sequência de implementação.
+- Prioridade 2026-07-13: ordem tática pós-S3.
 
 Quando uma tarefa nova afetar sintaxe, runtime, stdlib, tooling ou distribuição,
 adicione o detalhe no plano de uso real e mantenha aqui apenas o resumo.

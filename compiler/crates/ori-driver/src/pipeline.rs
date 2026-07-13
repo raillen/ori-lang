@@ -2285,7 +2285,7 @@ enum StdlibImportStatus {
     NotStdlib,
 }
 
-fn classify_stdlib_import(import: &str, has_selected_items: bool) -> StdlibImportStatus {
+fn classify_stdlib_import(import: &str, _has_selected_items: bool) -> StdlibImportStatus {
     if import != "ori" && !import.starts_with("ori.") {
         return StdlibImportStatus::NotStdlib;
     }

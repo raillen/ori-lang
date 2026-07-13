@@ -2,7 +2,7 @@
   "name": "vscode-orl",
   "displayName": "Ori Language",
   "description": "Language support for Ori (.orl) — LSP, stdlib completion, doctor, and tooling",
-  "version": "0.2.2",
+  "version": "0.3.1",
   "publisher": "ori-lang",
   "license": "MIT OR Apache-2.0",
   "engines": {

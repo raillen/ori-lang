@@ -2510,7 +2510,11 @@ fn compute_enum_layout(variants: &[ori_hir::hir::HirVariant], ptr_ty: types::Typ
     let mut max_payload_align = 1u8;
 
     for (tag_idx, v) in variants.iter().enumerate() {
-        let payload_layout = compute_struct_layout(&v.fields, ptr_ty, false);
+        // Use natural alignment (`repr_c=true`) so payload_offset matches the
+        // runtime ABI (e.g. ori.json.Value writes payloads at offset 8 for
+        // pointer-bearing variants). Packed layout left max_align at 1 and
+        // produced payload_offset=4 → match field loads of garbage pointers.
+        let payload_layout = compute_struct_layout(&v.fields, ptr_ty, true);
         if payload_layout.size > max_payload_size {
             max_payload_size = payload_layout.size;
         }
@@ -10714,6 +10718,20 @@ impl<'a> FuncCodegen<'a> {
                                     res[0]
                                 });
                             }
+                        }
+                        // `ori_list_push` stores the element pointer without
+                        // retaining; ownership is transferred via ARC edge.
+                        // Must not use the generic FFI path (which would free
+                        // a fresh managed temporary after the call).
+                        if name.as_str() == "ori_list_push" && args.len() == 2 {
+                            let list_v = self.emit_expr(&args[0].value)?;
+                            let value_v = self.emit_expr(&args[1].value)?;
+                            let elem_ty = match &args[0].value.ty {
+                                Ty::List(elem) => elem.as_ref().clone(),
+                                _ => args[1].value.ty.clone(),
+                            };
+                            self.emit_list_push_value(list_v, value_v, &elem_ty)?;
+                            return Ok(self.builder.ins().iconst(types::I8, 0));
                         }
                         let param_tys = self.func_param_tys.get(name).cloned();
                         let is_user_func = self.user_func_names.contains(name.as_str());

@@ -1076,7 +1076,7 @@ end
 
 apply Score
     use core.Comparable
-        compare(self, other: Score) -] int
+        compare(self, other: Score) -> int
             return self.value - other.value
         end
     end

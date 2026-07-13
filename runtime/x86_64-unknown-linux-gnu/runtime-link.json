@@ -1,15 +1,10 @@
 {
-    "target":  "x86_64-unknown-linux-gnu",
-    "runtime":  "libori_runtime.a",
-    "runtime_cdylib":  "libori_runtime.so",
-    "ori_version":  "0.2.0",
-    "abi_version":  "ori-native-abi-1",
-    "profile":  "debug",
-    "native_static_libs":  [
-                               "-lpthread",
-                               "-ldl",
-                               "-lm",
-                               "-no-pie"
-                           ],
-    "generated_by":  "tools/stage_native_runtime.sh (needs rebuild on Linux for updated symbols)"
+  "target": "x86_64-unknown-linux-gnu",
+  "runtime": "libori_runtime.a",
+  "runtime_cdylib": "libori_runtime.so",
+  "ori_version": "0.3.1",
+  "abi_version": "ori-native-abi-1",
+  "profile": "debug",
+  "native_static_libs": ["-lgcc_s", "-lutil", "-lrt", "-lpthread", "-lm", "-ldl", "-lc", "-no-pie"],
+  "generated_by": "tools/stage_native_runtime.sh"
 }

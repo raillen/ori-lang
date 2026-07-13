@@ -12,7 +12,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 > Itens de **superfície S3** (breaking) estão na seção **`[0.3.0]`**. Inferência local Nim-style está em **`[0.3.1]`**.
 
-> **Política de versionamento:** Cargo workspace package permanece **`0.2.0`** até tag de release oficial; superfícies documentadas em `[0.3.0]` / `[0.3.1]`.
+> **Política de versionamento (2026-07-13):** workspace Cargo = **`0.3.1`** (tags `v0.3.0` / `v0.3.1`). **Package** de distribuição (zip/tar) **adiado** até fechar pendências (stdlib, ARC residual, LSP, independência Rust). `ori-game` / `ori-imgui` = **última** migração. Auk9 = produto **arquivado**.
 
 ### Adicionado
 - **CLI/S3 (`ori migrate-syntax`):** ferramenta melhor-esforço para reescrever fonte pré-S3 → S3 (`namespace`→`module`, strip `func` em declarações, `import as`/`only`, `<>`→`[]`, `of` types, `else if`→`elif`, `case .V`→`case V`, `do(`→`(`, `?` simples→`try`, scaffold `implement`/`apply Trait to`). Opções `--dry-run` / `-v`. Ignora `packages/ori-game` e `packages/ori-imgui`. Wrapper `tools/migrate_syntax.sh`. Testes unitários em `pipeline::migrate_syntax`.
@@ -130,8 +130,16 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Testes:** `type_accepts_local_nim_style_inference`, `type_rejects_local_inference_on_try`, `type_rejects_local_inference_on_empty_list`.
 - **Docs:** caps. 04 e 06 atualizados; catálogo 13.
 
+### Corrigido (pós-tag de superfície)
+- **Codegen/ARC — `ori_list_push`:** path especial no backend nativo (`emit_list_push_value`) em vez do FFI genérico que liberava o temporário gerenciado após a chamada — corrigia corrupção de `list[string]` / stdlib utils.
+- **Codegen/ABI — layout de enum:** `compute_enum_layout` usa alinhamento natural (`repr_c=true`) para `payload_offset` bater com o runtime (ex.: `ori.json.Value` em offset 8).
+- **Driver:** warning dead_code em `classify_stdlib_import` (`_has_selected_items`).
+- **LSP:** índice semântico de bindings locais (`const`/`var` omitidos) para inlay/hover de tipos óbvios (0.3.1).
+- **VS Code:** `extensions/vscode-orl` version bump para `0.3.1`.
+
 ### Não incluído
-- Inferência global; omissão em `pub`/params/retornos de API; pipe `|>`.
+- Inferência global; omissão em `pub`/params/retornos de API.
+- **Pipe `|>`:** **permanece** na Ori (já existia; teste `compile_runs_pipe_operator_native`). A menção “fora do 0.3” na ata S3 foi **corrigida** — não era decisão de produto.
 
 ---
 
@@ -143,12 +151,13 @@ and identity: [`docs/spec/00-manifesto.md`](docs/spec/00-manifesto.md). Decision
 log: [`docs/planning/ori-surface-s3-auk9.md`](docs/planning/ori-surface-s3-auk9.md).
 ADR: [`docs/planning/adr-ori-surface-s3-auk9.md`](docs/planning/adr-ori-surface-s3-auk9.md).
 
-**Versioning note:** CHANGELOG documents the language surface as **`0.3.0`**.
-Workspace `Cargo.toml` may still report `0.2.0` until the tagged release package
-is cut; treat S3 docs + compiler as the source of truth for syntax.
+**Versioning note:** language surface **`0.3.0`**; workspace Cargo **`0.3.1`**
+(after inference slice). **Package** zip/tar remains deferred until remaining
+pendencies close.
 
-**Not in 0.3.0:** Nim-style local inference (**`0.3.1` / PR 11**), pipe `|>` as
-product focus, migration of `packages/ori-game` and `packages/ori-imgui` (follow-up).
+**Not in 0.3.0:** Nim-style local inference (**`0.3.1` / PR 11**); migration of
+`packages/ori-game` and `packages/ori-imgui` (**última** fatia). Pipe `|>` **já
+era** feature Ori e **permanece** (não foi cortado no S3).
 
 ### Breaking — surface S3
 

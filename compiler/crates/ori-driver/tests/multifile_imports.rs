@@ -9053,11 +9053,18 @@ fn check_readme_quick_example() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let readme = std::fs::read_to_string(root.join("README.md")).unwrap();
     assert!(
-        !readme.contains("(\namespace)") && !readme.contains("optional, \nesult)"),
+        !readme.contains("(\\namespace)") && !readme.contains("optional, \\nesult)"),
         "README has broken line splits inside important language terms"
     );
-    assert!(readme.contains("(namespace)"));
-    assert!(readme.contains("(optional, result)"));
+    // S3: modules are introduced with `module`, not `namespace`.
+    assert!(
+        readme.contains("`module`") || readme.contains("(module)"),
+        "README should mention modules (S3)"
+    );
+    assert!(
+        readme.contains("optional") && readme.contains("result"),
+        "README should mention optional/result"
+    );
 
     let examples = extract_ori_code_fences(&readme);
     assert!(!examples.is_empty(), "README should include an Ori example");

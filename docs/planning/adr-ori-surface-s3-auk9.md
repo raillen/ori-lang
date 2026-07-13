@@ -41,7 +41,7 @@ Exceções conscientes vs Auk9 pura:
 | Default em trait | corpo = default (sem keyword `default`) | keyword `default` |
 | Closure | `(u) => …` | `do(u) => …` |
 | Inferência | Nim-local **depois** (`0.3.1`) | anotações rígidas na v1 Auk9 |
-| Pipe `\|>` | fora do 0.3 | rejeitado na Auk9 |
+| Pipe `\|>` | **mantido** (feature Ori; teste nativo) | rejeitado na Auk9 |
 
 ---
 
@@ -80,10 +80,11 @@ A Ori **não** visa competir com linguagens de mercado. Existe para:
 
 ## Fora de escopo deste ADR
 
-- Self-hosting, registry remoto, pipe `|>`  
+- Self-hosting, registry remoto  
 - Inferência global HM (continua proibida)  
-- Migrar `ori-game` / `ori-imgui` no mesmo dia do 0.3.0 (plano B: depois)  
+- Migrar `ori-game` / `ori-imgui` no mesmo dia do 0.3.0 (plano B: **última** migração)  
 - Reimplementar features Ori na Auk9  
+- Package de distribuição (adiado até fechar pendências de runtime/stdlib/LSP)
 
 ---
 

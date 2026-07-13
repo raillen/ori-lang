@@ -151,14 +151,15 @@ Source (.orl)
   → Binary
 ```
 
-## Current Status (2026-07-12)
+## Current Status (2026-07-13)
 
 - **Rust:** 1.95.0 (via `rust-toolchain.toml`)
-- **Language surface:** **`0.3.0` S3** (Auk9-inspired cutover — breaking). Manifesto: `docs/spec/00-manifesto.md`. Decisões: `docs/planning/ori-surface-s3-auk9.md`.
-- **Cargo workspace package version:** still **`0.2.0`** until the official release package/tag; CHANGELOG documents language surface as `[0.3.0]`. See "Versioning policy".
-- **Etapas 0–9** do `PLANO-MATURIDADE-COMPLETO.md` (ciclo 0.2) concluídas; S3 PRs 1–10 = marco de superfície.
-- **Next surface slice:** local Nim-style inference **`0.3.1`** (PR 11 — **not** part of 0.3.0).
-- **Auk9:** retired as product; lab/reference only. Living surface is Ori S3.
+- **Language surface:** **`0.3.0` S3** + **`0.3.1`** Nim-local inference. Manifesto: `docs/spec/00-manifesto.md`. Decisões: `docs/planning/ori-surface-s3-auk9.md`.
+- **Cargo workspace package version:** **`0.3.1`**. Git tags `v0.3.0` / `v0.3.1`. **Package** de distribuição (zip/tar) **adiado** até fechar pendências.
+- **Etapas 0–9** do `PLANO-MATURIDADE-COMPLETO.md` (ciclo 0.2) concluídas; S3 PRs 1–10 + PR11 inference = superfície atual.
+- **Pipe `|>`:** **mantido** (feature Ori; não foi removido no S3).
+- **Auk9:** produto **arquivado** (README no repo auk9-lang). Living surface is Ori S3.
+- **Última migração:** `packages/ori-game` / `packages/ori-imgui` (depois de tudo o resto).
 - **cargo check --workspace:** PASSES cleanly
 - **cargo test --workspace:** PASSES cleanly (~690+ tests, including stdlib Layer 2/3, net v2 E2E, io streams, JIT default)
 - **Release smoke:** `tools/smoke_native_release.ps1 -SkipBuild` passes — `ori compile` + `ori test` validados em package isolado com runtime empacotada (Windows MSVC).
@@ -173,30 +174,31 @@ Source (.orl)
 - **Docs website (unreleased):** Site Starlight em [github.com/raillen/ori-website](https://github.com/raillen/ori-website) — i18n en/pt/es/ja, Pagefind + busca ⌘K, referência gerada via `ori doc export`. Deploy Vercel-ready (`vercel.json`).
 - **Master plan:** `docs/planning/PLANO-MATURIDADE-COMPLETO.md` — Etapas 0–9 concluídas; backlog v2 em Apêndice C (stdlib em `.orl`, paridade C debug para async, mais triples, registry/installer, `ori doc` HTML). Roadmap fechado: híbrido A→B→D para Rust removal (Phase 3 completa), 3 camadas explícitas para stdlib (detalhes em CHANGELOG `[Unreleased]`).
 
-## Versioning policy (2026-07-12)
+## Versioning policy (2026-07-13)
 
-**Histórico:** a escalada precoce `0.1.0 → 0.2.0` foi precipitada; o corte **S3** **é** o breaking que justifica documentar **`0.3.0`** no CHANGELOG. O número Cargo pode permanecer `0.2.0` até a tag de package. Comparação com pares:
+**Histórico:** S3 justifica **`0.3.0`** (breaking de superfície). Inferência Nim-local = **`0.3.1`**. Cargo workspace e tags git acompanham a superfície; **package** de distribuição fica para depois das pendências.
 
 | Linguagem | Tempo em 0.x | Versão atual | Status |
 |-----------|-------------|--------------|--------|
 | Zig | ~10 anos | 0.14 | Consolidada, ainda sem 1.0 |
 | Rust | ~6 anos (pre-1.0) | 1.0 em 2015 | Estável após 0.12 |
-| Ori | dias | surface 0.3.0 / pkg 0.2.0 | Pre-1.0, S3 cutover documentado |
+| Ori | dias | **0.3.1** (tags; package adiado) | Pre-1.0, S3 + inference |
 
 **Regras até 1.0:**
-- Superfície S3 documentada em CHANGELOG **`[0.3.0]`** (breaking real).
-- Marcos não-S3 / pós-corte (ex.: inferência `0.3.1`) ficam em `[Unreleased]` ou seção de versão seguinte.
-- Bump de `Cargo.toml` workspace para `0.3.0` acompanha a tag de release package (não é obrigatório no mesmo commit da reforma documental).
-- Patch versions (`0.2.1`, `0.2.2`) para correções e small additive features.
+- Superfície S3 = CHANGELOG **`[0.3.0]`**; inference = **`[0.3.1]`**.
+- Cargo/`runtime-link.json` = versão atual do workspace (**0.3.1**).
+- **Package** (zip/tar + smoke release) só após fechar pendências de runtime/stdlib/tooling — não bloqueia tags de superfície.
+- Patch versions (`0.3.2`, …) para correções e small additive features.
+- `0.4+` só com breaking real ou marco grande acordado.
 - `1.0` é critério de maturidade (anos, não dias):
-  1. Rust dependency totalmente removida (Rust removal Phase 1+2+3).
-  2. Stdlib portada em `.orl` (Layer 2+3 substantivas).
-  3. Compiler self-hosting (ou pelo menos provando que consegue).
-  4. ABI estável documentada.
-  5. Usuários reais (mesmo que poucos).
-  6. Sem breaking changes por ≥6 meses.
+  1. **Independência do Rust para o usuário final** (crítico — smoke em máquina sem Rust, SystemLinker/JIT estáveis).
+  2. Stdlib corrigida/consolidada (Layer 2+3; mesclagem de módulos a discutir).
+  3. **ABI estável documentada** — **após** integração das funcionalidades finais (não antes).
+  4. Self-hosting = **última** discussão de linguagem (só depois de tudo funcional).
+  5. ~~Usuários reais~~ — **ignorado** como critério de produto por agora.
+  6. Sem breaking changes por ≥6 meses quando se aproximar de 1.0.
 
-**Motivo (package vs surface):** a superfície S3 **é** breaking e vive em CHANGELOG `[0.3.0]`. Manter o número Cargo em `0.2.0` até a tag de package evita inflar maturidade de *distribuição* enquanto AOT ainda depende de linker do sistema e a stdlib Layer 1 permanece em Rust. Inferência local = `0.3.1`, não misturar no big-bang S3.
+**Prioridade tática (2026-07-13):** ver `docs/planning/PENDENTES.md` seção “Prioridade 2026-07-13”.
 
 ## Rust Independence Strategy (2026-07-02)
 

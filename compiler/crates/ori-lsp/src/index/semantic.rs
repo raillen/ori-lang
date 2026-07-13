@@ -293,9 +293,12 @@ impl SemanticIndex {
                             param.name.text,
                             type_to_string(&param.ty)
                         ),
-                        summary: format!("parameter {}", param.name.text),
+                        // Inlay shows `: {summary}` — use the type name for params.
+                        summary: type_to_string(&param.ty),
                     });
                 }
+                // Index local bindings so inlay can show inferred types (0.3.1).
+                self.index_local_bindings(&func.body, source);
             }
             ori_ast::item::Item::Struct(s) => {
                 let range = span_to_range(source, s.span);
@@ -423,6 +426,151 @@ impl SemanticIndex {
             _ => {}
         }
     }
+
+    fn index_local_bindings(&mut self, block: &ori_ast::stmt::Block, source: &str) {
+        self.index_local_stmts(&block.stmts, source);
+    }
+
+    fn index_local_stmts(&mut self, stmts: &[ori_ast::stmt::Stmt], source: &str) {
+        for stmt in stmts {
+            match stmt {
+                ori_ast::stmt::Stmt::Const(c) => {
+                    let ty_str = c
+                        .ty
+                        .as_ref()
+                        .map(type_to_string)
+                        .or_else(|| syntactic_type_hint(&c.value))
+                        .unwrap_or_else(|| "_".to_string());
+                    let range = span_to_range(source, c.name.span);
+                    self.add(SemanticSymbol {
+                        name: c.name.text.to_string(),
+                        kind: SymbolKind::Variable,
+                        range,
+                        hover: format!(
+                            "```ori\nconst {}: {}\n```\n\nLocal constant binding.",
+                            c.name.text, ty_str
+                        ),
+                        summary: ty_str,
+                    });
+                }
+                ori_ast::stmt::Stmt::Var(v) => {
+                    let ty_str = v
+                        .ty
+                        .as_ref()
+                        .map(type_to_string)
+                        .or_else(|| syntactic_type_hint(&v.value))
+                        .unwrap_or_else(|| "_".to_string());
+                    let range = span_to_range(source, v.name.span);
+                    self.add(SemanticSymbol {
+                        name: v.name.text.to_string(),
+                        kind: SymbolKind::Variable,
+                        range,
+                        hover: format!(
+                            "```ori\nvar {}: {}\n```\n\nLocal mutable binding.",
+                            v.name.text, ty_str
+                        ),
+                        summary: ty_str,
+                    });
+                }
+                ori_ast::stmt::Stmt::If(i) => {
+                    self.index_local_bindings(&i.then_block, source);
+                    for (_, b) in &i.else_ifs {
+                        self.index_local_bindings(b, source);
+                    }
+                    if let Some(eb) = &i.else_block {
+                        self.index_local_bindings(eb, source);
+                    }
+                }
+                ori_ast::stmt::Stmt::IfSome(i) => {
+                    let range = span_to_range(source, i.binding.span);
+                    self.add(SemanticSymbol {
+                        name: i.binding.text.to_string(),
+                        kind: SymbolKind::Variable,
+                        range,
+                        hover: format!(
+                            "```ori\nif some({})\n```\n\nOptional binding.",
+                            i.binding.text
+                        ),
+                        summary: "_".to_string(),
+                    });
+                    self.index_local_bindings(&i.then_block, source);
+                    if let Some(eb) = &i.else_block {
+                        self.index_local_bindings(eb, source);
+                    }
+                }
+                ori_ast::stmt::Stmt::While(w) => self.index_local_bindings(&w.body, source),
+                ori_ast::stmt::Stmt::WhileSome(w) => {
+                    let range = span_to_range(source, w.binding.span);
+                    self.add(SemanticSymbol {
+                        name: w.binding.text.to_string(),
+                        kind: SymbolKind::Variable,
+                        range,
+                        hover: format!(
+                            "```ori\nwhile some({})\n```\n\nOptional binding.",
+                            w.binding.text
+                        ),
+                        summary: "_".to_string(),
+                    });
+                    self.index_local_bindings(&w.body, source);
+                }
+                ori_ast::stmt::Stmt::For(f) => {
+                    let range = span_to_range(source, f.binding.span);
+                    self.add(SemanticSymbol {
+                        name: f.binding.text.to_string(),
+                        kind: SymbolKind::Variable,
+                        range,
+                        hover: format!(
+                            "```ori\nfor {}\n```\n\nLoop binding.",
+                            f.binding.text
+                        ),
+                        summary: "_".to_string(),
+                    });
+                    if let Some(second) = &f.second_binding {
+                        let range = span_to_range(source, second.span);
+                        self.add(SemanticSymbol {
+                            name: second.text.to_string(),
+                            kind: SymbolKind::Variable,
+                            range,
+                            hover: format!(
+                                "```ori\nfor _, {}\n```\n\nLoop binding.",
+                                second.text
+                            ),
+                            summary: "_".to_string(),
+                        });
+                    }
+                    self.index_local_bindings(&f.body, source);
+                }
+                ori_ast::stmt::Stmt::Loop(l) => self.index_local_bindings(&l.body, source),
+                ori_ast::stmt::Stmt::Repeat(r) => self.index_local_bindings(&r.body, source),
+                ori_ast::stmt::Stmt::Match(m) => {
+                    for case in &m.cases {
+                        match case {
+                            ori_ast::stmt::MatchCase::Pattern { body, .. }
+                            | ori_ast::stmt::MatchCase::Else { body, .. } => {
+                                self.index_local_stmts(body, source);
+                            }
+                        }
+                    }
+                }
+                ori_ast::stmt::Stmt::Using(u) => {
+                    // `using name: Type = expr` is a single statement (no nested block).
+                    let range = span_to_range(source, u.name.span);
+                    let ty_str = type_to_string(&u.ty);
+                    self.add(SemanticSymbol {
+                        name: u.name.text.to_string(),
+                        kind: SymbolKind::Variable,
+                        range,
+                        hover: format!(
+                            "```ori\nusing {}: {}\n```\n\nResource binding.",
+                            u.name.text, ty_str
+                        ),
+                        summary: ty_str,
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 /// Describes what kind of completion the user expects at the cursor position.
@@ -455,6 +603,23 @@ fn func_signature(func: &ori_ast::item::FuncDecl) -> String {
         prefix.push_str("mut ");
     }
     format!("{}{}({}){}", prefix, func.name.text, params.join(", "), ret)
+}
+
+/// Lightweight display type for omitted local annotations (inlay only).
+fn syntactic_type_hint(expr: &ori_ast::expr::Expr) -> Option<String> {
+    use ori_ast::expr::Expr;
+    match expr {
+        Expr::BoolLit(..) => Some("bool".into()),
+        Expr::IntLit { .. } => Some("int".into()),
+        Expr::FloatLit { .. } => Some("float".into()),
+        Expr::StrLit { .. } | Expr::FStrLit { .. } => Some("string".into()),
+        Expr::BytesLit { .. } => Some("bytes".into()),
+        Expr::StructLit { ty, .. } => Some(ty.to_string()),
+        Expr::List { elements, .. } if !elements.is_empty() => {
+            syntactic_type_hint(&elements[0]).map(|e| format!("list[{e}]"))
+        }
+        _ => None,
+    }
 }
 
 fn type_to_string(ty: &ori_ast::ty::Type) -> String {
