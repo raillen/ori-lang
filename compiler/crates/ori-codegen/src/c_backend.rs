@@ -2750,7 +2750,11 @@ impl CCodegen {
                 return format!("(({}){{ .has_value = false }})", ty_to_c(expected));
             } else if let HirExprKind::Some_(inner) = &expr.kind {
                 let i = self.expr_to_c_for_expected(inner, expected_inner);
-                return format!("(({}){{ .has_value = true, .value = {} }})", ty_to_c(expected), i);
+                return format!(
+                    "(({}){{ .has_value = true, .value = {} }})",
+                    ty_to_c(expected),
+                    i
+                );
             }
         }
         if let (Ty::Any(trait_def_id), Ty::Named(type_def_id, _)) = (expected, &expr.ty) {
@@ -2949,7 +2953,34 @@ impl CCodegen {
                         let tmp_item = self.fresh_tmp();
                         return format!("({{ ori_list_t {tmp_list} = {list_c}; {item_ty_c} {tmp_item} = {item_c}; ori_list_push(&{tmp_list}, &{tmp_item}); }})");
                     }
-                    if matches!(n.as_str(), "ori_list_try_get" | "ori_list_get" | "ori_list_remove" | "ori_list_pop" | "ori_list_insert" | "ori_bytes_from_hex" | "ori_io_read_line" | "ori_io_read_bytes" | "ori_io_try_read_line" | "ori_io_try_read_bytes" | "ori_io_read_all" | "ori_io_try_read_all" | "ori_io_read" | "ori_string_from_bytes" | "ori_string_to_bytes" | "ori_random_choice" | "ori_random_int" | "ori_random_float" | "ori_os_args" | "ori_os_current_dir" | "ori_os_read_env" | "ori_io_write" | "ori_io_flush" | "ori_bytes_concat" | "ori_bytes_to_list") {
+                    if matches!(
+                        n.as_str(),
+                        "ori_list_try_get"
+                            | "ori_list_get"
+                            | "ori_list_remove"
+                            | "ori_list_pop"
+                            | "ori_list_insert"
+                            | "ori_bytes_from_hex"
+                            | "ori_io_read_line"
+                            | "ori_io_read_bytes"
+                            | "ori_io_try_read_line"
+                            | "ori_io_try_read_bytes"
+                            | "ori_io_read_all"
+                            | "ori_io_try_read_all"
+                            | "ori_io_read"
+                            | "ori_string_from_bytes"
+                            | "ori_string_to_bytes"
+                            | "ori_random_choice"
+                            | "ori_random_int"
+                            | "ori_random_float"
+                            | "ori_os_args"
+                            | "ori_os_current_dir"
+                            | "ori_os_read_env"
+                            | "ori_io_write"
+                            | "ori_io_flush"
+                            | "ori_bytes_concat"
+                            | "ori_bytes_to_list"
+                    ) {
                         let ret_ty_c = ty_to_c(&expr.ty);
                         if ret_ty_c == "void" {
                             return format!("({{}})");

@@ -68,7 +68,10 @@ pub fn run_install_package(options: InstallPackageOptions) -> Result<InstallPack
                 };
                 let temp_dir = std::env::temp_dir().join(format!(
                     "ori_git_clone_{}",
-                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis()
                 ));
 
                 eprintln!("ori: cloning {}...", url);
@@ -79,7 +82,9 @@ pub fn run_install_package(options: InstallPackageOptions) -> Result<InstallPack
                     .arg(&url)
                     .arg(&temp_dir)
                     .status()
-                    .map_err(|err| format!("package.git_clone_failed: failed to invoke git: {err}"))?;
+                    .map_err(|err| {
+                        format!("package.git_clone_failed: failed to invoke git: {err}")
+                    })?;
 
                 if !status.success() {
                     return Err(format!(
@@ -105,11 +110,12 @@ pub fn run_install_package(options: InstallPackageOptions) -> Result<InstallPack
 
     let mut seen = HashSet::new();
     let mut packages = Vec::new();
-    let expected_name = if options.name.starts_with("github.com/") || options.name.starts_with("http") {
-        None
-    } else {
-        Some(options.name.as_str())
-    };
+    let expected_name =
+        if options.name.starts_with("github.com/") || options.name.starts_with("http") {
+            None
+        } else {
+            Some(options.name.as_str())
+        };
 
     install_local_package(
         &package_root_from_path(&source)?,
@@ -599,7 +605,7 @@ fn parse_string_array_value(raw: &str) -> Result<Vec<String>, String> {
     if inner.is_empty() {
         return Ok(Vec::new());
     }
-    
+
     let mut items = Vec::new();
     for part in inner.split(',') {
         let part = part.trim();

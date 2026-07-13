@@ -1,4 +1,4 @@
-namespace ori.math.mat3
+module ori.math.mat3
 
 import ori.math as math
 import ori.math.vec2 as vec2
@@ -15,7 +15,7 @@ public struct Mat3
     m22: float
 end
 
-public func identity() -> Mat3
+public identity() -> Mat3
     return Mat3(
         m00: 1.0, m01: 0.0, m02: 0.0,
         m10: 0.0, m11: 1.0, m12: 0.0,
@@ -23,7 +23,7 @@ public func identity() -> Mat3
     )
 end
 
-public func zero() -> Mat3
+public zero() -> Mat3
     return Mat3(
         m00: 0.0, m01: 0.0, m02: 0.0,
         m10: 0.0, m11: 0.0, m12: 0.0,
@@ -31,7 +31,7 @@ public func zero() -> Mat3
     )
 end
 
-public func translate(tx: float, ty: float) -> Mat3
+public translate(tx: float, ty: float) -> Mat3
     return Mat3(
         m00: 1.0, m01: 0.0, m02: tx,
         m10: 0.0, m11: 1.0, m12: ty,
@@ -39,7 +39,7 @@ public func translate(tx: float, ty: float) -> Mat3
     )
 end
 
-public func rotate(angle_rad: float) -> Mat3
+public rotate(angle_rad: float) -> Mat3
     const c: float = math.cos(angle_rad)
     const s: float = math.sin(angle_rad)
     return Mat3(
@@ -49,7 +49,7 @@ public func rotate(angle_rad: float) -> Mat3
     )
 end
 
-public func scale(sx: float, sy: float) -> Mat3
+public scale(sx: float, sy: float) -> Mat3
     return Mat3(
         m00: sx,  m01: 0.0, m02: 0.0,
         m10: 0.0, m11: sy,  m12: 0.0,
@@ -57,7 +57,7 @@ public func scale(sx: float, sy: float) -> Mat3
     )
 end
 
-public func multiply(a: Mat3, b: Mat3) -> Mat3
+public multiply(a: Mat3, b: Mat3) -> Mat3
     return Mat3(
         m00: a.m00*b.m00 + a.m01*b.m10 + a.m02*b.m20,
         m01: a.m00*b.m01 + a.m01*b.m11 + a.m02*b.m21,
@@ -71,14 +71,14 @@ public func multiply(a: Mat3, b: Mat3) -> Mat3
     )
 end
 
-public func transform_point(m: Mat3, p: vec2.Vec2) -> vec2.Vec2
+public transform_point(m: Mat3, p: vec2.Vec2) -> vec2.Vec2
     return vec2.Vec2(
         x: m.m00 * p.x + m.m01 * p.y + m.m02,
         y: m.m10 * p.x + m.m11 * p.y + m.m12
     )
 end
 
-public func transpose(m: Mat3) -> Mat3
+public transpose(m: Mat3) -> Mat3
     return Mat3(
         m00: m.m00, m01: m.m10, m02: m.m20,
         m10: m.m01, m11: m.m11, m12: m.m21,
@@ -86,13 +86,13 @@ public func transpose(m: Mat3) -> Mat3
     )
 end
 
-public func determinant(m: Mat3) -> float
+public determinant(m: Mat3) -> float
     return m.m00 * (m.m11 * m.m22 - m.m12 * m.m21)
          - m.m01 * (m.m10 * m.m22 - m.m12 * m.m20)
          + m.m02 * (m.m10 * m.m21 - m.m11 * m.m20)
 end
 
-public func inverse(m: Mat3) -> Mat3
+public inverse(m: Mat3) -> Mat3
     const det: float = determinant(m)
     const inv_det: float = 1.0 / det
     return Mat3(

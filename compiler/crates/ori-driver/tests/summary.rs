@@ -5,11 +5,11 @@ fn summary_lists_transitive_imports() {
     let dir = std::env::temp_dir().join(format!("ori-summary-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&dir);
     let lib = dir.join("lib.orl");
-    std::fs::write(&lib, "namespace app.lib\nstruct Point\n    x: int\nend\n").unwrap();
+    std::fs::write(&lib, "module app.lib\nstruct Point\n    x: int\nend\n").unwrap();
     let main = dir.join("main.orl");
     std::fs::write(
         &main,
-        "namespace app.main\nimport app.lib as lib\nfunc main() -> void\nend\n",
+        "module app.main\nimport app.lib as lib\nmain() -> void\nend\n",
     )
     .unwrap();
 

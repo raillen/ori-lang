@@ -1,4 +1,4 @@
-namespace app.generics_showcase
+module app.generics_showcase
 
 --- Demonstra o uso de coleções genéricas da stdlib Ori.
 --- Cada coleção é testada com int e string para validar
@@ -17,13 +17,13 @@ import ori.queue.utils as queue_utils
 import ori.stack as stack
 import ori.stack.utils as stack_utils
 
-func section(title: string)
+section(title: string)
     io.println("")
     io.println(f"=== {title} ===")
 end
 
 -- ─────────────────── Queue<T> ───────────────────
-func demo_queue()
+demo_queue()
     section("Queue — FIFO generica")
 
     -- Queue<int>
@@ -57,7 +57,7 @@ func demo_queue()
 end
 
 -- ─────────────────── Stack<T> ───────────────────
-func demo_stack()
+demo_stack()
     section("Stack — LIFO generica")
 
     -- Stack<int>
@@ -84,7 +84,7 @@ func demo_stack()
 end
 
 -- ─────────────────── Deque<T> ───────────────────
-func demo_deque()
+demo_deque()
     section("Deque — Double-ended generica")
 
     -- Deque<int>
@@ -116,7 +116,7 @@ func demo_deque()
 end
 
 -- ─────────────────── LinkedList<T> ───────────────
-func demo_linked_list()
+demo_linked_list()
     section("LinkedList — Singly-linked generica")
 
     -- LinkedList<int>
@@ -148,7 +148,7 @@ func demo_linked_list()
 end
 
 -- ─────────────── DoublyLinkedList<T> ─────────────
-func demo_doubly_linked_list()
+demo_doubly_linked_list()
     section("DoublyLinkedList — Doubly-linked generica")
 
     -- DoublyLinkedList<int>
@@ -176,7 +176,7 @@ func demo_doubly_linked_list()
 end
 
 -- ─────────────────── List<T> ────────────────────
-func demo_list_generics()
+demo_list_generics()
     section("List — Funcoes genericas da stdlib")
 
     const names: list<string> = ["Ada", "Grace", "Margaret"]
@@ -197,7 +197,7 @@ func demo_list_generics()
 end
 
 -- ──────────────── Main ──────────────────────────
-func main()
+main()
     io.println("Ori Language — Generic Collections Showcase")
     io.println("============================================")
 

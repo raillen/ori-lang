@@ -79,7 +79,7 @@ mod tests {
 
     #[test]
     fn position_roundtrip() {
-        let source = "namespace app.main\nfunc main()\nend\n";
+        let source = "module app.main\nmain()\nend\n";
         let pos = Position::new(1, 5);
         let offset = byte_offset_for_position(source, pos);
         let result = position_for_byte_offset(source, offset);

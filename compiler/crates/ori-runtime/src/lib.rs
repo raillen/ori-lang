@@ -4465,10 +4465,7 @@ unsafe fn map_key_equals(map: *mut OriMap, stored: i64, query: i64) -> bool {
     }
 }
 
-unsafe fn ht_lookup_map(
-    map: *mut OriMap,
-    key: i64,
-) -> usize {
+unsafe fn ht_lookup_map(map: *mut OriMap, key: i64) -> usize {
     let mask = (*map).ht_cap as usize - 1;
     let mut slot = map_key_hash(map, key) & mask;
     loop {
@@ -4503,7 +4500,11 @@ unsafe fn map_prepare_key_kind(map: *mut OriMap, key_kind: u8) -> bool {
     (*map).key_kind == key_kind
 }
 
-unsafe fn map_alloc_with(hash_fn: *const std::ffi::c_void, eq_fn: *const std::ffi::c_void, kind: u8) -> *mut OriMap {
+unsafe fn map_alloc_with(
+    hash_fn: *const std::ffi::c_void,
+    eq_fn: *const std::ffi::c_void,
+    kind: u8,
+) -> *mut OriMap {
     let cap = 8_i64;
     let bytes = cap as usize * std::mem::size_of::<i64>();
     let ht_bytes = INITIAL_MAP_HT_CAP * std::mem::size_of::<i64>();
@@ -4689,10 +4690,7 @@ pub unsafe extern "C" fn ori_map_try_get_string(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn ori_map_try_get_custom(
-    map: *mut OriMap,
-    key: i64,
-) -> *mut OriOptionalInt {
+pub unsafe extern "C" fn ori_map_try_get_custom(map: *mut OriMap, key: i64) -> *mut OriOptionalInt {
     if ori_map_contains_custom(map, key) == 0 {
         alloc_optional_int(0, 0)
     } else {
@@ -7991,7 +7989,8 @@ fn tcp_connect(address: &str, timeout_ms: i64) -> Result<std::net::TcpStream, St
 
 fn alloc_runtime_connection(stream: ConnectionTransport) -> Result<*mut u8, String> {
     let layout_size = std::mem::size_of::<RuntimeConnection>();
-    let payload = unsafe { ori_alloc(layout_size, Some(ori_net_destructor)) as *mut RuntimeConnection };
+    let payload =
+        unsafe { ori_alloc(layout_size, Some(ori_net_destructor)) as *mut RuntimeConnection };
     if payload.is_null() {
         return Err("allocation failed".to_string());
     }

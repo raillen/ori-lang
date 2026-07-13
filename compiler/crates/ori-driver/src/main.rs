@@ -351,10 +351,7 @@ fn main() {
                         } else {
                             "installed"
                         };
-                        eprintln!(
-                            "  + {} v{} ({})",
-                            installed.name, installed.version, status
-                        );
+                        eprintln!("  + {} v{} ({})", installed.name, installed.version, status);
                     }
                 }
             }

@@ -100,12 +100,12 @@ fn compile_runs_native_no_managed_no_leak() {
     let dir = TestDir::new("no_managed_no_leak");
     let (stdout, _stderr, success) = compile_and_run(
         &dir,
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.test as test
 
-func main()
+main()
     io.print("hello")
     const leaked: int = test.live_allocations()
     io.print("leaks:" + string(leaked))
@@ -127,13 +127,13 @@ fn compile_runs_native_single_list_no_leak() {
     let dir = TestDir::new("single_list_no_leak");
     let (stdout, _stderr, success) = compile_and_run(
         &dir,
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
 import ori.test as test
 
-func exercise_list() -> int
+exercise_list() -> int
     const xs: list<int> = lists.new()
     lists.push(xs, 1)
     lists.push(xs, 2)
@@ -141,7 +141,7 @@ func exercise_list() -> int
     return n
 end
 
-func main()
+main()
     const n: int = exercise_list()
     const leaked: int = test.live_allocations()
     io.print("size:" + string(n))
@@ -177,7 +177,7 @@ fn compile_runs_native_struct_with_managed_field_no_leak() {
     let dir = TestDir::new("struct_managed_field_no_leak");
     let (stdout, _stderr, success) = compile_and_run(
         &dir,
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
@@ -187,7 +187,7 @@ struct Holder
     items: list<int>
 end
 
-func make_holder(n: int) -> Holder
+make_holder(n: int) -> Holder
     const xs: list<int> = lists.new()
     var i: int = 0
     while i < n
@@ -197,12 +197,12 @@ func make_holder(n: int) -> Holder
     return Holder(items: xs)
 end
 
-func measure_holder(n: int) -> int
+measure_holder(n: int) -> int
     const h: Holder = make_holder(n)
     return lists.len(h.items)
 end
 
-func main()
+main()
     const size: int = measure_holder(4)
     const leaked: int = test.assert_no_leaks("main_struct_managed")
     io.print("size:" + string(size))
@@ -223,7 +223,7 @@ fn compile_runs_native_nested_struct_arc_cascade_no_leak() {
     let dir = TestDir::new("nested_struct_cascade_no_leak");
     let (stdout, _stderr, success) = compile_and_run(
         &dir,
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
@@ -237,7 +237,7 @@ struct Branch
     leaf: Leaf
 end
 
-func make_branch(n: int) -> Branch
+make_branch(n: int) -> Branch
     const xs: list<int> = lists.new()
     var i: int = 0
     while i < n
@@ -247,12 +247,12 @@ func make_branch(n: int) -> Branch
     return Branch(leaf: Leaf(data: xs))
 end
 
-func measure_branch(n: int) -> int
+measure_branch(n: int) -> int
     const b: Branch = make_branch(n)
     return lists.len(b.leaf.data)
 end
 
-func main()
+main()
     const size: int = measure_branch(3)
     const leaked: int = test.assert_no_leaks("main_nested_struct")
     io.print("leaf-size:" + string(size))
@@ -273,7 +273,7 @@ fn compile_runs_native_enum_with_managed_payload_no_leak() {
     let dir = TestDir::new("enum_managed_payload_no_leak");
     let (stdout, _stderr, success) = compile_and_run(
         &dir,
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
@@ -284,7 +284,7 @@ enum Shape
     Polygon(points: list<int>)
 end
 
-func make_polygon(n: int) -> Shape
+make_polygon(n: int) -> Shape
     const xs: list<int> = lists.new()
     var i: int = 0
     while i < n
@@ -294,7 +294,7 @@ func make_polygon(n: int) -> Shape
     return Shape.Polygon(points: xs)
 end
 
-func measure_polygon(n: int) -> int
+measure_polygon(n: int) -> int
     const s: Shape = make_polygon(n)
     match s
         case Empty:
@@ -305,7 +305,7 @@ func measure_polygon(n: int) -> int
     return 0
 end
 
-func main()
+main()
     const size: int = measure_polygon(5)
     const leaked: int = test.assert_no_leaks("main_enum_payload")
     io.print("polygon:" + string(size))
@@ -326,7 +326,7 @@ fn compile_runs_native_optional_struct_no_leak() {
     let dir = TestDir::new("optional_struct_no_leak");
     let (stdout, _stderr, success) = compile_and_run(
         &dir,
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
@@ -336,7 +336,7 @@ struct Box
     items: list<int>
 end
 
-func maybe_box(n: int) -> optional<Box>
+maybe_box(n: int) -> optional<Box>
     if n <= 0
         return none
     end
@@ -349,7 +349,7 @@ func maybe_box(n: int) -> optional<Box>
     return some(Box(items: xs))
 end
 
-func measure_box(n: int) -> int
+measure_box(n: int) -> int
     const opt: optional<Box> = maybe_box(n)
     match opt
         case some(box):
@@ -360,7 +360,7 @@ func measure_box(n: int) -> int
     return 0
 end
 
-func main()
+main()
     const size: int = measure_box(3)
     const leaked: int = test.assert_no_leaks("main_optional_struct")
     io.print("box:" + string(size))
@@ -388,13 +388,13 @@ fn compile_runs_native_cycle_collector_runs() {
     let dir = TestDir::new("cycle_collector_runs");
     let (stdout, _stderr, success) = compile_and_run(
         &dir,
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
 import ori.test as test
 
-func main()
+main()
     const xs: list<int> = lists.new()
     lists.push(xs, 1)
     lists.push(xs, 2)
@@ -423,7 +423,7 @@ fn compile_runs_native_orphan_cycle_reclaimed() {
     let dir = TestDir::new("orphan_cycle_reclaimed");
     let (stdout, _stderr, success) = compile_and_run(
         &dir,
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
@@ -434,7 +434,7 @@ struct Peer
     link: list<int>
 end
 
-func build_and_measure() -> int
+build_and_measure() -> int
     const a_link: list<int> = lists.new()
     const b_link: list<int> = lists.new()
     lists.push(a_link, 10)
@@ -444,7 +444,7 @@ func build_and_measure() -> int
     return a.id + b.id
 end
 
-func main()
+main()
     const total: int = build_and_measure()
     const collected: int = test.collect_cycles()
     const leaked: int = test.live_allocations()
@@ -481,13 +481,13 @@ fn compile_runs_native_loop_managed_allocations_no_leak() {
     let dir = TestDir::new("loop_managed_no_leak");
     let (stdout, _stderr, success) = compile_and_run(
         &dir,
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
 import ori.test as test
 
-func main()
+main()
     var i: int = 0
     var total: int = 0
     while i < 100
@@ -519,7 +519,7 @@ fn compile_runs_native_leak_check_env_aborts_on_intentional_leak() {
     let dir = TestDir::new("leak_check_env_aborts");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
@@ -527,7 +527,7 @@ import ori.test as test
 
 var kept: list<int> = lists.new()
 
-func main()
+main()
     lists.push(kept, 1)
     lists.push(kept, 2)
     io.print("kept:" + string(lists.len(kept)))
@@ -576,12 +576,12 @@ fn compile_runs_native_leak_check_env_clean() {
     let dir = TestDir::new("leak_check_env_clean");
     let (stdout, stderr, success) = compile_and_run_with_leak_check(
         &dir,
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.test as test
 
-func main()
+main()
     io.print("clean")
     const leaked: int = test.assert_no_leaks("main_clean")
     io.print("leaks:" + string(leaked))
@@ -609,7 +609,7 @@ fn compile_runs_native_cycle_stress_10k() {
     let dir = TestDir::new("cycle_stress_10k");
     let (stdout, _stderr, success) = compile_and_run(
         &dir,
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
@@ -620,7 +620,7 @@ struct Peer
     link: list<int>
 end
 
-func build_one_cycle(seed: int) -> int
+build_one_cycle(seed: int) -> int
     const a_link: list<int> = lists.new()
     const b_link: list<int> = lists.new()
     const a: Peer = Peer(id: seed, link: b_link)
@@ -628,7 +628,7 @@ func build_one_cycle(seed: int) -> int
     return a.id + b.id
 end
 
-func main()
+main()
     var i: int = 0
     var acc: int = 0
     while i < 10000
@@ -672,7 +672,7 @@ fn compile_runs_native_linked_list_and_graph_no_leak() {
     let dir = TestDir::new("linked_list_graph_no_leak");
     let (stdout, _stderr, success) = compile_and_run(
         &dir,
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.graph as graph
@@ -680,7 +680,7 @@ import ori.linked_list as llist
 import ori.list as lists
 import ori.test as test
 
-func exercise_collections(seed: int) -> int
+exercise_collections(seed: int) -> int
     const xs: llist.LinkedList<int> = llist.new()
     llist.push_back(xs, seed)
     llist.push_back(xs, seed + 1)
@@ -695,7 +695,7 @@ func exercise_collections(seed: int) -> int
     return llist.len(xs) + lists.len(ns)
 end
 
-func main()
+main()
     var i: int = 0
     var total: int = 0
     while i < 50

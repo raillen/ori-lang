@@ -1,4 +1,4 @@
-namespace examples.log_analyzer
+module examples.log_analyzer
 
 import ori.io as io
 import ori.string only (has_prefix, lines)
@@ -9,7 +9,7 @@ struct LogStats
     error_count: int
 end
 
-func analyze(text: string) -> LogStats
+analyze(text: string) -> LogStats
     var info_count: int = 0
     var warn_count: int = 0
     var error_count: int = 0
@@ -31,7 +31,7 @@ func analyze(text: string) -> LogStats
     )
 end
 
-func main()
+main()
     const sample: string = "[info] boot\n[warn] cache miss\n[error] timeout\n[info] done"
     const stats: LogStats = analyze(sample)
 

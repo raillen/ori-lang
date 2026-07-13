@@ -1,13 +1,13 @@
-namespace ori.config
+module ori.config
 
 import ori.fs as fs
 import ori.json as json
 
-public func read_text(path: string) -> result<string, string>
+public read_text(path: string) -> result<string, string>
     return fs.read_text(path)
 end
 
-public func read_text_or(path: string, fallback: string) -> string
+public read_text_or(path: string, fallback: string) -> string
     match fs.read_text(path)
         case success(text):
             return text
@@ -17,11 +17,11 @@ public func read_text_or(path: string, fallback: string) -> string
     return fallback
 end
 
-public func write_text(path: string, content: string) -> result<string, string>
+public write_text(path: string, content: string) -> result<string, string>
     return fs.write_text(path, content)
 end
 
-public func read_json(path: string) -> result<json.Value, string>
+public read_json(path: string) -> result<json.Value, string>
     match fs.read_text(path)
         case success(text):
             return json.parse(text)
@@ -31,6 +31,6 @@ public func read_json(path: string) -> result<json.Value, string>
     return error("failed to read config")
 end
 
-public func write_json(path: string, value: json.Value) -> result<string, string>
+public write_json(path: string, value: json.Value) -> result<string, string>
     return fs.write_text(path, json.stringify_pretty(value))
 end

@@ -665,14 +665,25 @@ pub fn resolve_many<S: Into<SmolStr>>(
                 Item::Extern(ext) => {
                     for member in &ext.members {
                         match member {
-                            ori_ast::item::ExternMember::Func { name, params, return_ty, .. } => {
+                            ori_ast::item::ExternMember::Func {
+                                name,
+                                params,
+                                return_ty,
+                                ..
+                            } => {
                                 let path = format!("{}.{}", namespace, name.text);
                                 if let Some(def_id) = def_map.lookup(&path) {
                                     let resolved_params: Vec<Ty> = params
                                         .iter()
                                         .map(|p| {
                                             lower_type_with_aliases(
-                                                &p.ty, &namespace, &[], &def_map, *file_id, sink, &aliases,
+                                                &p.ty,
+                                                &namespace,
+                                                &[],
+                                                &def_map,
+                                                *file_id,
+                                                sink,
+                                                &aliases,
                                             )
                                         })
                                         .collect();
@@ -680,7 +691,13 @@ pub fn resolve_many<S: Into<SmolStr>>(
                                         .as_ref()
                                         .map(|t| {
                                             lower_type_with_aliases(
-                                                t, &namespace, &[], &def_map, *file_id, sink, &aliases,
+                                                t,
+                                                &namespace,
+                                                &[],
+                                                &def_map,
+                                                *file_id,
+                                                sink,
+                                                &aliases,
                                             )
                                         })
                                         .unwrap_or(Ty::Void);
@@ -700,7 +717,13 @@ pub fn resolve_many<S: Into<SmolStr>>(
                                 let path = format!("{}.{}", namespace, name.text);
                                 if let Some(def_id) = def_map.lookup(&path) {
                                     let resolved_ty = lower_type_with_aliases(
-                                        ty, &namespace, &[], &def_map, *file_id, sink, &aliases,
+                                        ty,
+                                        &namespace,
+                                        &[],
+                                        &def_map,
+                                        *file_id,
+                                        sink,
+                                        &aliases,
                                     );
                                     value_sigs.push(ValueSig {
                                         def_id,

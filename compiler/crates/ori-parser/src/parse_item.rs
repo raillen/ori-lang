@@ -13,12 +13,21 @@ impl<'src> Parser<'src> {
     /// Entry point: parse a full source file.
     pub fn parse_source_file(&mut self) -> SourceFile {
         let start = self.current_span();
-        let namespace = if self.at(&TokenKind::Namespace) {
-            self.parse_namespace()
+        let namespace = if self.at(&TokenKind::Module) {
+            self.parse_module_header()
+        } else if self.at(&TokenKind::Namespace) {
+            // S3 cutover: `namespace` is a hard error; recover by parsing the path.
+            let span = self.current_span();
+            self.error(
+                "parse.namespace_removed",
+                "`namespace` was removed; use `module` for the file header",
+                span,
+            );
+            self.parse_module_header_after_keyword()
         } else {
             self.error(
-                "parse.namespace_missing",
-                "source file must start with a namespace declaration",
+                "parse.module_missing",
+                "source file must start with a `module` declaration",
                 start,
             );
             None
@@ -58,6 +67,7 @@ impl<'src> Parser<'src> {
                     TokenKind::Const,
                     TokenKind::Var,
                     TokenKind::Extern,
+                    TokenKind::Mut,
                     TokenKind::Ident,
                     TokenKind::At,
                 ]);
@@ -75,8 +85,19 @@ impl<'src> Parser<'src> {
         }
     }
 
-    fn parse_namespace(&mut self) -> Option<NamespaceDecl> {
-        let start = self.expect(&TokenKind::Namespace)?;
+    /// `module path.to.name` — canonical S3 file header.
+    fn parse_module_header(&mut self) -> Option<NamespaceDecl> {
+        let start = self.expect(&TokenKind::Module)?;
+        let name = self.parse_qualified_name()?;
+        Some(NamespaceDecl {
+            span: start.cover(name.span),
+            name,
+        })
+    }
+
+    /// Parse the path after a leading header keyword already diagnosed (or to be consumed).
+    fn parse_module_header_after_keyword(&mut self) -> Option<NamespaceDecl> {
+        let start = self.advance().unwrap().span; // `module` or removed `namespace`
         let name = self.parse_qualified_name()?;
         Some(NamespaceDecl {
             span: start.cover(name.span),
@@ -204,14 +225,24 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_item(&mut self) -> Option<Item> {
+        if self.at(&TokenKind::Module) {
+            let span = self.current_span();
+            self.error(
+                "parse.module_not_first",
+                "`module` must be the first declaration in a file",
+                span,
+            );
+            let _ = self.parse_module_header();
+            return None;
+        }
         if self.at(&TokenKind::Namespace) {
             let span = self.current_span();
             self.error(
-                "parse.namespace_not_first",
-                "namespace must be the first declaration in a file",
+                "parse.namespace_removed",
+                "`namespace` was removed; use `module` for the file header",
                 span,
             );
-            let _ = self.parse_namespace();
+            let _ = self.parse_module_header_after_keyword();
             return None;
         }
 
@@ -229,11 +260,10 @@ impl<'src> Parser<'src> {
         }
 
         let vis = self.parse_visibility();
-        if self.at_contextual("async") {
+        if self.at_func_decl_start() {
             return Some(Item::Func(self.parse_func_decl(vis)?));
         }
         match self.peek_kind()? {
-            TokenKind::Func | TokenKind::Mut => Some(Item::Func(self.parse_func_decl(vis)?)),
             TokenKind::Struct => Some(Item::Struct(self.parse_struct_decl(vis)?)),
             TokenKind::Enum => Some(Item::Enum(self.parse_enum_decl(vis)?)),
             TokenKind::Trait => Some(Item::Trait(self.parse_trait_decl(vis)?)),
@@ -250,12 +280,33 @@ impl<'src> Parser<'src> {
         }
     }
 
+    /// Whether the next tokens start a function declaration (S3: no `func` keyword).
+    ///
+    /// Forms: `[async] [mut] name(…)` / `[async] [mut] name<T>(…)` / legacy `func …`.
+    fn at_func_decl_start(&self) -> bool {
+        if self.at(&TokenKind::Func) || self.at(&TokenKind::Mut) || self.at_contextual("async") {
+            return true;
+        }
+        self.at_named_func_head()
+    }
+
+    /// `name(` or `name<` — function/method head without modifiers.
+    fn at_named_func_head(&self) -> bool {
+        if !self.at(&TokenKind::Ident) {
+            return false;
+        }
+        matches!(
+            self.peek_nth_kind(1),
+            Some(TokenKind::LParen) | Some(TokenKind::Lt)
+        )
+    }
+
     // ── Functions ─────────────────────────────────────────────────────────────
 
     pub fn parse_func_decl(&mut self, vis: Visibility) -> Option<FuncDecl> {
         let start = self.current_span();
         let (is_async, is_mut) = self.parse_func_modifiers();
-        self.expect(&TokenKind::Func)?;
+        self.reject_func_keyword_on_decl();
         let name = self.parse_name()?;
         let type_params = self.parse_type_params_opt();
         let params = self.parse_param_list()?;
@@ -284,7 +335,7 @@ impl<'src> Parser<'src> {
     fn parse_func_signature(&mut self, vis: Visibility) -> Option<FuncSignature> {
         let start = self.current_span();
         let (is_async, is_mut) = self.parse_func_modifiers();
-        self.expect(&TokenKind::Func)?;
+        self.reject_func_keyword_on_decl();
         let name = self.parse_name()?;
         let type_params = self.parse_type_params_opt();
         let params = self.parse_param_list()?;
@@ -306,6 +357,19 @@ impl<'src> Parser<'src> {
             where_clause,
             span: start.cover(end),
         })
+    }
+
+    /// S3: declaration form is `name(...)` — `func` on a declaration is a hard error.
+    /// Still consumed so recovery can parse the remainder of the signature.
+    fn reject_func_keyword_on_decl(&mut self) {
+        if self.at(&TokenKind::Func) {
+            let span = self.advance().unwrap().span;
+            self.error(
+                "parse.func_removed",
+                "`func` was removed from declarations; write `name(...)` directly",
+                span,
+            );
+        }
     }
 
     fn parse_param_list(&mut self) -> Option<Vec<Param>> {
@@ -441,8 +505,8 @@ impl<'src> Parser<'src> {
         let mut fields = Vec::new();
         let mut field_names = HashSet::new();
         let mut methods = Vec::new();
-        // Fields: ident : type [if expr]
-        while self.at(&TokenKind::Ident) {
+        // Fields: ident : type [if expr]  (not `ident(` / `ident<` methods)
+        while self.at_struct_field_start() {
             let field = self.parse_struct_field()?;
             if !field_names.insert(field.name.text.clone()) {
                 self.error(
@@ -453,7 +517,7 @@ impl<'src> Parser<'src> {
             }
             fields.push(field);
         }
-        // Methods: [public] [mut] func …
+        // Methods: [public] [async] [mut] name(…) …
         while !self.at(&TokenKind::End) && !self.at_eof() {
             let mvis = self.parse_visibility();
             methods.push(self.parse_func_decl(mvis)?);
@@ -487,6 +551,11 @@ impl<'src> Parser<'src> {
             contract,
             span,
         })
+    }
+
+    /// Field heads are `name:`; method heads are `name(` / `name<` (S3, no `func`).
+    fn at_struct_field_start(&self) -> bool {
+        self.at(&TokenKind::Ident) && self.peek_nth_kind(1) == Some(&TokenKind::Colon)
     }
 
     // ── Enums ─────────────────────────────────────────────────────────────────
@@ -571,16 +640,10 @@ impl<'src> Parser<'src> {
             }
             let mvis = self.parse_visibility();
             let is_mut = self.at(&TokenKind::Mut);
-            // Peek: is there a body? Advance copy of pos to find out
             let sig = self.parse_func_signature(mvis)?;
-            // If next is a statement-starting token or the func signature is followed
-            // by something other than `func`/`public`/`end`/`mut`, it has a body
-            let has_body = !self.at_any(&[
-                TokenKind::Func,
-                TokenKind::Public,
-                TokenKind::Mut,
-                TokenKind::End,
-            ]);
+            // Required methods are followed by another member or `end`.
+            // Default methods have a body (statement / expression) before `end`.
+            let has_body = !self.at_trait_member_start() && !self.at(&TokenKind::End);
             if has_body && !is_mut {
                 let body = self.parse_block()?;
                 let end = self.expect_block_end(sig.span, "trait method")?;
@@ -610,6 +673,28 @@ impl<'src> Parser<'src> {
             members,
             span: start.cover(end),
         })
+    }
+
+    /// Start of the next trait member after a method signature (S3, no `func`).
+    fn at_trait_member_start(&self) -> bool {
+        if self.at_any(&[
+            TokenKind::Func,
+            TokenKind::Public,
+            TokenKind::Mut,
+            TokenKind::End,
+        ]) || self.at_contextual("async")
+        {
+            return true;
+        }
+        // associated type: `type Name`
+        if self
+            .peek()
+            .is_some_and(|tok| tok.kind == TokenKind::Ident && self.slice(tok.span) == "type")
+        {
+            return true;
+        }
+        // next method: `name(` / `name<`
+        self.at_named_func_head()
     }
 
     // ── Implement ─────────────────────────────────────────────────────────────
@@ -745,8 +830,21 @@ impl<'src> Parser<'src> {
 
     fn parse_extern_member(&mut self, vis: Visibility) -> Option<ExternMember> {
         let start = self.current_span();
-        if self.at(&TokenKind::Func) {
+        if self.at(&TokenKind::Var) {
             self.advance();
+            let name = self.parse_name()?;
+            self.expect(&TokenKind::Colon)?;
+            let ty = self.parse_type()?;
+            let span = start.cover(ty.span());
+            Some(ExternMember::Var {
+                visibility: vis,
+                name,
+                ty,
+                span,
+            })
+        } else if self.at(&TokenKind::Func) || self.at_named_func_head() {
+            // S3: `name(...)` — legacy `func name(...)` is accepted with an error.
+            self.reject_func_keyword_on_decl();
             let name = self.parse_name()?;
             let params = self.parse_param_list()?;
             let return_ty = if self.eat(&TokenKind::Arrow) {
@@ -762,23 +860,11 @@ impl<'src> Parser<'src> {
                 return_ty,
                 span: start.cover(end),
             })
-        } else if self.at(&TokenKind::Var) {
-            self.advance();
-            let name = self.parse_name()?;
-            self.expect(&TokenKind::Colon)?;
-            let ty = self.parse_type()?;
-            let span = start.cover(ty.span());
-            Some(ExternMember::Var {
-                visibility: vis,
-                name,
-                ty,
-                span,
-            })
         } else {
             let span = self.current_span();
             self.error(
                 "parse.expected_extern_member",
-                "expected `func` or `var` in extern block",
+                "expected a function signature or `var` in extern block",
                 span,
             );
             None
@@ -789,7 +875,8 @@ impl<'src> Parser<'src> {
 fn is_import_alias_recovery_boundary(kind: Option<&TokenKind>) -> bool {
     matches!(
         kind,
-        Some(TokenKind::Namespace)
+        Some(TokenKind::Module)
+            | Some(TokenKind::Namespace)
             | Some(TokenKind::Import)
             | Some(TokenKind::Public)
             | Some(TokenKind::Func)

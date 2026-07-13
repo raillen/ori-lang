@@ -1,4 +1,4 @@
-namespace app.collections
+module app.collections
 
 import ori.deque as deque
 import ori.doubly_linked_list as dll
@@ -11,7 +11,7 @@ import ori.queue as queue
 import ori.stack as stack
 import ori.tree as tree
 
-func main()
+main()
     io.print("Collections")
     const fruits: list<string> = ["Apple", "Banana", "Cherry"]
     io.print(string(lists.len(fruits)))

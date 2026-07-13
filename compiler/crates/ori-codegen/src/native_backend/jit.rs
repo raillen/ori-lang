@@ -26,13 +26,17 @@ use ori_hir::HirModule;
 /// `os.exit(code)`, the runtime invokes `std::process::exit(code)` and this
 /// function never returns — the driver process terminates with that code,
 /// matching AOT `ori run` semantics.
-pub fn run_jit(hir: &HirModule, cdylib_path: &Path, native_libs_paths: &[std::path::PathBuf]) -> Result<i32, String> {
+pub fn run_jit(
+    hir: &HirModule,
+    cdylib_path: &Path,
+    native_libs_paths: &[std::path::PathBuf],
+) -> Result<i32, String> {
     // 1. Load the runtime cdylib and any package-provided native cdylibs.
     let mut libraries = Vec::with_capacity(1 + native_libs_paths.len());
     let runtime_lib = unsafe { Library::new(cdylib_path) }
         .map_err(|e| format!("load runtime cdylib `{}`: {e}", cdylib_path.display()))?;
     libraries.push(runtime_lib);
-    
+
     for lib_path in native_libs_paths {
         let lib = unsafe { Library::new(lib_path) }
             .map_err(|e| format!("load native cdylib `{}`: {e}", lib_path.display()))?;

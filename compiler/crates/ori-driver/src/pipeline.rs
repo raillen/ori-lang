@@ -305,9 +305,11 @@ pub fn run_compile_with_options(
         for lib in import_context.native_libs {
             let lib_name = native_lib_static_name(&target, &lib.name);
             let lib_path = lib.package_root.join("lib").join(&target).join(lib_name);
-            runtime_link.native_static_libs.push(lib_path.to_string_lossy().to_string());
+            runtime_link
+                .native_static_libs
+                .push(lib_path.to_string_lossy().to_string());
         }
-        
+
         ori_codegen::emit_native(&hir, &obj_path)?;
         let extra = runtime_link.link_args();
         ori_codegen::link_with_options(
@@ -370,7 +372,7 @@ pub fn run_jit(source_path: &Path) -> Result<JitRunOutput, String> {
         let hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
         if !sink.has_errors() {
             let cdylib = find_native_runtime_cdylib()?;
-            
+
             let target = native_target_triple();
             let mut native_libs = Vec::new();
             for lib in import_context.native_libs {
@@ -378,7 +380,7 @@ pub fn run_jit(source_path: &Path) -> Result<JitRunOutput, String> {
                 let lib_path = lib.package_root.join("lib").join(&target).join(lib_name);
                 native_libs.push(lib_path);
             }
-            
+
             exit_code = ori_codegen::run_jit(&hir, &cdylib, &native_libs)?;
         }
     }
@@ -1258,25 +1260,27 @@ pub fn run_new_project(
         NewProjectKind::App => (
             "app",
             "src/main.orl",
-            "namespace app.main\n\nimport ori.io as io\n\nfunc main()\n    io.println(\"Hello, Ori!\")\nend\n",
+            "module app.main\n\nimport ori.io as io\n\nmain()\n    io.println(\"Hello, Ori!\")\nend\n",
         ),
         NewProjectKind::Lib => (
             "lib",
             "src/lib.orl",
-            "namespace app.lib\n\npublic func answer() -> int\n    return 42\nend\n",
+            "module app.lib\n\npublic answer() -> int\n    return 42\nend\n",
         ),
     };
 
     let manifest = root.join("ori.pkg.toml");
     let entry = root.join(entry_rel);
     let manifest_source = format!(
-        "[package]\nname = \"{}\"\nversion = \"0.1.0\"\n\n[build]\n# native_libs = []\n",
-        escape_manifest_string(&name)
+        "[package]\nname = \"{}\"\nversion = \"0.1.0\"\nentry = \"{}\"\nori_version = \"{}\"\n\n[build]\n# native_libs = []\n",
+        escape_manifest_string(&name),
+        escape_manifest_string(entry_rel),
+        ORI_VERSION,
     );
 
     std::fs::write(&manifest, manifest_source)
         .map_err(|e| format!("cannot write `{}`: {e}", manifest.display()))?;
-    
+
     if !entry.exists() {
         std::fs::write(&entry, source)
             .map_err(|e| format!("cannot write `{}`: {e}", entry.display()))?;
@@ -2104,8 +2108,7 @@ fn load_source_recursive(
             StdlibImportStatus::StdlibSources(sources) => {
                 for (source_path, expected_namespace) in sources {
                     if active.contains(&source_path) {
-                        let cycle =
-                            import_cycle_description(active, loaded, &source_path, &import);
+                        let cycle = import_cycle_description(active, loaded, &source_path, &import);
                         sink.emit(
                             Diagnostic::error(
                                 "project.circular_import",
@@ -2767,7 +2770,7 @@ fn collect_doc_symbols(loaded: &[LoadedSource]) -> BTreeMap<String, DocSymbol> {
             DocSymbol {
                 symbol: namespace.clone(),
                 kind: "module".into(),
-                signature: format!("namespace {namespace}"),
+                signature: format!("module {namespace}"),
                 source_path: source.path.clone(),
                 file_id: source.file_id,
                 span: source.ast.namespace.span,
@@ -3123,7 +3126,9 @@ pub fn oridoc_hover_for_symbol(source_path: &Path, source: &str, symbol: &str) -
 fn namespace_from_source_text(source: &str) -> Option<String> {
     source.lines().find_map(|line| {
         let line = line.trim();
-        let rest = line.strip_prefix("namespace ")?;
+        let rest = line
+            .strip_prefix("module ")
+            .or_else(|| line.strip_prefix("namespace "))?;
         rest.split_whitespace().next().map(str::to_string)
     })
 }
@@ -3187,7 +3192,7 @@ fn collect_test_cases(
                         "test functions must be concrete functions with no parameters and no return value",
                     ))
                     .with_action(
-                        "use `@test` on a function shaped like `func test_name() ... end` or `async func test_name() ... end`",
+                        "use `@test` on a function shaped like `test_name() ... end` or `async test_name() ... end`",
                     ),
                 );
                 continue;
@@ -4856,7 +4861,7 @@ fn func_signature_parts_text(
         .map(|param| param_signature_text(source, param))
         .collect::<Vec<_>>()
         .join(", ");
-    let mut signature = format!("{}func {}({})", visibility_prefix(visibility), name, params);
+    let mut signature = format!("{}{}({})", visibility_prefix(visibility), name, params);
     if let Some(return_ty) = return_ty {
         signature.push_str(" -> ");
         signature.push_str(&type_text(source, return_ty));

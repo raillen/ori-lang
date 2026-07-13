@@ -1,4 +1,4 @@
-namespace test.game_concepts
+module test.game_concepts
 
 import ori.math.vec2 as vec2
 import ori.math as math
@@ -29,19 +29,19 @@ end
 
 // ── Collision Functions ───────────────────────────────────
 
-func rects_collide(a: Rectangle, b: Rectangle) -> bool
+rects_collide(a: Rectangle, b: Rectangle) -> bool
     return a.x < b.x + b.width
        and a.x + a.width > b.x
        and a.y < b.y + b.height
        and a.y + a.height > b.y
 end
 
-func point_in_rect(point: vec2.Vec2, rect: Rectangle) -> bool
+point_in_rect(point: vec2.Vec2, rect: Rectangle) -> bool
     return point.x >= rect.x and point.x <= rect.x + rect.width
        and point.y >= rect.y and point.y <= rect.y + rect.height
 end
 
-func circles_collide(a: Circle, b: Circle) -> bool
+circles_collide(a: Circle, b: Circle) -> bool
     var dx = a.x - b.x
     var dy = a.y - b.y
     var dist = a.radius + b.radius
@@ -58,7 +58,7 @@ struct Timer
     on_complete: func() -> void
 end
 
-func tick_timer(t: Timer, dt: float) -> void
+tick_timer(t: Timer, dt: float) -> void
     if not t.active
         return
     end
@@ -84,7 +84,7 @@ end
 
 // ── Test Functions ────────────────────────────────────────
 
-func test_rectangles() -> void
+test_rectangles() -> void
     var a = Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
     var b = Rectangle(x: 5.0, y: 5.0, width: 10.0, height: 10.0)
     var c = Rectangle(x: 20.0, y: 20.0, width: 10.0, height: 10.0)
@@ -93,7 +93,7 @@ func test_rectangles() -> void
     assert(not rects_collide(a, c))
 end
 
-func test_point_in_rect() -> void
+test_point_in_rect() -> void
     var rect = Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
     var inside = vec2.Vec2(x: 5.0, y: 5.0)
     var outside = vec2.Vec2(x: 15.0, y: 15.0)
@@ -102,7 +102,7 @@ func test_point_in_rect() -> void
     assert(not point_in_rect(outside, rect))
 end
 
-func test_circles() -> void
+test_circles() -> void
     var a = Circle(x: 0.0, y: 0.0, radius: 5.0)
     var b = Circle(x: 8.0, y: 0.0, radius: 5.0)
     var c = Circle(x: 20.0, y: 0.0, radius: 5.0)
@@ -111,7 +111,7 @@ func test_circles() -> void
     assert(not circles_collide(a, c))
 end
 
-func test_timer() -> void
+test_timer() -> void
     var completed = false
     var t = Timer(
         duration: 1.0,
@@ -127,7 +127,7 @@ func test_timer() -> void
     assert(completed)
 end
 
-func test_entity() -> void
+test_entity() -> void
     var e = Entity(
         id: 1,
         pos: vec2.Vec2(x: 100.0, y: 200.0),
@@ -144,7 +144,7 @@ func test_entity() -> void
     assert(e.pos.x > 100.0)
 end
 
-func test_vec2_operations() -> void
+test_vec2_operations() -> void
     var a = vec2.Vec2(x: 1.0, y: 2.0)
     var b = vec2.Vec2(x: 3.0, y: 4.0)
 

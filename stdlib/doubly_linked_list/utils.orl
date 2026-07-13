@@ -1,9 +1,9 @@
-namespace ori.doubly_linked_list.utils
+module ori.doubly_linked_list.utils
 
 import ori.doubly_linked_list as doubly_linked_list
 import ori.list as lists
 
-public func from_list<T>(items: list<T>) -> doubly_linked_list.DoublyLinkedList<T>
+public from_list<T>(items: list<T>) -> doubly_linked_list.DoublyLinkedList<T>
     var node: doubly_linked_list.DoublyLinkedList<T> = doubly_linked_list.new()
     var i: int = 0
     const n: int = lists.len(items)
@@ -16,24 +16,24 @@ public func from_list<T>(items: list<T>) -> doubly_linked_list.DoublyLinkedList<
     return node
 end
 
-public func to_list<T>(node: doubly_linked_list.DoublyLinkedList<T>) -> list<T>
+public to_list<T>(node: doubly_linked_list.DoublyLinkedList<T>) -> list<T>
     return doubly_linked_list.to_list(node)
 end
 
-public func front_or<T>(node: doubly_linked_list.DoublyLinkedList<T>, fallback: T) -> T
+public front_or<T>(node: doubly_linked_list.DoublyLinkedList<T>, fallback: T) -> T
     if some(value) = doubly_linked_list.front(node)
         return value
     end
     return fallback
 end
 
-public func back_or<T>(node: doubly_linked_list.DoublyLinkedList<T>, fallback: T) -> T
+public back_or<T>(node: doubly_linked_list.DoublyLinkedList<T>, fallback: T) -> T
     if some(value) = doubly_linked_list.back(node)
         return value
     end
     return fallback
 end
 
-public func len<T>(node: doubly_linked_list.DoublyLinkedList<T>) -> int
+public len<T>(node: doubly_linked_list.DoublyLinkedList<T>) -> int
     return doubly_linked_list.len(node)
 end

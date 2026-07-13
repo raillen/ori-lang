@@ -1,4 +1,4 @@
-namespace app.path_time_io
+module app.path_time_io
 
 --- Demonstra os módulos path, time, io e fs da stdlib Ori.
 --- Cobre: manipulação de caminhos, medição de tempo, I/O e sistema de arquivos.
@@ -11,13 +11,13 @@ import ori.path as path
 import ori.string as su
 import ori.time as time
 
-func section(title: string)
+section(title: string)
     io.println("")
     io.println(f"=== {title} ===")
 end
 
 -- ─────────────────── Path ───────────────────
-func demo_path()
+demo_path()
     section("Path Utilities")
 
     const file_path: string = "dir/file.txt"
@@ -58,7 +58,7 @@ func demo_path()
 end
 
 -- ─────────────────── Time ───────────────────
-func demo_time()
+demo_time()
     section("Time Utilities")
 
     const start: time.Instant = time.instant_now()
@@ -95,7 +95,7 @@ func demo_time()
 end
 
 -- ─────────────────── OS ────────────────────
-func demo_os()
+demo_os()
     section("OS and Process")
 
     const pid: int = os.pid()
@@ -112,7 +112,7 @@ func demo_os()
 end
 
 -- ─────────────────── FS ────────────────────
-func demo_fs()
+demo_fs()
     section("Filesystem")
 
     const test_path: string = "_ori_example_test.txt"
@@ -158,7 +158,7 @@ func demo_fs()
 end
 
 -- ─────────────────── Math ───────────────────
-func demo_math()
+demo_math()
     section("Math")
 
     io.println(f"  abs -42: {math.abs(-42)}")
@@ -173,7 +173,7 @@ func demo_math()
 end
 
 -- ──────────────── Main ──────────────────────────
-func main()
+main()
     io.println("Ori Language — Path, Time, IO, FS and Math Showcase")
     io.println("=====================================================")
 

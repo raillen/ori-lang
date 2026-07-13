@@ -1,8 +1,8 @@
-namespace app.bytes_demo
+module app.bytes_demo
 
 import ori.io as io
 
-func main()
+main()
     io.print("Bytes Primitive Demonstration")
     io.print("-----------------------------")
 

@@ -1,10 +1,10 @@
-namespace ori.graph.algorithms
+module ori.graph.algorithms
 
 import ori.graph as graph
 import ori.queue as queue
 import ori.set as sets
 
-public func has_path(g: graph.Graph<string>, start: string, goal: string) -> bool
+public has_path(g: graph.Graph<string>, start: string, goal: string) -> bool
     if start == goal
         return true
     end
@@ -35,7 +35,7 @@ public func has_path(g: graph.Graph<string>, start: string, goal: string) -> boo
     return false
 end
 
-public func reachable_count(g: graph.Graph<string>, start: string) -> int
+public reachable_count(g: graph.Graph<string>, start: string) -> int
     if not graph.has_node(g, start)
         return 0
     end
@@ -57,11 +57,11 @@ public func reachable_count(g: graph.Graph<string>, start: string) -> int
     return sets.len(visited)
 end
 
-public func is_reachable(g: graph.Graph<string>, start: string, goal: string) -> bool
+public is_reachable(g: graph.Graph<string>, start: string, goal: string) -> bool
     return has_path(g, start, goal)
 end
 
-public func has_path_int(g: graph.Graph<int>, start: int, goal: int) -> bool
+public has_path_int(g: graph.Graph<int>, start: int, goal: int) -> bool
     if start == goal
         return true
     end

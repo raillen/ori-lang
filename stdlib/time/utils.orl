@@ -1,54 +1,54 @@
-namespace ori.time.utils
+module ori.time.utils
 
 import ori.time as time
 
-public func milliseconds(n: int) -> int
+public milliseconds(n: int) -> int
     return n
 end
 
-public func seconds(n: int) -> int
+public seconds(n: int) -> int
     return n * 1000
 end
 
-public func minutes(n: int) -> int
+public minutes(n: int) -> int
     return n * 60 * 1000
 end
 
-public func hours(n: int) -> int
+public hours(n: int) -> int
     return n * 60 * 60 * 1000
 end
 
-public func since(start: int) -> int
+public since(start: int) -> int
     return time.now() - start
 end
 
-public func until(target: int) -> int
+public until(target: int) -> int
     return target - time.now()
 end
 
-public func add(at: int, duration: int) -> int
+public add(at: int, duration: int) -> int
     return at + duration
 end
 
-public func sub(at: int, duration: int) -> int
+public sub(at: int, duration: int) -> int
     return at - duration
 end
 
-public func diff(a: int, b: int) -> int
+public diff(a: int, b: int) -> int
     if a >= b
         return a - b
     end
     return b - a
 end
 
-public func from_unix_ms(ts: int) -> int
+public from_unix_ms(ts: int) -> int
     return ts
 end
 
-public func to_unix_ms(at: int) -> int
+public to_unix_ms(at: int) -> int
     return at
 end
 
-public func sleep_ms(duration: int)
+public sleep_ms(duration: int)
     time.sleep(duration)
 end

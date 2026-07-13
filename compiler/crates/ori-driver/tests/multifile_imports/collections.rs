@@ -5,14 +5,14 @@ fn compile_runs_more_collection_stdlib() {
     let dir = TestDir::new("compile_more_collection_stdlib");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
 import ori.map as maps
 import ori.set as sets
 
-func main()
+main()
     var values: list<int> = [3, 1, 2]
     lists.insert(values, 1, 7)
     lists.remove(values, 2)
@@ -54,13 +54,13 @@ fn compile_runs_map_set_capacity_reserve_clear_native() {
     let dir = TestDir::new("compile_map_set_capacity_reserve_clear_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.map as maps
 import ori.set as sets
 
-func main()
+main()
     const seen: set<int> = sets.new()
     sets.reserve(seen, 32)
     if sets.capacity(seen) >= 32
@@ -126,14 +126,14 @@ fn compile_runs_deque_queue_stack_stdlib_native() {
     let dir = TestDir::new("compile_deque_queue_stack_stdlib_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.deque as deque
 import ori.io as io
 import ori.queue as queue
 import ori.stack as stack
 
-func main()
+main()
     const d: deque.Deque<int> = deque.new()
     deque.push_back(d, 2)
     deque.push_front(d, 1)
@@ -248,12 +248,12 @@ fn check_preserves_opaque_collection_type_display() {
     let dir = TestDir::new("opaque_collection_type_display");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.list as lists
 import ori.queue as queue
 
-func main()
+main()
     const values: queue.Queue<int> = queue.new()
     lists.push(values, 1)
 end
@@ -283,13 +283,13 @@ fn compile_runs_linked_list_stdlib_native() {
     let dir = TestDir::new("compile_linked_list_stdlib_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.doubly_linked_list as dll
 import ori.io as io
 import ori.linked_list as ll
 
-func main()
+main()
     const names: ll.LinkedList<string> = ll.new()
     ll.push_back(names, "beta")
     ll.push_front(names, "alpha")
@@ -451,12 +451,12 @@ fn compile_runs_doubly_linked_list_many_nodes_native() {
     let dir = TestDir::new("compile_doubly_linked_list_many_nodes_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.doubly_linked_list as dll
 import ori.io as io
 
-func main()
+main()
     const values: dll.DoublyLinkedList<int> = dll.new()
 
     var i: int = 0
@@ -529,13 +529,13 @@ fn compile_runs_tree_stdlib_native() {
     let dir = TestDir::new("compile_tree_stdlib_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
 import ori.tree as tree
 
-func main()
+main()
     const t: tree.Tree<string> = tree.new("root")
     const root: tree.NodeId = tree.root(t)
     const left: tree.NodeId = tree.add_child(t, root, "left")
@@ -608,12 +608,12 @@ fn compile_runs_tree_invalid_node_id_runtime_error() {
     let dir = TestDir::new("tree_invalid_node_id_runtime_error");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.tree as tree
 
-func main()
+main()
     const t: tree.Tree<int> = tree.new(1)
     io.print(string(tree.value(t, 999)))
 end
@@ -642,13 +642,13 @@ fn compile_runs_hash_table_stdlib_native() {
     let dir = TestDir::new("compile_hash_table_stdlib_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.hash_table as hash_table
 import ori.io as io
 import ori.list as lists
 
-func main()
+main()
     const table: hash_table.HashTable<int, string> = hash_table.with_capacity(2)
     hash_table.set(table, 1, "one")
     hash_table.set(table, 17, "seventeen")
@@ -737,7 +737,7 @@ fn check_accepts_hash_table_user_defined_hashable_equatable_key() {
     let dir = TestDir::new("hash_table_user_defined_key");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.core as core
 import ori.hash_table as hash_table
@@ -750,12 +750,12 @@ implement core.Hashable for Resource
 end
 
 implement core.Equatable for Resource
-    func equals(self, other: Resource) -> bool
+    equals(self, other: Resource) -> bool
         return self.id == other.id
     end
 end
 
-func main()
+main()
     const cache: hash_table.HashTable<Resource, int> = hash_table.new()
 end
 "#,
@@ -770,13 +770,13 @@ fn compile_runs_graph_stdlib_native() {
     let dir = TestDir::new("compile_graph_stdlib_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.graph as graph
 import ori.io as io
 import ori.list as lists
 
-func main()
+main()
     const dag: graph.Graph<int> = graph.new(true)
     graph.add_edge(dag, 1, 2)
     graph.add_edge(dag, 1, 3)
@@ -852,13 +852,13 @@ fn compile_runs_graph_cycle_stress_native() {
     let dir = TestDir::new("compile_graph_cycle_stress_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.graph as graph
 import ori.io as io
 import ori.list as lists
 
-func main()
+main()
     const cyclic: graph.Graph<int> = graph.new(true)
 
     var node: int = 1
@@ -906,7 +906,7 @@ fn check_accepts_graph_user_defined_hashable_equatable_node() {
     let dir = TestDir::new("graph_user_defined_node");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.core as core
 import ori.graph as graph
@@ -919,12 +919,12 @@ implement core.Hashable for Resource
 end
 
 implement core.Equatable for Resource
-    func equals(self, other: Resource) -> bool
+    equals(self, other: Resource) -> bool
         return self.id == other.id
     end
 end
 
-func main()
+main()
     const links: graph.Graph<Resource> = graph.new(false)
 end
 "#,
@@ -939,7 +939,7 @@ fn compile_runs_heap_stdlib_native() {
     let dir = TestDir::new("compile_heap_stdlib_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.core as core
 import ori.heap as heap
@@ -950,12 +950,12 @@ struct Score
 end
 
 implement core.Comparable for Score
-    func compare(self, other: Score) -> int
+    compare(self, other: Score) -> int
         return self.value - other.value
     end
 end
 
-func main()
+main()
     const numbers: heap.Heap<int> = heap.new()
     heap.push(numbers, 4)
     heap.push(numbers, 1)
@@ -1054,7 +1054,7 @@ fn compile_runs_heap_managed_pop_and_peek_after_heap_scope_native() {
     let dir = TestDir::new("heap_managed_pop_peek_after_scope");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.core as core
 import ori.heap as heap
@@ -1065,12 +1065,12 @@ struct Score
 end
 
 implement core.Comparable for Score
-    func compare(self, other: Score) -> int
+    compare(self, other: Score) -> int
         return self.value - other.value
     end
 end
 
-func main()
+main()
     const pop_scores: heap.Heap<Score> = heap.new()
     heap.push(pop_scores, Score(value: 5))
     heap.push(pop_scores, Score(value: 2))
@@ -1105,7 +1105,7 @@ fn compile_runs_completed_collection_gap_apis_native() {
     let dir = TestDir::new("compile_completed_collection_gap_apis_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.graph as graph
 import ori.heap as heap
@@ -1115,7 +1115,7 @@ import ori.map as maps
 import ori.set as sets
 import ori.tree as tree
 
-func main()
+main()
     const values: list<int> = lists.from_list([10, 20, 30])
     const copied: list<int> = lists.clone(values)
     match lists.try_get(copied, 1)
@@ -1315,7 +1315,7 @@ fn compile_runs_managed_values_in_all_collection_stdlibs_native() {
     let dir = TestDir::new("compile_managed_values_all_collections_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.deque as deque
 import ori.doubly_linked_list as dll
@@ -1331,7 +1331,7 @@ import ori.set as sets
 import ori.stack as stack
 import ori.tree as tree
 
-func main()
+main()
     var list_values: list<string> = ["list-a"]
     lists.push(list_values, "list-b")
     io.print(list_values[1])
@@ -1442,7 +1442,7 @@ fn check_rejects_heap_without_comparable_element() {
     let dir = TestDir::new("heap_rejects_missing_comparable");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.heap as heap
 
@@ -1450,7 +1450,7 @@ struct Score
     value: int
 end
 
-func main()
+main()
     const scores: heap.Heap<Score> = heap.new()
 end
 "#,
@@ -1470,12 +1470,12 @@ fn compile_runs_for_loop_over_map() {
     let dir = TestDir::new("compile_for_map");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.map as maps
 
-func main()
+main()
     const labels: map<int, string> = maps.new()
     maps.set(labels, 1, "alpha")
     maps.set(labels, 2, "beta")
@@ -1513,7 +1513,7 @@ fn compile_runs_custom_iterable_native() {
     let dir = TestDir::new("custom_iterable_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.core as core
@@ -1524,7 +1524,7 @@ struct Countdown
 end
 
 implement core.Iterable for Countdown
-    mut func next() -> optional<int>
+    mut next() -> optional<int>
         if self.current < self.min
             return none
         end
@@ -1534,7 +1534,7 @@ implement core.Iterable for Countdown
     end
 end
 
-func main()
+main()
     var total: int = 0
     for value, index in Countdown(current: 3, min: 1)
         total = total + value + index
@@ -1563,9 +1563,9 @@ fn check_reports_non_iterable_for_loop() {
     let dir = TestDir::new("non_iterable_for_loop");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
-func main()
+main()
     for value in 1
     end
 end
@@ -1582,12 +1582,12 @@ fn compile_runs_string_keyed_map_native() {
     let dir = TestDir::new("string_keyed_map_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.map as maps
 
-func main()
+main()
     const labels: map<string, int> = { "alpha": 1, "beta": 2 }
     maps.set(labels, "alpha", 10)
     io.print(string(maps.get(labels, "alpha")))
@@ -1639,12 +1639,12 @@ fn compile_runs_string_set_native() {
     let dir = TestDir::new("string_set_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.set as sets
 
-func main()
+main()
     const primary: set<string> = set { "red", "blue", "red" }
     io.print(string(sets.len(primary)))
     io.print(if sets.contains(primary, "red") then "yes" else "no")
@@ -1692,7 +1692,7 @@ fn compile_runs_trait_gated_user_defined_map_and_set_native() {
     let dir = TestDir::new("trait_gated_user_defined_map_set");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.core as core
 import ori.io as io
@@ -1707,12 +1707,12 @@ implement core.Hashable for Resource
 end
 
 implement core.Equatable for Resource
-    func equals(self, other: Resource) -> bool
+    equals(self, other: Resource) -> bool
         return self.id == other.id
     end
 end
 
-func main()
+main()
     const resource: Resource = Resource(id: 7)
     const labels: map<Resource, int> = maps.new()
     maps.set(labels, resource, 42)
@@ -1746,12 +1746,12 @@ fn compile_runs_concurrent_modification_list_runtime_error() {
     let dir = TestDir::new("list_concurrent_modification");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
 
-func main()
+main()
     const values: list<int> = [1, 2, 3]
     for x in values
         lists.push(values, 4)
@@ -1782,12 +1782,12 @@ fn compile_runs_concurrent_modification_map_runtime_error() {
     let dir = TestDir::new("map_concurrent_modification");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.map as maps
 
-func main()
+main()
     const scores: map<int, int> = maps.new()
     maps.set(scores, 1, 10)
     maps.set(scores, 2, 20)
@@ -1820,12 +1820,12 @@ fn compile_runs_concurrent_modification_deque_runtime_error() {
     let dir = TestDir::new("deque_concurrent_modification");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.deque as deque
 import ori.io as io
 
-func main()
+main()
     const d: deque.Deque<int> = deque.new()
     deque.push_back(d, 1)
     deque.push_back(d, 2)
@@ -1858,7 +1858,7 @@ fn compile_runs_structured_json_api_native() {
     let dir = TestDir::new("structured_json_api_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.json as json
@@ -1866,7 +1866,7 @@ import ori.list as lists
 import ori.map as maps
 import ori.math as math
 
-func main()
+main()
     const input: string = """{
         "name": "Ada",
         "age": 42.0,

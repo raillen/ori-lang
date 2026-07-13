@@ -1,9 +1,9 @@
-namespace ori.process.utils
+module ori.process.utils
 
 import ori.convert as conv
 import ori.map as maps
 
-public func exit_code(capture: map<string, string>) -> int
+public exit_code(capture: map<string, string>) -> int
     if some(raw) = maps.try_get(capture, "status")
         if some(code) = conv.string_to_int(raw)
             return code
@@ -12,14 +12,14 @@ public func exit_code(capture: map<string, string>) -> int
     return -1
 end
 
-public func stdout(capture: map<string, string>) -> string
+public stdout(capture: map<string, string>) -> string
     if some(out) = maps.try_get(capture, "stdout")
         return out
     end
     return ""
 end
 
-public func stderr(capture: map<string, string>) -> string
+public stderr(capture: map<string, string>) -> string
     if some(out) = maps.try_get(capture, "stderr")
         return out
     end

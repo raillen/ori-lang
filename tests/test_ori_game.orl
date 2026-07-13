@@ -1,4 +1,4 @@
-namespace test.ori_game
+module test.ori_game
 
 import ori.game.shape as shape
 import ori.game.color as color
@@ -6,7 +6,7 @@ import ori.game.collision as collision
 import ori.game.engine as engine
 import ori.math.vec2 as vec2
 
-func test_shape_creation() -> void
+test_shape_creation() -> void
     var rect = shape.Rectangle(x: 10.0, y: 20.0, width: 100.0, height: 50.0)
     assert(rect.x == 10.0)
     assert(rect.width == 100.0)
@@ -15,7 +15,7 @@ func test_shape_creation() -> void
     assert(circle.radius == 25.0)
 end
 
-func test_color_creation() -> void
+test_color_creation() -> void
     var c = color.from_rgb(255, 128, 0)
     assert(c.r == 255)
     assert(c.g == 128)
@@ -24,7 +24,7 @@ func test_color_creation() -> void
     assert(hex_color.r == 255)
 end
 
-func test_collision() -> void
+test_collision() -> void
     var rect_a = shape.Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
     var rect_b = shape.Rectangle(x: 5.0, y: 5.0, width: 10.0, height: 10.0)
     assert(collision.rects_collide(rect_a, rect_b))
@@ -36,7 +36,7 @@ func test_collision() -> void
     assert(collision.point_in_rect(point, rect_a))
 end
 
-func test_engine() -> void
+test_engine() -> void
     var eng = engine.create_engine()
     assert(eng.entities.len() == 0)
 
@@ -49,7 +49,7 @@ func test_engine() -> void
     assert(eng.entities.len() == 1)
 end
 
-func test_timer() -> void
+test_timer() -> void
     var completed = false
     var t = ori.game.timer.create_timer(1.0, false, do() =>
         completed = true

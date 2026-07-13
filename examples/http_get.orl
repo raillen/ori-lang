@@ -1,11 +1,11 @@
-namespace app.main
+module app.main
 
 import ori.io as io
 import ori.net as net
 import ori.string as str
 import ori.bytes as bytes_mod
 
-func read_http_headers(conn: net.Connection) -> result<string, string>
+read_http_headers(conn: net.Connection) -> result<string, string>
     var acc: string = ""
     loop
         match net.read_some(conn, 1024)
@@ -29,7 +29,7 @@ func read_http_headers(conn: net.Connection) -> result<string, string>
     return success(acc)
 end
 
-func main()
+main()
     match net.connect_tls("example.com", 443, 5000)
         case success(conn):
             const request: string = "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: close\r\n\r\n"

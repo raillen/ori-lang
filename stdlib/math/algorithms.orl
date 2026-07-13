@@ -1,9 +1,9 @@
-namespace ori.math.algorithms
+module ori.math.algorithms
 
 import ori.math as math
 import ori.math.utils as mu
 
-public func clamp_float(value: float, min_val: float, max_val: float) -> float
+public clamp_float(value: float, min_val: float, max_val: float) -> float
     if value < min_val
         return min_val
     end
@@ -13,19 +13,19 @@ public func clamp_float(value: float, min_val: float, max_val: float) -> float
     return value
 end
 
-public func hypot(a: float, b: float) -> float
+public hypot(a: float, b: float) -> float
     return math.sqrt(a * a + b * b)
 end
 
-public func lerp_float(a: float, b: float, t: float) -> float
+public lerp_float(a: float, b: float, t: float) -> float
     return mu.lerp(a, b, t)
 end
 
-public func is_approx_zero(value: float) -> bool
+public is_approx_zero(value: float) -> bool
     return mu.approx_eq(value, 0.0, 0.00001)
 end
 
-public func sign_float(value: float) -> int
+public sign_float(value: float) -> int
     if value < 0.0
         return -1
     end

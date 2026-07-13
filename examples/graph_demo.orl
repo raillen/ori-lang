@@ -1,10 +1,10 @@
-namespace app.graph_demo
+module app.graph_demo
 
 import ori.graph as graph
 import ori.io as io
 import ori.list as lists
 
-func main()
+main()
     const tasks: graph.Graph<string> = graph.new(true)
     graph.add_edge(tasks, "plan", "build")
     graph.add_edge(tasks, "build", "test")

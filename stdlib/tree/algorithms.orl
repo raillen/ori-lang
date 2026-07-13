@@ -1,14 +1,14 @@
-namespace ori.tree.algorithms
+module ori.tree.algorithms
 
 import ori.list as lists
 import ori.tree as tree
 
-public func is_leaf<T>(t: tree.Tree<T>, node: tree.NodeId) -> bool
+public is_leaf<T>(t: tree.Tree<T>, node: tree.NodeId) -> bool
     const kids: list<tree.NodeId> = tree.children(t, node)
     return lists.is_empty(kids)
 end
 
-public func values_preorder<T>(t: tree.Tree<T>) -> list<T>
+public values_preorder<T>(t: tree.Tree<T>) -> list<T>
     var out: list<T> = []
     var stack: list<tree.NodeId> = [tree.root(t)]
     while not lists.is_empty(stack)
@@ -27,7 +27,7 @@ public func values_preorder<T>(t: tree.Tree<T>) -> list<T>
     return out
 end
 
-public func leaf_count<T>(t: tree.Tree<T>) -> int
+public leaf_count<T>(t: tree.Tree<T>) -> int
     var n: int = 0
     var stack: list<tree.NodeId> = [tree.root(t)]
     while not lists.is_empty(stack)
@@ -45,7 +45,7 @@ public func leaf_count<T>(t: tree.Tree<T>) -> int
     return n
 end
 
-public func max_depth_from<T>(t: tree.Tree<T>, node: tree.NodeId) -> int
+public max_depth_from<T>(t: tree.Tree<T>, node: tree.NodeId) -> int
     var deepest: int = 0
     var stack: list<tree.NodeId> = [node]
     var depths: list<int> = [0]

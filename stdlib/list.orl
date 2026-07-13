@@ -1,17 +1,17 @@
-namespace ori.list
+module ori.list
 
-public func get_or<T>(items: list<T>, index: int, fallback: T) -> T
+public get_or<T>(items: list<T>, index: int, fallback: T) -> T
     if some(value) = ori.list.try_get(items, index)
         return value
     end
     return fallback
 end
 
-public func first_or<T>(items: list<T>, fallback: T) -> T
+public first_or<T>(items: list<T>, fallback: T) -> T
     return get_or(items, 0, fallback)
 end
 
-public func last_or<T>(items: list<T>, fallback: T) -> T
+public last_or<T>(items: list<T>, fallback: T) -> T
     const items_len: int = ori.list.len(items)
     if items_len == 0
         return fallback
@@ -19,13 +19,13 @@ public func last_or<T>(items: list<T>, fallback: T) -> T
     return get_or(items, items_len - 1, fallback)
 end
 
-public func singleton<T>(item: T) -> list<T>
+public singleton<T>(item: T) -> list<T>
     var out: list<T> = []
     ori.list.push(out, item)
     return out
 end
 
-public func sum_int(items: list<int>) -> int
+public sum_int(items: list<int>) -> int
     var total: int = 0
     for n in items
         total = total + n
@@ -33,7 +33,7 @@ public func sum_int(items: list<int>) -> int
     return total
 end
 
-public func binary_search_int(items: list<int>, target: int) -> int
+public binary_search_int(items: list<int>, target: int) -> int
     var lo: int = 0
     var hi: int = ori.list.len(items) - 1
     while lo <= hi
@@ -50,7 +50,7 @@ public func binary_search_int(items: list<int>, target: int) -> int
     return -1
 end
 
-public func all_equal_int(items: list<int>, expected: int) -> bool
+public all_equal_int(items: list<int>, expected: int) -> bool
     for n in items
         if n != expected
             return false

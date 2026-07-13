@@ -1,4 +1,4 @@
-namespace tools.quality_metrics
+module tools.quality_metrics
 
 import ori.fs as fs
 import ori.io as io
@@ -7,7 +7,7 @@ import ori.process as proc
 import ori.string as str
 import ori.time as time
 
-func write_file(path: string, content: string)
+write_file(path: string, content: string)
     match fs.write_text(path, content)
         case success(_):
             return
@@ -16,7 +16,7 @@ func write_file(path: string, content: string)
     end
 end
 
-func append_file(path: string, content: string)
+append_file(path: string, content: string)
     match fs.append_text(path, content)
         case success(_):
             return
@@ -25,7 +25,7 @@ func append_file(path: string, content: string)
     end
 end
 
-func append_summary(
+append_summary(
     summary_path: string,
     category: string,
     name: string,
@@ -52,7 +52,7 @@ func append_summary(
     append_file(summary_path, line)
 end
 
-func append_csv(
+append_csv(
     csv_path: string,
     category: string,
     name: string,
@@ -79,7 +79,7 @@ func append_csv(
     append_file(csv_path, line)
 end
 
-func log_size(path: string) -> int
+log_size(path: string) -> int
     match fs.read_text(path)
         case success(content):
             return str.len(content)
@@ -89,14 +89,14 @@ func log_size(path: string) -> int
     return 0
 end
 
-func shell_program() -> string
+shell_program() -> string
     if os_utils.is_windows()
         return "cmd"
     end
     return "sh"
 end
 
-func shell_args(command_label: string, log_path: string) -> list<string>
+shell_args(command_label: string, log_path: string) -> list<string>
     const redirected: string = command_label + " > " + log_path + " 2>&1"
     if os_utils.is_windows()
         return ["/C", redirected]
@@ -104,7 +104,7 @@ func shell_args(command_label: string, log_path: string) -> list<string>
     return ["-c", redirected]
 end
 
-func run_metric(
+run_metric(
     csv_path: string,
     summary_path: string,
     category: string,
@@ -142,7 +142,7 @@ func run_metric(
     append_summary(summary_path, category, name, passed, duration_ms, exit_code)
 end
 
-func main()
+main()
     const report_dir: string = "target/ori-quality-metrics"
     match fs.create_dir_all(report_dir)
         case success(_):

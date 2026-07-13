@@ -83,8 +83,6 @@ fn build_catalog() -> StdlibCatalog {
     catalog
 }
 
-
-
 impl StdlibCatalog {
     fn insert(&mut self, entry: StdlibEntry) {
         let key = entry.qualified.clone();
@@ -544,9 +542,9 @@ mod tests {
     #[test]
     fn import_alias_map_resolves_io() {
         let source = r#"
-namespace app.main
+module app.main
 import ori.io as io
-func main() -> void
+main() -> void
 end
 "#;
         let map = import_alias_map(source);

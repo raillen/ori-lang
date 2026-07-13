@@ -2,20 +2,20 @@
   "func main": {
     "prefix": "main",
     "body": [
-      "namespace ${1:app.main}",
+      "module ${1:app.main}",
       "",
       "import ori.io as io",
       "",
-      "func main() -> void",
+      "main() -> void",
       "    ${0}",
       "end"
     ],
     "description": "Main entry point"
   },
   "func": {
-    "prefix": "func",
+    "prefix": "fn",
     "body": [
-      "func ${1:name}(${2:params}) -> ${3:void}",
+      "${1:name}(${2:params}) -> ${3:void}",
       "    ${0}",
       "end"
     ],
@@ -24,7 +24,7 @@
   "async func": {
     "prefix": "afunc",
     "body": [
-      "async func ${1:name}(${2:params}) -> ${3:void}",
+      "async ${1:name}(${2:params}) -> ${3:void}",
       "    ${0}",
       "end"
     ],
@@ -52,7 +52,7 @@
     "prefix": "trait",
     "body": [
       "trait ${1:Name}",
-      "    func ${2:method}(self) -> ${3:void}",
+      "    ${2:method}(self) -> ${3:void}",
       "end"
     ],
     "description": "Trait declaration"
@@ -61,7 +61,7 @@
     "prefix": "impl",
     "body": [
       "implement ${1:Trait} for ${2:Type}",
-      "    func ${3:method}(self) -> ${4:void}",
+      "    ${3:method}(self) -> ${4:void}",
       "        ${0}",
       "    end",
       "end"
@@ -133,7 +133,7 @@
   "test func": {
     "prefix": "test",
     "body": [
-      "func test_${1:name}() -> void",
+      "test_${1:name}() -> void",
       "    ${0}",
       "end"
     ],

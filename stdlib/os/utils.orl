@@ -1,49 +1,49 @@
-namespace ori.os.utils
+module ori.os.utils
 
 import ori.os as os_mod
 import ori.string as su
 
-public func env_or(name: string, fallback: string) -> string
+public env_or(name: string, fallback: string) -> string
     if some(value) = os_mod.env(name)
         return value
     end
     return fallback
 end
 
-public func has_env(name: string) -> bool
+public has_env(name: string) -> bool
     if some(_) = os_mod.env(name)
         return true
     end
     return false
 end
 
-public func platform() -> string
+public platform() -> string
     return os_mod.platform()
 end
 
-public func arch() -> string
+public arch() -> string
     return os_mod.arch()
 end
 
-public func pid() -> int
+public pid() -> int
     return os_mod.pid()
 end
 
-public func args() -> list<string>
+public args() -> list<string>
     return os_mod.args()
 end
 
-public func is_windows() -> bool
+public is_windows() -> bool
     const p: string = os_mod.platform()
     return su.has_prefix(p, "windows")
 end
 
-public func is_linux() -> bool
+public is_linux() -> bool
     const p: string = os_mod.platform()
     return su.has_prefix(p, "linux")
 end
 
-public func is_macos() -> bool
+public is_macos() -> bool
     const p: string = os_mod.platform()
     if su.has_prefix(p, "macos")
         return true
@@ -51,7 +51,7 @@ public func is_macos() -> bool
     return su.has_prefix(p, "darwin")
 end
 
-public func current_dir_or(fallback: string) -> string
+public current_dir_or(fallback: string) -> string
     match os_mod.current_dir()
         case success(path):
             return path

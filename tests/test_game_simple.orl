@@ -1,4 +1,4 @@
-namespace test.game_simple
+module test.game_simple
 
 import ori.math.vec2 as vec2
 import ori.math as math
@@ -18,19 +18,19 @@ struct Circle
 end
 
 // Collision functions
-func rects_collide(a: Rectangle, b: Rectangle) -> bool
+rects_collide(a: Rectangle, b: Rectangle) -> bool
     return a.x < b.x + b.width
        and a.x + a.width > b.x
        and a.y < b.y + b.height
        and a.y + a.height > b.y
 end
 
-func point_in_rect(point: vec2.Vec2, rect: Rectangle) -> bool
+point_in_rect(point: vec2.Vec2, rect: Rectangle) -> bool
     return point.x >= rect.x and point.x <= rect.x + rect.width
        and point.y >= rect.y and point.y <= rect.y + rect.height
 end
 
-func circles_collide(a: Circle, b: Circle) -> bool
+circles_collide(a: Circle, b: Circle) -> bool
     const dx: float = a.x - b.x
     const dy: float = a.y - b.y
     const dist: float = a.radius + b.radius
@@ -38,7 +38,7 @@ func circles_collide(a: Circle, b: Circle) -> bool
 end
 
 // Test functions
-func test_rectangles() -> void
+test_rectangles() -> void
     const a: Rectangle = Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
     const b: Rectangle = Rectangle(x: 5.0, y: 5.0, width: 10.0, height: 10.0)
     const c: Rectangle = Rectangle(x: 20.0, y: 20.0, width: 10.0, height: 10.0)
@@ -47,7 +47,7 @@ func test_rectangles() -> void
     assert(not rects_collide(a, c))
 end
 
-func test_point_in_rect() -> void
+test_point_in_rect() -> void
     const rect: Rectangle = Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
     const inside: vec2.Vec2 = vec2.Vec2(x: 5.0, y: 5.0)
     const outside: vec2.Vec2 = vec2.Vec2(x: 15.0, y: 15.0)
@@ -56,7 +56,7 @@ func test_point_in_rect() -> void
     assert(not point_in_rect(outside, rect))
 end
 
-func test_circles() -> void
+test_circles() -> void
     const a: Circle = Circle(x: 0.0, y: 0.0, radius: 5.0)
     const b: Circle = Circle(x: 8.0, y: 0.0, radius: 5.0)
     const c: Circle = Circle(x: 20.0, y: 0.0, radius: 5.0)
@@ -65,7 +65,7 @@ func test_circles() -> void
     assert(not circles_collide(a, c))
 end
 
-func test_vec2_operations() -> void
+test_vec2_operations() -> void
     const a: vec2.Vec2 = vec2.Vec2(x: 1.0, y: 2.0)
     const b: vec2.Vec2 = vec2.Vec2(x: 3.0, y: 4.0)
 

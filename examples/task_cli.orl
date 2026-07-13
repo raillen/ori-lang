@@ -1,4 +1,4 @@
-namespace examples.task_cli
+module examples.task_cli
 
 import ori.args as args
 import ori.io as io
@@ -9,14 +9,14 @@ struct Task
     done: bool
 end
 
-func marker(task: Task) -> string
+marker(task: Task) -> string
     if task.done
         return "[x]"
     end
     return "[ ]"
 end
 
-func done_count(tasks: list<Task>) -> int
+done_count(tasks: list<Task>) -> int
     var total: int = 0
     for task in tasks
         if task.done
@@ -26,13 +26,13 @@ func done_count(tasks: list<Task>) -> int
     return total
 end
 
-func print_tasks(tasks: list<Task>)
+print_tasks(tasks: list<Task>)
     for task in tasks
         io.print(marker(task) + " " + task.title)
     end
 end
 
-func main()
+main()
     var tasks: list<Task> = []
     lists.push(tasks, Task(title: "write example", done: true))
     lists.push(tasks, Task(title: "run tests", done: false))

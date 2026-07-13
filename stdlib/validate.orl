@@ -1,33 +1,33 @@
-namespace ori.validate
+module ori.validate
 
 import ori.list as lists
 import ori.string as str
 import ori.string as su
 
-public func between(value: int, min_val: int, max_val: int) -> bool
+public between(value: int, min_val: int, max_val: int) -> bool
     if value < min_val
         return false
     end
     return value <= max_val
 end
 
-public func positive(value: int) -> bool
+public positive(value: int) -> bool
     return value > 0
 end
 
-public func non_negative(value: int) -> bool
+public non_negative(value: int) -> bool
     return value >= 0
 end
 
-public func negative(value: int) -> bool
+public negative(value: int) -> bool
     return value < 0
 end
 
-public func non_zero(value: int) -> bool
+public non_zero(value: int) -> bool
     return value != 0
 end
 
-public func one_of(value: int, candidates: list<int>) -> bool
+public one_of(value: int, candidates: list<int>) -> bool
     var i: int = 0
     const n: int = lists.len(candidates)
     while i < n
@@ -41,7 +41,7 @@ public func one_of(value: int, candidates: list<int>) -> bool
     return false
 end
 
-public func one_of_string(value: string, candidates: list<string>) -> bool
+public one_of_string(value: string, candidates: list<string>) -> bool
     var i: int = 0
     const n: int = lists.len(candidates)
     while i < n
@@ -55,31 +55,31 @@ public func one_of_string(value: string, candidates: list<string>) -> bool
     return false
 end
 
-public func not_empty(value: string) -> bool
+public not_empty(value: string) -> bool
     return not su.is_empty(value)
 end
 
-public func not_empty_text(value: string) -> bool
+public not_empty_text(value: string) -> bool
     return not_empty(value)
 end
 
-public func min_length(value: string, min_val: int) -> bool
+public min_length(value: string, min_val: int) -> bool
     return str.len(value) >= min_val
 end
 
-public func min_len(value: string, min_val: int) -> bool
+public min_len(value: string, min_val: int) -> bool
     return min_length(value, min_val)
 end
 
-public func max_length(value: string, max_val: int) -> bool
+public max_length(value: string, max_val: int) -> bool
     return str.len(value) <= max_val
 end
 
-public func max_len(value: string, max_val: int) -> bool
+public max_len(value: string, max_val: int) -> bool
     return max_length(value, max_val)
 end
 
-public func length_between(value: string, min_val: int, max_val: int) -> bool
+public length_between(value: string, min_val: int, max_val: int) -> bool
     const value_len: int = str.len(value)
     if value_len < min_val
         return false
@@ -87,38 +87,38 @@ public func length_between(value: string, min_val: int, max_val: int) -> bool
     return value_len <= max_val
 end
 
-public func even(value: int) -> bool
+public even(value: int) -> bool
     return value % 2 == 0
 end
 
-public func odd(value: int) -> bool
+public odd(value: int) -> bool
     return value % 2 != 0
 end
 
-public func in_range(value: int, min_val: int, max_val: int) -> bool
+public in_range(value: int, min_val: int, max_val: int) -> bool
     return between(value, min_val, max_val)
 end
 
-public func blank(value: string) -> bool
+public blank(value: string) -> bool
     return su.blank(value)
 end
 
-public func length_equal(value: string, expected: int) -> bool
+public length_equal(value: string, expected: int) -> bool
     return str.len(value) == expected
 end
 
-public func all_digits(value: string) -> bool
+public all_digits(value: string) -> bool
     return su.is_digits(value)
 end
 
-public func matches_length(value: string, exact: int) -> bool
+public matches_length(value: string, exact: int) -> bool
     return length_equal(value, exact)
 end
 
-public func int_in_range(value: int, min_val: int, max_val: int) -> bool
+public int_in_range(value: int, min_val: int, max_val: int) -> bool
     return between(value, min_val, max_val)
 end
 
-public func string_not_blank(value: string) -> bool
+public string_not_blank(value: string) -> bool
     return not blank(value)
 end

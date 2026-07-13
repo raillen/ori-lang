@@ -50,6 +50,10 @@ pub enum TokenKind {
     BlockComment,
 
     // ── Reserved keywords ────────────────────────────────────────────────────
+    /// Canonical file header keyword (S3 surface).
+    #[token("module")]
+    Module,
+    /// Removed in S3; kept so the parser can emit a hard error on the old form.
     #[token("namespace")]
     Namespace,
     #[token("import")]
@@ -58,6 +62,8 @@ pub enum TokenKind {
     As,
     #[token("public")]
     Public,
+    /// Still used for callable types `func(T) -> R`. Declaration form no longer
+    /// uses this keyword (S3); the parser errors when it appears on declarations.
     #[token("func")]
     Func,
     #[token("return")]
@@ -332,6 +338,7 @@ impl TokenKind {
             | TokenKind::TripleStrLit
             | TokenKind::TripleFStrLit => "string literal",
             TokenKind::BytesLit => "bytes literal",
+            TokenKind::Module => "`module`",
             TokenKind::Namespace => "`namespace`",
             TokenKind::Import => "`import`",
             TokenKind::As => "`as`",

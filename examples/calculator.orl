@@ -1,18 +1,18 @@
-namespace app.calculator
+module app.calculator
 
 import ori.io as io
 
-func add(a: int, b: int) -> int
+add(a: int, b: int) -> int
     return a + b
 end
 
-func multiply(a: int, b: int) -> int
+multiply(a: int, b: int) -> int
     return a * b
 end
 
 
 
-func main()
+main()
     const x: int = 10
     const y: int = 5
     

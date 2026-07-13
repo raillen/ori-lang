@@ -1,4 +1,4 @@
-namespace examples.process_runner
+module examples.process_runner
 
 import ori.io as io
 import ori.os.utils as os
@@ -6,21 +6,21 @@ import ori.process as process
 import ori.process.utils as process_utils
 import ori.string only (trim_all)
 
-func echo_command() -> string
+echo_command() -> string
     if os.is_windows()
         return "cmd"
     end
     return "echo"
 end
 
-func echo_args(message: string) -> list<string>
+echo_args(message: string) -> list<string>
     if os.is_windows()
         return ["/C", "echo", message]
     end
     return [message]
 end
 
-func main()
+main()
     match process.run_capture(echo_command(), echo_args("hello from ori"))
         case success(capture):
             const out: string = trim_all(process_utils.stdout(capture))

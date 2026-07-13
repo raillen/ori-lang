@@ -6066,7 +6066,10 @@ fn item_target_name(item: &Item) -> &'static str {
 }
 
 fn is_known_attr(name: &str) -> bool {
-    matches!(name, "test" | "deprecated" | "inline" | "no_inline" | "cfg" | "repr")
+    matches!(
+        name,
+        "test" | "deprecated" | "inline" | "no_inline" | "cfg" | "repr"
+    )
 }
 
 fn attr_applies_to(name: &str, target: &str) -> bool {

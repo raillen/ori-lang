@@ -255,19 +255,19 @@ mod tests {
 
     #[test]
     fn ignores_utf8_bom_at_file_start_and_preserves_spans() {
-        let (tokens, diagnostics) = lex_for_test("\u{feff}namespace app.main\n");
+        let (tokens, diagnostics) = lex_for_test("\u{feff}module app.main\n");
 
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert_eq!(
             tokens.first().map(|token| &token.kind),
-            Some(&TokenKind::Namespace)
+            Some(&TokenKind::Module)
         );
         assert_eq!(tokens.first().map(|token| token.span.start), Some(3));
     }
 
     #[test]
     fn reports_utf8_bom_outside_file_start() {
-        let (_tokens, diagnostics) = lex_for_test("namespace app.main\n\u{feff}\n");
+        let (_tokens, diagnostics) = lex_for_test("module app.main\n\u{feff}\n");
 
         assert!(
             diagnostics
@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn reports_unclosed_block_comment_without_generic_lex_error() {
-        let (_tokens, diagnostics) = lex_for_test("namespace app.main\n--|\nmissing close\n");
+        let (_tokens, diagnostics) = lex_for_test("module app.main\n--|\nmissing close\n");
 
         let codes: Vec<_> = diagnostics
             .iter()
@@ -290,8 +290,7 @@ mod tests {
 
     #[test]
     fn reports_unterminated_string_without_generic_lex_error() {
-        let (_tokens, diagnostics) =
-            lex_for_test("namespace app.main\nconst name: string = \"Ori\n");
+        let (_tokens, diagnostics) = lex_for_test("module app.main\nconst name: string = \"Ori\n");
 
         let codes: Vec<_> = diagnostics
             .iter()
@@ -302,7 +301,7 @@ mod tests {
 
     #[test]
     fn accepts_valid_block_comment() {
-        let (tokens, diagnostics) = lex_for_test("namespace app.main\n--|\nclosed\n|--\n");
+        let (tokens, diagnostics) = lex_for_test("module app.main\n--|\nclosed\n|--\n");
 
         assert!(diagnostics.is_empty(), "{diagnostics:?}");
         assert!(tokens
@@ -313,7 +312,7 @@ mod tests {
     #[test]
     fn ignores_block_comment_openers_inside_string_literals() {
         let source = concat!(
-            "namespace app.main\n",
+            "module app.main\n",
             "const plain: string = \"--| text\"\n",
             "const bytes: bytes = b\"--| bytes\"\n",
             "const fstr: string = f\"--| {1}\"\n",

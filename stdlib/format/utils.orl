@@ -1,47 +1,47 @@
-namespace ori.format.utils
+module ori.format.utils
 
 import ori.format as fmt
 
-public func number(value: float) -> string
+public number(value: float) -> string
     return fmt.number(value, 2)
 end
 
-public func number_with(value: float, decimals: int) -> string
+public number_with(value: float, decimals: int) -> string
     return fmt.number(value, decimals)
 end
 
-public func number_int(value: int) -> string
+public number_int(value: int) -> string
     return fmt.number(float(value), 0)
 end
 
-public func percent(value: float) -> string
+public percent(value: float) -> string
     return fmt.percent(value, 1)
 end
 
-public func percent_with(value: float, decimals: int) -> string
+public percent_with(value: float, decimals: int) -> string
     return fmt.percent(value, decimals)
 end
 
-public func hex(value: int) -> string
+public hex(value: int) -> string
     return fmt.hex(value)
 end
 
-public func binary(value: int) -> string
+public binary(value: int) -> string
     return fmt.binary(value)
 end
 
-public func bytes_size(value: int) -> string
+public bytes_size(value: int) -> string
     return fmt.bytes_size(value, "B")
 end
 
-public func bytes_size_unit(value: int, unit: string) -> string
+public bytes_size_unit(value: int, unit: string) -> string
     return fmt.bytes_size(value, unit)
 end
 
-public func date(ts: int, pattern: string) -> string
+public date(ts: int, pattern: string) -> string
     return fmt.date(ts, pattern)
 end
 
-public func datetime(ts: int, date_pattern: string, time_pattern: string) -> string
+public datetime(ts: int, date_pattern: string, time_pattern: string) -> string
     return fmt.datetime(ts, date_pattern, time_pattern)
 end

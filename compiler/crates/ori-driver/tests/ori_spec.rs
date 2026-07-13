@@ -70,9 +70,9 @@ fn lex_accepts_line_comment_in_expression() {
     let dir = TestDir::new("lex_comment_in_expr");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     const x: int = 1 + -- comment inline
         2
     io.print(string(x))
@@ -88,7 +88,7 @@ fn lex_accepts_multiline_block_comment() {
     let dir = TestDir::new("lex_block_comment");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 --|
 line 1
@@ -97,7 +97,7 @@ line 3
 line 4
 line 5
 |--
-func main()
+main()
     io.print("ok")
 end
 "#,
@@ -111,7 +111,7 @@ fn lex_rejects_unclosed_block_comment() {
     let dir = TestDir::new("lex_unclosed_block");
     dir.write(
         "main.orl",
-        "namespace app.main\n--| unclosed block comment\nfunc main()\nend\n",
+        "module app.main\n--| unclosed block comment\nmain()\nend\n",
     );
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
@@ -127,7 +127,7 @@ fn lex_rejects_unterminated_string() {
     let dir = TestDir::new("lex_unterminated_string");
     dir.write(
         "main.orl",
-        "namespace app.main\nfunc main()\n    const text: string = \"open\nend\n",
+        "module app.main\nmain()\n    const text: string = \"open\nend\n",
     );
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
@@ -143,7 +143,7 @@ fn parse_rejects_unterminated_block() {
     let dir = TestDir::new("parse_unterminated_block");
     dir.write(
         "main.orl",
-        "namespace app.main\nfunc main()\n    const answer: int = 42\n",
+        "module app.main\nmain()\n    const answer: int = 42\n",
     );
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
@@ -159,7 +159,7 @@ fn doc_accepts_documentation_comment_with_param_and_returns() {
     let dir = TestDir::new("doc_comment_params");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 --|
 Computes an area.
@@ -168,11 +168,11 @@ Computes an area.
 @param height Height in pixels.
 @returns The computed area.
 |--
-public func area(width: int, height: int) -> int
+public area(width: int, height: int) -> int
     return width * height
 end
 
-func main()
+main()
 end
 "#,
     );
@@ -189,17 +189,17 @@ fn doc_warns_param_name_mismatch() {
     let dir = TestDir::new("doc_param_mismatch");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 --|
 @param wrong_name This parameter does not exist.
 @returns A value.
 |--
-public func area(width: int, height: int) -> int
+public area(width: int, height: int) -> int
     return width * height
 end
 
-func main()
+main()
 end
 "#,
     );
@@ -216,7 +216,7 @@ fn doc_warns_missing_return_tag() {
     let dir = TestDir::new("doc_missing_return");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 --|
 Computes an area.
@@ -224,11 +224,11 @@ Computes an area.
 @param width Width in pixels.
 @param height Height in pixels.
 |--
-public func area(width: int, height: int) -> int
+public area(width: int, height: int) -> int
     return width * height
 end
 
-func main()
+main()
 end
 "#,
     );
@@ -243,9 +243,9 @@ fn lex_accepts_integer_literal_variants() {
     let dir = TestDir::new("lex_int_literals");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     const a: int = 1_000_000
     const b: int = 0xFF
     const c: int = 0b1010_1010
@@ -266,8 +266,8 @@ fn lex_rejects_invalid_integer_width() {
     let dir = TestDir::new("lex_invalid_width");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func main()
+        r#"module app.main
+main()
     const x: int = 42i128
 end
 "#,
@@ -281,9 +281,9 @@ fn lex_accepts_string_escape_sequences() {
     let dir = TestDir::new("lex_string_escapes");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     const s: string = "backslash: \\ quote: \" newline: \n return: \r tab: \t null: \0 smile: \u{1F600}"
     io.print(s)
 end
@@ -298,9 +298,9 @@ fn lex_accepts_triple_quote_multiline_string() {
     let dir = TestDir::new("lex_triple_quote");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     const s: string = """line one
     line two
         line three"""
@@ -317,12 +317,12 @@ fn lex_accepts_interpolated_string() {
     let dir = TestDir::new("lex_fstring");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 struct User
     name: string
 end
-func main()
+main()
     const user: User = User(name: "Ada")
     io.print(f"user: {user.name}")
 end
@@ -337,9 +337,9 @@ fn lex_accepts_byte_string() {
     let dir = TestDir::new("lex_byte_string");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     const b: bytes = b"\xFF\x00"
     io.print("ok")
 end
@@ -354,8 +354,8 @@ fn lex_rejects_unicode_escape_in_byte_string() {
     let dir = TestDir::new("lex_byte_unicode");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func main()
+        r#"module app.main
+main()
     const b: bytes = b"\u{0041}"
 end
 "#,
@@ -374,9 +374,9 @@ fn lex_accepts_range_literals() {
     let dir = TestDir::new("lex_ranges");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     var total: int = 0
     for i in 0..9
         total = total + 1
@@ -400,9 +400,9 @@ fn lex_accepts_times_as_contextual_identifier() {
     let dir = TestDir::new("lex_times_contextual");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     var times: int = 1
     times = times + 2
     io.print(string(times))
@@ -418,8 +418,8 @@ fn lex_rejects_loop_as_identifier() {
     let dir = TestDir::new("lex_loop_reserved");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func main()
+        r#"module app.main
+main()
     var loop: int = 1
 end
 "#,
@@ -435,9 +435,9 @@ fn type_accepts_all_primitives() {
     let dir = TestDir::new("type_primitives");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     const b: bool = true
     const i: int = 42
     const v8: int8 = 42i8
@@ -464,13 +464,13 @@ fn type_default_int_and_float() {
     let dir = TestDir::new("type_defaults");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func takes_int(x: int)
+takes_int(x: int)
 end
-func takes_float(x: float)
+takes_float(x: float)
 end
-func main()
+main()
     takes_int(42)
     takes_float(3.14)
     io.print("ok")
@@ -486,13 +486,13 @@ fn type_accepts_struct_literal_construction() {
     let dir = TestDir::new("type_struct_literal");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 struct Point
     x: int
     y: int
 end
-func main()
+main()
     const p: Point = Point(x: 1, y: 2)
     io.print(string(p.x + p.y))
 end
@@ -507,14 +507,14 @@ fn type_accepts_enum_named_variants() {
     let dir = TestDir::new("type_enum_named");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 enum Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
     Dot
 end
-func main()
+main()
     const c: Shape = Shape.Circle(radius: 1.0)
     const r: Shape = Shape.Rectangle(width: 2.0, height: 3.0)
     const d: Shape = Shape.Dot()
@@ -531,12 +531,12 @@ fn type_accepts_contextual_enum_variant_call_shorthand() {
     let dir = TestDir::new("type_enum_variant_call_shorthand");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 enum Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
 end
-func main()
+main()
     const c: Shape = .Circle(radius: 1.0)
     const r: Shape = .Rectangle(width: 2.0, height: 3.0)
 end
@@ -551,11 +551,11 @@ fn type_rejects_braced_enum_variant_shorthand() {
     let dir = TestDir::new("type_enum_variant_braced_shorthand");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 enum Shape
     Rectangle(width: float, height: float)
 end
-func main()
+main()
     const r: Shape = .Rectangle{width: 2.0, height: 3.0}
 end
 "#,
@@ -569,9 +569,9 @@ fn type_accepts_tuple() {
     let dir = TestDir::new("type_tuple");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     const pair: tuple<int, string> = tuple(1, "one")
     io.print(string(pair.0))
     io.print(pair.1)
@@ -587,8 +587,8 @@ fn type_rejects_out_of_bounds_tuple_index() {
     let dir = TestDir::new("type_tuple_oob");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func main()
+        r#"module app.main
+main()
     const pair: tuple<int, string> = tuple(1, "one")
     const x: int = pair.2
 end
@@ -608,9 +608,9 @@ fn type_accepts_optional_some_and_none() {
     let dir = TestDir::new("type_optional");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     const x: optional<int> = some(5)
     const y: optional<int> = none
     if some(v) = x
@@ -634,15 +634,15 @@ fn type_accepts_result_success_and_error() {
     let dir = TestDir::new("type_result");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func divide(a: int, b: int) -> result<int, string>
+divide(a: int, b: int) -> result<int, string>
     if b == 0
         return error("zero")
     end
     return success(a / b)
 end
-func main()
+main()
     match divide(10, 2)
         case success(v):
             io.print(string(v))
@@ -661,11 +661,11 @@ fn type_rejects_success_without_payload_for_non_void_result() {
     let dir = TestDir::new("type_success_void_mismatch");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func bad() -> result<int, string>
+        r#"module app.main
+bad() -> result<int, string>
     return success()
 end
-func main()
+main()
 end
 "#,
     );
@@ -683,9 +683,9 @@ fn type_accepts_equality_on_int_and_string() {
     let dir = TestDir::new("type_equality");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     check 1 + 1 == 2, "int equality"
     check "ab" == "ab", "string equality"
     io.print("ok")
@@ -701,12 +701,12 @@ fn type_rejects_equality_on_function_types() {
     let dir = TestDir::new("type_eq_func");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func id(x: int) -> int
+        r#"module app.main
+id(x: int) -> int
     return x
 end
-func main()
-    check id == id, "func eq"
+main()
+    check id == id, "eq"
 end
 "#,
     );
@@ -725,14 +725,14 @@ fn type_rejects_struct_equality_with_unsupported_field() {
     let dir = TestDir::new("type_struct_equality_unsupported_field");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 struct Handler
     run: func(int) -> int
 end
-func id(x: int) -> int
+id(x: int) -> int
     return x
 end
-func main()
+main()
     const a: Handler = Handler(run: id)
     const b: Handler = Handler(run: id)
     const same: bool = a == b
@@ -753,14 +753,14 @@ fn type_accepts_type_alias() {
     let dir = TestDir::new("type_alias");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 alias UserId = int
 alias Callback = func(string) -> bool
-func takes_id(id: UserId)
+takes_id(id: UserId)
     io.print(string(id))
 end
-func main()
+main()
     takes_id(42)
 end
 "#,
@@ -774,13 +774,13 @@ fn type_alias_accepts_underlying_type_interchangeably() {
     let dir = TestDir::new("type_alias_interchange");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 alias UserId = int
-func takes_int(x: int)
+takes_int(x: int)
     io.print(string(x))
 end
-func main()
+main()
     const uid: UserId = 100
     takes_int(uid)
 end
@@ -797,9 +797,9 @@ fn expr_accepts_arithmetic_and_division() {
     let dir = TestDir::new("expr_arithmetic");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     const a: int = 10 / 3
     const b: int = 10 % 3
     const c: int = -(-5)
@@ -818,10 +818,10 @@ fn expr_float_division_by_zero_is_infinity() {
     let dir = TestDir::new("expr_float_div_zero");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 import ori.math as math
-func main()
+main()
     const inf: float = 10.0 / 0.0
     io.print(string(inf))
 end
@@ -841,8 +841,8 @@ fn expr_rejects_comparison_chaining() {
     let dir = TestDir::new("expr_chained_cmp");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func main()
+        r#"module app.main
+main()
     const a: int = 1
     const b: int = 2
     const c: int = 3
@@ -864,12 +864,12 @@ fn expr_short_circuit_and_skips_side_effect() {
     let dir = TestDir::new("expr_short_circuit_and");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func check_bool(x: int) -> bool
+check_bool(x: int) -> bool
     return x > 0
 end
-func main()
+main()
     const value: bool = false and check_bool(10)
     io.print("ok")
 end
@@ -884,11 +884,11 @@ fn expr_rejects_propagate_on_non_result_in_void_function() {
     let dir = TestDir::new("expr_propagate_void");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func produce() -> result<int, string>
+        r#"module app.main
+produce() -> result<int, string>
     return success(1)
 end
-func main()
+main()
     const x: int = produce()?
 end
 "#,
@@ -907,15 +907,15 @@ fn expr_rejects_propagate_err_type_mismatch() {
     let dir = TestDir::new("expr_propagate_err_mismatch");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func a() -> result<int, string>
+        r#"module app.main
+a() -> result<int, string>
     return success(1)
 end
-func b() -> result<int, int>
+b() -> result<int, int>
     const x: int = a()?
     return success(x)
 end
-func main()
+main()
 end
 "#,
     );
@@ -933,15 +933,15 @@ fn expr_accepts_try_prefix_for_result_propagation() {
     let dir = TestDir::new("expr_try_result_propagation");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func produce() -> result<int, string>
+        r#"module app.main
+produce() -> result<int, string>
     return success(1)
 end
-func wrapped() -> result<int, string>
+wrapped() -> result<int, string>
     const x: int = try produce()
     return success(x + 1)
 end
-func main()
+main()
 end
 "#,
     );
@@ -954,15 +954,15 @@ fn expr_accepts_try_prefix_for_optional_propagation() {
     let dir = TestDir::new("expr_try_optional_propagation");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func maybe() -> optional<int>
+        r#"module app.main
+maybe() -> optional<int>
     return some(1)
 end
-func wrapped() -> optional<int>
+wrapped() -> optional<int>
     const x: int = try maybe()
     return some(x + 1)
 end
-func main()
+main()
 end
 "#,
     );
@@ -975,12 +975,12 @@ fn expr_rejects_try_prefix_on_non_result_or_optional() {
     let dir = TestDir::new("expr_try_non_result");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func wrapped() -> result<int, string>
+        r#"module app.main
+wrapped() -> result<int, string>
     const x: int = try 1
     return success(x)
 end
-func main()
+main()
 end
 "#,
     );
@@ -998,11 +998,11 @@ fn expr_accepts_pipe_operator() {
     let dir = TestDir::new("expr_pipe");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 import ori.list as lists
 import ori.iter as iter
-func main()
+main()
     const items: list<int> = [1, 2, 3]
     const doubled: list<int> = iter.map(items, do(x: int) => x * 2)
     io.print(string(lists.len(doubled)))
@@ -1018,9 +1018,9 @@ fn expr_accepts_inline_if_expression() {
     let dir = TestDir::new("expr_inline_if");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     const label: string = if true then "pass" else "fail"
     io.print(label)
 end
@@ -1043,8 +1043,8 @@ fn expr_rejects_inline_if_branches_different_types() {
     let dir = TestDir::new("expr_inline_if_type_mismatch");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func main()
+        r#"module app.main
+main()
     const label: string = if true then "pass" else 42
 end
 "#,
@@ -1063,8 +1063,8 @@ fn expr_rejects_inline_if_without_else() {
     let dir = TestDir::new("expr_inline_if_missing_else");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func main()
+        r#"module app.main
+main()
     const label: string = if true then "pass"
 end
 "#,
@@ -1088,13 +1088,13 @@ fn expr_accepts_anonymous_struct_literal() {
     let dir = TestDir::new("expr_anon_struct");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 struct Vec2
     x: float
     y: float
 end
-func main()
+main()
     const v: Vec2 = .{x: 1.0, y: 2.0}
     io.print(f"{v.x} {v.y}")
 end
@@ -1109,12 +1109,12 @@ fn expr_rejects_anonymous_struct_missing_field() {
     let dir = TestDir::new("expr_anon_struct_missing");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 struct Vec2
     x: float
     y: float
 end
-func main()
+main()
     const v: Vec2 = .{x: 1.0}
 end
 "#,
@@ -1134,14 +1134,14 @@ fn expr_accepts_struct_update_with() {
     let dir = TestDir::new("expr_struct_update");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 struct Config
     timeout: int
     retries: int
     verbose: bool
 end
-func main()
+main()
     const a: Config = Config(timeout: 30, retries: 3, verbose: false)
     const b: Config = a with {
         verbose: true,
@@ -1161,9 +1161,9 @@ fn expr_accepts_collection_literals() {
     let dir = TestDir::new("expr_collections");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     const items: list<string> = ["a", "b", "c"]
     const scores: map<int, string> = {1: "one", 2: "two"}
     const empty: list<int> = []
@@ -1180,10 +1180,10 @@ fn expr_accepts_index_and_slice() {
     let dir = TestDir::new("expr_index_slice");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 import ori.list as lists
-func main()
+main()
     const items: list<int> = [10, 20, 30]
     io.print(string(items[0]))
     const sub: list<int> = items[1..3]
@@ -1202,8 +1202,8 @@ fn stmt_rejects_const_reassignment() {
     let dir = TestDir::new("stmt_const_reassign");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func main()
+        r#"module app.main
+main()
     const x: int = 0
     x = 1
 end
@@ -1223,9 +1223,9 @@ fn stmt_accepts_var_mutation() {
     let dir = TestDir::new("stmt_var_mutate");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     var x: int = 0
     x += 5
     io.print(string(x))
@@ -1241,8 +1241,8 @@ fn stmt_rejects_same_scope_shadowing() {
     let dir = TestDir::new("stmt_same_scope_shadow");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func main()
+        r#"module app.main
+main()
     const x: int = 1
     const x: int = 2
 end
@@ -1262,12 +1262,12 @@ fn stmt_accepts_if_some_binding() {
     let dir = TestDir::new("stmt_if_some");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func maybe_user() -> optional<string>
+maybe_user() -> optional<string>
     return some("Ada")
 end
-func main()
+main()
     if some(name) = maybe_user()
         io.print(name)
     else
@@ -1285,9 +1285,9 @@ fn stmt_accepts_while_some_loop() {
     let dir = TestDir::new("stmt_while_some");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     var source: optional<int> = some(3)
     while some(n) = source
         io.print(string(n))
@@ -1305,9 +1305,9 @@ fn stmt_accepts_loop_with_break_continue() {
     let dir = TestDir::new("stmt_loop_break_continue");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     var counter: int = 0
     loop
         counter = counter + 1
@@ -1328,8 +1328,8 @@ fn stmt_rejects_break_outside_loop() {
     let dir = TestDir::new("stmt_break_outside");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func main()
+        r#"module app.main
+main()
     break
 end
 "#,
@@ -1348,9 +1348,9 @@ fn stmt_accepts_for_loop_with_index() {
     let dir = TestDir::new("stmt_for_index");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     for item, index in ["a", "b", "c"]
         io.print(f"{index}: {item}")
     end
@@ -1366,9 +1366,9 @@ fn stmt_accepts_repeat() {
     let dir = TestDir::new("stmt_repeat");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     var total: int = 0
     repeat 3
         total = total + 1
@@ -1386,9 +1386,9 @@ fn stmt_accepts_repeat_with_times_keyword() {
     let dir = TestDir::new("stmt_repeat_times");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     var total: int = 0
     repeat 3 times
         total = total + 1
@@ -1406,13 +1406,13 @@ fn stmt_rejects_non_exhaustive_match() {
     let dir = TestDir::new("stmt_non_exhaustive");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 enum Color
     Red
     Green
     Blue
 end
-func describe(c: Color) -> string
+describe(c: Color) -> string
     match c
         case Red:
             return "red"
@@ -1420,7 +1420,7 @@ func describe(c: Color) -> string
             return "green"
     end
 end
-func main()
+main()
 end
 "#,
     );
@@ -1438,8 +1438,8 @@ fn stmt_warns_duplicate_match_case() {
     let dir = TestDir::new("stmt_duplicate_match_case");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func describe(value: bool) -> string
+        r#"module app.main
+describe(value: bool) -> string
     match value
         case true:
             return "yes"
@@ -1450,7 +1450,7 @@ func describe(value: bool) -> string
     end
     return "fallback"
 end
-func main()
+main()
 end
 "#,
     );
@@ -1468,8 +1468,8 @@ fn stmt_warns_unreachable_match_case() {
     let dir = TestDir::new("stmt_unreachable_match_case");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func describe(value: bool) -> string
+        r#"module app.main
+describe(value: bool) -> string
     match value
         case _:
             return "anything"
@@ -1478,7 +1478,7 @@ func describe(value: bool) -> string
     end
     return "fallback"
 end
-func main()
+main()
 end
 "#,
     );
@@ -1496,14 +1496,14 @@ fn stmt_accepts_match_with_case_else() {
     let dir = TestDir::new("stmt_match_else");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 enum Color
     Red
     Green
     Blue
 end
-func describe(c: Color) -> string
+describe(c: Color) -> string
     match c
         case Red:
             return "red"
@@ -1513,7 +1513,7 @@ func describe(c: Color) -> string
             return "other"
     end
 end
-func main()
+main()
     io.print(describe(Color.Blue()))
 end
 "#,
@@ -1527,9 +1527,9 @@ fn stmt_accepts_check_assertion() {
     let dir = TestDir::new("stmt_check");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     check true, "should pass"
     io.print("ok")
 end
@@ -1544,9 +1544,9 @@ fn stmt_check_failure_causes_panic() {
     let dir = TestDir::new("stmt_check_fail");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     io.print("start")
     check false, "intentional failure"
     io.print("end")
@@ -1572,12 +1572,12 @@ fn func_accepts_named_parameters_with_defaults() {
     let dir = TestDir::new("func_named_defaults");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func connect(host: string, port: int = 80)
+connect(host: string, port: int = 80)
     io.print(f"{host}:{port}")
 end
-func main()
+main()
     connect("localhost")
     connect(host: "example.com", port: 443)
 end
@@ -1592,10 +1592,10 @@ fn func_rejects_positional_arg_after_named_arg() {
     let dir = TestDir::new("func_pos_after_named");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func connect(host: string, port: int = 80)
+        r#"module app.main
+connect(host: string, port: int = 80)
 end
-func main()
+main()
     connect(host: "x", 443)
 end
 "#,
@@ -1614,14 +1614,14 @@ fn func_rejects_const_receiver_on_mut_func() {
     let dir = TestDir::new("func_const_mut_call");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 struct Counter
     value: int
-    mut func increment()
+    mut increment()
         self.value = self.value + 1
     end
 end
-func main()
+main()
     const c: Counter = Counter(value: 0)
     c.increment()
 end
@@ -1641,14 +1641,14 @@ fn func_rejects_self_field_mutation_in_non_mut_method() {
     let dir = TestDir::new("func_self_field_mutation_non_mut");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 struct Counter
     value: int
-    func increment()
+    increment()
         self.value = self.value + 1
     end
 end
-func main()
+main()
 end
 "#,
     );
@@ -1666,9 +1666,9 @@ fn func_rejects_closure_capturing_var() {
     let dir = TestDir::new("func_closure_capture_var");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.iter as iter
-func main()
+main()
     var total: int = 0
     const mapped: list<int> = iter.map([1, 2], do(x: int) => x + total)
 end
@@ -1688,9 +1688,9 @@ fn func_rejects_await_outside_async() {
     let dir = TestDir::new("func_await_outside");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.task as task
-func main()
+main()
     const v: int = await task.sleep(1)
 end
 "#,
@@ -1709,13 +1709,13 @@ fn func_accepts_async_func_and_await() {
     let dir = TestDir::new("func_async");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.task as task
-async func compute() -> int
+async compute() -> int
     await task.sleep(1)
     return 42
 end
-async func main()
+async main()
     const n: int = await compute()
 end
 "#,
@@ -1729,22 +1729,22 @@ fn func_allows_using_inside_async_func() {
     let dir = TestDir::new("func_async_using");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 trait Disposable
-    mut func dispose(self)
+    mut dispose(self)
 end
 struct Res
     id: int
 end
 implement Disposable for Res
-    mut func dispose(self)
+    mut dispose(self)
     end
 end
-async func load() -> int
+async load() -> int
     using res: Res = Res(id: 1)
     return 42
 end
-func main()
+main()
 end
 "#,
     );
@@ -1757,14 +1757,14 @@ fn func_compile_runs_async_main_native() {
     let dir = TestDir::new("func_async_main_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 import ori.task as task
-async func answer() -> int
+async answer() -> int
     await task.sleep(1)
     return 42
 end
-async func main()
+async main()
     const n: int = await answer()
     io.print(string(n))
 end
@@ -1786,11 +1786,11 @@ fn trait_accepts_required_and_default_methods() {
     let dir = TestDir::new("trait_default");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 trait Greetable
-    func name(self) -> string
-    func greet(self) -> string
+    name(self) -> string
+    greet(self) -> string
         return f"Hello, {self.name()}!"
     end
 end
@@ -1798,11 +1798,11 @@ struct User
     n: string
 end
 implement Greetable for User
-    func name(self) -> string
+    name(self) -> string
         return self.n
     end
 end
-func main()
+main()
     const u: User = User(n: "Ada")
     io.print(u.greet())
 end
@@ -1817,10 +1817,10 @@ fn trait_rejects_implement_missing_required_method() {
     let dir = TestDir::new("trait_missing_method");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 trait Greetable
-    func name(self) -> string
-    func greet(self) -> string
+    name(self) -> string
+    greet(self) -> string
         return f"Hello, {self.name()}!"
     end
 end
@@ -1829,7 +1829,7 @@ struct User
 end
 implement Greetable for User
 end
-func main()
+main()
 end
 "#,
     );
@@ -1847,10 +1847,10 @@ fn trait_accepts_any_dynamic_dispatch() {
     let dir = TestDir::new("trait_any_dispatch");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 trait Drawable
-    func draw(self) -> string
+    draw(self) -> string
 end
 struct Circle
     radius: float
@@ -1860,16 +1860,16 @@ struct Rect
     h: float
 end
 implement Drawable for Circle
-    func draw(self) -> string
+    draw(self) -> string
         return "circle"
     end
 end
 implement Drawable for Rect
-    func draw(self) -> string
+    draw(self) -> string
         return "rect"
     end
 end
-func main()
+main()
     const c: any<Drawable> = Circle(radius: 1.0)
     const r: any<Drawable> = Rect(w: 2.0, h: 3.0)
     io.print(c.draw())
@@ -1886,20 +1886,20 @@ fn trait_object_equality_works() {
     let dir = TestDir::new("trait_any_equality");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 trait Drawable
-    func draw(self) -> string
+    draw(self) -> string
 end
 struct Circle
     radius: float
 end
 implement Drawable for Circle
-    func draw(self) -> string
+    draw(self) -> string
         return "circle"
     end
 end
-func main()
+main()
     const a: any<Drawable> = Circle(radius: 1.0)
     const b: any<Drawable> = Circle(radius: 1.0)
     const c: any<Drawable> = Circle(radius: 2.0)
@@ -1924,25 +1924,25 @@ fn trait_rejects_ambiguous_method_call() {
     let dir = TestDir::new("trait_ambiguous");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 trait Alpha
-    func output(self) -> string
+    output(self) -> string
 end
 trait Beta
-    func output(self) -> string
+    output(self) -> string
 end
 struct S end
 implement Alpha for S
-    func output(self) -> string
+    output(self) -> string
         return "alpha"
     end
 end
 implement Beta for S
-    func output(self) -> string
+    output(self) -> string
         return "beta"
     end
 end
-func main()
+main()
     const s: S = S()
     const msg: string = s.output()
 end
@@ -1964,20 +1964,20 @@ fn error_accepts_result_with_propagation_chain() {
     let dir = TestDir::new("error_propagation");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func step1() -> result<int, string>
+step1() -> result<int, string>
     return success(1)
 end
-func step2(x: int) -> result<int, string>
+step2(x: int) -> result<int, string>
     return success(x + 1)
 end
-func pipeline() -> result<int, string>
+pipeline() -> result<int, string>
     const a: int = step1()?
     const b: int = step2(a)?
     return success(b)
 end
-func main()
+main()
     match pipeline()
         case success(v):
             io.print(string(v))
@@ -1996,9 +1996,9 @@ fn error_compile_runs_integer_division_by_zero_causes_panic() {
     let dir = TestDir::new("error_div_zero_panic");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     const x: int = 10 / 0
     io.print(string(x))
 end
@@ -2019,10 +2019,10 @@ fn error_compile_runs_index_out_of_bounds_causes_panic() {
     let dir = TestDir::new("error_oob_panic");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 import ori.list as lists
-func main()
+main()
     const items: list<int> = [1, 2, 3]
     const x: int = items[99]
     io.print(string(x))
@@ -2044,9 +2044,9 @@ fn error_panic_explicit_causes_runtime_panic() {
     let dir = TestDir::new("error_panic");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     panic("test panic")
     io.print("unreachable")
 end
@@ -2066,9 +2066,9 @@ fn error_todo_causes_runtime_panic() {
     let dir = TestDir::new("error_todo");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     io.print("before")
     todo()
     io.print("after")
@@ -2097,9 +2097,9 @@ fn error_unreachable_causes_runtime_panic() {
     let dir = TestDir::new("error_unreachable");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     io.print("before")
     unreachable()
     io.print("after")
@@ -2130,13 +2130,13 @@ fn mem_value_semantics_isolate_copies() {
     let dir = TestDir::new("mem_value_semantics");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 struct Point
     x: int
     y: int
 end
-func main()
+main()
     const a: Point = Point(x: 1, y: 2)
     var b: Point = Point(x: a.x, y: a.y)
     b.x = 99
@@ -2160,19 +2160,19 @@ fn mem_using_calls_dispose_on_normal_return() {
     let dir = TestDir::new("mem_using_normal");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 trait Disposable
-    mut func dispose(self)
+    mut dispose(self)
 end
 struct Res
     name: string
 end
 implement Disposable for Res
-    mut func dispose(self)
+    mut dispose(self)
     end
 end
-func main()
+main()
     using r: Res = Res(name: "test")
     io.print(r.name)
 end
@@ -2187,20 +2187,20 @@ fn mem_compile_multiple_using_lifo_order() {
     let dir = TestDir::new("mem_using_lifo");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 trait Disposable
-    mut func dispose(self)
+    mut dispose(self)
 end
 struct Logger
     label: string
 end
 implement Disposable for Logger
-    mut func dispose(self)
+    mut dispose(self)
         io.print(f"disposed {self.label}")
     end
 end
-func main()
+main()
     using a: Logger = Logger(label: "A")
     using b: Logger = Logger(label: "B")
     using c: Logger = Logger(label: "C")
@@ -2228,8 +2228,8 @@ fn mem_rejects_using_on_non_disposable_type() {
     let dir = TestDir::new("mem_using_non_disposable");
     dir.write(
         "main.orl",
-        r#"namespace app.main
-func main()
+        r#"module app.main
+main()
     using x: int = 5
 end
 "#,
@@ -2250,12 +2250,12 @@ fn generic_accepts_type_inference() {
     let dir = TestDir::new("generic_inference");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func wrap<T>(value: T) -> optional<T>
+wrap<T>(value: T) -> optional<T>
     return some(value)
 end
-func main()
+main()
     const a: int = 42
     const b: optional<int> = wrap(a)
     const c: optional<string> = wrap("hello")
@@ -2272,23 +2272,23 @@ fn generic_accepts_where_constraint() {
     let dir = TestDir::new("generic_where");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 trait Labelled
-    func label(self) -> string
+    label(self) -> string
 end
 struct User
     name: string
 end
 implement Labelled for User
-    func label(self) -> string
+    label(self) -> string
         return self.name
     end
 end
-func show<T>(value: T) -> string where T is Labelled
+show<T>(value: T) -> string where T is Labelled
     return value.label()
 end
-func main()
+main()
     const u: User = User(name: "Ada")
     io.print(show(u))
 end
@@ -2303,18 +2303,18 @@ fn generic_rejects_constraint_not_satisfied() {
     let dir = TestDir::new("generic_constraint_fail");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 trait Comparable
-    func compare(self, other: Self) -> int
+    compare(self, other: Self) -> int
 end
-func max<T>(a: T, b: T) -> T where T is Comparable
+max<T>(a: T, b: T) -> T where T is Comparable
     return a
 end
 struct Point
     x: int
     y: int
 end
-func main()
+main()
     const p: Point = max(Point(x: 1, y: 2), Point(x: 3, y: 4))
 end
 "#,
@@ -2333,15 +2333,15 @@ fn generic_accepts_negative_constraint() {
     let dir = TestDir::new("generic_negative");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 trait Disposable
-    mut func dispose(self)
+    mut dispose(self)
 end
-func raw_copy<T>(src: T) -> T where T is not Disposable
+raw_copy<T>(src: T) -> T where T is not Disposable
     return src
 end
-func main()
+main()
     const x: int = raw_copy(42)
     io.print(string(x))
 end
@@ -2356,19 +2356,19 @@ fn generic_rejects_negative_constraint_violated() {
     let dir = TestDir::new("generic_neg_violation");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 trait Disposable
-    mut func dispose(self)
+    mut dispose(self)
 end
 struct Res end
 implement Disposable for Res
-    mut func dispose(self)
+    mut dispose(self)
     end
 end
-func raw_copy<T>(src: T) -> T where T is not Disposable
+raw_copy<T>(src: T) -> T where T is not Disposable
     return src
 end
-func main()
+main()
     const r: Res = raw_copy(Res())
 end
 "#,
@@ -2387,13 +2387,13 @@ fn generic_accepts_generic_struct() {
     let dir = TestDir::new("generic_struct");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 struct Pair<A, B>
     first: A
     second: B
 end
-func main()
+main()
     io.print("generic struct defined")
 end
 "#,
@@ -2407,14 +2407,14 @@ fn generic_generic_struct_types_are_distinct() {
     let dir = TestDir::new("generic_struct_distinct");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 struct Pair<A, B>
     first: A
     second: B
 end
-func takes_int_string(p: Pair<int, string>)
+takes_int_string(p: Pair<int, string>)
 end
-func main()
+main()
     const p: Pair<string, int> = Pair(first: "one", second: 1)
     takes_int_string(p)
 end
@@ -2435,11 +2435,11 @@ fn generic_accepts_hkt() {
     let dir = TestDir::new("generic_hkt");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 trait Functor<F<_>>
-    func fmap<A, B>(fa: F<A>, f: func(A) -> B) -> F<B>
+    fmap<A, B>(fa: F<A>, f: func(A) -> B) -> F<B>
 end
-func main()
+main()
 end
 "#,
     );
@@ -2452,12 +2452,12 @@ fn generic_accepts_associated_type_in_trait() {
     let dir = TestDir::new("generic_assoc_type");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 trait Container
     type Item
-    func get(self) -> Item
+    get(self) -> Item
 end
-func main()
+main()
 end
 "#,
     );
@@ -2470,11 +2470,11 @@ fn generic_accepts_const_generic_param() {
     let dir = TestDir::new("generic_const_generic");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 struct Matrix<const N: int>
     value: int
 end
-func main()
+main()
 end
 "#,
     );
@@ -2489,15 +2489,15 @@ fn crosscut_accepts_full_pipeline_program() {
     let dir = TestDir::new("crosscut_full_pipeline");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
 
 trait Disposable
-    mut func dispose(self)
+    mut dispose(self)
 end
 
 trait Loggable
-    func to_log(self) -> string
+    to_log(self) -> string
 end
 
 struct User
@@ -2510,25 +2510,25 @@ struct Session
 end
 
 implement Disposable for Session
-    mut func dispose(self)
+    mut dispose(self)
         io.print(f"session of {self.user.name} disposed")
     end
 end
 
 implement Loggable for User
-    func to_log(self) -> string
+    to_log(self) -> string
         return f"User({self.name}, {self.age})"
     end
 end
 
-func validate_age(age: int) -> result<int, string>
+validate_age(age: int) -> result<int, string>
     if age < 0
         return error("age below zero")
     end
     return success(age)
 end
 
-func main()
+main()
     using session: Session = Session(user: User(name: "Ada", age: 30))
 
     match validate_age(30)
@@ -2570,17 +2570,17 @@ fn crosscut_rejects_private_access_from_other_namespace() {
     let dir = TestDir::new("crosscut_private");
     dir.write(
         "util.orl",
-        r#"namespace app.util
-func hidden() -> int
+        r#"module app.util
+hidden() -> int
     return 42
 end
 "#,
     );
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import app.util as util
-func main()
+main()
     const x: int = util.hidden()
 end
 "#,
@@ -2599,17 +2599,17 @@ fn crosscut_rejects_import_cycle() {
     let dir = TestDir::new("crosscut_import_cycle");
     dir.write(
         "a.orl",
-        r#"namespace app.a
+        r#"module app.a
 import app.b
-func main()
+main()
 end
 "#,
     );
     dir.write(
         "b.orl",
-        r#"namespace app.b
+        r#"module app.b
 import app.a
-func main()
+main()
 end
 "#,
     );
@@ -2627,17 +2627,17 @@ fn crosscut_rejects_namespace_mismatch() {
     let dir = TestDir::new("crosscut_namespace_mismatch");
     dir.write(
         "app/bar.orl",
-        r#"namespace app.foo
-public func answer() -> int
+        r#"module app.foo
+public answer() -> int
     return 42
 end
 "#,
     );
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import app.bar
-func main()
+main()
 end
 "#,
     );
@@ -2655,23 +2655,23 @@ fn crosscut_accepts_public_import_reexport() {
     let dir = TestDir::new("crosscut_public_import");
     dir.write(
         "util.orl",
-        r#"namespace app.util
-public func answer() -> int
+        r#"module app.util
+public answer() -> int
     return 42
 end
 "#,
     );
     dir.write(
         "facade.orl",
-        r#"namespace app.facade
+        r#"module app.facade
 public import app.util as util
 "#,
     );
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import app.facade as api
-func main()
+main()
     const x: int = api.util.answer()
 end
 "#,
@@ -2685,18 +2685,18 @@ fn crosscut_variadic_rejects_not_last_parameter() {
     let dir = TestDir::new("crosscut_variadic_not_last");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 trait Displayable
-    func display(self) -> string
+    display(self) -> string
 end
 implement Displayable for string
-    func display(self) -> string
+    display(self) -> string
         return self
     end
 end
-func log(values: any<Displayable>..., prefix: string)
+log(values: any<Displayable>..., prefix: string)
 end
-func main()
+main()
 end
 "#,
     );
@@ -2714,13 +2714,13 @@ fn crosscut_rejects_unknown_extern_abi() {
     let dir = TestDir::new("crosscut_unknown_extern_abi");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 extern wasm
-    func host_value() -> int
+    host_value() -> int
 end
 
-func main()
+main()
 end
 "#,
     );
@@ -2735,14 +2735,14 @@ fn crosscut_rejects_managed_extern_ffi_types() {
     let dir = TestDir::new("crosscut_managed_extern_ffi_types");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 extern c
-    func read_name(input: string) -> string
+    read_name(input: string) -> string
     var last_name: string
 end
 
-func main()
+main()
 end
 "#,
     );
@@ -2755,11 +2755,11 @@ end
 #[test]
 fn crosscut_fmt_preserves_valid_source_unchanged() {
     let dir = TestDir::new("crosscut_fmt_idempotent");
-    let source = r#"namespace app.main
+    let source = r#"module app.main
 
 import ori.io as io
 
-func main()
+main()
     io.print("hello")
 end
 "#;
@@ -2783,6 +2783,7 @@ fn tooling_new_project_creates_checkable_app_skeleton() {
         NewProjectOptions {
             name: Some("demo".to_string()),
             kind: NewProjectKind::App,
+            is_init: false,
         },
     )
     .unwrap();
@@ -2805,6 +2806,7 @@ fn tooling_new_project_refuses_non_empty_directory() {
         NewProjectOptions {
             name: None,
             kind: NewProjectKind::App,
+            is_init: false,
         },
     )
     .expect_err("non-empty directory must be rejected");
@@ -2827,9 +2829,9 @@ description = "Local math helpers"
     );
     dir.write(
         "local_math/src/lib.orl",
-        r#"namespace demo.math
+        r#"module demo.math
 
-public func one() -> int
+public one() -> int
     return 1
 end
 "#,
@@ -2848,12 +2850,12 @@ demo.math = { path = "../local_math", version = "0.1.0" }
     );
     dir.write(
         "app/src/main.orl",
-        r#"namespace demo.app
+        r#"module demo.app
 
 import demo.math only (one)
 import ori.io as io
 
-func main()
+main()
     io.print(string(one()))
 end
 "#,
@@ -2886,9 +2888,9 @@ ori_version = "0.2.0"
     );
     dir.write(
         "local_math/src/lib.orl",
-        r#"namespace demo.math
+        r#"module demo.math
 
-public func one() -> int
+public one() -> int
     return 1
 end
 "#,
@@ -2907,11 +2909,11 @@ demo.math = { path = "../local_math", version = "0.1.0" }
     );
     dir.write(
         "app/src/main.orl",
-        r#"namespace demo.app
+        r#"module demo.app
 
 import demo.math only (one)
 
-func main()
+main()
     const value: int = one()
 end
 "#,
@@ -2939,9 +2941,9 @@ root_namespace = "demo.math"
     );
     dir.write(
         "math/src/lib.orl",
-        r#"namespace demo.math
+        r#"module demo.math
 
-public func two() -> int
+public two() -> int
     return 2
 end
 "#,
@@ -2964,11 +2966,11 @@ demo.math = { path = "../math", version = "0.1.0" }
     );
     dir.write(
         "app/src/main.orl",
-        r#"namespace demo.app
+        r#"module demo.app
 
 import demo.math only (two)
 
-func main()
+main()
     const value: int = two()
 end
 "#,
@@ -2995,9 +2997,9 @@ other.lib = "1.0.0"
     );
     dir.write(
         "app/src/main.orl",
-        r#"namespace demo.app
+        r#"module demo.app
 
-func main()
+main()
 end
 "#,
     );
@@ -3017,13 +3019,13 @@ fn stdlib_real_project_helpers_typecheck() {
     let dir = TestDir::new("stdlib_real_project_helpers");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.args as args
 import ori.config as config
 import ori.log as log
 import ori.time only (Instant, Duration, add, between, duration_seconds, duration_to_millis, instant_from_unix_ms)
 
-func main()
+main()
     const start: Instant = instant_from_unix_ms(1000)
     const duration: Duration = duration_seconds(2)
     const finish: Instant = add(start, duration)
@@ -3046,9 +3048,9 @@ fn crosscut_build_generates_c_source_with_entry_point() {
     let dir = TestDir::new("crosscut_build_c");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 import ori.io as io
-func main()
+main()
     io.print("c build")
 end
 "#,
@@ -3066,7 +3068,7 @@ fn check_rejects_duplicate_struct_fields() {
     let dir = TestDir::new("dup_struct_fields");
     dir.write(
         "main.orl",
-        "namespace app.test\nstruct S\n    x: int\n    x: int\nend\nfunc main()\nend\n",
+        "module app.test\nstruct S\n    x: int\n    x: int\nend\nmain()\nend\n",
     );
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
@@ -3082,7 +3084,7 @@ fn check_rejects_duplicate_enum_variants() {
     let dir = TestDir::new("dup_enum_variants");
     dir.write(
         "main.orl",
-        "namespace app.test\nenum E\n    A\n    A\nend\nfunc main()\nend\n",
+        "module app.test\nenum E\n    A\n    A\nend\nmain()\nend\n",
     );
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
@@ -3098,7 +3100,7 @@ fn check_rejects_duplicate_fields_in_enum_variant() {
     let dir = TestDir::new("dup_variant_fields");
     dir.write(
         "main.orl",
-        "namespace app.test\nenum E\n    A(x: int, x: int)\nend\nfunc main()\nend\n",
+        "module app.test\nenum E\n    A(x: int, x: int)\nend\nmain()\nend\n",
     );
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
@@ -3114,7 +3116,7 @@ fn check_accepts_struct_with_unique_fields() {
     let dir = TestDir::new("ok_struct_unique");
     dir.write(
         "main.orl",
-        "namespace app.test\nstruct S\n    x: int\n    y: string\nend\nfunc main()\nend\n",
+        "module app.test\nstruct S\n    x: int\n    y: string\nend\nmain()\nend\n",
     );
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(!out.has_errors, "{:?}", out.diagnostics);
@@ -3125,7 +3127,7 @@ fn check_accepts_enum_with_unique_variants() {
     let dir = TestDir::new("ok_enum_unique");
     dir.write(
         "main.orl",
-        "namespace app.test\nenum E\n    A\n    B\nend\nfunc main()\nend\n",
+        "module app.test\nenum E\n    A\n    B\nend\nmain()\nend\n",
     );
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(!out.has_errors, "{:?}", out.diagnostics);
@@ -3141,27 +3143,27 @@ fn fs_file_handle_native() {
     dir.write(
         "main.orl",
         &format!(
-            r#"namespace app.main
+            r#"module app.main
 
 import ori.fs as fs
 import ori.io as io
 import ori.bytes as bytes_mod
 
-func write_helper(path: string) -> result<void, string>
+write_helper(path: string) -> result<void, string>
     using file: fs.File = fs.open_write(path)?
     const n: int = fs.write(file, b"hello using file")?
     io.println(f"written: {{n}}")
     return success()
 end
 
-func read_helper(path: string) -> result<string, string>
+read_helper(path: string) -> result<string, string>
     using file: fs.File = fs.open_read(path)?
     const data: bytes = fs.read(file, 20)?
     const s: string = bytes_mod.decode_utf8(data)?
     return success(s)
 end
 
-func main()
+main()
     const path: string = "{test_file}"
     match write_helper(path)
         case success(_):
@@ -3195,12 +3197,12 @@ fn task_cancellation_native() {
     let dir = TestDir::new("task_cancellation_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.task as task
 import ori.io as io
 
-async func worker(token: task.CancelToken)
+async worker(token: task.CancelToken)
     io.println("worker started")
     const fut: future<void> = task.sleep(5000)
     task.associate(token, fut)
@@ -3208,7 +3210,7 @@ async func worker(token: task.CancelToken)
     io.println("worker finished")
 end
 
-func main()
+main()
     const token: task.CancelToken = task.create_token()
     const job: task.Job<void> = task.spawn(do() -> void
         task.block_on(worker(token))
@@ -3251,7 +3253,7 @@ fn compile_runs_structural_equality_advanced_native() {
     let dir = TestDir::new("structural_equality_advanced_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.map as maps
@@ -3262,11 +3264,11 @@ struct Pair<A, B>
     second: B
 end
 
-func check_generic_eq<T>(left: T, right: T) -> bool where T is core.Equatable
+check_generic_eq<T>(left: T, right: T) -> bool where T is core.Equatable
     return left == right
 end
 
-func main()
+main()
     const p1: Pair<string, int> = .{ first: "hello", second: 42 }
     const p2: Pair<string, int> = .{ first: "hello", second: 42 }
     const p3: Pair<string, int> = .{ first: "world", second: 42 }
@@ -3319,7 +3321,7 @@ fn build_c_backend_structural_equality_advanced() {
     let dir = TestDir::new("c_backend_structural_equality_advanced");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.core as core
 
@@ -3328,7 +3330,7 @@ struct Pair<A, B>
     second: B
 end
 
-func main()
+main()
     const p1: Pair<string, int> = .{ first: "hello", second: 42 }
     const p2: Pair<string, int> = .{ first: "hello", second: 42 }
     const is_equal: bool = p1 == p2

@@ -68,11 +68,11 @@ fn jit_run_hello_world() {
     let dir = TestDir::new("jit_hello_world");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 
-func main()
+main()
     io.print("hello from JIT")
 end
 "#,
@@ -97,11 +97,11 @@ fn jit_run_uses_jit_by_default_when_cdylib_available() {
     let dir = TestDir::new("jit_default");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 
-func main()
+main()
     io.print("jit default path")
 end
 "#,
@@ -133,11 +133,11 @@ fn jit_run_computes_arithmetic() {
     let dir = TestDir::new("jit_arithmetic");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 
-func main()
+main()
     const a: int = 21 * 2
     io.print(f"answer={a}")
 end

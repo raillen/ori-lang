@@ -1,11 +1,11 @@
-namespace ori.path
+module ori.path
 
 import ori.bytes as bytes_mod
 import ori.list as lists
 import ori.string as str
 import ori.string as su
 
-func normalize_separators(value: string) -> string
+normalize_separators(value: string) -> string
     var backslash: string = "/"
     match str.from_bytes(bytes_mod.from_list([92]))
         case success(sep):
@@ -28,7 +28,7 @@ func normalize_separators(value: string) -> string
     return out
 end
 
-public func join(parts: list<string>) -> string
+public join(parts: list<string>) -> string
     var out: string = ""
     var i: int = 0
     const n: int = lists.len(parts)
@@ -47,11 +47,11 @@ public func join(parts: list<string>) -> string
     return normalize_separators(out)
 end
 
-public func normalize(value: string) -> string
+public normalize(value: string) -> string
     return normalize_separators(str.trim(value))
 end
 
-public func is_absolute(value: string) -> bool
+public is_absolute(value: string) -> bool
     const norm: string = normalize(value)
     if su.is_empty(norm)
         return false
@@ -69,11 +69,11 @@ public func is_absolute(value: string) -> bool
     return false
 end
 
-public func is_relative(value: string) -> bool
+public is_relative(value: string) -> bool
     return not is_absolute(value)
 end
 
-public func base_name(value: string) -> string
+public base_name(value: string) -> string
     const norm: string = normalize(value)
     if su.is_empty(norm)
         return ""
@@ -89,7 +89,7 @@ public func base_name(value: string) -> string
     return norm
 end
 
-public func extension(value: string) -> string
+public extension(value: string) -> string
     const name: string = base_name(value)
     var pos: int = str.len(name) - 1
     while pos >= 0
@@ -102,7 +102,7 @@ public func extension(value: string) -> string
     return ""
 end
 
-public func name_without_extension(value: string) -> string
+public name_without_extension(value: string) -> string
     const name: string = base_name(value)
     var pos: int = str.len(name) - 1
     while pos >= 0
@@ -115,7 +115,7 @@ public func name_without_extension(value: string) -> string
     return name
 end
 
-public func parent(value: string) -> string
+public parent(value: string) -> string
     const norm: string = normalize(value)
     if su.is_empty(norm)
         return ""
@@ -134,11 +134,11 @@ public func parent(value: string) -> string
     return ""
 end
 
-public func has_extension(value: string, expected: string) -> bool
+public has_extension(value: string, expected: string) -> bool
     return extension(value) == expected
 end
 
-public func change_extension(value: string, new_ext: string) -> string
+public change_extension(value: string, new_ext: string) -> string
     const parent_path: string = parent(value)
     const stem: string = name_without_extension(base_name(value))
     const file_name: string = str.concat(str.concat(stem, "."), new_ext)
@@ -148,14 +148,14 @@ public func change_extension(value: string, new_ext: string) -> string
     return join([parent_path, file_name])
 end
 
-public func absolute(value: string, base: string) -> string
+public absolute(value: string, base: string) -> string
     if is_absolute(value)
         return normalize(value)
     end
     return join([base, value])
 end
 
-func split_segments(value: string) -> list<string>
+split_segments(value: string) -> list<string>
     const raw: list<string> = str.split(value, "/")
     var out: list<string> = []
     var i: int = 0
@@ -171,7 +171,7 @@ func split_segments(value: string) -> list<string>
     return out
 end
 
-public func relative(value: string, from: string) -> string
+public relative(value: string, from: string) -> string
     const target: string = normalize(value)
     const base: string = normalize(from)
     const target_parts: list<string> = split_segments(target)

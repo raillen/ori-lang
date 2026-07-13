@@ -1975,7 +1975,7 @@ pub fn stdlib_native_abi(
         "ori_files_read" => (vec![Ptr, I64], Some(Ptr)),
         "ori_files_write" => (vec![Ptr, Ptr], Some(Ptr)),
         "ori_files_close" => (vec![Ptr], None),
-        | "ori_files_file_size" | "ori_files_modified_at" | "ori_files_created_at" => {
+        "ori_files_file_size" | "ori_files_modified_at" | "ori_files_created_at" => {
             (vec![Ptr], Some(Ptr))
         }
         "ori_os_current_dir" => (vec![], Some(Ptr)),
@@ -2027,8 +2027,14 @@ pub fn stdlib_entry_for_path(path: &str) -> Option<&'static StdlibRuntimeFunctio
 /// This list is the only hand-maintained addition to the manifest-derived
 /// module set; keep it small and document why each entry cannot be derived
 /// from `STDLIB_RUNTIME_FUNCTIONS`.
-const STDLIB_MODULE_ONLY_PATHS: &[&str] =
-    &["ori", "ori.core", "ori.Error", "ori.mem", "ori.concurrent", "ori.buffer"];
+const STDLIB_MODULE_ONLY_PATHS: &[&str] = &[
+    "ori",
+    "ori.core",
+    "ori.Error",
+    "ori.mem",
+    "ori.concurrent",
+    "ori.buffer",
+];
 
 /// Extracts the module prefix from a canonical stdlib path.
 /// `"ori.io.print"` -> `Some("ori.io")`. Returns `None` for unqualified names
@@ -2081,8 +2087,6 @@ pub fn implemented_stdlib_modules() -> Vec<&'static str> {
     }
     modules.into_iter().collect()
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -2247,8 +2251,14 @@ mod tests {
         // Rows documented as "yes" (every function carries the flag).
         assert!(flagged("ori.io.print"), "io.print should be c_backend");
         assert!(flagged("ori.io.println"), "io.println should be c_backend");
-        assert!(flagged("ori.mem.string_as_ptr"), "mem.string_as_ptr should be c_backend");
-        assert!(flagged("ori.mem.string_len"), "mem.string_len should be c_backend");
+        assert!(
+            flagged("ori.mem.string_as_ptr"),
+            "mem.string_as_ptr should be c_backend"
+        );
+        assert!(
+            flagged("ori.mem.string_len"),
+            "mem.string_len should be c_backend"
+        );
         assert!(flagged("ori.math.sqrt"), "math should be c_backend");
         assert!(flagged("ori.time.now"), "time should be c_backend");
         assert!(flagged("ori.format.number"), "format should be c_backend");

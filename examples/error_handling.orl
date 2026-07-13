@@ -1,15 +1,15 @@
-namespace app.errors
+module app.errors
 
 import ori.io as io
 
-func divide(a: int, b: int) -> result<int, string>
+divide(a: int, b: int) -> result<int, string>
     if b == 0
         return error("Division by zero")
     end
     return success(a / b)
 end
 
-func calculate(numerator: int, denominator: int) -> result<int, string>
+calculate(numerator: int, denominator: int) -> result<int, string>
     io.print(f"Calculating {numerator} / {denominator}...")
     
     -- Using try for early return on error
@@ -19,7 +19,7 @@ func calculate(numerator: int, denominator: int) -> result<int, string>
     return success(val * 2)
 end
 
-func main()
+main()
     io.print("Error Handling Demonstration")
     io.print("----------------------------")
 

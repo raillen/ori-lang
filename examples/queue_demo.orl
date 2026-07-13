@@ -1,9 +1,9 @@
-namespace examples.queue_demo
+module examples.queue_demo
 
 import ori.io as io
 import ori.queue as queue
 
-func main()
+main()
     const jobs: queue.Queue<string> = queue.new()
     queue.enqueue(jobs, "parse")
     queue.enqueue(jobs, "check")

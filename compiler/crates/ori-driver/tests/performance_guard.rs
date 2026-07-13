@@ -27,12 +27,10 @@ fn check_deep_import_graph_has_stable_performance_shape() {
     for index in 0..module_count {
         let module = format!("app/mod{index}.orl");
         let source = if index + 1 == module_count {
-            format!(
-                "namespace app.mod{index}\n\npublic func value() -> int\n    return {index}\nend\n"
-            )
+            format!("module app.mod{index}\n\npublic value() -> int\n    return {index}\nend\n")
         } else {
             format!(
-                "namespace app.mod{index}\n\nimport app.mod{} as next\n\npublic func value() -> int\n    return next.value() + 1\nend\n",
+                "module app.mod{index}\n\nimport app.mod{} as next\n\npublic value() -> int\n    return next.value() + 1\nend\n",
                 index + 1
             )
         };
@@ -40,7 +38,7 @@ fn check_deep_import_graph_has_stable_performance_shape() {
     }
     dir.write(
         "main.orl",
-        "namespace app.main\n\nimport app.mod0 as entry\n\nfunc main()\n    const total: int = entry.value()\nend\n",
+        "module app.main\n\nimport app.mod0 as entry\n\nmain()\n    const total: int = entry.value()\nend\n",
     );
 
     let started = Instant::now();
@@ -61,7 +59,7 @@ fn fmt_and_doc_large_public_surface_have_stable_performance_shape() {
     let fmt = run_fmt(&dir.path("main.orl")).unwrap();
     let fmt_elapsed = fmt_started.elapsed();
     assert!(!fmt.has_errors, "{:?}", fmt.diagnostics);
-    assert!(fmt.formatted.contains("public func item_95"));
+    assert!(fmt.formatted.contains("public item_95"));
     assert_strict_budget("ORI_PERF_FMT_SURFACE_BUDGET_MS", fmt_elapsed, 1_500);
 
     let doc_started = Instant::now();
@@ -85,11 +83,11 @@ fn strict_generated_code_runtime_probe() {
     let dir = TestDir::new("perf_runtime_probe");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 
-func fib(n: int) -> int
+fib(n: int) -> int
     if n <= 1
         return n
     end
@@ -105,7 +103,7 @@ func fib(n: int) -> int
     return b
 end
 
-func main()
+main()
     var total: int = 0
     var i: int = 0
     while i < 2_000
@@ -134,10 +132,10 @@ end
 
 fn large_single_file_source(function_count: usize) -> String {
     let mut source = String::from(
-        r#"namespace app.main
+        r#"module app.main
 
 trait Named
-    func name(self) -> string
+    name(self) -> string
 end
 
 struct Item
@@ -146,7 +144,7 @@ struct Item
 end
 
 implement Named for Item
-    func name(self) -> string
+    name(self) -> string
         return self.label
     end
 end
@@ -156,10 +154,10 @@ end
     for index in 0..function_count {
         let _ = writeln!(
             source,
-            "func step_{index}(value: int) -> int\n    return value + {index}\nend\n"
+            "step_{index}(value: int) -> int\n    return value + {index}\nend\n"
         );
     }
-    source.push_str("func main()\n    const item: Item = Item(id: 1, label: \"ori\")\n    var total: int = item.id\n");
+    source.push_str("main()\n    const item: Item = Item(id: 1, label: \"ori\")\n    var total: int = item.id\n");
     for index in 0..function_count {
         let _ = writeln!(source, "    total = step_{index}(total)");
     }
@@ -168,14 +166,14 @@ end
 }
 
 fn documented_public_surface_source(function_count: usize) -> String {
-    let mut source = String::from("namespace app.main\n\n");
+    let mut source = String::from("module app.main\n\n");
     for index in 0..function_count {
         let _ = writeln!(
             source,
-            "--|\nReturns item {index}.\n\n@param value Input value.\n@returns The adjusted value.\n|--\npublic func item_{index}(value: int) -> int\n    return value + {index}\nend\n"
+            "--|\nReturns item {index}.\n\n@param value Input value.\n@returns The adjusted value.\n|--\npublic item_{index}(value: int) -> int\n    return value + {index}\nend\n"
         );
     }
-    source.push_str("func main()\nend\n");
+    source.push_str("main()\nend\n");
     source
 }
 

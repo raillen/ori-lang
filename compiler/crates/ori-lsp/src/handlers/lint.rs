@@ -194,7 +194,7 @@ mod tests {
             shadowed_variable: false,
             prefer_const: false,
         };
-        let codes = diagnostic_codes("func main()\n    const value = 1\nend\n", &config);
+        let codes = diagnostic_codes("main()\n    const value = 1\nend\n", &config);
         assert!(!codes.iter().any(|code| code == "lint.unused_variable"));
     }
 
@@ -205,7 +205,7 @@ mod tests {
             shadowed_variable: false,
             prefer_const: false,
         };
-        let codes = diagnostic_codes("func main()\n    var value: int = 1\nend\n", &config);
+        let codes = diagnostic_codes("main()\n    var value: int = 1\nend\n", &config);
         assert!(!codes.iter().any(|code| code == "lint.prefer_const"));
     }
 
@@ -217,7 +217,7 @@ mod tests {
             prefer_const: false,
         };
         let codes = diagnostic_codes(
-            "func main()\n    const value = 1\n    const value = 2\nend\n",
+            "main()\n    const value = 1\n    const value = 2\nend\n",
             &config,
         );
         assert!(codes.iter().any(|code| code == "lint.shadowed_variable"));

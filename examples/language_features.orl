@@ -1,4 +1,4 @@
-namespace app.language_features
+module app.language_features
 
 --- Demonstra as features fundamentais da linguagem Ori:
 --- structs, enums, traits, generics, pattern matching, error handling,
@@ -9,7 +9,7 @@ import ori.io as io
 import ori.list as lists
 import ori.string as su
 
-func section(title: string)
+section(title: string)
     io.println("")
     io.println(f"=== {title} ===")
 end
@@ -31,7 +31,7 @@ struct Pixel
     color: Color
 end
 
-func demo_structs()
+demo_structs()
     section("Structs and Struct Update")
 
     const origin: Point = Point(x: 0, y: 0)
@@ -55,7 +55,7 @@ enum Shape
     Triangle(base: int, height: int)
 end
 
-func shape_area(s: Shape) -> int
+shape_area(s: Shape) -> int
     match s
     case Circle(radius):
         return radius * radius * 3
@@ -67,7 +67,7 @@ func shape_area(s: Shape) -> int
     return 0
 end
 
-func shape_name(s: Shape) -> string
+shape_name(s: Shape) -> string
     match s
     case Circle(radius):
         return "Circle"
@@ -79,7 +79,7 @@ func shape_name(s: Shape) -> string
     return "Unknown"
 end
 
-func demo_enums()
+demo_enums()
     section("Enums and Pattern Matching")
 
     const shapes: list<Shape> = [
@@ -101,12 +101,12 @@ struct Animal
 end
 
 implement core.Equatable for Animal
-    func equals(self, other: Animal) -> bool
+    equals(self, other: Animal) -> bool
         return self.name == other.name
     end
 end
 
-func demo_traits()
+demo_traits()
     section("Traits (Equatable)")
 
     const cat: Animal = Animal(name: "Cat", sound: "meow", legs: 4)
@@ -118,14 +118,14 @@ func demo_traits()
 end
 
 -- ─────────────── Generic Functions ──────────────
-func first_or_custom<T>(items: list<T>, fallback: T) -> T
+first_or_custom<T>(items: list<T>, fallback: T) -> T
     if some(item) = lists.try_get(items, 0)
         return item
     end
     return fallback
 end
 
-func repeat_element<T>(item: T, count: int) -> list<T>
+repeat_element<T>(item: T, count: int) -> list<T>
     var out: list<T> = []
     var i: int = 0
     while i < count
@@ -135,7 +135,7 @@ func repeat_element<T>(item: T, count: int) -> list<T>
     return out
 end
 
-func demo_generics()
+demo_generics()
     section("Generic Functions")
 
     io.println(f"  first_or int: {first_or_custom([10, 20, 30], -1)}")
@@ -150,14 +150,14 @@ func demo_generics()
 end
 
 -- ──────────── Optional and Result ──────────────
-func safe_divide(a: int, b: int) -> result<int, string>
+safe_divide(a: int, b: int) -> result<int, string>
     if b == 0
         return error("division by zero")
     end
     return success(a / b)
 end
 
-func find_by_name(names: list<string>, target: string) -> optional<int>
+find_by_name(names: list<string>, target: string) -> optional<int>
     var i: int = 0
     while i < lists.len(names)
         if some(name) = lists.try_get(names, i)
@@ -170,7 +170,7 @@ func find_by_name(names: list<string>, target: string) -> optional<int>
     return none
 end
 
-func demo_optional_result()
+demo_optional_result()
     section("Optional and Result")
 
     match safe_divide(10, 3)
@@ -212,7 +212,7 @@ func demo_optional_result()
 end
 
 -- ─────────── Control Flow and Loops ───────────
-func demo_control_flow()
+demo_control_flow()
     section("Control Flow")
 
     const items: list<string> = ["alpha", "beta", "gamma"]
@@ -250,19 +250,19 @@ func demo_control_flow()
 end
 
 -- ─────────────── Pipe Operator ──────────────
-func double(n: int) -> int
+double(n: int) -> int
     return n * 2
 end
 
-func add_ten(n: int) -> int
+add_ten(n: int) -> int
     return n + 10
 end
 
-func to_label(n: int) -> string
+to_label(n: int) -> string
     return f"result: {n}"
 end
 
-func demo_pipe()
+demo_pipe()
     section("Pipe Operator")
 
     const label: string = 5 |> double |> add_ten |> to_label
@@ -270,7 +270,7 @@ func demo_pipe()
 end
 
 -- ──────────── Structural Equality ───────────
-func demo_structural_equality()
+demo_structural_equality()
     section("Structural Equality")
 
     const p1: Point = Point(x: 1, y: 2)
@@ -288,7 +288,7 @@ func demo_structural_equality()
 end
 
 -- ──────────── String Features ───────────────
-func demo_strings()
+demo_strings()
     section("String Features")
 
     const name: string = "Ori"
@@ -308,7 +308,7 @@ func demo_strings()
 end
 
 -- ──────────────── Main ──────────────────────────
-func main()
+main()
     io.println("Ori Language — Language Features Showcase")
     io.println("==========================================")
 

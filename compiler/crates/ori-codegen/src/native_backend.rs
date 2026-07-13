@@ -301,7 +301,9 @@ impl NativeHirValidator {
                     }
                     self.reject_error_ty(return_ty, "extern function return type", *span)?;
                 }
-                HirExtern::Var { ty, span, path: _, .. } => {
+                HirExtern::Var {
+                    ty, span, path: _, ..
+                } => {
                     self.reject_error_ty(ty, "extern variable type", *span)?;
                 }
             }
@@ -3273,13 +3275,15 @@ impl<M: Module> NativeBackend<M> {
         // ori_len(ptr: *u8) -> i64
         let id = decl("ori_len", &[pt], vec![], Some(types::I64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_len"), id);
-        
+
         let id = decl("ori_mem_string_as_ptr", &[pt], vec![], Some(types::I64))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_mem_string_as_ptr"), id);
-        
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_mem_string_as_ptr"), id);
+
         let id = decl("ori_mem_string_len", &[pt], vec![], Some(types::I64))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_mem_string_len"), id);
-        
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_mem_string_len"), id);
+
         // ori_math_abs(n: i64) -> i64
         let id = decl("ori_math_sqrt", &[types::F64], vec![], Some(types::F64))?;
         self.stdlib_ids.insert(SmolStr::new("ori_math_sqrt"), id);
@@ -3734,7 +3738,8 @@ impl<M: Module> NativeBackend<M> {
         let id = decl("ori_map_new", &[], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_new"), id);
         let id = decl("ori_map_new_custom", &[pt, pt], vec![], Some(pt))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_map_new_custom"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_map_new_custom"), id);
         let id = decl("ori_map_set", &[pt, types::I64, types::I64], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_map_set"), id);
         let id = decl("ori_map_set_string", &[pt, pt, types::I64], vec![], None)?;
@@ -4221,7 +4226,14 @@ impl<M: Module> NativeBackend<M> {
             self.func_ids.insert(f.name.clone(), id);
         }
         for ext in &hir.externs {
-            if let HirExtern::Func { path, name, params, return_ty, .. } = ext {
+            if let HirExtern::Func {
+                path,
+                name,
+                params,
+                return_ty,
+                ..
+            } = ext
+            {
                 let mut sig = self.module.make_signature();
                 for p in params {
                     if let Some(t) = cl_type(&p.ty, self.ptr_ty) {
@@ -4235,7 +4247,7 @@ impl<M: Module> NativeBackend<M> {
                     .module
                     .declare_function(name, Linkage::Import, &sig)
                     .map_err(|e| format!("declare extern '{}': {e}", name))?;
-                
+
                 self.func_ids.insert(path.clone(), id);
             }
         }
@@ -14073,10 +14085,7 @@ fn discover_linux_dynamic_linker(cc: &str) -> Result<PathBuf, String> {
     ];
     for &name in &candidates {
         let arg = format!("-print-file-name={name}");
-        let output = match std::process::Command::new(cc)
-            .args([arg.as_str()])
-            .output()
-        {
+        let output = match std::process::Command::new(cc).args([arg.as_str()]).output() {
             Ok(output) => output,
             Err(_) => break,
         };

@@ -57,13 +57,13 @@ fn check_accepts_concurrency_stdlib_types() {
     let dir = TestDir::new("check_concurrency_types");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.task as task
 import ori.channel as channel
 import ori.atomic as atomic
 
-func main()
+main()
     const job: task.Job<int> = task.spawn(do() => 41)
     const joined: result<int, task.JoinError> = task.join(job)
     const ch: channel.Channel<int> = channel.create()
@@ -86,15 +86,15 @@ fn check_accepts_async_func_and_await_types() {
     let dir = TestDir::new("check_async_func_await_types");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.task as task
 
-async func compute() -> int
+async compute() -> int
     return 41
 end
 
-async func main()
+async main()
     const future: future<int> = compute()
     const value: int = await future
     await task.sleep(1)
@@ -111,11 +111,11 @@ fn fmt_preserves_async_state_machine_surface() {
     let dir = TestDir::new("fmt_async_surface");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.task as task
 
-async func main()
+async main()
 await task.sleep(1)
 if true
 await task.sleep(1)
@@ -128,7 +128,7 @@ end
     assert!(!out.has_errors, "{:?}", out.diagnostics);
     assert!(
         out.formatted.contains(
-            r#"async func main()
+            r#"async main()
     await task.sleep(1)
     if true
         await task.sleep(1)
@@ -149,11 +149,11 @@ fn check_rejects_await_outside_async_func() {
     let dir = TestDir::new("await_outside_async_func");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.task as task
 
-func main()
+main()
     await task.sleep(1)
 end
 "#,
@@ -170,9 +170,9 @@ fn check_rejects_await_on_non_future_value() {
     let dir = TestDir::new("await_non_future_value");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
-async func main()
+async main()
     const value: int = await 1
 end
 "#,
@@ -189,11 +189,11 @@ fn check_rejects_non_transferable_spawn_capture() {
     let dir = TestDir::new("spawn_non_transferable_capture");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.task as task
 
-func main()
+main()
     const callback: func() -> int = do() => 1
     const job: task.Job<int> = task.spawn(do() => callback())
 end
@@ -214,11 +214,11 @@ fn check_rejects_non_transferable_channel_value() {
     let dir = TestDir::new("channel_non_transferable_value");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.channel as channel
 
-func main()
+main()
     const ch: channel.Channel<func() -> int> = channel.create()
     const sent: result<void, channel.SendError> = channel.send(ch, do() => 1)
 end
@@ -236,12 +236,12 @@ fn check_allows_using_inside_async_func() {
     let dir = TestDir::new("async_using_allowed");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.task as task
 
 trait Disposable
-    mut func dispose(self)
+    mut dispose(self)
 end
 
 struct Resource
@@ -249,11 +249,11 @@ struct Resource
 end
 
 implement Disposable for Resource
-    mut func dispose(self)
+    mut dispose(self)
     end
 end
 
-async func main()
+async main()
     using resource: Resource = Resource(id: 1)
     await task.sleep(1)
 end
@@ -269,12 +269,12 @@ fn check_rejects_keyword_import_aliases_without_hanging() {
     let dir = TestDir::new("map_set_alias_conflict");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.map as map
 import ori.set as set
 
-func main()
+main()
     const lookup: map<int, int> = { 1: 40, 2: 41 }
     const seen: set<int> = set { 3, 4 }
     const value: int = map.get(lookup, 2)
@@ -294,12 +294,12 @@ fn compile_runs_task_spawn_join_native() {
     let dir = TestDir::new("compile_task_spawn_join_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-func main()
+main()
     const job: task.Job<int> = task.spawn(do() => 41)
     match task.join(job)
         case success(value):
@@ -326,15 +326,15 @@ fn compile_runs_async_main_and_await_ready_future_native() {
     let dir = TestDir::new("compile_async_main_ready_future_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 
-async func compute() -> int
+async compute() -> int
     return 41
 end
 
-async func main()
+async main()
     const value: int = await compute()
     io.print(string(value))
 end
@@ -356,18 +356,18 @@ fn compile_async_function_call_returns_before_first_await_native() {
     let dir = TestDir::new("compile_async_call_returns_before_await_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 import ori.time as time
 
-async func delayed() -> int
+async delayed() -> int
     await task.sleep(250)
     return 41
 end
 
-func main()
+main()
     const start: int = time.now()
     const future: future<int> = delayed()
     const elapsed: int = time.duration_ms(start, time.now())
@@ -396,22 +396,22 @@ fn compile_runs_simple_async_state_machine_reads_await_value_native() {
     let dir = TestDir::new("compile_simple_async_state_machine_await_value_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func delayed() -> int
+async delayed() -> int
     await task.sleep(1)
     return 40
 end
 
-async func compute() -> int
+async compute() -> int
     const value: int = await delayed()
     return value + 1
 end
 
-func main()
+main()
     const value: int = task.block_on(compute())
     io.print(string(value))
 end
@@ -433,28 +433,28 @@ fn compile_runs_simple_async_state_machine_two_await_states_native() {
     let dir = TestDir::new("compile_simple_async_state_machine_two_await_states_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func left() -> int
+async left() -> int
     await task.sleep(1)
     return 20
 end
 
-async func right() -> int
+async right() -> int
     await task.sleep(1)
     return 21
 end
 
-async func compute() -> int
+async compute() -> int
     const a: int = await left()
     const b: int = await right()
     return a + b
 end
 
-func main()
+main()
     const value: int = task.block_on(compute())
     io.print(string(value))
 end
@@ -476,17 +476,17 @@ fn compile_runs_simple_async_state_machine_scalar_param_native() {
     let dir = TestDir::new("compile_simple_async_state_machine_scalar_param_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func add_later(base: int) -> int
+async add_later(base: int) -> int
     await task.sleep(1)
     return base + 1
 end
 
-func main()
+main()
     const value: int = task.block_on(add_later(40))
     io.print(string(value))
 end
@@ -508,21 +508,21 @@ fn compile_runs_simple_async_state_machine_return_await_native() {
     let dir = TestDir::new("compile_simple_async_state_machine_return_await_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func delayed() -> int
+async delayed() -> int
     await task.sleep(1)
     return 41
 end
 
-async func forward() -> int
+async forward() -> int
     return await delayed()
 end
 
-func main()
+main()
     const value: int = task.block_on(forward())
     io.print(string(value))
 end
@@ -544,25 +544,25 @@ fn compile_runs_async_await_in_call_argument_native() {
     let dir = TestDir::new("compile_async_await_in_call_argument_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func delayed() -> int
+async delayed() -> int
     await task.sleep(1)
     return 40
 end
 
-func add_one(value: int) -> int
+add_one(value: int) -> int
     return value + 1
 end
 
-async func compute() -> int
+async compute() -> int
     return add_one(await delayed())
 end
 
-func main()
+main()
     const value: int = task.block_on(compute())
     io.print(string(value))
 end
@@ -584,26 +584,26 @@ fn compile_runs_async_await_inside_operator_native() {
     let dir = TestDir::new("compile_async_await_inside_operator_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func left() -> int
+async left() -> int
     await task.sleep(1)
     return 20
 end
 
-async func right() -> int
+async right() -> int
     await task.sleep(1)
     return 21
 end
 
-async func compute() -> int
+async compute() -> int
     return (await left()) + (await right())
 end
 
-func main()
+main()
     const value: int = task.block_on(compute())
     io.print(string(value))
 end
@@ -625,17 +625,17 @@ fn compile_runs_async_await_in_condition_native() {
     let dir = TestDir::new("compile_async_await_in_condition_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func flag() -> bool
+async flag() -> bool
     await task.sleep(1)
     return true
 end
 
-async func main()
+async main()
     if await flag()
         io.print("yes")
     end
@@ -658,17 +658,17 @@ fn compile_runs_simple_async_state_machine_managed_param_native() {
     let dir = TestDir::new("compile_simple_async_state_machine_managed_param_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func echo_later(text: string) -> string
+async echo_later(text: string) -> string
     await task.sleep(1)
     return text
 end
 
-func main()
+main()
     const text: string = task.block_on(echo_later("ori"))
     io.print(text)
 end
@@ -690,22 +690,22 @@ fn compile_runs_simple_async_state_machine_managed_await_binding_native() {
     let dir = TestDir::new("compile_simple_async_state_machine_managed_await_binding_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func load_text() -> string
+async load_text() -> string
     await task.sleep(1)
     return "ori"
 end
 
-async func compute() -> string
+async compute() -> string
     const text: string = await load_text()
     return text
 end
 
-func main()
+main()
     const text: string = task.block_on(compute())
     io.print(text)
 end
@@ -727,22 +727,22 @@ fn compile_runs_async_main_with_two_awaits_native() {
     let dir = TestDir::new("compile_async_main_two_awaits_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func left() -> int
+async left() -> int
     await task.sleep(1)
     return 20
 end
 
-async func right() -> int
+async right() -> int
     await task.sleep(1)
     return 21
 end
 
-async func main()
+async main()
     const a: int = await left()
     const b: int = await right()
     io.print(string(a + b))
@@ -765,20 +765,20 @@ fn compile_runs_async_result_question_mark_native() {
     let dir = TestDir::new("compile_async_result_question_mark_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 
-async func compute() -> result<int, string>
+async compute() -> result<int, string>
     return success(41)
 end
 
-async func use_value() -> result<int, string>
+async use_value() -> result<int, string>
     const value: int = (await compute())?
     return success(value)
 end
 
-async func main()
+async main()
     const outcome: result<int, string> = await use_value()
     match outcome
         case success(value):
@@ -805,20 +805,20 @@ fn compile_runs_async_result_question_mark_error_state_machine_native() {
     let dir = TestDir::new("compile_async_result_question_mark_error_state_machine_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 
-async func fail() -> result<int, string>
+async fail() -> result<int, string>
     return error("bad")
 end
 
-async func use_value() -> result<int, string>
+async use_value() -> result<int, string>
     const value: int = (await fail())?
     return success(value)
 end
 
-async func main()
+async main()
     const outcome: result<int, string> = await use_value()
     match outcome
         case success(value):
@@ -845,12 +845,12 @@ fn compile_runs_async_state_machine_tail_control_flow_native() {
     let dir = TestDir::new("compile_async_state_machine_tail_control_flow_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func main()
+async main()
     const values: list<int> = [1, 2, 3]
     var total: int = 0
 
@@ -892,14 +892,14 @@ fn compile_runs_managed_collections_across_await_native() {
     let dir = TestDir::new("compile_managed_collections_across_await_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.map as maps
 import ori.set as sets
 import ori.task as task
 
-async func main()
+async main()
     const label: string = "answer"
     const values: list<string> = ["first", "second"]
     const lookup: map<int, int> = { 1: 40, 2: 41 }
@@ -933,7 +933,7 @@ fn compile_runs_managed_struct_across_await_native() {
     let dir = TestDir::new("compile_managed_struct_across_await_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
@@ -942,7 +942,7 @@ struct User
     name: string
 end
 
-async func main()
+async main()
     const user: User = User(name: "Ada")
 
     await task.sleep(1)
@@ -967,7 +967,7 @@ fn compile_runs_managed_enum_payload_across_await_native() {
     let dir = TestDir::new("compile_managed_enum_payload_across_await_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
@@ -981,7 +981,7 @@ enum Event
     Empty
 end
 
-async func main()
+async main()
     const event: Event = Event.Ready(user: User(name: "Ada"))
 
     await task.sleep(1)
@@ -1011,12 +1011,12 @@ fn compile_runs_managed_closure_capture_across_await_native() {
     let dir = TestDir::new("compile_managed_closure_capture_across_await_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func main()
+async main()
     const prefix: string = "value"
     const format: func(int) -> string = do(x: int) -> string
         const next: int = x + 1
@@ -1045,17 +1045,17 @@ fn compile_runs_await_task_sleep_native() {
     let dir = TestDir::new("compile_await_task_sleep_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func compute() -> int
+async compute() -> int
     await task.sleep(1)
     return 41
 end
 
-async func main()
+async main()
     const value: int = await compute()
     io.print(string(value))
 end
@@ -1083,12 +1083,12 @@ fn compile_runs_async_fs_read_and_write_native() {
     dir.write(
         "main.orl",
         &format!(
-            r#"namespace app.main
+            r#"module app.main
 
 import ori.fs as fs
 import ori.io as io
 
-async func main()
+async main()
     const read_result: result<string, string> = await fs.read_text_async("{input}")
     const write_result: result<string, string> = await fs.write_text_async("{output}", "written async")
     match read_result
@@ -1128,13 +1128,13 @@ fn test_runner_accepts_async_test_functions() {
     let dir = TestDir::new("test_runner_async_test");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.task as task
 import ori.test as test
 
 @test
-async func async_check()
+async async_check()
     await task.sleep(1)
     test.assert(true, "async test should run")
 end
@@ -1152,11 +1152,11 @@ fn fmt_preserves_async_func_and_await_indentation() {
     let dir = TestDir::new("fmt_async_func_await");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.task as task
 
-async func main()
+async main()
 await task.sleep(1)
 end
 "#,
@@ -1166,7 +1166,7 @@ end
     assert!(!out.has_errors, "{:?}", out.diagnostics);
     assert!(
         out.formatted
-            .contains("async func main()\n    await task.sleep(1)\nend\n"),
+            .contains("async main()\n    await task.sleep(1)\nend\n"),
         "{}",
         out.formatted
     );
@@ -1177,14 +1177,14 @@ fn compile_runs_channel_atomic_and_block_on_native() {
     let dir = TestDir::new("compile_channel_atomic_block_on_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.atomic as atomic
 import ori.channel as channel
 import ori.io as io
 import ori.task as task
 
-func main()
+main()
     const ch: channel.Channel<int> = channel.create()
     channel.send(ch, 29)
     match channel.receive(ch)
@@ -1215,14 +1215,14 @@ fn compile_runs_transferable_collections_through_channel_native() {
     let dir = TestDir::new("collection_handles_through_channel_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.channel as channel
 import ori.deque as deque
 import ori.io as io
 import ori.queue as queue
 
-func main()
+main()
     const q: queue.Queue<int> = queue.new()
     queue.enqueue(q, 5)
     const qch: channel.Channel<queue.Queue<int>> = channel.create()
@@ -1273,15 +1273,15 @@ fn native_backend_accepts_async_await_shape_nested_await() {
     let dir = TestDir::new("native_async_nested_await");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 
-async func compute() -> int
+async compute() -> int
     return 1
 end
 
-async func main()
+async main()
     if true
         const value: int = await compute()
         io.print(string(value))
@@ -1305,9 +1305,9 @@ fn c_backend_rejects_async_functions() {
     let dir = TestDir::new("c_backend_rejects_async_functions");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
-async func main()
+async main()
 end
 "#,
     );
@@ -1334,11 +1334,11 @@ fn c_backend_rejects_concurrency_runtime_calls() {
     let dir = TestDir::new("c_backend_rejects_concurrency");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.task as task
 
-func main()
+main()
     task.block_on(task.sleep(1))
 end
 "#,
@@ -1366,17 +1366,17 @@ fn compile_runs_async_await_in_loop_and_branch_native() {
     let dir = TestDir::new("compile_async_await_in_loop_and_branch_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func compute(x: int) -> int
+async compute(x: int) -> int
     await task.sleep(1)
     return x + 10
 end
 
-async func test_branching_await(flag: bool) -> int
+async test_branching_await(flag: bool) -> int
     if flag
         const a: int = await compute(5)
         return a
@@ -1386,7 +1386,7 @@ async func test_branching_await(flag: bool) -> int
     end
 end
 
-async func test_loop_await() -> int
+async test_loop_await() -> int
     var sum: int = 0
     var i: int = 0
     while i < 3
@@ -1397,7 +1397,7 @@ async func test_loop_await() -> int
     return sum
 end
 
-func main()
+main()
     const r1: int = task.block_on(test_branching_await(true))
     const r2: int = task.block_on(test_branching_await(false))
     const r3: int = task.block_on(test_loop_await())
@@ -1421,12 +1421,12 @@ fn compile_runs_async_await_with_managed_variables_in_branch_native() {
     let dir = TestDir::new("compile_async_await_managed_in_branch_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func get_prefix(flag: bool) -> string
+async get_prefix(flag: bool) -> string
     await task.sleep(1)
     if flag
         return "yes"
@@ -1435,7 +1435,7 @@ async func get_prefix(flag: bool) -> string
     end
 end
 
-async func format_msg(flag: bool) -> string
+async format_msg(flag: bool) -> string
     const prefix: string = await get_prefix(flag)
     if flag
         const msg: string = prefix + "-ok"
@@ -1448,7 +1448,7 @@ async func format_msg(flag: bool) -> string
     end
 end
 
-func main()
+main()
     const r1: string = task.block_on(format_msg(true))
     const r2: string = task.block_on(format_msg(false))
     io.print(r1 + " " + r2)
@@ -1474,13 +1474,13 @@ fn compile_runs_async_using_dispose_native() {
     let dir = TestDir::new("compile_async_using_dispose_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
 trait Disposable
-    mut func dispose(self)
+    mut dispose(self)
 end
 
 var dispose_count: int = 0
@@ -1490,17 +1490,17 @@ struct Resource
 end
 
 implement Disposable for Resource
-    mut func dispose(self)
+    mut dispose(self)
         dispose_count = dispose_count + self.id
     end
 end
 
-async func get_resource(id: int) -> Resource
+async get_resource(id: int) -> Resource
     await task.sleep(1)
     return Resource(id: id)
 end
 
-async func test_using()
+async test_using()
     using r1: Resource = await get_resource(10)
     await task.sleep(1)
     if true
@@ -1509,7 +1509,7 @@ async func test_using()
     end
 end
 
-async func test_using_early_return(flag: bool)
+async test_using_early_return(flag: bool)
     using r1: Resource = await get_resource(100)
     if flag
         using r2: Resource = await get_resource(200)
@@ -1518,7 +1518,7 @@ async func test_using_early_return(flag: bool)
     using r3: Resource = await get_resource(400)
 end
 
-func main()
+main()
     task.block_on(test_using())
     task.block_on(test_using_early_return(true))
     io.print("disposed: " + string(dispose_count))
@@ -1541,13 +1541,13 @@ fn compile_runs_async_using_dispose_on_cancel() {
     let dir = TestDir::new("compile_async_using_dispose_on_cancel");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
 trait Disposable
-    mut func dispose(self)
+    mut dispose(self)
 end
 
 var dispose_count: int = 0
@@ -1557,24 +1557,24 @@ struct Resource
 end
 
 implement Disposable for Resource
-    mut func dispose(self)
+    mut dispose(self)
         dispose_count = dispose_count + self.id
     end
 end
 
-async func get_resource(id: int) -> Resource
+async get_resource(id: int) -> Resource
     await task.sleep(1)
     return Resource(id: id)
 end
 
-async func worker(token: task.CancelToken)
+async worker(token: task.CancelToken)
     using r: Resource = await get_resource(77)
     const fut: future<void> = task.sleep(5000)
     task.associate(token, fut)
     await fut
 end
 
-func main()
+main()
     const token: task.CancelToken = task.create_token()
     const job: task.Job<void> = task.spawn(do() -> void
         task.block_on(worker(token))
@@ -1602,13 +1602,13 @@ fn compile_runs_async_using_dispose_on_break() {
     let dir = TestDir::new("compile_async_using_dispose_on_break");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
 trait Disposable
-    mut func dispose(self)
+    mut dispose(self)
 end
 
 var dispose_count: int = 0
@@ -1618,17 +1618,17 @@ struct Resource
 end
 
 implement Disposable for Resource
-    mut func dispose(self)
+    mut dispose(self)
         dispose_count = dispose_count + self.id
     end
 end
 
-async func get_resource(id: int) -> Resource
+async get_resource(id: int) -> Resource
     await task.sleep(1)
     return Resource(id: id)
 end
 
-async func worker()
+async worker()
     var total: int = 0
     while total < 100
         using r: Resource = await get_resource(10)
@@ -1640,7 +1640,7 @@ async func worker()
     end
 end
 
-func main()
+main()
     task.block_on(worker())
     io.print("disposed: " + string(dispose_count))
 end
@@ -1667,14 +1667,14 @@ fn compile_runs_async_file_using_dispose_on_cancel() {
     dir.write(
         "main.orl",
         &format!(
-            r#"namespace app.main
+            r#"module app.main
 
 import ori.fs as fs
 import ori.io as io
 import ori.bytes as bytes_mod
 import ori.task as task
 
-async func worker(token: task.CancelToken, path: string) -> result<int, string>
+async worker(token: task.CancelToken, path: string) -> result<int, string>
     using file: fs.File = fs.open_write(path)?
     fs.write(file, b"ok")?
     const fut: future<void> = task.sleep(5000)
@@ -1683,7 +1683,7 @@ async func worker(token: task.CancelToken, path: string) -> result<int, string>
     return success(0)
 end
 
-func main()
+main()
     const path: string = "{test_file}"
     const token: task.CancelToken = task.create_token()
     const job: task.Job<void> = task.spawn(do() -> void
@@ -1725,17 +1725,17 @@ fn compile_runs_async_await_in_match_native() {
     let dir = TestDir::new("compile_async_await_in_match_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func compute(x: int) -> int
+async compute(x: int) -> int
     await task.sleep(1)
     return x + 1
 end
 
-async func pick(flag: bool) -> int
+async pick(flag: bool) -> int
     var out: int = 0
     match flag
         case true:
@@ -1746,7 +1746,7 @@ async func pick(flag: bool) -> int
     return out
 end
 
-func main()
+main()
     const left: int = task.block_on(pick(true))
     const right: int = task.block_on(pick(false))
     io.print(string(left) + " " + string(right))
@@ -1774,17 +1774,17 @@ fn compile_runs_async_await_in_for_loop_native() {
     let dir = TestDir::new("compile_async_await_in_for_loop_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func compute(x: int) -> int
+async compute(x: int) -> int
     await task.sleep(1)
     return x * x
 end
 
-async func sum_squares(values: list<int>) -> int
+async sum_squares(values: list<int>) -> int
     var total: int = 0
     for value in values
         const sq: int = await compute(value)
@@ -1793,7 +1793,7 @@ async func sum_squares(values: list<int>) -> int
     return total
 end
 
-func main()
+main()
     const xs: list<int> = [1, 2, 3, 4]
     const outcome: int = task.block_on(sum_squares(xs))
     io.print(string(outcome))
@@ -1822,17 +1822,17 @@ fn compile_runs_async_await_in_deeply_nested_bodies_native() {
     let dir = TestDir::new("compile_async_await_deeply_nested_native");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.task as task
 
-async func compute(x: int) -> int
+async compute(x: int) -> int
     await task.sleep(1)
     return x + 1
 end
 
-async func deeply_nested(limit: int) -> int
+async deeply_nested(limit: int) -> int
     var total: int = 0
     const xs: list<int> = [1, 2, 3]
     for value in xs
@@ -1845,7 +1845,7 @@ async func deeply_nested(limit: int) -> int
     return total
 end
 
-func main()
+main()
     const r: int = task.block_on(deeply_nested(2))
     io.print(string(r))
 end
@@ -1883,18 +1883,18 @@ end
 #[test]
 fn fmt_preserves_async_spawn_nested_using_and_multiline_match_idempotent() {
     let dir = TestDir::new("fmt_async_audit_idempotent");
-    let source = r#"namespace app.main
+    let source = r#"module app.main
 
 import ori.fs as fs
 import ori.io as io
 import ori.task as task
 
-async func work(n: int) -> int
+async work(n: int) -> int
 await task.sleep(1)
 return n * 2
 end
 
-func handle(path: string) -> result<int, string>
+handle(path: string) -> result<int, string>
 using file: fs.File = fs.open_read(path)?
 match fs.read(file, 100)
 case success(data):
@@ -1906,7 +1906,7 @@ return error(msg)
 end
 end
 
-func pick(flag: bool) -> int
+pick(flag: bool) -> int
 match flag
 case true:
 return 1
@@ -1915,7 +1915,7 @@ return 2
 end
 end
 
-func main()
+main()
 const job: task.Job<int> = task.spawn(do() => 41)
 const r: int = task.block_on(work(task.join(job)))
 io.print(string(r))
@@ -1934,7 +1934,7 @@ end
     // Audit: async func + await + return at one indent level inside the func.
     assert!(
         once.contains(
-            "async func work(n: int) -> int\n    await task.sleep(1)\n    return n * 2\nend\n"
+            "async work(n: int) -> int\n    await task.sleep(1)\n    return n * 2\nend\n"
         ),
         "async func + await indentation: {once}"
     );

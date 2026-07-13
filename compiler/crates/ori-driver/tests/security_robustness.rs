@@ -21,7 +21,7 @@ struct CheckCase {
 #[test]
 fn malformed_source_corpus_never_panics_and_keeps_spans_bounded() {
     let mut unbalanced_expression =
-        String::from("namespace app.main\nfunc main()\n    const value: int = ");
+        String::from("module app.main\nmain()\n    const value: int = ");
     unbalanced_expression.push_str(&"(".repeat(96));
     unbalanced_expression.push('1');
     unbalanced_expression.push_str(&")".repeat(12));
@@ -32,19 +32,19 @@ fn malformed_source_corpus_never_panics_and_keeps_spans_bounded() {
         ("namespace_without_path", "namespace\n"),
         (
             "unterminated_block_comment",
-            "namespace app.main\n--| comment without terminator\nfunc main()\nend\n",
+            "module app.main\n--| comment without terminator\nmain()\nend\n",
         ),
         (
             "unterminated_string",
-            "namespace app.main\nfunc main()\n    const text: string = \"open\nend\n",
+            "module app.main\nmain()\n    const text: string = \"open\nend\n",
         ),
         (
             "unicode_and_bad_tokens",
-            "namespace app.main\nfunc main()\n    const cafe: string = \"cafe emoji \u{1F642}\"\n    @@@\nend\n",
+            "module app.main\nmain()\n    const cafe: string = \"cafe emoji \u{1F642}\"\n    @@@\nend\n",
         ),
         (
             "bad_import_shape",
-            "namespace app.main\nimport app.\nfunc main()\nend\n",
+            "module app.main\nimport app.\nmain()\nend\n",
         ),
         ("unbalanced_expression", unbalanced_expression.as_str()),
     ];
@@ -70,9 +70,9 @@ fn malformed_source_corpus_never_panics_and_keeps_spans_bounded() {
 #[test]
 fn deterministic_token_mutation_corpus_never_panics() {
     let seeds = [
-        "namespace app.main\nfunc main()\n    const x: int = 1\nend\n",
-        "namespace app.main\nstruct User\n    name: string\nend\nfunc main()\nend\n",
-        "namespace app.main\nfunc main()\n    match true\n        case true:\n            return\n    end\nend\n",
+        "module app.main\nmain()\n    const x: int = 1\nend\n",
+        "module app.main\nstruct User\n    name: string\nend\nmain()\nend\n",
+        "module app.main\nmain()\n    match true\n        case true:\n            return\n    end\nend\n",
     ];
     let fragments = [
         "",
@@ -119,7 +119,7 @@ fn semantic_security_rules_report_stable_diagnostic_codes() {
             name: "undefined_name",
             files: vec![(
                 "main.orl",
-                "namespace app.main\nfunc main()\n    const value: int = missing\nend\n",
+                "module app.main\nmain()\n    const value: int = missing\nend\n",
             )],
             expected_codes: &["name.undefined"],
         },
@@ -127,7 +127,7 @@ fn semantic_security_rules_report_stable_diagnostic_codes() {
             name: "const_reassignment",
             files: vec![(
                 "main.orl",
-                "namespace app.main\nfunc main()\n    const value: int = 1\n    value = 2\nend\n",
+                "module app.main\nmain()\n    const value: int = 1\n    value = 2\nend\n",
             )],
             expected_codes: &["bind.const_reassignment"],
         },
@@ -135,7 +135,7 @@ fn semantic_security_rules_report_stable_diagnostic_codes() {
             name: "duplicate_struct_field",
             files: vec![(
                 "main.orl",
-                "namespace app.main\nstruct User\n    name: string\n    name: string\nend\nfunc main()\nend\n",
+                "module app.main\nstruct User\n    name: string\n    name: string\nend\nmain()\nend\n",
             )],
             expected_codes: &["bind.duplicate_field"],
         },
@@ -143,18 +143,18 @@ fn semantic_security_rules_report_stable_diagnostic_codes() {
             name: "non_exhaustive_match",
             files: vec![(
                 "main.orl",
-                r#"namespace app.main
+                r#"module app.main
 enum Color
     Red
     Blue
 end
-func label(color: Color) -> string
+label(color: Color) -> string
     match color
         case Red:
             return "red"
     end
 end
-func main()
+main()
 end
 "#,
             )],
@@ -164,7 +164,7 @@ end
             name: "await_outside_async",
             files: vec![(
                 "main.orl",
-                "namespace app.main\nimport ori.task as task\nfunc main()\n    await task.sleep(1)\nend\n",
+                "module app.main\nimport ori.task as task\nmain()\n    await task.sleep(1)\nend\n",
             )],
             expected_codes: &["async.await_outside_async"],
         },
@@ -172,9 +172,9 @@ end
             name: "non_transferable_spawn_capture",
             files: vec![(
                 "main.orl",
-                r#"namespace app.main
+                r#"module app.main
 import ori.task as task
-func main()
+main()
     const callback: func() -> int = do() => 1
     const job: task.Job<int> = task.spawn(do() => callback())
 end
@@ -186,7 +186,7 @@ end
             name: "unknown_stdlib_module",
             files: vec![(
                 "main.orl",
-                "namespace app.main\nimport ori.this_module_does_not_exist\nfunc main()\nend\n",
+                "module app.main\nimport ori.this_module_does_not_exist\nmain()\nend\n",
             )],
             expected_codes: &["bind.stdlib_module_unknown"],
         },
@@ -194,14 +194,14 @@ end
             name: "generic_constraint",
             files: vec![(
                 "main.orl",
-                r#"namespace app.main
+                r#"module app.main
 trait Named
-    func name(self) -> string
+    name(self) -> string
 end
-func read_name<T>(value: T) -> string where T is Named
+read_name<T>(value: T) -> string where T is Named
     return value.name()
 end
-func main()
+main()
     const text: string = read_name(1)
 end
 "#,
@@ -213,11 +213,11 @@ end
             files: vec![
                 (
                     "util.orl",
-                    "namespace app.util\nfunc secret() -> int\n    return 42\nend\n",
+                    "module app.util\nsecret() -> int\n    return 42\nend\n",
                 ),
                 (
                     "main.orl",
-                    "namespace app.main\nimport app.util as util\nfunc main()\n    const value: int = util.secret()\nend\n",
+                    "module app.main\nimport app.util as util\nmain()\n    const value: int = util.secret()\nend\n",
                 ),
             ],
             expected_codes: &["name.private"],
@@ -227,11 +227,11 @@ end
             files: vec![
                 (
                     "app/math.orl",
-                    "namespace app.math\npublic func add(a: int, b: int) -> int\n    return a + b\nend\n",
+                    "module app.math\npublic add(a: int, b: int) -> int\n    return a + b\nend\n",
                 ),
                 (
                     "main.orl",
-                    "namespace app.main\nimport app.math only (missing)\nfunc main()\nend\n",
+                    "module app.main\nimport app.math only (missing)\nmain()\nend\n",
                 ),
             ],
             expected_codes: &["bind.import_member_unknown"],
@@ -241,11 +241,11 @@ end
             files: vec![
                 (
                     "util.orl",
-                    "namespace app.other\npublic func value() -> int\n    return 1\nend\n",
+                    "module app.other\npublic value() -> int\n    return 1\nend\n",
                 ),
                 (
                     "main.orl",
-                    "namespace app.main\nimport app.util as util\nfunc main()\n    const value: int = util.value()\nend\n",
+                    "module app.main\nimport app.util as util\nmain()\n    const value: int = util.value()\nend\n",
                 ),
             ],
             expected_codes: &["project.namespace_file_mismatch"],
@@ -255,11 +255,11 @@ end
             files: vec![
                 (
                     "a.orl",
-                    "namespace app.a\nimport app.b\nfunc main()\nend\n",
+                    "module app.a\nimport app.b\nmain()\nend\n",
                 ),
                 (
                     "b.orl",
-                    "namespace app.b\nimport app.a\n",
+                    "module app.b\nimport app.a\n",
                 ),
             ],
             expected_codes: &["project.circular_import"],
@@ -301,7 +301,7 @@ fn generated_documentation_html_escapes_doc_comment_content() {
     let dir = TestDir::new("doc_html_escaping");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 --|
 <script>alert("x")</script>
@@ -309,11 +309,11 @@ fn generated_documentation_html_escapes_doc_comment_content() {
 @param name <img src=x onerror=alert(1)>
 @returns <b>safe text only</b>
 |--
-public func greet(name: string) -> string
+public greet(name: string) -> string
     return name
 end
 
-func main()
+main()
 end
 "#,
     );
@@ -340,7 +340,7 @@ fn native_runtime_composite_program_runs_under_leak_check() {
     let dir = TestDir::new("native_runtime_security_leak_check");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 import ori.io as io
 import ori.list as lists
@@ -350,7 +350,7 @@ struct Buffer
     items: list<int>
 end
 
-func exercise() -> int
+exercise() -> int
     const values: list<int> = lists.new()
     lists.push(values, 10)
     lists.push(values, 20)
@@ -358,7 +358,7 @@ func exercise() -> int
     return lists.len(buffer.items)
 end
 
-func main()
+main()
     const size: int = exercise()
     const leaked: int = test.assert_no_leaks("native_runtime_composite")
     io.print("size:" + string(size))

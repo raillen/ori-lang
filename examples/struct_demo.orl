@@ -1,4 +1,4 @@
-namespace app.structs
+module app.structs
 
 import ori.io as io
 
@@ -12,13 +12,13 @@ struct Rectangle
     bottom_right: Point
 end
 
-func area(rect: Rectangle) -> int
+area(rect: Rectangle) -> int
     const width: int = rect.bottom_right.x - rect.top_left.x
     const height: int = rect.top_left.y - rect.bottom_right.y
     return width * height
 end
 
-func main()
+main()
     io.print("Struct Demonstration")
     io.print("--------------------")
 

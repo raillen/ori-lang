@@ -1,22 +1,22 @@
-namespace ori.convert.utils
+module ori.convert.utils
 
 import ori.convert as conv
 
-public func parse_int_or(s: string, default: int) -> int
+public parse_int_or(s: string, default: int) -> int
     if some(n) = conv.string_to_int(s)
         return n
     end
     return default
 end
 
-public func parse_float_or(s: string, default: float) -> float
+public parse_float_or(s: string, default: float) -> float
     if some(f) = conv.string_to_float(s)
         return f
     end
     return default
 end
 
-public func parse_bool_or(s: string, default: bool) -> bool
+public parse_bool_or(s: string, default: bool) -> bool
     if s == "true"
         return true
     end

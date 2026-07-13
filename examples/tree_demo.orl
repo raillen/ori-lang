@@ -1,10 +1,10 @@
-namespace app.tree_demo
+module app.tree_demo
 
 import ori.io as io
 import ori.list as lists
 import ori.tree as tree
 
-func main()
+main()
     const outline: tree.Tree<string> = tree.new("book")
     const root: tree.NodeId = tree.root(outline)
     const chapter: tree.NodeId = tree.add_child(outline, root, "chapter")

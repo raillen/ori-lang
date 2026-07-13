@@ -1,25 +1,25 @@
-namespace ori.io.utils
+module ori.io.utils
 
 import ori.io as io
 import ori.string as str
 
-public func print_line(value: string)
+public print_line(value: string)
     io.println(value)
 end
 
-public func try_read_line() -> optional<string>
+public try_read_line() -> optional<string>
     return io.read_line()
 end
 
-public func write(value: string)
+public write(value: string)
     io.print(value)
 end
 
-public func read_bytes(input: ori.io.Input, max_bytes: int) -> result<optional<bytes>, string>
+public read_bytes(input: ori.io.Input, max_bytes: int) -> result<optional<bytes>, string>
     return ori.io.read(input, max_bytes)
 end
 
-public func read_text(input: ori.io.Input, max_chars: int) -> result<optional<string>, string>
+public read_text(input: ori.io.Input, max_chars: int) -> result<optional<string>, string>
     match ori.io.read(input, max_chars)
         case success(payload):
             if some(raw) = payload
@@ -37,22 +37,22 @@ public func read_text(input: ori.io.Input, max_chars: int) -> result<optional<st
     return error("read failed")
 end
 
-public func write_bytes(output: ori.io.Output, data: bytes) -> result<int, string>
+public write_bytes(output: ori.io.Output, data: bytes) -> result<int, string>
     return ori.io.write(output, data)
 end
 
-public func write_text(output: ori.io.Output, text: string) -> result<int, string>
+public write_text(output: ori.io.Output, text: string) -> result<int, string>
     return ori.io.write(output, str.to_bytes(text))
 end
 
-public func flush(output: ori.io.Output) -> result<void, string>
+public flush(output: ori.io.Output) -> result<void, string>
     return ori.io.flush(output)
 end
 
-public func close_input(input: ori.io.Input)
+public close_input(input: ori.io.Input)
     ori.io.close_input(input)
 end
 
-public func close_output(output: ori.io.Output)
+public close_output(output: ori.io.Output)
     ori.io.close_output(output)
 end

@@ -55,8 +55,10 @@ when the compiler starts producing it.
 | `parse.invalid_lvalue` | error | Assignment target is not assignable |
 | `parse.invalid_range` | error | Range expression has a non-integer boundary |
 | `parse.missing_else_in_if_expr` | error | Inline `if` expression is missing the required `else` branch |
-| `parse.namespace_missing` | error | Source file is missing the leading namespace declaration |
-| `parse.namespace_not_first` | error | Namespace declaration appears after another declaration |
+| `parse.module_missing` | error | Source file is missing the leading `module` declaration |
+| `parse.module_not_first` | error | `module` declaration appears after another declaration |
+| `parse.namespace_removed` | error | Source used removed `namespace` keyword; use `module` |
+| `parse.func_removed` | error | Source used removed `func` on a declaration; write `name(...)` directly |
 | `parse.tuple_arity` | error | Tuple type or expression has invalid arity |
 | `parse.unterminated_block` | error | End-delimited block reaches end of file before `end` |
 | `parse.unterminated_string` | error | String literal starts but is not closed |

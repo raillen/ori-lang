@@ -1,18 +1,18 @@
-namespace ori.net.utils
+module ori.net.utils
 
 import ori.net as net
 import ori.string as str
 import ori.task as task
 
-public func connect(host: string, port: int, timeout_ms: int) -> result<net.Connection, string>
+public connect(host: string, port: int, timeout_ms: int) -> result<net.Connection, string>
     return net.connect(host, port, timeout_ms)
 end
 
-public func connect_tls(host: string, port: int, timeout_ms: int) -> result<net.Connection, string>
+public connect_tls(host: string, port: int, timeout_ms: int) -> result<net.Connection, string>
     return net.connect_tls(host, port, timeout_ms)
 end
 
-public func read_text(conn: net.Connection, max_bytes: int) -> result<string, string>
+public read_text(conn: net.Connection, max_bytes: int) -> result<string, string>
     match net.read_some(conn, max_bytes)
         case success(payload):
             match str.from_bytes(payload)
@@ -27,40 +27,40 @@ public func read_text(conn: net.Connection, max_bytes: int) -> result<string, st
     return error("read failed")
 end
 
-public func write_text(conn: net.Connection, text: string) -> result<void, string>
+public write_text(conn: net.Connection, text: string) -> result<void, string>
     return net.write_all(conn, str.to_bytes(text))
 end
 
-public func close(conn: net.Connection)
+public close(conn: net.Connection)
     net.close(conn)
 end
 
-public func is_open(conn: net.Connection) -> bool
+public is_open(conn: net.Connection) -> bool
     return not net.is_closed(conn)
 end
 
-public func read_bytes(conn: net.Connection, max_bytes: int) -> result<bytes, string>
+public read_bytes(conn: net.Connection, max_bytes: int) -> result<bytes, string>
     return net.read_some(conn, max_bytes)
 end
 
-public func write_bytes(conn: net.Connection, payload: bytes) -> result<void, string>
+public write_bytes(conn: net.Connection, payload: bytes) -> result<void, string>
     return net.write_all(conn, payload)
 end
 
 -- Blocking TCP/TLS I/O runs on a worker thread via task.run_blocking (same as task.spawn).
 -- Join the returned job from sync code; from async code prefer spawning before await boundaries.
-public func connect_in_background(host: string, port: int, timeout_ms: int) -> task.Job<result<net.Connection, string>>
+public connect_in_background(host: string, port: int, timeout_ms: int) -> task.Job<result<net.Connection, string>>
     return task.run_blocking(do() => connect(host, port, timeout_ms))
 end
 
-public func connect_tls_in_background(host: string, port: int, timeout_ms: int) -> task.Job<result<net.Connection, string>>
+public connect_tls_in_background(host: string, port: int, timeout_ms: int) -> task.Job<result<net.Connection, string>>
     return task.run_blocking(do() => connect_tls(host, port, timeout_ms))
 end
 
-public func listen_local(port: int) -> result<net.Listener, string>
+public listen_local(port: int) -> result<net.Listener, string>
     return net.listen("127.0.0.1", port)
 end
 
-public func udp_bind_local(port: int) -> result<net.UdpSocket, string>
+public udp_bind_local(port: int) -> result<net.UdpSocket, string>
     return net.udp_bind("127.0.0.1", port)
 end

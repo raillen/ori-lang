@@ -561,7 +561,9 @@ where
         Ty::Set(elem) => Ty::Set(Box::new(normalize_ty_aliases_depth(*elem, lookup, depth))),
         Ty::Range(elem) => Ty::Range(Box::new(normalize_ty_aliases_depth(*elem, lookup, depth))),
         Ty::Lazy(inner) => Ty::Lazy(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth))),
-        Ty::Handle(inner) => Ty::Handle(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth))),
+        Ty::Handle(inner) => {
+            Ty::Handle(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth)))
+        }
         Ty::Future(inner) => {
             Ty::Future(Box::new(normalize_ty_aliases_depth(*inner, lookup, depth)))
         }

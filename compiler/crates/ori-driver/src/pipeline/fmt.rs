@@ -72,27 +72,17 @@ fn opens_block_after(line: &str, next_line: Option<&str>, block_stack: &[BlockKi
 }
 
 fn declaration_opens_block(line: &str, next_line: Option<&str>, block_stack: &[BlockKind]) -> bool {
-    let mut line = line;
-    loop {
-        let next = line
-            .strip_prefix("public ")
-            .or_else(|| line.strip_prefix("async "))
-            .or_else(|| line.strip_prefix("mut "));
-        let Some(next) = next else {
-            break;
-        };
-        line = next;
-    }
-    let is_function = line.starts_with("func ");
+    let bare = declaration_line_without_modifiers(line);
+    let is_function = is_function_decl_line(bare);
     if is_function && inside_trait(block_stack) {
         return trait_function_has_body(next_line);
     }
     is_function
-        || line.starts_with("struct ")
-        || line.starts_with("enum ")
-        || line.starts_with("trait ")
-        || line.starts_with("implement ")
-        || line.starts_with("extern ")
+        || bare.starts_with("struct ")
+        || bare.starts_with("enum ")
+        || bare.starts_with("trait ")
+        || bare.starts_with("implement ")
+        || bare.starts_with("extern ")
 }
 
 fn inside_trait(block_stack: &[BlockKind]) -> bool {
@@ -108,7 +98,7 @@ fn trait_function_has_body(next_line: Option<&str>) -> bool {
         || next_line == "mut"
         || next_line == "public"
         || next_line == "async"
-        || next_member.starts_with("func ")
+        || is_function_decl_line(next_member)
         || next_member.starts_with("type "))
 }
 
@@ -133,6 +123,26 @@ fn declaration_line_without_modifiers(mut line: &str) -> &str {
     }
 }
 
+/// S3 function form: `name(...)` / `name<T>(...)` (no `func` keyword).
+/// Legacy `func name(...)` is still recognized so old snippets format until migrated.
+fn is_function_decl_line(line: &str) -> bool {
+    if let Some(rest) = line.strip_prefix("func ") {
+        return is_named_function_head(rest);
+    }
+    is_named_function_head(line)
+}
+
+fn is_named_function_head(line: &str) -> bool {
+    let name_end = line
+        .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .unwrap_or(line.len());
+    if name_end == 0 {
+        return false;
+    }
+    let rest = &line[name_end..];
+    rest.starts_with('(') || rest.starts_with('<')
+}
+
 fn is_comment_line(line: &str) -> bool {
     line.starts_with("--") || line.starts_with("|--")
 }
@@ -151,7 +161,7 @@ mod tests {
 
     #[test]
     fn fmt_idempotent_on_simple_module() {
-        let src = "namespace App\n\nfunc main()\n    io.println(\"hi\")\nend\n";
+        let src = "module App\n\nmain()\n    io.println(\"hi\")\nend\n";
         let once = format_source_text(src);
         let twice = format_source_text(&once);
         assert_eq!(once, twice);
@@ -159,57 +169,57 @@ mod tests {
 
     #[test]
     fn fmt_dedents_end_and_else() {
-        let src = "namespace App\nfunc f()\nif x\nreturn 1\nelse\nreturn 2\nend\nend\n";
+        let src = "module App\nf()\nif x\nreturn 1\nelse\nreturn 2\nend\nend\n";
         let out = format_source_text(src);
         assert!(out.contains("    if x\n"));
         assert!(out.contains("    return 1\n"));
         assert!(out.contains("    else\n"));
         assert!(out.contains("    return 2\n"));
         assert!(out.contains("    end\n"));
-        assert!(out.contains("func f()\n"));
+        assert!(out.contains("f()\n"));
     }
 
     #[test]
     fn fmt_keeps_required_trait_methods_unopened() {
-        let src = "namespace app.main\ntrait Drawable\nfunc draw()\nfunc area() -> int\nend\n";
+        let src = "module app.main\ntrait Drawable\ndraw()\narea() -> int\nend\n";
         let out = format_source_text(src);
         assert_eq!(
             out,
-            "namespace app.main\ntrait Drawable\n    func draw()\n    func area() -> int\nend\n"
+            "module app.main\ntrait Drawable\n    draw()\n    area() -> int\nend\n"
         );
         assert_eq!(format_source_text(&out), out);
     }
 
     #[test]
     fn fmt_indents_default_trait_methods() {
-        let src = "namespace app.main\ntrait Displayable\nfunc display() -> string\nfunc print()\nio.print(display())\nend\nend\n";
+        let src = "module app.main\ntrait Displayable\ndisplay() -> string\nprint()\nio.print(display())\nend\nend\n";
         let out = format_source_text(src);
         assert_eq!(
             out,
-            "namespace app.main\ntrait Displayable\n    func display() -> string\n    func print()\n        io.print(display())\n    end\nend\n"
+            "module app.main\ntrait Displayable\n    display() -> string\n    print()\n        io.print(display())\n    end\nend\n"
         );
         assert_eq!(format_source_text(&out), out);
     }
 
     #[test]
     fn fmt_keeps_stack_aligned_after_branch_blocks() {
-        let src = "namespace app.main\ntrait Displayable\nfunc display() -> string\nfunc print(value: int)\nif value > 0\nio.print(display())\nelse\nio.print(\"empty\")\nend\nend\nend\nfunc outside()\nio.print(\"done\")\nend\n";
+        let src = "module app.main\ntrait Displayable\ndisplay() -> string\nprint(value: int)\nif value > 0\nio.print(display())\nelse\nio.print(\"empty\")\nend\nend\nend\noutside()\nio.print(\"done\")\nend\n";
         let out = format_source_text(src);
         assert_eq!(
             out,
-            "namespace app.main\ntrait Displayable\n    func display() -> string\n    func print(value: int)\n        if value > 0\n            io.print(display())\n        else\n            io.print(\"empty\")\n        end\n    end\nend\nfunc outside()\n    io.print(\"done\")\nend\n"
+            "module app.main\ntrait Displayable\n    display() -> string\n    print(value: int)\n        if value > 0\n            io.print(display())\n        else\n            io.print(\"empty\")\n        end\n    end\nend\noutside()\n    io.print(\"done\")\nend\n"
         );
         assert_eq!(format_source_text(&out), out);
     }
 
     #[test]
     fn fmt_is_idempotent_for_real_use_constructs() {
-        let src = "namespace app.main\nimport ori.string only (trim as trim_text)\nimport ori.task as task\n\nstruct Book\nid: int\ntitle: string\nend\n\ntrait Displayable\nfunc display() -> string\nfunc debug()\nio.print(display())\nend\nend\n\nasync func load<T>(value: T) -> T\nawait task.sleep(1)\nreturn value\nend\n\nfunc main()\nconst book: Book = Book(id: 1, title: trim_text(\" Ori \"))\nmatch book.id\ncase 0:\nio.print(\"zero\")\ncase 1:\nio.print(book.title)\nelse\nio.print(\"many\")\nend\nend\n";
+        let src = "module app.main\nimport ori.string only (trim as trim_text)\nimport ori.task as task\n\nstruct Book\nid: int\ntitle: string\nend\n\ntrait Displayable\ndisplay() -> string\ndebug()\nio.print(display())\nend\nend\n\nasync load<T>(value: T) -> T\nawait task.sleep(1)\nreturn value\nend\n\nmain()\nconst book: Book = Book(id: 1, title: trim_text(\" Ori \"))\nmatch book.id\ncase 0:\nio.print(\"zero\")\ncase 1:\nio.print(book.title)\nelse\nio.print(\"many\")\nend\nend\n";
         let once = format_source_text(src);
         let twice = format_source_text(&once);
         assert_eq!(once, twice);
         assert!(once.contains("import ori.string only (trim as trim_text)\n"));
-        assert!(once.contains("async func load<T>(value: T) -> T\n"));
+        assert!(once.contains("async load<T>(value: T) -> T\n"));
         assert!(once.contains("    match book.id\n"));
         assert!(once.contains("    case 1:\n"));
         assert!(once.contains("const book: Book = Book(id: 1, title: trim_text(\" Ori \"))"));

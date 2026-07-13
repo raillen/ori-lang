@@ -47,17 +47,17 @@ fn build_lowers_inherent_method_call() {
     let dir = TestDir::new("inherent_method");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 struct Player
     score: int
 
-    func add(self, bonus: int) -> int
+    add(self, bonus: int) -> int
         return self.score + bonus
     end
 end
 
-func main()
+main()
     const player: Player = Player(score: 7)
     const total: int = player.add(5)
 end
@@ -86,17 +86,17 @@ fn check_reports_inherent_method_argument_type_mismatch() {
     let dir = TestDir::new("inherent_method_arg_type");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 struct Player
     score: int
 
-    func add(self, bonus: int) -> int
+    add(self, bonus: int) -> int
         return self.score + bonus
     end
 end
 
-func main()
+main()
     const player: Player = Player(score: 7)
     const total: int = player.add("bad")
 end
@@ -113,23 +113,23 @@ fn build_lowers_implement_method_call() {
     let dir = TestDir::new("implement_method");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 struct Player
     score: int
 end
 
 trait Entity
-    func id(self) -> int
+    id(self) -> int
 end
 
 implement Entity for Player
-    func id(self) -> int
+    id(self) -> int
         return self.score
     end
 end
 
-func main()
+main()
     const player: Player = Player(score: 42)
     const id: int = player.id()
 end
@@ -158,33 +158,33 @@ fn check_reports_ambiguous_trait_method_call() {
     let dir = TestDir::new("ambiguous_trait_method");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 struct Thing
     name: string
 end
 
 trait Alpha
-    func output(self) -> string
+    output(self) -> string
 end
 
 trait Beta
-    func output(self) -> string
+    output(self) -> string
 end
 
 implement Alpha for Thing
-    func output(self) -> string
+    output(self) -> string
         return "alpha"
     end
 end
 
 implement Beta for Thing
-    func output(self) -> string
+    output(self) -> string
         return "beta"
     end
 end
 
-func main()
+main()
     const thing: Thing = Thing(name: "x")
     const text: string = thing.output()
 end
@@ -201,33 +201,33 @@ fn build_lowers_qualified_trait_method_call() {
     let dir = TestDir::new("qualified_trait_method");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 struct Thing
     name: string
 end
 
 trait Alpha
-    func output(self) -> string
+    output(self) -> string
 end
 
 trait Beta
-    func output(self) -> string
+    output(self) -> string
 end
 
 implement Alpha for Thing
-    func output(self) -> string
+    output(self) -> string
         return "alpha"
     end
 end
 
 implement Beta for Thing
-    func output(self) -> string
+    output(self) -> string
         return "beta"
     end
 end
 
-func main()
+main()
     const thing: Thing = Thing(name: "x")
     const alpha: string = Alpha.output(thing)
     const beta: string = Beta.output(thing)
@@ -253,14 +253,14 @@ fn build_lowers_default_trait_method_call() {
     let dir = TestDir::new("default_trait_method");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 struct Player
     score: int
 end
 
 trait Entity
-    func id(self) -> int
+    id(self) -> int
         return 7
     end
 end
@@ -268,7 +268,7 @@ end
 implement Entity for Player
 end
 
-func main()
+main()
     const player: Player = Player(score: 42)
     const id: int = player.id()
 end
@@ -290,18 +290,18 @@ fn check_reports_missing_required_trait_method() {
     let dir = TestDir::new("missing_trait_method");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 struct Player
 end
 
 trait Entity
-    func id(self) -> int
-    func tick(self) -> void
+    id(self) -> int
+    tick(self) -> void
 end
 
 implement Entity for Player
-    func id(self) -> int
+    id(self) -> int
         return 1
     end
 end
@@ -318,17 +318,17 @@ fn check_reports_trait_method_signature_mismatch() {
     let dir = TestDir::new("trait_signature_mismatch");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 struct Player
 end
 
 trait Cloneable
-    func merge(self, other: Self) -> Self
+    merge(self, other: Self) -> Self
 end
 
 implement Cloneable for Player
-    func merge(self, other: int) -> Player
+    merge(self, other: int) -> Player
         return self
     end
 end
@@ -345,17 +345,17 @@ fn check_reports_trait_method_mut_mismatch() {
     let dir = TestDir::new("trait_mut_mismatch");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 struct Bag
 end
 
 trait Stackable
-    mut func push(self) -> void
+    mut push(self) -> void
 end
 
 implement Stackable for Bag
-    func push(self) -> void
+    push(self) -> void
         return
     end
 end
@@ -372,17 +372,17 @@ fn check_reports_implicit_self_mut_method_on_const_receiver() {
     let dir = TestDir::new("implicit_self_const_receiver");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 struct Counter
     value: int
 
-    mut func increment()
+    mut increment()
         self.value = self.value + 1
     end
 end
 
-func main()
+main()
     const counter: Counter = Counter(value: 1)
     counter.increment()
 end
@@ -399,23 +399,23 @@ fn check_reports_duplicate_implement_pair() {
     let dir = TestDir::new("duplicate_implement");
     dir.write(
         "main.orl",
-        r#"namespace app.main
+        r#"module app.main
 
 struct Player
 end
 
 trait Entity
-    func id(self) -> int
+    id(self) -> int
 end
 
 implement Entity for Player
-    func id(self) -> int
+    id(self) -> int
         return 1
     end
 end
 
 implement Entity for Player
-    func id(self) -> int
+    id(self) -> int
         return 2
     end
 end

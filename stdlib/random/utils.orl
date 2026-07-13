@@ -1,38 +1,38 @@
-namespace ori.random.utils
+module ori.random.utils
 
 import ori.list as lists
 import ori.random as rnd
 
-public func int_range(min_val: int, max_val: int) -> int
+public int_range(min_val: int, max_val: int) -> int
     return rnd.int(min_val, max_val)
 end
 
-public func float_range(min_val: float, max_val: float) -> float
+public float_range(min_val: float, max_val: float) -> float
     return rnd.float(min_val, max_val)
 end
 
-public func coin() -> bool
+public coin() -> bool
     return rnd.bool()
 end
 
-public func pick<T>(items: list<T>) -> optional<T>
+public pick<T>(items: list<T>) -> optional<T>
     return rnd.choice(items)
 end
 
-public func shuffle<T>(items: list<T>) -> list<T>
+public shuffle<T>(items: list<T>) -> list<T>
     return rnd.shuffle(items)
 end
 
-public func seeded_int(seed: int, min_val: int, max_val: int) -> int
+public seeded_int(seed: int, min_val: int, max_val: int) -> int
     rnd.seed(seed)
     return rnd.int(min_val, max_val)
 end
 
-public func seeded_pick<T>(seed: int, items: list<T>) -> optional<T>
+public seeded_pick<T>(seed: int, items: list<T>) -> optional<T>
     rnd.seed(seed)
     return rnd.choice(items)
 end
 
-public func is_empty_choice<T>(items: list<T>) -> bool
+public is_empty_choice<T>(items: list<T>) -> bool
     return lists.len(items) == 0
 end

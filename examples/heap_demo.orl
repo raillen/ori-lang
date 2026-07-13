@@ -1,9 +1,9 @@
-namespace examples.heap_demo
+module examples.heap_demo
 
 import ori.heap as heap
 import ori.io as io
 
-func main()
+main()
     const pending: heap.Heap<int> = heap.new()
     heap.push(pending, 30)
     heap.push(pending, 10)

@@ -1,15 +1,15 @@
-namespace app.native_showcase
+module app.native_showcase
 
 import ori.io as io
 import ori.list as lists
 import ori.map as maps
 
 trait Labelled
-    func label(self) -> string
+    label(self) -> string
 end
 
 trait Disposable
-    mut func dispose(self)
+    mut dispose(self)
 end
 
 struct User
@@ -28,26 +28,26 @@ enum Event
 end
 
 implement Labelled for User
-    func label(self) -> string
+    label(self) -> string
         return self.name + ":" + self.role
     end
 end
 
 implement Disposable for Resource
-    mut func dispose(self)
+    mut dispose(self)
         io.print("disposed-" + string(self.id))
     end
 end
 
-func choose<T>(first: T, second: T) -> T
+choose<T>(first: T, second: T) -> T
     return second
 end
 
-func label_of<T>(value: T) -> string where T is Labelled
+label_of<T>(value: T) -> string where T is Labelled
     return value.label()
 end
 
-func event(kind: int, user: User) -> Event
+event(kind: int, user: User) -> Event
     if kind == 0
         return Event.Started(label: "boot")
     end
@@ -57,7 +57,7 @@ func event(kind: int, user: User) -> Event
     return Event.Pair(data: tuple(7, "seven"))
 end
 
-func main()
+main()
     using resource: Resource = Resource(id: 1)
 
     const user: User = choose(

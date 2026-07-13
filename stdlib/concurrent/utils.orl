@@ -1,53 +1,53 @@
-namespace ori.concurrent.utils
+module ori.concurrent.utils
 
 import ori.list as lists
 import ori.map as maps
 import ori.set as sets
 
-public func copy_int(value: int) -> int
+public copy_int(value: int) -> int
     return value
 end
 
-public func copy_bool(value: bool) -> bool
+public copy_bool(value: bool) -> bool
     return value
 end
 
-public func copy_float(value: float) -> float
+public copy_float(value: float) -> float
     return value
 end
 
-public func copy_string(value: string) -> string
+public copy_string(value: string) -> string
     return value
 end
 
-public func copy_bytes(value: bytes) -> bytes
+public copy_bytes(value: bytes) -> bytes
     return value
 end
 
-public func copy_list_int(value: list<int>) -> list<int>
+public copy_list_int(value: list<int>) -> list<int>
     return lists.clone(value)
 end
 
-public func copy_list_string(value: list<string>) -> list<string>
+public copy_list_string(value: list<string>) -> list<string>
     return lists.clone(value)
 end
 
-public func copy_map_string_string(value: map<string, string>) -> map<string, string>
+public copy_map_string_string(value: map<string, string>) -> map<string, string>
     return maps.clone(value)
 end
 
-public func copy_set_string(value: set<string>) -> set<string>
+public copy_set_string(value: set<string>) -> set<string>
     return sets.clone(value)
 end
 
-public func transfer_int(value: int) -> int
+public transfer_int(value: int) -> int
     return copy_int(value)
 end
 
-public func transfer_string(value: string) -> string
+public transfer_string(value: string) -> string
     return copy_string(value)
 end
 
-public func transfer_list_string(value: list<string>) -> list<string>
+public transfer_list_string(value: list<string>) -> list<string>
     return copy_list_string(value)
 end

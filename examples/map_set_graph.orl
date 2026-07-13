@@ -1,4 +1,4 @@
-namespace app.map_set_graph
+module app.map_set_graph
 
 --- Demonstra map, set, graph, heap e hash_table da stdlib Ori.
 --- Inclui cenários com Hashable/Equatable/Comparable customizados.
@@ -12,13 +12,13 @@ import ori.list as lists
 import ori.map as maps
 import ori.set as sets
 
-func section(title: string)
+section(title: string)
     io.println("")
     io.println(f"=== {title} ===")
 end
 
 -- ────────────── Map ──────────────
-func demo_map()
+demo_map()
     section("Map K V")
 
     const scores: map<string, int> = maps.new()
@@ -78,7 +78,7 @@ func demo_map()
 end
 
 -- ────────────── Set ──────────────
-func demo_set()
+demo_set()
     section("Set T")
 
     const tags: set<string> = sets.new()
@@ -112,7 +112,7 @@ func demo_set()
 end
 
 -- ────────────── Hash Table ──────────────
-func demo_hash_table()
+demo_hash_table()
     section("HashTable K V")
 
     const cache: hash_table.HashTable<string, int> = hash_table.with_capacity(8)
@@ -155,7 +155,7 @@ func demo_hash_table()
 end
 
 -- ────────────── Heap ──────────────
-func demo_heap()
+demo_heap()
     section("Heap T — Min-Heap")
 
     const priorities: heap.Heap<int> = heap.new()
@@ -212,12 +212,12 @@ struct Priority
 end
 
 implement core.Comparable for Priority
-    func compare(self, other: Priority) -> int
+    compare(self, other: Priority) -> int
         return self.level - other.level
     end
 end
 
-func demo_custom_comparable_heap()
+demo_custom_comparable_heap()
     section("Heap Priority — Custom Comparable")
 
     const pq: heap.Heap<Priority> = heap.new()
@@ -240,7 +240,7 @@ func demo_custom_comparable_heap()
 end
 
 -- ────────────── Graph ──────────────
-func demo_graph()
+demo_graph()
     section("Graph T")
 
     const routes: graph.Graph<string> = graph.new(true)
@@ -298,12 +298,12 @@ implement core.Hashable for Player
 end
 
 implement core.Equatable for Player
-    func equals(self, other: Player) -> bool
+    equals(self, other: Player) -> bool
         return self.id == other.id
     end
 end
 
-func demo_custom_hashable()
+demo_custom_hashable()
     section("User-defined Hashable/Equatable")
 
     const player_scores: map<Player, int> = maps.new()
@@ -322,7 +322,7 @@ func demo_custom_hashable()
 end
 
 -- ──────────────── Main ──────────────────────────
-func main()
+main()
     io.println("Ori Language — Map, Set, Graph, Heap and HashTable Showcase")
     io.println("=============================================================")
 

@@ -1,8 +1,8 @@
-namespace app.hello
+module app.hello
 
 import ori.io as io
 
-func main()
+main()
     io.print("Hello, Ori Language!")
     
     const name: string = "Developer"

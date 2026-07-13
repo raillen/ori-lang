@@ -183,9 +183,9 @@ fn e2e_lsp_session_covers_8_scenarios() {
     let doc_uri = uri_for(&dir, "e2e_main.orl");
     let root_uri = uri_for(&dir, "");
 
-    let source = "namespace app.main\n\
+    let source = "module app.main\n\
 import ori.io as io\n\
-func main()\n\
+main()\n\
     io.print(string(42))\n\
 end\n";
 
@@ -324,8 +324,8 @@ fn e2e_lsp_publishes_diagnostics_for_type_error() {
     let doc_uri = uri_for(&dir, "e2e_err.orl");
     let root_uri = uri_for(&dir, "");
     // `x` is int; assigning a string is a type mismatch.
-    let source = "namespace app.main\n\
-func main()\n\
+    let source = "module app.main\n\
+main()\n\
     var x: int = 0\n\
     x = \"oops\"\n\
 end\n";
@@ -370,12 +370,12 @@ fn e2e_lsp_returns_document_symbols() {
     let dir = tempfile_dir();
     let doc_uri = uri_for(&dir, "e2e_sym.orl");
     let root_uri = uri_for(&dir, "");
-    let source = "namespace app.main\n\
+    let source = "module app.main\n\
 import ori.io as io\n\
-func greet(name: string) -> string\n\
+greet(name: string) -> string\n\
     return \"hi \" + name\n\
 end\n\
-func main()\n\
+main()\n\
     io.print(greet(\"ada\"))\n\
 end\n";
 
@@ -429,16 +429,16 @@ fn e2e_lsp_formatting_is_idempotent() {
     let doc_uri = uri_for(&dir, "e2e_fmt.orl");
     let root_uri = uri_for(&dir, "");
     // Unformatted: body statements at column 0 instead of indented.
-    let unformatted = "namespace app.main\n\
+    let unformatted = "module app.main\n\
 import ori.io as io\n\
 import ori.task as task\n\
 \n\
-async func work(n: int) -> int\n\
+async work(n: int) -> int\n\
 await task.sleep(1)\n\
 return n * 2\n\
 end\n\
 \n\
-func main()\n\
+main()\n\
 const r: int = task.block_on(work(21))\n\
 io.print(string(r))\n\
 end\n";
@@ -517,10 +517,10 @@ fn e2e_lsp_formatting_emits_edits_for_unformatted() {
     let doc_uri = uri_for(&dir, "e2e_fmt_un.orl");
     let root_uri = uri_for(&dir, "");
     // Unformatted: body statements at column 0 instead of indented.
-    let unformatted = "namespace app.main\n\
+    let unformatted = "module app.main\n\
 import ori.io as io\n\
 \n\
-func main()\n\
+main()\n\
 io.print(string(42))\n\
 end\n";
 
@@ -680,12 +680,12 @@ fn e2e_lsp_circular_import_diagnostic() {
     write_file(
         &dir,
         "cyc_a.orl",
-        "namespace app.cyc_a\nimport app.cyc_b\nfunc f()\nend\n",
+        "module app.cyc_a\nimport app.cyc_b\nf()\nend\n",
     );
     write_file(
         &dir,
         "cyc_b.orl",
-        "namespace app.cyc_b\nimport app.cyc_a\nfunc g()\nend\n",
+        "module app.cyc_b\nimport app.cyc_a\ng()\nend\n",
     );
     let a_uri = uri_for(&dir, "cyc_a.orl");
 
@@ -704,7 +704,7 @@ fn e2e_lsp_circular_import_diagnostic() {
                 "uri": a_uri,
                 "languageId": "ori",
                 "version": 1,
-                "text": "namespace app.cyc_a\nimport app.cyc_b\nfunc f()\nend\n",
+                "text": "module app.cyc_a\nimport app.cyc_b\nf()\nend\n",
             },
         }),
     );
@@ -735,9 +735,9 @@ fn e2e_lsp_cross_file_goto_definition() {
     write_file(
         &dir,
         "crossdef_lib.orl",
-        "namespace app.crossdef_lib\nstruct Point\n    x: int\n    y: int\nend\n",
+        "module app.crossdef_lib\nstruct Point\n    x: int\n    y: int\nend\n",
     );
-    let main_src = "namespace app.crossdef_main\nimport app.crossdef_lib as lib\nfunc main()\n    var p: lib.Point = Point { x: 1, y: 2 }\nend\n";
+    let main_src = "module app.crossdef_main\nimport app.crossdef_lib as lib\nmain()\n    var p: lib.Point = Point { x: 1, y: 2 }\nend\n";
     let main_uri = uri_for(&dir, "crossdef_main.orl");
     let lib_uri = uri_for(&dir, "crossdef_lib.orl");
 
@@ -806,7 +806,7 @@ fn e2e_lsp_cross_file_goto_definition() {
 fn e2e_lsp_type_aware_dot_completion() {
     let dir = tempfile_dir();
     let root_uri = uri_for(&dir, "");
-    let src = "namespace app.dotcomp\nstruct Point\n    x: int\n    y: int\nend\nfunc main()\n    var p: Point = Point { x: 1, y: 2 }\n    p.\nend\n";
+    let src = "module app.dotcomp\nstruct Point\n    x: int\n    y: int\nend\nmain()\n    var p: Point = Point { x: 1, y: 2 }\n    p.\nend\n";
     let main_uri = uri_for(&dir, "dotcomp_main.orl");
 
     let mut lsp = LspClient::new().expect("spawn ori-lsp");
@@ -874,9 +874,9 @@ fn e2e_lsp_cross_file_find_references() {
     write_file(
         &dir,
         "findref_lib.orl",
-        "namespace app.findref_lib\nstruct Point\n    x: int\n    y: int\nend\n",
+        "module app.findref_lib\nstruct Point\n    x: int\n    y: int\nend\n",
     );
-    let main_src = "namespace app.findref_main\nimport app.findref_lib as lib\nfunc main()\n    var p: lib.Point = Point { x: 1, y: 2 }\nend\n";
+    let main_src = "module app.findref_main\nimport app.findref_lib as lib\nmain()\n    var p: lib.Point = Point { x: 1, y: 2 }\nend\n";
     let main_uri = uri_for(&dir, "findref_main.orl");
 
     let mut lsp = LspClient::new().expect("spawn ori-lsp");
@@ -945,7 +945,8 @@ fn e2e_lsp_stdlib_layer2_hover() {
     std::env::set_var("ORI_STDLIB_ROOT", stdlib_root());
     let dir = tempfile_dir();
     let root_uri = uri_for(&dir, "");
-    let src = "namespace app.main\nimport ori.string as su\nfunc main() -> void\n    su.is_empty(\"x\")\nend\n";
+    let src =
+        "module app.main\nimport ori.string as su\nmain() -> void\n    su.is_empty(\"x\")\nend\n";
     let main_uri = uri_for(&dir, "stdlib_hover.orl");
 
     let mut lsp = LspClient::new().expect("spawn ori-lsp");
@@ -998,7 +999,7 @@ fn e2e_lsp_stdlib_layer2_hover() {
 fn e2e_lsp_incremental_edit_completion() {
     let dir = tempfile_dir();
     let root_uri = uri_for(&dir, "");
-    let initial = "namespace app.main\nimport ori.io as io\nfunc main() -> void\n    io.\nend\n";
+    let initial = "module app.main\nimport ori.io as io\nmain() -> void\n    io.\nend\n";
     let main_uri = uri_for(&dir, "incr.orl");
 
     let mut lsp = LspClient::new().expect("spawn ori-lsp");

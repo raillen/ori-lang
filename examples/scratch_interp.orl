@@ -1,8 +1,8 @@
-namespace app.interp
+module app.interp
 
 import ori.io as io
 
-func main()
+main()
     const name: string = "World"
     const val: int = 42
     io.print(f"Hello {name}, value is {val}!")

@@ -1,4 +1,4 @@
-namespace app.string_toolkit
+module app.string_toolkit
 
 --- Demonstra todas as funções utilitárias de string da stdlib Ori.
 --- Cobre: manipulação de texto, busca, formatação e validação.
@@ -8,12 +8,12 @@ import ori.list as lists
 import ori.string as su
 import ori.validate as val
 
-func section(title: string)
+section(title: string)
     io.println("")
     io.println(f"--- {title} ---")
 end
 
-func demo_basic_operations()
+demo_basic_operations()
     section("Basic String Operations")
 
     const empty: string = ""
@@ -33,7 +33,7 @@ func demo_basic_operations()
     io.println(f"  swap_case: {su.swap_case(mixed)}")
 end
 
-func demo_search_and_count()
+demo_search_and_count()
     section("Search and Count")
 
     const text: string = "banana"
@@ -50,7 +50,7 @@ func demo_search_and_count()
     io.println(f"  has_suffix: {su.has_suffix(report, suffix)}")
 end
 
-func demo_formatting()
+demo_formatting()
     section("Formatting and Padding")
 
     const sep: string = "=-"
@@ -69,7 +69,7 @@ func demo_formatting()
     io.println(f"  default value: {su.default(val_str, fb)}")
 end
 
-func demo_splitting()
+demo_splitting()
     section("Splitting and Lines")
 
     const csv: string = "alpha,beta,gamma"
@@ -88,7 +88,7 @@ func demo_splitting()
     io.println(f"  words count: {lists.len(words_list)}")
 end
 
-func demo_extraction()
+demo_extraction()
     section("Extraction")
 
     const sample: string = "Hello, World!"
@@ -98,7 +98,7 @@ func demo_extraction()
     io.println(f"  truncate 5: {su.truncate(sample, 5)}")
 end
 
-func demo_replacement()
+demo_replacement()
     section("Replace and Transform")
 
     const text: string = "foo bar foo"
@@ -125,7 +125,7 @@ func demo_replacement()
     io.println(f"  join_non_empty: {jne_result}")
 end
 
-func demo_char_checks()
+demo_char_checks()
     section("Character Checks")
 
     const digits: string = "12345"
@@ -139,7 +139,7 @@ func demo_char_checks()
     io.println(f"  has_whitespace without: {su.has_whitespace(no_space)}")
 end
 
-func demo_validation()
+demo_validation()
     section("Validation (ori.validate)")
 
     io.println(f"  positive 5: {val.positive(5)}")
@@ -169,7 +169,7 @@ func demo_validation()
     io.println(f"  all_digits 42: {val.all_digits(num)}")
 end
 
-func main()
+main()
     io.println("Ori Language — String and Validation Stdlib Showcase")
     io.println("=====================================================")
 
