@@ -28,7 +28,9 @@ docs/planning/
 ## Guia de Uso dos Documentos
 
 ### 1. Documentos Ativos (Backlog Ativo)
-*   **[uso-real-pequeno-medio.md](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/planning/uso-real-pequeno-medio.md):** É o mapa de progresso atual. Deve ser consultado para entender as metas para a versão 1.0 (independência de compilador, robustez e paridade).
+*   **[PENDENTES.md](PENDENTES.md):** Prioridade tática **M2 → M3 → M1 → M4**.
+*   **[stdlib-merge-policy.md](stdlib-merge-policy.md):** Decisão M2 de mesclagem da stdlib (`ori.X` canônico).
+*   **[uso-real-pequeno-medio.md](uso-real-pequeno-medio.md):** Plano de usabilidade pequeno/médio (subordinado a PENDENTES).
 *   **[PENDENTES.md](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/planning/PENDENTES.md):** É a lista consolidada de tarefas a fazer. Serve como checklist técnico diário.
 
 ### 2. Decisões Arquiteturais (ADRs)

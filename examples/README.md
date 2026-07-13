@@ -3,6 +3,11 @@
 This directory contains small examples that are expected to type-check with the
 current compiler.
 
+**Stdlib import style (M2):** use canonical **`ori.X`** modules
+(`import ori.io = io`, `import ori.fs = fs`). Do **not** teach
+`ori.X.utils` / `ori.X.algorithms` in new examples — those paths remain as
+silent compatibility only. Policy: `docs/planning/stdlib-merge-policy.md`.
+
 ## Examples
 
 - [hello_world.orl](hello_world.orl): Basic output and variable usage.

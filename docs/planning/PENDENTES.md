@@ -28,13 +28,13 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 
 | # | Item | Ordem | Notas |
 |---|------|-------|--------|
-| **M2** | **Stdlib** corrigir + **discutir mesclagem** de módulos | **1º** | Gap parity residual; consolidar `utils`/`algorithms`/pais; residual `path.relative` |
+| **M2** | **Stdlib** corrigir + mesclar módulos | **1º (docs ✅)** | Política: [`stdlib-merge-policy.md`](stdlib-merge-policy.md). Código de merge em lotes; fix `path.relative` |
 | **M3** | **ABI estável** documentada | **2º** | Após integração das funcionalidades finais (não congelar cedo) |
 | **M1** | **Independência do Rust para usuário final** | **3º** | Depois de M2+M3: smoke sem Rust, SystemLinker/JIT, CI `smoke-no-rust` |
 | **M4** | Self-hosting | **última** discussão de linguagem | Só depois de tudo o resto já funcional |
 
 > **Ordem acordada (2026-07-13):** **M2 → M3 → M1 → M4**.  
-> Independência do Rust **não** é o próximo passo; vem **depois** de stdlib e ABI.
+> **M2 mesclagem:** API canônica `ori.X`; `.utils`/`.algorithms` = alias silencioso; docs ✅ (`stdlib-merge-policy.md`); código de merge em lotes.
 
 ### Explicitamente fora da fila agora
 

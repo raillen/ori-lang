@@ -1,31 +1,51 @@
 module examples.process_runner
 
+-- Canonical stdlib style: import ori.X (not ori.X.utils).
+-- Helpers that used to live only under process.utils are inlined with L1 map/convert.
+
+import ori.convert = conv
 import ori.io = io
-import ori.os.utils = os
+import ori.map = maps
+import ori.os = os
 import ori.process = process
-import ori.process.utils = process_utils
 import ori.string (trim_all)
 
 echo_command() -> string
-    if os.is_windows()
+    if os.platform() == "windows"
         return "cmd"
     end
     return "echo"
 end
 
 echo_args(message: string) -> list[string]
-    if os.is_windows()
+    if os.platform() == "windows"
         return ["/C", "echo", message]
     end
     return [message]
 end
 
+capture_stdout(capture: map[string, string]) -> string
+    if some(out) = maps.try_get(capture, "stdout")
+        return out
+    end
+    return ""
+end
+
+capture_exit_code(capture: map[string, string]) -> int
+    if some(raw) = maps.try_get(capture, "status")
+        if some(code) = conv.string_to_int(raw)
+            return code
+        end
+    end
+    return -1
+end
+
 main()
     match process.run_capture(echo_command(), echo_args("hello from ori"))
         case success(capture):
-            const out: string = trim_all(process_utils.stdout(capture))
+            const out: string = trim_all(capture_stdout(capture))
             io.print("stdout: " + out)
-            io.print(f"exit: {process_utils.exit_code(capture)}")
+            io.print(f"exit: {capture_exit_code(capture)}")
         case error(message):
             io.print("process failed: " + message)
     end

@@ -1,21 +1,15 @@
 module app.generics_showcase
 
---- Demonstra o uso de coleções genéricas da stdlib Ori.
---- Cada coleção é testada com int e string para validar
---- que a parametrização[T] funciona em todo o pipeline.
+-- Canonical stdlib style: import ori.X only (no ori.X.utils).
+-- Collection helpers that still live only under *.utils are shown via L1 APIs.
 
 import ori.deque = deque
-import ori.deque.utils = deque_utils
 import ori.doubly_linked_list = dll
-import ori.doubly_linked_list.utils = dll_utils
 import ori.io = io
 import ori.linked_list = ll
-import ori.linked_list.utils = ll_utils
 import ori.list = lists
 import ori.queue = queue
-import ori.queue.utils = queue_utils
 import ori.stack = stack
-import ori.stack.utils = stack_utils
 
 section(title: string)
     io.println("")
@@ -26,7 +20,6 @@ end
 demo_queue()
     section("Queue — FIFO generica")
 
-    -- Queue[int]
     const numbers: queue.Queue[int] = queue.new()
     queue.enqueue(numbers, 10)
     queue.enqueue(numbers, 20)
@@ -40,12 +33,17 @@ demo_queue()
         io.println("  dequeue: empty")
     end
 
-    -- Queue[string] via from_list genérico
-    const tasks: queue.Queue[string] = queue_utils.from_list(["compile", "test", "deploy"])
+    const tasks: queue.Queue[string] = queue.new()
+    queue.enqueue(tasks, "compile")
+    queue.enqueue(tasks, "test")
+    queue.enqueue(tasks, "deploy")
     io.println(f"  queue[string] len: {queue.len(tasks)}")
-    const fallback_task: string = "nothing"
-    const peeked: string = queue_utils.peek_or(tasks, fallback_task)
-    io.println(f"  peek_or: {peeked}")
+    match queue.peek(tasks)
+    case some(peeked):
+        io.println(f"  peek: {peeked}")
+    case none:
+        io.println("  peek: empty")
+    end
 
     match queue.dequeue(tasks)
     case some(task):
@@ -60,7 +58,6 @@ end
 demo_stack()
     section("Stack — LIFO generica")
 
-    -- Stack[int]
     const undo_ids: stack.Stack[int] = stack.new()
     stack.push(undo_ids, 1)
     stack.push(undo_ids, 2)
@@ -74,30 +71,45 @@ demo_stack()
         io.println("  pop: empty")
     end
 
-    -- Stack[string] via from_list genérico
-    const history: stack.Stack[string] = stack_utils.from_list(["open", "edit", "save"])
+    const history: stack.Stack[string] = stack.new()
+    stack.push(history, "open")
+    stack.push(history, "edit")
+    stack.push(history, "save")
     io.println(f"  stack[string] len: {stack.len(history)}")
-    const fallback_hist: string = "nothing"
-    const peeked_hist: string = stack_utils.peek_or(history, fallback_hist)
-    io.println(f"  peek_or: {peeked_hist}")
-    io.println(f"  is_singleton: {stack_utils.is_singleton(history)}")
+    match stack.peek(history)
+    case some(peeked_hist):
+        io.println(f"  peek: {peeked_hist}")
+    case none:
+        io.println("  peek: empty")
+    end
 end
 
 -- ─────────────────── Deque[T] ───────────────────
 demo_deque()
     section("Deque — Double-ended generica")
 
-    -- Deque[int]
     const window: deque.Deque[int] = deque.new()
     deque.push_front(window, 10)
     deque.push_back(window, 20)
     deque.push_front(window, 5)
     io.println(f"  deque[int] len: {deque.len(window)}")
-    io.println(f"  front_or: {deque_utils.front_or(window, -1)}")
-    io.println(f"  back_or: {deque_utils.back_or(window, -1)}")
+    match deque.front(window)
+    case some(f):
+        io.println(f"  front: {f}")
+    case none:
+        io.println("  front: empty")
+    end
+    match deque.back(window)
+    case some(b):
+        io.println(f"  back: {b}")
+    case none:
+        io.println("  back: empty")
+    end
 
-    -- Deque[string]
-    const buffer: deque.Deque[string] = deque_utils.from_list(["alpha", "beta", "gamma"])
+    const buffer: deque.Deque[string] = deque.new()
+    deque.push_back(buffer, "alpha")
+    deque.push_back(buffer, "beta")
+    deque.push_back(buffer, "gamma")
     io.println(f"  deque[string] len: {deque.len(buffer)}")
 
     match deque.pop_front(buffer)
@@ -119,7 +131,6 @@ end
 demo_linked_list()
     section("LinkedList — Singly-linked generica")
 
-    -- LinkedList[int]
     const ids: ll.LinkedList[int] = ll.new()
     ll.push_back(ids, 100)
     ll.push_back(ids, 200)
@@ -133,11 +144,16 @@ demo_linked_list()
         io.println("  front: empty")
     end
 
-    -- LinkedList[string] via from_list genérico
-    const items: ll.LinkedList[string] = ll_utils.from_list(["red", "green", "blue"])
-    const ll_fallback: string = "none"
-    const ll_front: string = ll_utils.front_or(items, ll_fallback)
-    io.println(f"  linked_list[string] front_or: {ll_front}")
+    const items: ll.LinkedList[string] = ll.new()
+    ll.push_back(items, "red")
+    ll.push_back(items, "green")
+    ll.push_back(items, "blue")
+    match ll.front(items)
+    case some(ll_front):
+        io.println(f"  linked_list[string] front: {ll_front}")
+    case none:
+        io.println("  linked_list[string] front: empty")
+    end
 
     match ll.pop_front(items)
     case some(color):
@@ -151,20 +167,29 @@ end
 demo_doubly_linked_list()
     section("DoublyLinkedList — Doubly-linked generica")
 
-    -- DoublyLinkedList[int]
     const scores: dll.DoublyLinkedList[int] = dll.new()
     dll.push_back(scores, 88)
     dll.push_back(scores, 95)
     dll.push_front(scores, 72)
     io.println(f"  dll[int] len: {dll.len(scores)}")
 
-    -- DoublyLinkedList[string]
-    const log: dll.DoublyLinkedList[string] = dll_utils.from_list(["start", "process", "done"])
-    io.println(f"  dll[string] len: {dll_utils.len(log)}")
-    const dll_fb_front: string = "n/a"
-    const dll_fb_back: string = "n/a"
-    io.println(f"  front_or: {dll_utils.front_or(log, dll_fb_front)}")
-    io.println(f"  back_or: {dll_utils.back_or(log, dll_fb_back)}")
+    const log: dll.DoublyLinkedList[string] = dll.new()
+    dll.push_back(log, "start")
+    dll.push_back(log, "process")
+    dll.push_back(log, "done")
+    io.println(f"  dll[string] len: {dll.len(log)}")
+    match dll.front(log)
+    case some(f):
+        io.println(f"  front: {f}")
+    case none:
+        io.println("  front: empty")
+    end
+    match dll.back(log)
+    case some(b):
+        io.println(f"  back: {b}")
+    case none:
+        io.println("  back: empty")
+    end
 
     match dll.pop_back(log)
     case some(last):
@@ -172,7 +197,7 @@ demo_doubly_linked_list()
     case none:
         io.println("  pop_back: empty")
     end
-    io.println(f"  after pop_back len: {dll_utils.len(log)}")
+    io.println(f"  after pop_back len: {dll.len(log)}")
 end
 
 -- ─────────────────── List[T] ────────────────────

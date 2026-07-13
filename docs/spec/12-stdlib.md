@@ -2,7 +2,7 @@
 
 > Status: normative (contracts); informative (usage examples)
 > Audience: stdlib implementers, compiler implementers
-> Surface: **S3** (`0.3.0`)
+> Surface: **S3** (`0.3.0`) + stdlib merge policy **M2** (2026-07-13)
 
 ---
 
@@ -16,21 +16,27 @@ Stdlib modules are imported explicitly:
 ```ori
 import ori.io = io
 import ori.fs = fs
+import ori.string = str
 ```
+
+**Canonical public module** for a domain is **`ori.X`** (one name per domain).
+Prefer that form in all new code and examples. Nested historical paths
+`ori.X.utils` and `ori.X.algorithms` remain accepted as **silent compatibility**
+aliases while the on-disk merge completes — they are not the preferred API.
+Product decision: `docs/planning/stdlib-merge-policy.md`.
 
 The stdlib is small and layered:
 - **Core types** (`optional`, `result`, `list`, etc.) — always available, no import.
-- **Foundation modules** — general-purpose utilities.
-- **Domain modules** — specific areas (networking, JSON, etc.).
+- **Foundation modules** — general-purpose utilities under `ori.X`.
+- **Domain modules** — specific areas (networking, JSON, etc.) under `ori.X`.
 
 ---
 
-## Implementation Architecture (v1.x)
+## Implementation Architecture (v1.x + Phase 0 `.orl`)
 
-The v1.x stdlib is implemented as a Rust manifest plus a native runtime, not
-as separate `.orl` source modules. This is the canonical source of truth
-until the language bootstraps enough to port cold modules to `.orl` (v2
-backlog, not a v1 release gate).
+**Layer 1** is a Rust manifest plus a native runtime (hot path). **Layers 2/3**
+are `.orl` sources under `stdlib/` loaded by the driver. Layer 1 remains the
+ABI contract for primitives; cold ergonomics and algorithms live in `.orl`.
 
 ### Single source of truth
 
@@ -91,14 +97,25 @@ The manifest is protected by tests in `ori-types::stdlib::tests`:
 Steps 1-3 are guarded by the parity tests above; the build fails fast if
 they diverge.
 
-### `.orl` modules
+### `.orl` modules (Layers 2/3)
 
-The stdlib now uses a three-layer model. Hot-path modules (collections, async,
-I/O, ARC) keep runtime intrinsics. Cold compositional APIs can live in
-`stdlib/*.orl` as source modules loaded by the compiler. This is how modules
-such as `ori.string`, `ori.list`, `ori.fs`, `ori.time`, `ori.args`,
-`ori.config`, and `ori.log` expose ergonomic helpers without expanding the
-runtime ABI.
+Cold compositional APIs live in `stdlib/**/*.orl` and are loaded by the
+compiler. Prefer a **single parent file** `stdlib/X.orl` (`module ori.X`) so
+helpers land on the same public path as Layer 1 symbols for that domain.
+
+On-disk layout policy (M2):
+
+| Prefer | When |
+|--------|------|
+| `stdlib/X.orl` | Default |
+| `stdlib/X/…` | Heavy algorithms, multi-file math (`vec2`/`mat3`), or oversized parents |
+
+Nested `ori.X.utils` / `ori.X.algorithms` modules may still exist on disk and
+remain importable for compatibility. New public APIs should target `ori.X`.
+
+Examples of hybrid parents already in this style: `ori.string`, `ori.list`,
+`ori.fs`, `ori.time`, `ori.path`, `ori.io`, `ori.net`, `ori.args`, `ori.config`,
+`ori.log`, `ori.validate`.
 
 ---
 
@@ -133,10 +150,17 @@ Implemented and importable today:
 - `ori.Error`
 - `ori.json`
 
-`ori.string`, `ori.list`, `ori.fs`, and `ori.time` are hybrid modules: native
-runtime functions and selected `.orl` helpers live under the same public module.
-Use `import ori.string (is_empty)`-style imports for helper-only names.
-Normal alias imports keep the runtime surface lightweight.
+Hybrid modules expose native runtime functions and selected `.orl` helpers
+under the **same** public module `ori.X`. Prefer:
+
+```ori
+import ori.string (is_empty)
+import ori.fs (read_text_or)
+import ori.string = str   -- alias; call str.is_empty when the parent defines it
+```
+
+Compatibility imports such as `import ori.fs.utils = fu` still work; prefer
+`ori.fs` in new code.
 
 Partially importable modules:
 - `ori.test`
