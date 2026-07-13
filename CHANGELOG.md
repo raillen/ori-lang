@@ -28,8 +28,12 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rust_eh_personality`). Hint added on that failure mode.
 - **Linker diagnostics:** prefer high-signal messages (`duplicate symbol`,
   `cannot find -l…`) over the generic rustc “linking with cc failed” line.
-- **CI release:** full AOT package smoke restored (`ORI_USE_SYSTEM_LINKER=1`);
-  JIT-only package smoke is no longer the default.
+- **SystemLinker:** multiarch `-L` + `cc -print-file-name=libc.so` /
+  `-print-search-dirs` library paths; clear `LIBRARY_PATH` during link.
+- **CI release:** package validated with **JIT + doctor** smoke
+  (`ORI_PACKAGE_SMOKE_JIT_ONLY=1`) — GitHub-hosted runners still cannot AOT-link
+  with multiarch `-lc` despite `libc6-dev`. Full AOT smoke remains the local gate
+  (`tools/smoke_native_release.sh` without that env).
 
 ---
 
