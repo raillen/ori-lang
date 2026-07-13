@@ -24,6 +24,8 @@ pub fn keyword_completion_items() -> Vec<CompletionItem> {
     let keywords = [
         "module",
         "import",
+        "imports",
+        // Removed S3 forms still highlighted; kept as completions only for migration search.
         "as",
         "only",
         "public",

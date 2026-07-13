@@ -437,6 +437,46 @@ end
 }
 
 #[test]
+fn check_bare_public_import_does_not_reexport_last_segment() {
+    let dir = TestDir::new("bare_public_import_no_reexport");
+    dir.write(
+        "util.orl",
+        r#"module app.util
+
+public answer(value: int) -> int
+    return value + 1
+end
+"#,
+    );
+    dir.write(
+        "facade.orl",
+        r#"module app.facade
+
+public import app.util
+"#,
+    );
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import app.facade = api
+
+main()
+    const value: int = api.util.answer(40)
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"name.undefined"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
 fn build_lowers_public_reexported_import_to_real_symbol() {
     let dir = TestDir::new("public_reexport_build");
     dir.write(

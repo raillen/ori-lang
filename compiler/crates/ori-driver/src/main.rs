@@ -817,12 +817,13 @@ fn run_repl(color: bool) -> i32 {
 }
 
 fn repl_source(imports: &[String], bindings: &[String], statement: Option<&str>) -> String {
-    let mut source = String::from("namespace repl.main\n\nimport ori.io = io\n");
+    // S3 surface: `module` header, no declaration `func`, import `path = alias`.
+    let mut source = String::from("module repl.main\n\nimport ori.io = io\n");
     for import in imports {
         source.push_str(import);
         source.push('\n');
     }
-    source.push_str("\nfunc main()\n");
+    source.push_str("\nmain()\n");
     for binding in bindings {
         source.push_str("    ");
         source.push_str(binding);

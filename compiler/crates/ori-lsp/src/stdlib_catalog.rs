@@ -506,6 +506,11 @@ fn name_span_to_range(source: &str, func: &FuncDecl) -> Range {
 }
 
 /// Build a map of import alias → stdlib module path from source text.
+///
+/// Mirrors S3 `import_aliases` / `direct_import_alias`:
+/// - `import path = alias` → short key
+/// - `import path (items)` → item names/aliases
+/// - bare `import path` → full path only (no last-segment short alias)
 pub fn import_alias_map(source: &str) -> HashMap<String, String> {
     let file_id = ori_diagnostics::FileId(0);
     let mut sink = ori_diagnostics::DiagnosticSink::default();
@@ -514,14 +519,7 @@ pub fn import_alias_map(source: &str) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for import in &source_file.imports {
         let module = import.path.to_string();
-        if import.selected.is_empty() {
-            let alias = import
-                .alias
-                .as_ref()
-                .map(|n| n.text.to_string())
-                .unwrap_or_else(|| module.rsplit('.').next().unwrap_or(&module).to_string());
-            map.insert(alias, module);
-        } else {
+        if !import.selected.is_empty() {
             for item in &import.selected {
                 let alias = item
                     .alias
@@ -530,6 +528,11 @@ pub fn import_alias_map(source: &str) -> HashMap<String, String> {
                     .unwrap_or_else(|| item.name.text.to_string());
                 map.insert(alias, format!("{}.{}", module, item.name.text));
             }
+        } else if let Some(alias) = import.alias.as_ref() {
+            map.insert(alias.text.to_string(), module);
+        } else {
+            // Bare whole-module import: identity full-path key only.
+            map.insert(module.clone(), module);
         }
     }
     map
@@ -550,11 +553,27 @@ mod tests {
     fn import_alias_map_resolves_io() {
         let source = r#"
 module app.main
-import ori.io as io
+import ori.io = io
 main() -> void
 end
 "#;
         let map = import_alias_map(source);
         assert_eq!(map.get("io"), Some(&"ori.io".to_string()));
+    }
+
+    #[test]
+    fn import_alias_map_bare_import_has_no_last_segment_alias() {
+        let source = r#"
+module app.main
+import ori.io
+main() -> void
+end
+"#;
+        let map = import_alias_map(source);
+        assert!(
+            map.get("io").is_none(),
+            "bare import must not invent short alias `io`: {map:?}"
+        );
+        assert_eq!(map.get("ori.io"), Some(&"ori.io".to_string()));
     }
 }
