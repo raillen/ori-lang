@@ -13540,6 +13540,9 @@ fn link_with_rustc_driver(
         .map_err(|e| format!("failed to write native linker shim {}: {e}", shim.display()))?;
 
     let mut cmd = std::process::Command::new(command);
+    // Same multiarch trap as SystemLinker: rustup LIBRARY_PATH can hide libc.
+    cmd.env_remove("LIBRARY_PATH");
+    cmd.env_remove("LIBPATH");
     cmd.arg("--edition=2021")
         .arg("--crate-name")
         .arg(format!("ori_link_shim_{id}"))
@@ -13552,9 +13555,17 @@ fn link_with_rustc_driver(
     if let Some(linker) = linker_override {
         cmd.arg("-C").arg(format!("linker={}", linker.display()));
     }
+    // Force multiarch lib search for the underlying `cc`/`ld` (GitHub Actions).
+    if cfg!(target_os = "linux") {
+        for dir in linux_multiarch_lib_dirs() {
+            cmd.arg("-C").arg(format!("link-arg=-L{dir}"));
+        }
+    }
 
     for lib in extra_libs {
-        cmd.arg("-C").arg(format!("link-arg={}", lib.display()));
+        let s = lib.to_string_lossy();
+        // Flag-like entries from runtime-link.json (`-lpthread`, `-lc`, …).
+        cmd.arg("-C").arg(format!("link-arg={s}"));
     }
 
     let output = cmd.output().map_err(|e| {
