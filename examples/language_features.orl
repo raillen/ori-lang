@@ -4,10 +4,10 @@ module app.language_features
 --- structs, enums, traits, generics, pattern matching, error handling,
 --- closures, pipes, contratos e operadores.
 
-import ori.core as core
-import ori.io as io
-import ori.list as lists
-import ori.string as su
+import ori.core = core
+import ori.io = io
+import ori.list = lists
+import ori.string = su
 
 section(title: string)
     io.println("")

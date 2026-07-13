@@ -7,10 +7,10 @@ fn compile_runs_more_collection_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.map as maps
-import ori.set as sets
+import ori.io = io
+import ori.list = lists
+import ori.map = maps
+import ori.set = sets
 
 main()
     var values: list[int] = [3, 1, 2]
@@ -56,9 +56,9 @@ fn compile_runs_map_set_capacity_reserve_clear_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.map as maps
-import ori.set as sets
+import ori.io = io
+import ori.map = maps
+import ori.set = sets
 
 main()
     const seen: set[int] = sets.new()
@@ -128,10 +128,10 @@ fn compile_runs_deque_queue_stack_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.deque as deque
-import ori.io as io
-import ori.queue as queue
-import ori.stack as stack
+import ori.deque = deque
+import ori.io = io
+import ori.queue = queue
+import ori.stack = stack
 
 main()
     const d: deque.Deque[int] = deque.new()
@@ -250,8 +250,8 @@ fn check_preserves_opaque_collection_type_display() {
         "main.orl",
         r#"module app.main
 
-import ori.list as lists
-import ori.queue as queue
+import ori.list = lists
+import ori.queue = queue
 
 main()
     const values: queue.Queue[int] = queue.new()
@@ -285,9 +285,9 @@ fn compile_runs_linked_list_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.doubly_linked_list as dll
-import ori.io as io
-import ori.linked_list as ll
+import ori.doubly_linked_list = dll
+import ori.io = io
+import ori.linked_list = ll
 
 main()
     const names: ll.LinkedList[string] = ll.new()
@@ -453,8 +453,8 @@ fn compile_runs_doubly_linked_list_many_nodes_native() {
         "main.orl",
         r#"module app.main
 
-import ori.doubly_linked_list as dll
-import ori.io as io
+import ori.doubly_linked_list = dll
+import ori.io = io
 
 main()
     const values: dll.DoublyLinkedList[int] = dll.new()
@@ -531,9 +531,9 @@ fn compile_runs_tree_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.tree as tree
+import ori.io = io
+import ori.list = lists
+import ori.tree = tree
 
 main()
     const t: tree.Tree<string> = tree.new("root")
@@ -610,8 +610,8 @@ fn compile_runs_tree_invalid_node_id_runtime_error() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.tree as tree
+import ori.io = io
+import ori.tree = tree
 
 main()
     const t: tree.Tree<int> = tree.new(1)
@@ -644,9 +644,9 @@ fn compile_runs_hash_table_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.hash_table as hash_table
-import ori.io as io
-import ori.list as lists
+import ori.hash_table = hash_table
+import ori.io = io
+import ori.list = lists
 
 main()
     const table: hash_table.HashTable[int, string] = hash_table.with_capacity(2)
@@ -739,8 +739,8 @@ fn check_accepts_hash_table_user_defined_hashable_equatable_key() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
-import ori.hash_table as hash_table
+import ori.core = core
+import ori.hash_table = hash_table
 
 struct Resource
     id: int
@@ -772,9 +772,9 @@ fn compile_runs_graph_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.graph as graph
-import ori.io as io
-import ori.list as lists
+import ori.graph = graph
+import ori.io = io
+import ori.list = lists
 
 main()
     const dag: graph.Graph[int] = graph.new(true)
@@ -854,9 +854,9 @@ fn compile_runs_graph_cycle_stress_native() {
         "main.orl",
         r#"module app.main
 
-import ori.graph as graph
-import ori.io as io
-import ori.list as lists
+import ori.graph = graph
+import ori.io = io
+import ori.list = lists
 
 main()
     const cyclic: graph.Graph[int] = graph.new(true)
@@ -908,8 +908,8 @@ fn check_accepts_graph_user_defined_hashable_equatable_node() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
-import ori.graph as graph
+import ori.core = core
+import ori.graph = graph
 
 struct Resource
     id: int
@@ -941,9 +941,9 @@ fn compile_runs_heap_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
-import ori.heap as heap
-import ori.io as io
+import ori.core = core
+import ori.heap = heap
+import ori.io = io
 
 struct Score
     value: int
@@ -1056,9 +1056,9 @@ fn compile_runs_heap_managed_pop_and_peek_after_heap_scope_native() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
-import ori.heap as heap
-import ori.io as io
+import ori.core = core
+import ori.heap = heap
+import ori.io = io
 
 struct Score
     value: int
@@ -1107,13 +1107,13 @@ fn compile_runs_completed_collection_gap_apis_native() {
         "main.orl",
         r#"module app.main
 
-import ori.graph as graph
-import ori.heap as heap
-import ori.io as io
-import ori.list as lists
-import ori.map as maps
-import ori.set as sets
-import ori.tree as tree
+import ori.graph = graph
+import ori.heap = heap
+import ori.io = io
+import ori.list = lists
+import ori.map = maps
+import ori.set = sets
+import ori.tree = tree
 
 main()
     const values: list[int] = lists.from_list([10, 20, 30])
@@ -1317,19 +1317,19 @@ fn compile_runs_managed_values_in_all_collection_stdlibs_native() {
         "main.orl",
         r#"module app.main
 
-import ori.deque as deque
-import ori.doubly_linked_list as dll
-import ori.graph as graph
-import ori.hash_table as hash_table
-import ori.heap as heap
-import ori.io as io
-import ori.linked_list as ll
-import ori.list as lists
-import ori.map as maps
-import ori.queue as queue
-import ori.set as sets
-import ori.stack as stack
-import ori.tree as tree
+import ori.deque = deque
+import ori.doubly_linked_list = dll
+import ori.graph = graph
+import ori.hash_table = hash_table
+import ori.heap = heap
+import ori.io = io
+import ori.linked_list = ll
+import ori.list = lists
+import ori.map = maps
+import ori.queue = queue
+import ori.set = sets
+import ori.stack = stack
+import ori.tree = tree
 
 main()
     var list_values: list[string] = ["list-a"]
@@ -1444,7 +1444,7 @@ fn check_rejects_heap_without_comparable_element() {
         "main.orl",
         r#"module app.main
 
-import ori.heap as heap
+import ori.heap = heap
 
 struct Score
     value: int
@@ -1472,8 +1472,8 @@ fn compile_runs_for_loop_over_map() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.map as maps
+import ori.io = io
+import ori.map = maps
 
 main()
     const labels: map[int, string] = maps.new()
@@ -1515,8 +1515,8 @@ fn compile_runs_custom_iterable_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.core as core
+import ori.io = io
+import ori.core = core
 
 struct Countdown
     current: int
@@ -1584,8 +1584,8 @@ fn compile_runs_string_keyed_map_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.map as maps
+import ori.io = io
+import ori.map = maps
 
 main()
     const labels: map[string, int] = { "alpha": 1, "beta": 2 }
@@ -1641,8 +1641,8 @@ fn compile_runs_string_set_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.set as sets
+import ori.io = io
+import ori.set = sets
 
 main()
     const primary: set[string] = set { "red", "blue", "red" }
@@ -1694,10 +1694,10 @@ fn compile_runs_trait_gated_user_defined_map_and_set_native() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
-import ori.io as io
-import ori.map as maps
-import ori.set as sets
+import ori.core = core
+import ori.io = io
+import ori.map = maps
+import ori.set = sets
 
 struct Resource
     id: int
@@ -1748,8 +1748,8 @@ fn compile_runs_concurrent_modification_list_runtime_error() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
+import ori.io = io
+import ori.list = lists
 
 main()
     const values: list[int] = [1, 2, 3]
@@ -1784,8 +1784,8 @@ fn compile_runs_concurrent_modification_map_runtime_error() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.map as maps
+import ori.io = io
+import ori.map = maps
 
 main()
     const scores: map[int, int] = maps.new()
@@ -1822,8 +1822,8 @@ fn compile_runs_concurrent_modification_deque_runtime_error() {
         "main.orl",
         r#"module app.main
 
-import ori.deque as deque
-import ori.io as io
+import ori.deque = deque
+import ori.io = io
 
 main()
     const d: deque.Deque[int] = deque.new()
@@ -1860,11 +1860,11 @@ fn compile_runs_structured_json_api_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.json as json
-import ori.list as lists
-import ori.map as maps
-import ori.math as math
+import ori.io = io
+import ori.json = json
+import ori.list = lists
+import ori.map = maps
+import ori.math = math
 
 main()
     const input: string = """{

@@ -40,7 +40,7 @@
       "patterns": [
         {
           "name": "keyword.control.ori",
-          "match": "\\b(async|await|try|func|return|end|if|else|elif|while|for|in|repeat|loop|break|continue|match|case|using|check|with|then|do|and|or|not|import|as|only|public|module|namespace|struct|trait|implement|enum|where|is|alias|mut|self|extern|lazy|tuple|void|true|false|none|success|error|some)\\b"
+          "match": "\\b(async|await|try|func|return|end|if|else|elif|while|for|in|repeat|loop|break|continue|match|case|using|check|with|then|do|and|or|not|import|imports|as|only|public|module|namespace|struct|trait|implement|enum|where|is|alias|mut|self|extern|lazy|tuple|void|true|false|none|success|error|some)\\b"
         },
         {
           "name": "storage.type.ori",

@@ -1,9 +1,9 @@
 module app.main
 
-import ori.io as io
-import ori.net as net
-import ori.string as str
-import ori.bytes as bytes_mod
+import ori.io = io
+import ori.net = net
+import ori.string = str
+import ori.bytes = bytes_mod
 
 read_http_headers(conn: net.Connection) -> result[string, string]
     var acc: string = ""

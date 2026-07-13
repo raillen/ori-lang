@@ -164,7 +164,7 @@ end
             name: "await_outside_async",
             files: vec![(
                 "main.orl",
-                "module app.main\nimport ori.task as task\nmain()\n    await task.sleep(1)\nend\n",
+                "module app.main\nimport ori.task = task\nmain()\n    await task.sleep(1)\nend\n",
             )],
             expected_codes: &["async.await_outside_async"],
         },
@@ -173,7 +173,7 @@ end
             files: vec![(
                 "main.orl",
                 r#"module app.main
-import ori.task as task
+import ori.task = task
 main()
     const callback: func() -> int = do() => 1
     const job: task.Job[int] = task.spawn(do() => callback())
@@ -217,7 +217,7 @@ end
                 ),
                 (
                     "main.orl",
-                    "module app.main\nimport app.util as util\nmain()\n    const value: int = util.secret()\nend\n",
+                    "module app.main\nimport app.util = util\nmain()\n    const value: int = util.secret()\nend\n",
                 ),
             ],
             expected_codes: &["name.private"],
@@ -231,7 +231,7 @@ end
                 ),
                 (
                     "main.orl",
-                    "module app.main\nimport app.math only (missing)\nmain()\nend\n",
+                    "module app.main\nimport app.math (missing)\nmain()\nend\n",
                 ),
             ],
             expected_codes: &["bind.import_member_unknown"],
@@ -245,7 +245,7 @@ end
                 ),
                 (
                     "main.orl",
-                    "module app.main\nimport app.util as util\nmain()\n    const value: int = util.value()\nend\n",
+                    "module app.main\nimport app.util = util\nmain()\n    const value: int = util.value()\nend\n",
                 ),
             ],
             expected_codes: &["project.namespace_file_mismatch"],
@@ -342,9 +342,9 @@ fn native_runtime_composite_program_runs_under_leak_check() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.test as test
+import ori.io = io
+import ori.list = lists
+import ori.test = test
 
 struct Buffer
     items: list[int]

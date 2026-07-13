@@ -1,6 +1,6 @@
 module ori.format.utils
 
-import ori.format as fmt
+import ori.format = fmt
 
 public number(value: float) -> string
     return fmt.number(value, 2)

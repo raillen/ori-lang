@@ -205,36 +205,7 @@ impl SemanticIndex {
         for import in &source_file.imports {
             let namespace = import.path.to_string();
             let file_path = ori_driver::pipeline::stdlib_source_path(&namespace);
-            if import.selected.is_empty() {
-                let alias = import
-                    .alias
-                    .as_ref()
-                    .map(|n| n.text.to_string())
-                    .unwrap_or_else(|| {
-                        namespace
-                            .rsplit('.')
-                            .next()
-                            .unwrap_or(&namespace)
-                            .to_string()
-                    });
-                let alias_span = import
-                    .alias
-                    .as_ref()
-                    .map(|name| name.span)
-                    .unwrap_or(import.path.span);
-                self.imports.push(ResolvedImport {
-                    alias: alias.clone(),
-                    namespace: namespace.clone(),
-                    file_path: file_path.clone(),
-                });
-                self.add(SemanticSymbol {
-                    name: alias,
-                    kind: SymbolKind::Import,
-                    range: span_to_range(source, alias_span),
-                    hover: format!("```ori\nimport {namespace}\n```\n\nModule import."),
-                    summary: format!("import {namespace}"),
-                });
-            } else {
+            if !import.selected.is_empty() {
                 for item in &import.selected {
                     let alias = item
                         .alias
@@ -242,6 +213,11 @@ impl SemanticIndex {
                         .map(|n| n.text.to_string())
                         .unwrap_or_else(|| item.name.text.to_string());
                     let selected_namespace = format!("{}.{}", namespace, item.name.text);
+                    let selection = if let Some(item_alias) = item.alias.as_ref() {
+                        format!("{} = {}", item.name.text, item_alias.text)
+                    } else {
+                        item.name.text.to_string()
+                    };
                     self.imports.push(ResolvedImport {
                         alias: alias.clone(),
                         namespace: selected_namespace.clone(),
@@ -252,12 +228,43 @@ impl SemanticIndex {
                         kind: SymbolKind::Import,
                         range: span_to_range(source, item.span),
                         hover: format!(
-                            "```ori\nimport {namespace} only ({})\n```\n\nSelective import.",
-                            item.name.text
+                            "```ori\nimport {namespace} ({selection})\n```\n\nSelective import."
                         ),
                         summary: format!("import {selected_namespace}"),
                     });
                 }
+            } else if let Some(alias_name) = import.alias.as_ref() {
+                // S3: `import path = alias` — short key only when explicit.
+                let alias = alias_name.text.to_string();
+                self.imports.push(ResolvedImport {
+                    alias: alias.clone(),
+                    namespace: namespace.clone(),
+                    file_path: file_path.clone(),
+                });
+                self.add(SemanticSymbol {
+                    name: alias,
+                    kind: SymbolKind::Import,
+                    range: span_to_range(source, alias_name.span),
+                    hover: format!(
+                        "```ori\nimport {namespace} = {}\n```\n\nModule import.",
+                        alias_name.text
+                    ),
+                    summary: format!("import {namespace}"),
+                });
+            } else {
+                // Bare whole-module import: full path only (no last-segment alias).
+                self.imports.push(ResolvedImport {
+                    alias: namespace.clone(),
+                    namespace: namespace.clone(),
+                    file_path: file_path.clone(),
+                });
+                self.add(SemanticSymbol {
+                    name: namespace.clone(),
+                    kind: SymbolKind::Import,
+                    range: span_to_range(source, import.path.span),
+                    hover: format!("```ori\nimport {namespace}\n```\n\nModule import (full path only)."),
+                    summary: format!("import {namespace}"),
+                });
             }
         }
     }

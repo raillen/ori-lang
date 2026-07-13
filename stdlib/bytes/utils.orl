@@ -1,7 +1,7 @@
 module ori.bytes.utils
 
-import ori.bytes as bytes_mod
-import ori.string as str
+import ori.bytes = bytes_mod
+import ori.string = str
 
 public is_empty(b: bytes) -> bool
     return bytes_mod.len(b) == 0

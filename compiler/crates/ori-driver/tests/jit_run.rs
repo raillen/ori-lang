@@ -70,7 +70,7 @@ fn jit_run_hello_world() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     io.print("hello from JIT")
@@ -99,7 +99,7 @@ fn jit_run_uses_jit_by_default_when_cdylib_available() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     io.print("jit default path")
@@ -135,7 +135,7 @@ fn jit_run_computes_arithmetic() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     const a: int = 21 * 2

@@ -1,6 +1,6 @@
 module ori.args
 
-import ori.os as os
+import ori.os = os
 
 public all() -> list[string]
     return os.args()

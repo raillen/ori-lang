@@ -3,10 +3,10 @@ module app.string_toolkit
 --- Demonstra todas as funções utilitárias de string da stdlib Ori.
 --- Cobre: manipulação de texto, busca, formatação e validação.
 
-import ori.io as io
-import ori.list as lists
-import ori.string as su
-import ori.validate as val
+import ori.io = io
+import ori.list = lists
+import ori.string = su
+import ori.validate = val
 
 section(title: string)
     io.println("")

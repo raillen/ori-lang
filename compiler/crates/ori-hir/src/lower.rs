@@ -888,7 +888,7 @@ struct Lowerer<'a> {
     file_id: FileId,
     sink: &'a mut DiagnosticSink,
     scopes: Vec<Scope>,
-    /// `import ori.io as io` → `io` maps to `ori.io`.
+    /// `import ori.io = io` → `io` maps to `ori.io`.
     aliases: HashMap<SmolStr, SmolStr>,
     /// Current function's return type (for `try` propagation lowering).
     ret_ty: Ty,
@@ -1700,7 +1700,7 @@ pub fn lower(
         sink,
     );
 
-    // Build alias map from imports: `import ori.io as io` → `io → ori.io`
+    // Build alias map from imports: `import ori.io = io` → `io → ori.io`
     l.aliases = ori_types::resolve::import_aliases(file, reexports);
     let mut structs = builtin_stdlib_structs(def_map);
     let mut enums = Vec::new();

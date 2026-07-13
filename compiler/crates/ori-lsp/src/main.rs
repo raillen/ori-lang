@@ -1395,7 +1395,10 @@ const ORI_KEYWORDS: &[&str] = &[
     "async",
     "await",
     "import",
+    "imports",
+    // Kept for removed-form highlighting during migration (`as` / `only`).
     "as",
+    "only",
     "public",
 ];
 

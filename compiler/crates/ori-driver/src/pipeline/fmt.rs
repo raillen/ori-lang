@@ -225,11 +225,11 @@ mod tests {
 
     #[test]
     fn fmt_is_idempotent_for_real_use_constructs() {
-        let src = "module app.main\nimport ori.string only (trim as trim_text)\nimport ori.task as task\n\nstruct Book\nid: int\ntitle: string\nend\n\ntrait Displayable\ndisplay() -> string\ndebug()\nio.print(display())\nend\nend\n\nasync load[T](value: T) -> T\nawait task.sleep(1)\nreturn value\nend\n\nmain()\nconst book: Book = Book(id: 1, title: trim_text(\" Ori \"))\nmatch book.id\ncase 0:\nio.print(\"zero\")\ncase 1:\nio.print(book.title)\nelse\nio.print(\"many\")\nend\nend\n";
+        let src = "module app.main\nimport ori.string (trim = trim_text)\nimport ori.task = task\n\nstruct Book\nid: int\ntitle: string\nend\n\ntrait Displayable\ndisplay() -> string\ndebug()\nio.print(display())\nend\nend\n\nasync load[T](value: T) -> T\nawait task.sleep(1)\nreturn value\nend\n\nmain()\nconst book: Book = Book(id: 1, title: trim_text(\" Ori \"))\nmatch book.id\ncase 0:\nio.print(\"zero\")\ncase 1:\nio.print(book.title)\nelse\nio.print(\"many\")\nend\nend\n";
         let once = format_source_text(src);
         let twice = format_source_text(&once);
         assert_eq!(once, twice);
-        assert!(once.contains("import ori.string only (trim as trim_text)\n"));
+        assert!(once.contains("import ori.string (trim = trim_text)\n"));
         assert!(once.contains("async load[T](value: T) -> T\n"));
         assert!(once.contains("    match book.id\n"));
         assert!(once.contains("    case 1:\n"));

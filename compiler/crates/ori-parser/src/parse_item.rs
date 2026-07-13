@@ -42,8 +42,13 @@ impl<'src> Parser<'src> {
         let mut imports = Vec::new();
         while self.at(&TokenKind::Import)
             || (self.at(&TokenKind::Public) && self.peek_nth_kind(1) == Some(&TokenKind::Import))
+            || self.at_contextual("imports")
         {
-            if let Some(i) = self.parse_import() {
+            if self.at_contextual("imports") {
+                if let Some(batch) = self.parse_imports_block() {
+                    imports.extend(batch);
+                }
+            } else if let Some(i) = self.parse_import() {
                 imports.push(i);
             }
         }
@@ -105,6 +110,7 @@ impl<'src> Parser<'src> {
         })
     }
 
+    /// Standalone `import` / `public import` statement (one form per line).
     fn parse_import(&mut self) -> Option<ImportDecl> {
         let start = self.current_span();
         let visibility = if self.eat(&TokenKind::Public) {
@@ -113,10 +119,60 @@ impl<'src> Parser<'src> {
             Visibility::Private
         };
         self.expect(&TokenKind::Import)?;
+        self.parse_import_body(start, visibility)
+    }
+
+    /// S3 block form:
+    /// ```text
+    /// imports
+    ///   path (A, B), path = alias, path
+    /// end
+    /// ```
+    /// Comma-separated multi-import is allowed only inside this block.
+    fn parse_imports_block(&mut self) -> Option<Vec<ImportDecl>> {
+        let start = self.current_span();
+        if !self.at_contextual("imports") {
+            return None;
+        }
+        self.advance(); // contextual `imports`
+        let mut decls = Vec::new();
+        while !self.at(&TokenKind::End) && !self.at_eof() {
+            // Optional commas between entries (and trailing commas).
+            while self.eat(&TokenKind::Comma) {}
+            if self.at(&TokenKind::End) || self.at_eof() {
+                break;
+            }
+            let item_start = self.current_span();
+            let visibility = if self.eat(&TokenKind::Public) {
+                Visibility::Public
+            } else {
+                Visibility::Private
+            };
+            // Optional `import` keyword inside the block for familiarity.
+            let _ = self.eat(&TokenKind::Import);
+            let before = self.pos;
+            if let Some(decl) = self.parse_import_body(item_start, visibility) {
+                decls.push(decl);
+            } else if self.pos == before {
+                // Avoid infinite loop on unparseable junk.
+                self.advance();
+            }
+        }
+        let _ = self.expect_block_end(start, "imports");
+        Some(decls)
+    }
+
+    /// Shared body after optional visibility / `import` keyword:
+    /// `path`, `path = alias`, or `path (A, B [= alias])`.
+    fn parse_import_body(
+        &mut self,
+        start: Span,
+        visibility: Visibility,
+    ) -> Option<ImportDecl> {
         let path = self.parse_qualified_name()?;
-        let (alias, selected) = if self.eat_contextual("only") {
+        let (alias, selected) = if self.at(&TokenKind::LParen) {
             (None, self.parse_import_selection()?)
-        } else if self.eat(&TokenKind::As) {
+        } else if self.eat(&TokenKind::Eq) {
             match self.parse_name() {
                 Some(alias) => (Some(alias), Vec::new()),
                 None => {
@@ -126,7 +182,31 @@ impl<'src> Parser<'src> {
                     return None;
                 }
             }
+        } else if self.at(&TokenKind::As) {
+            // S3 cutover: `as` removed in favour of `path = alias`.
+            let as_span = self.current_span();
+            self.advance();
+            self.error(
+                "parse.import_as_removed",
+                "`import path as alias` was removed; use `import path = alias`",
+                as_span,
+            );
+            match self.parse_name() {
+                Some(alias) => (Some(alias), Vec::new()),
+                None => (None, Vec::new()),
+            }
+        } else if self.at_contextual("only") {
+            // S3 cutover: `only` removed; selective form is `path (A, B)`.
+            let only_span = self.current_span();
+            self.advance();
+            self.error(
+                "parse.import_only_removed",
+                "`import path only (…)` was removed; use `import path (…)`",
+                only_span,
+            );
+            (None, self.parse_import_selection().unwrap_or_default())
         } else {
+            // Whole-module import: full path only (no implicit last-segment alias).
             (None, Vec::new())
         };
         let end = selected
@@ -148,8 +228,17 @@ impl<'src> Parser<'src> {
         let mut selected = Vec::new();
         while !self.at(&TokenKind::RParen) && !self.at_eof() {
             let name = self.parse_name()?;
-            let alias = if self.eat(&TokenKind::As) {
+            let alias = if self.eat(&TokenKind::Eq) {
                 Some(self.parse_name()?)
+            } else if self.at(&TokenKind::As) {
+                let as_span = self.current_span();
+                self.advance();
+                self.error(
+                    "parse.import_as_removed",
+                    "selected import rename uses `name = alias`, not `as`",
+                    as_span,
+                );
+                self.parse_name()
             } else {
                 None
             };
@@ -248,6 +337,7 @@ impl<'src> Parser<'src> {
 
         if self.at(&TokenKind::Import)
             || (self.at(&TokenKind::Public) && self.peek_nth_kind(1) == Some(&TokenKind::Import))
+            || self.at_contextual("imports")
         {
             let span = self.current_span();
             self.error(
@@ -255,7 +345,11 @@ impl<'src> Parser<'src> {
                 "imports must appear before declarations",
                 span,
             );
-            let _ = self.parse_import();
+            if self.at_contextual("imports") {
+                let _ = self.parse_imports_block();
+            } else {
+                let _ = self.parse_import();
+            }
             return None;
         }
 
@@ -1173,6 +1267,8 @@ fn is_import_alias_recovery_boundary(kind: Option<&TokenKind>) -> bool {
             | Some(TokenKind::Const)
             | Some(TokenKind::Var)
             | Some(TokenKind::Extern)
+            | Some(TokenKind::End)
+            | Some(TokenKind::Comma)
     )
 }
 

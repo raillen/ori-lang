@@ -1,15 +1,15 @@
 module app.collections
 
-import ori.deque as deque
-import ori.doubly_linked_list as dll
-import ori.hash_table as hash_table
-import ori.io as io
-import ori.linked_list as ll
-import ori.list as lists
-import ori.map as maps
-import ori.queue as queue
-import ori.stack as stack
-import ori.tree as tree
+import ori.deque = deque
+import ori.doubly_linked_list = dll
+import ori.hash_table = hash_table
+import ori.io = io
+import ori.linked_list = ll
+import ori.list = lists
+import ori.map = maps
+import ori.queue = queue
+import ori.stack = stack
+import ori.tree = tree
 
 main()
     io.print("Collections")

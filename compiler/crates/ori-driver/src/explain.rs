@@ -15,7 +15,7 @@ const ENTRIES: &[ExplainEntry] = &[
         severity: "error",
         summary: "A name was used but is not defined in the current scope.",
         cause: "The identifier is missing a binding: typo, wrong import, or symbol defined in another module without import.",
-        fix: "Check spelling, add `import module as alias`, or qualify with the module alias (e.g. `lib.Point`).",
+        fix: "Check spelling, add `import module = alias`, or qualify with the module alias (e.g. `lib.Point`).",
     },
     ExplainEntry {
         code: "name.private",

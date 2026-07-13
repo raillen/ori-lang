@@ -1478,22 +1478,25 @@ fn collect_reexports(files: &[(&SourceFile, FileId)]) -> Vec<ReExport> {
     for (file, _) in files {
         let namespace = SmolStr::new(file.namespace.name.to_string());
         for import in &file.imports {
-            if import.visibility.is_public() {
-                if import.selected.is_empty() {
+            if !import.visibility.is_public() {
+                continue;
+            }
+            if !import.selected.is_empty() {
+                for item in &import.selected {
                     reexports.push(ReExport {
                         namespace: namespace.clone(),
-                        alias: direct_import_alias(import),
-                        target: SmolStr::new(import.path.to_string()),
+                        alias: selected_import_alias(item),
+                        target: selected_import_target(import, item),
                     });
-                } else {
-                    for item in &import.selected {
-                        reexports.push(ReExport {
-                            namespace: namespace.clone(),
-                            alias: selected_import_alias(item),
-                            target: selected_import_target(import, item),
-                        });
-                    }
                 }
+            } else if let Some(alias) = direct_import_alias(import) {
+                // S3: bare `public import path` has no local binding — only
+                // `path = alias` and selective forms re-export a name.
+                reexports.push(ReExport {
+                    namespace: namespace.clone(),
+                    alias,
+                    target: SmolStr::new(import.path.to_string()),
+                });
             }
         }
     }
@@ -1503,18 +1506,21 @@ fn collect_reexports(files: &[(&SourceFile, FileId)]) -> Vec<ReExport> {
 pub fn import_aliases(file: &SourceFile, reexports: &[ReExport]) -> HashMap<SmolStr, SmolStr> {
     let mut aliases = HashMap::new();
     for import in &file.imports {
-        if import.selected.is_empty() {
-            aliases.insert(
-                direct_import_alias(import),
-                SmolStr::new(import.path.to_string()),
-            );
-        } else {
+        if !import.selected.is_empty() {
             for item in &import.selected {
                 aliases.insert(
                     selected_import_alias(item),
                     selected_import_target(import, item),
                 );
             }
+        } else if let Some(alias) = direct_import_alias(import) {
+            aliases.insert(alias, SmolStr::new(import.path.to_string()));
+        } else {
+            // Bare whole-module import: no short alias. Map the full path to
+            // itself so `ori.io.print` resolves/tracks usage without creating
+            // an implicit last-segment binding like `io`.
+            let path = SmolStr::new(import.path.to_string());
+            aliases.insert(path.clone(), path);
         }
     }
 
@@ -1525,6 +1531,11 @@ pub fn import_aliases(file: &SourceFile, reexports: &[ReExport]) -> HashMap<Smol
             .map(|(visible, target)| (visible.clone(), target.clone()))
             .collect();
         for (visible_prefix, target_ns) in snapshot {
+            // Skip identity full-path keys when expanding reexports through
+            // short aliases only (multi-segment bare keys are not reexport hosts).
+            if visible_prefix.contains('.') {
+                continue;
+            }
             for reexport in reexports.iter().filter(|r| r.namespace == target_ns) {
                 let visible = SmolStr::new(format!("{}.{}", visible_prefix, reexport.alias));
                 if aliases.contains_key(&visible) {
@@ -1541,12 +1552,9 @@ pub fn import_aliases(file: &SourceFile, reexports: &[ReExport]) -> HashMap<Smol
     aliases
 }
 
-fn direct_import_alias(import: &ImportDecl) -> SmolStr {
-    import
-        .alias
-        .as_ref()
-        .map(|a| a.text.clone())
-        .unwrap_or_else(|| import.path.last().text.clone())
+/// Explicit `path = alias` binding, if any. Bare imports return `None` (S3).
+fn direct_import_alias(import: &ImportDecl) -> Option<SmolStr> {
+    import.alias.as_ref().map(|a| a.text.clone())
 }
 
 fn selected_import_alias(item: &ori_ast::item::ImportItem) -> SmolStr {

@@ -1,6 +1,6 @@
 module ori.test.utils
 
-import ori.test as test
+import ori.test = test
 
 public is_true(value: bool)
     test.assert(value, "expected true")

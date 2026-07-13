@@ -1,7 +1,7 @@
 module ori.process.utils
 
-import ori.convert as conv
-import ori.map as maps
+import ori.convert = conv
+import ori.map = maps
 
 public exit_code(capture: map[string, string]) -> int
     if some(raw) = maps.try_get(capture, "status")

@@ -1,7 +1,7 @@
 module ori.math.vec3
 
-import ori.math as math
-import ori.core as core
+import ori.math = math
+import ori.core = core
 
 public struct Vec3
     x: float
