@@ -32,6 +32,8 @@ const INTERNAL_NATIVE_RUNTIME_IMPORTS: &[&str] = &[
     "ori_arc_update_edge",
     "ori_alloc",
     "ori_bool_to_string_parts",
+    "ori_debug_init",
+    "ori_debug_line",
     "ori_deque_iterator_new",
     "ori_deque_iterator_next",
     "ori_queue_iterator_new",
@@ -2936,6 +2938,10 @@ pub struct NativeBackend<M: Module> {
     /// HIR has an entry `main`. Used by the JIT backend to locate the entry
     /// function pointer after `finalize_definitions`.
     main_func_id: Option<FuncId>,
+    /// Cooperative line debugger (ORI_DEBUG_INSTRUMENT=1 + ORI_DEBUG_SOURCE).
+    debug_source_path: Option<String>,
+    debug_line_starts: Vec<u32>,
+    debug_path_data: Option<DataId>,
 }
 
 impl<M: Module> NativeBackend<M> {
@@ -2960,6 +2966,9 @@ impl<M: Module> NativeBackend<M> {
             struct_dtors: HashMap::new(),
             enum_dtors: HashMap::new(),
             main_func_id: None,
+            debug_source_path: None,
+            debug_line_starts: Vec::new(),
+            debug_path_data: None,
         })
     }
 
@@ -2972,6 +2981,7 @@ impl<M: Module> NativeBackend<M> {
     ///   `finalize_definitions` + `get_address(main_func_id)`.
     pub fn prepare(mut self, hir: &HirModule) -> Result<Self, String> {
         validate_native_hir(hir)?;
+        self.load_debug_instrument_from_env()?;
         // Compute struct layouts before anything else
         for s in &hir.structs {
             let layout = compute_struct_layout(&s.fields, self.ptr_ty, s.repr_c);
@@ -3041,6 +3051,46 @@ impl<M: Module> NativeBackend<M> {
                 .map_err(|e| format!("define string data: {e}"))?;
             self.string_data.insert(s, id);
         }
+        Ok(())
+    }
+
+
+    /// When `ORI_DEBUG_INSTRUMENT=1`, load `ORI_DEBUG_SOURCE` and prepare line-map
+    /// + rodata path for cooperative `ori_debug_line` probes.
+    fn load_debug_instrument_from_env(&mut self) -> Result<(), String> {
+        if std::env::var_os("ORI_DEBUG_INSTRUMENT").is_none() {
+            return Ok(());
+        }
+        let path = match std::env::var("ORI_DEBUG_SOURCE") {
+            Ok(p) if !p.is_empty() => p,
+            _ => return Ok(()),
+        };
+        let content = std::fs::read_to_string(&path).map_err(|e| {
+            format!("ORI_DEBUG_INSTRUMENT: cannot read ORI_DEBUG_SOURCE `{path}`: {e}")
+        })?;
+        let line_starts: Vec<u32> = std::iter::once(0u32)
+            .chain(
+                content
+                    .char_indices()
+                    .filter(|&(_, c)| c == '\n')
+                    .map(|(i, _)| (i + 1) as u32),
+            )
+            .collect();
+        // Plain UTF-8 path bytes (no ori string heap header) for ori_debug_line.
+        let mut bytes = path.as_bytes().to_vec();
+        bytes.push(0);
+        let mut desc = DataDescription::new();
+        desc.define(bytes.into_boxed_slice());
+        let id = self
+            .module
+            .declare_anonymous_data(false, false)
+            .map_err(|e| format!("declare debug path data: {e}"))?;
+        self.module
+            .define_data(id, &desc)
+            .map_err(|e| format!("define debug path data: {e}"))?;
+        self.debug_path_data = Some(id);
+        self.debug_line_starts = line_starts;
+        self.debug_source_path = Some(path);
         Ok(())
     }
 
@@ -4105,6 +4155,18 @@ impl<M: Module> NativeBackend<M> {
         self.stdlib_ids
             .insert(SmolStr::new("ori_graph_iterator_next"), id);
 
+
+        // Cooperative DAP line probes (no-op in runtime unless ORI_DEBUG_PORT is set).
+        let id = decl(
+            "ori_debug_line",
+            &[pt, types::I32, types::I32],
+            vec![],
+            None,
+        )?;
+        self.stdlib_ids.insert(SmolStr::new("ori_debug_line"), id);
+        let id = decl("ori_debug_init", &[], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_debug_init"), id);
+
         Ok(())
     }
 
@@ -4379,7 +4441,29 @@ impl<M: Module> NativeBackend<M> {
                 tuple_dtor_refs.insert(elems.clone(), fref);
             }
 
-            let mut bctx = FunctionBuilderContext::new();
+                        let instrument_debug = self.debug_path_data.is_some()
+                && !f.name.as_str().starts_with("ori.");
+            let debug_file_gv = if instrument_debug {
+                self.debug_path_data
+                    .map(|id| self.module.declare_data_in_func(id, &mut ctx.func))
+            } else {
+                None
+            };
+            let debug_file_len = if instrument_debug {
+                self.debug_source_path
+                    .as_ref()
+                    .map(|s| s.len() as u32)
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+            let debug_line_starts: &[u32] = if instrument_debug {
+                self.debug_line_starts.as_slice()
+            } else {
+                &[]
+            };
+
+let mut bctx = FunctionBuilderContext::new();
             {
                 let builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
                 FuncCodegen {
@@ -4412,6 +4496,9 @@ impl<M: Module> NativeBackend<M> {
                     async_loop_index: 0,
                     async_poll_blocks: Vec::new(),
                     func_name: f.name.clone(),
+                    debug_file_gv,
+                    debug_file_len,
+                    debug_line_starts,
                 }
                 .emit_user_func(f)?;
             }
@@ -4492,6 +4579,11 @@ impl<M: Module> NativeBackend<M> {
                 .get("ori_os_set_args")
                 .copied()
                 .map(|id| self.module.declare_func_in_func(id, &mut ctx.func));
+            let debug_init_ref = self
+                .stdlib_ids
+                .get("ori_debug_init")
+                .copied()
+                .map(|id| self.module.declare_func_in_func(id, &mut ctx.func));
             let block_on_ref = if matches!(entry_main.return_ty, Ty::Future(_)) {
                 Some(
                     self.stdlib_ids
@@ -4515,6 +4607,9 @@ impl<M: Module> NativeBackend<M> {
                 b.seal_block(blk);
                 if let Some(init_ref) = init_ref {
                     b.ins().call(init_ref, &[]);
+                }
+                if let Some(debug_init_ref) = debug_init_ref {
+                    b.ins().call(debug_init_ref, &[]);
                 }
                 if let Some(set_args_ref) = set_args_ref {
                     let (argc, argv) = {
@@ -4830,6 +4925,9 @@ impl<M: Module> NativeBackend<M> {
                     async_loop_index: 0,
                     async_poll_blocks: Vec::new(),
                     func_name: SmolStr::new(name.as_str()),
+                    debug_file_gv: None,
+                    debug_file_len: 0,
+                    debug_line_starts: &[],
                 };
 
                 let res = if codegen.struct_supports_equality(s.def_id) {
@@ -4902,7 +5000,29 @@ impl<M: Module> NativeBackend<M> {
             tuple_dtor_refs.insert(elems.clone(), fref);
         }
 
-        let mut bctx = FunctionBuilderContext::new();
+                let instrument_debug = self.debug_path_data.is_some()
+            && !f.name.as_str().starts_with("ori.");
+        let debug_file_gv = if instrument_debug {
+            self.debug_path_data
+                .map(|id| self.module.declare_data_in_func(id, &mut ctx.func))
+        } else {
+            None
+        };
+        let debug_file_len = if instrument_debug {
+            self.debug_source_path
+                .as_ref()
+                .map(|s| s.len() as u32)
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        let debug_line_starts: &[u32] = if instrument_debug {
+            self.debug_line_starts.as_slice()
+        } else {
+            &[]
+        };
+
+let mut bctx = FunctionBuilderContext::new();
         {
             let builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
             let codegen = FuncCodegen {
@@ -4935,6 +5055,9 @@ impl<M: Module> NativeBackend<M> {
                 async_loop_index: 0,
                 async_poll_blocks: Vec::new(),
                 func_name: f.name.clone(),
+                debug_file_gv,
+                debug_file_len,
+                debug_line_starts,
             };
             if plan.is_general {
                 codegen.emit_general_async_step(f, plan)?;
@@ -5046,6 +5169,9 @@ impl<M: Module> NativeBackend<M> {
                 async_loop_index: 0,
                 async_poll_blocks: Vec::new(),
                 func_name: SmolStr::new(""),
+                    debug_file_gv: None,
+                    debug_file_len: 0,
+                    debug_line_starts: &[],
             };
             let block = codegen.builder.create_block();
             codegen.builder.switch_to_block(block);
@@ -5109,6 +5235,10 @@ struct FuncCodegen<'a> {
     async_loop_index: usize,
     async_poll_blocks: Vec<ir::Block>,
     func_name: SmolStr,
+    /// When set, emit `ori_debug_line` at statement boundaries.
+    debug_file_gv: Option<ir::GlobalValue>,
+    debug_file_len: u32,
+    debug_line_starts: &'a [u32],
 }
 
 impl<'a> FuncCodegen<'a> {
@@ -7947,7 +8077,61 @@ impl<'a> FuncCodegen<'a> {
         Ok(true)
     }
 
+    fn stmt_span(stmt: &HirStmt) -> Span {
+        match stmt {
+            HirStmt::Let { span, .. }
+            | HirStmt::Assign { span, .. }
+            | HirStmt::If { span, .. }
+            | HirStmt::While { span, .. }
+            | HirStmt::For { span, .. }
+            | HirStmt::Loop { span, .. }
+            | HirStmt::Repeat { span, .. }
+            | HirStmt::Match { span, .. }
+            | HirStmt::IfSome { span, .. }
+            | HirStmt::WhileSome { span, .. }
+            | HirStmt::Using { span, .. }
+            | HirStmt::Check { span, .. } => *span,
+            HirStmt::Return(_, span) | HirStmt::Break(span) | HirStmt::Continue(span) => *span,
+            HirStmt::Expr(e) => e.span,
+        }
+    }
+
+    fn line_from_byte_offset(&self, offset: u32) -> u32 {
+        let starts = self.debug_line_starts;
+        if starts.is_empty() {
+            return 0;
+        }
+        let idx = starts.partition_point(|&s| s <= offset).saturating_sub(1);
+        (idx as u32) + 1
+    }
+
+    fn emit_debug_line_probe(&mut self, span: Span) {
+        let Some(gv) = self.debug_file_gv else {
+            return;
+        };
+        if self.debug_file_len == 0 || self.debug_line_starts.is_empty() {
+            return;
+        }
+        let Some(&fref) = self.func_refs.get("ori_debug_line") else {
+            return;
+        };
+        let line = self.line_from_byte_offset(span.start);
+        if line == 0 {
+            return;
+        }
+        let ptr = self.builder.ins().global_value(self.ptr_ty, gv);
+        let len = self
+            .builder
+            .ins()
+            .iconst(types::I32, i64::from(self.debug_file_len));
+        let line_v = self.builder.ins().iconst(types::I32, i64::from(line));
+        self.builder.ins().call(fref, &[ptr, len, line_v]);
+    }
+
     fn emit_stmt(&mut self, stmt: &HirStmt) -> Result<(), String> {
+        if !self.terminated {
+            self.emit_debug_line_probe(Self::stmt_span(stmt));
+        }
         match stmt {
             HirStmt::Let {
                 name, ty, value, ..

@@ -10,6 +10,10 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Adicionado
+- **Runtime/DAP cooperativo (Ori IDE):** agent `debug_agent` no `ori-runtime` (`ori_debug_line` / `ori_debug_init`) ativado por `ORI_DEBUG_PORT`; codegen nativo instrumenta statements quando `ORI_DEBUG_INSTRUMENT=1` + `ORI_DEBUG_SOURCE=<path>`; adapter `ori-dap` (repo ori-ide) faz bind TCP e controla continue/step/breakpoints.
+
+
 ### Notas
 - Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package line **`[0.3.4]`**.
 
