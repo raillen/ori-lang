@@ -1,9 +1,11 @@
 module examples.file_organizer
 
-import ori.io = io
-import ori.list = lists
-import ori.log = log
-import ori.path = path
+imports
+    ori.io = io
+    ori.list = lists
+    ori.log = log
+    ori.path = path
+end
 
 struct PlannedMove
     from: string

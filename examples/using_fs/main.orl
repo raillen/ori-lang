@@ -1,8 +1,10 @@
 module app.using_fs
 
 -- File streams + using dispose (STDLIB-3).
-import ori.io = io
-import ori.io (open_input, open_output, write_text, read_text, flush)
+imports
+    ori.io = io
+    ori.io (open_input, open_output, write_text, read_text, flush)
+end
 
 main()
     -- Relative path: run from the example dir or any cwd you can write to.

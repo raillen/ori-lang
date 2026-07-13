@@ -3,12 +3,14 @@ module examples.process_runner
 -- Canonical stdlib style: import ori.X (not ori.X.utils).
 -- Helpers that used to live only under process.utils are inlined with L1 map/convert.
 
-import ori.convert = conv
-import ori.io = io
-import ori.map = maps
-import ori.os = os
-import ori.process = process
-import ori.string (trim_all)
+imports
+    ori.convert = conv
+    ori.io = io
+    ori.map = maps
+    ori.os = os
+    ori.process = process
+    ori.string (trim_all)
+end
 
 echo_command() -> string
     if os.platform() == "windows"

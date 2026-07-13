@@ -35,8 +35,9 @@ if [ "$skip_stage" -eq 0 ]; then
     "$repo_root/tools/stage_native_runtime.sh" --profile release
 fi
 
-# Workloads: tiny, multi-module, collections (ARC-heavy-ish), language tour
+# Workloads: tiny, multi-module, collections, language tour, concurrency, ARC churn
 examples="hello multi_module collections_demo language_features concurrency"
+arc_bench="$repo_root/tools/bench/arc_list_churn.orl"
 
 time_cmd() {
     # print wall seconds only on stderr line "TIME <label> <sec>"
@@ -74,5 +75,17 @@ for ex in $examples; do
         i=$((i + 1))
     done
 done
+
+if [ -f "$arc_bench" ]; then
+    i=1
+    while [ "$i" -le "$samples" ]; do
+        time_cmd "check.arc_list_churn.$i" "$ori" check "$arc_bench" || true
+        time_cmd "run.arc_list_churn.$i" "$ori" run "$arc_bench" || true
+        out="/tmp/ori_bench_arc_$$"
+        time_cmd "compile.arc_list_churn.$i" "$ori" compile "$arc_bench" --out "$out" || true
+        rm -f "$out"
+        i=$((i + 1))
+    done
+fi
 
 echo "== done (grep TIME lines above; lower is better) =="

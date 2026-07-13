@@ -1,9 +1,11 @@
 module examples.json_validator
 
-import ori.config = config
-import ori.io = io
-import ori.json = json
-import ori.log = log
+imports
+    ori.config = config
+    ori.io = io
+    ori.json = json
+    ori.log = log
+end
 
 is_valid_json(text: string) -> bool
     match json.parse(text)

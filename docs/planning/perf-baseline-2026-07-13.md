@@ -99,12 +99,31 @@ Host Linux x86_64 · warm process · 2026-07-13 afternoon remeasure:
 | JIT `run` hello | ~0.11–0.15 s | **~0.04–0.05 s** | release cdylib dominates residual |
 | SystemLinker vs BFD | n/a | ~0.36 s | PATH mold/lld preferred when installed |
 
-### Residual after wave 2
+### Residual after wave 2 (closed in wave 3 / living)
 
 - JIT cold start (Cranelift lower + cdylib load) still dominates `ori run` tiny
-  relative to AOT binary exec (~0 s).
-- Deeper ARC alloc/collect microbench inside the runtime (not just end-to-end).
-- Optional: prefer mold over BundledRustLld when mold is on PATH (product policy TBD).
+  relative to AOT binary exec (~0 s) — **living**, not a v1 gate (~40–50 ms today).
+- Deeper ARC end-to-end bench — **done** (`tools/bench/arc_list_churn.orl`).
+- Prefer mold over BundledRustLld by default — **wontfix** for now: BundledRustLld
+  is the measured product default and does not require mold installed.
+
+## Wave 3 (2026-07-13) — ARC bench + LANG-PERF closed
+
+### Changes
+
+1. **`tools/bench/arc_list_churn.orl`** — 200 rounds × 500 `list.push` + nested list
+   (ARC retain/release pressure).
+2. **`tools/microbench_lang_perf.sh`** includes the ARC workload.
+3. **BACKLOG:** `LANG-PERF` → **done**. Further JIT gains are Cranelift-bound
+   living work, not an open implementation item.
+
+### Numbers (release + staged release runtime)
+
+| Workload | Mode | Wall time |
+|----------|------|-----------|
+| `arc_list_churn` | run (JIT) | ~0.05 s |
+| `arc_list_churn` | compile AOT | ~0.20 s |
+| `arc_list_churn` AOT binary | execute | ~instant (workload itself is light at N=200×500) |
 
 ### How to re-measure
 
@@ -115,4 +134,5 @@ cd compiler && cargo build -p ori-driver --release
 # or one-shot:
 /usr/bin/time -f '%e' ./target/release/ori compile ../examples/hello --out /tmp/h
 /usr/bin/time -f '%e' ./target/release/ori run ../examples/hello
+/usr/bin/time -f '%e' ./target/release/ori run ../tools/bench/arc_list_churn.orl
 ```

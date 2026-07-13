@@ -1,0 +1,40 @@
+module app.arc_list_churn
+
+-- ARC-heavy microbench: many list pushes + nested lists (LANG-PERF residual).
+-- Run: ori run tools/bench/arc_list_churn.orl
+--    or: tools/microbench_lang_perf.sh (includes this workload)
+
+imports
+    ori.io = io
+    ori.list = lists
+end
+
+churn(rounds: int, push_count: int) -> int
+    var total: int = 0
+    var r: int = 0
+    while r < rounds
+        var items: list[int] = []
+        var i: int = 0
+        while i < push_count
+            lists.push(items, i)
+            i = i + 1
+        end
+        total = total + lists.len(items)
+        -- Nested list: forces more ARC retains/releases
+        var nested: list[list[int]] = []
+        lists.push(nested, items)
+        match lists.try_get(nested, 0)
+            case some(inner):
+                total = total + lists.len(inner)
+            case none:
+                total = total + 0
+        end
+        r = r + 1
+    end
+    return total
+end
+
+main()
+    const n: int = churn(200, 500)
+    io.println(string(n))
+end

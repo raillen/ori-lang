@@ -1,7 +1,9 @@
 module examples.log_analyzer
 
-import ori.io = io
-import ori.string (has_prefix, lines)
+imports
+    ori.io = io
+    ori.string (has_prefix, lines)
+end
 
 struct LogStats
     info_count: int

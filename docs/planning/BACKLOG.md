@@ -45,6 +45,7 @@
 | DONE-PKG-1…4 | Path/git/registry (code exists; not market push) |
 | DONE-FREEZE-1 / ABI-1 | Freeze window open; ABI-1 in force |
 | DONE-LANG-DOC | User docs + examples aligned to S3 / current stdlib / editors local |
+| DONE-LANG-PERF | AOT/JIT, stage release, mold/lld PATH, microbench + ARC bench; living JIT lower only |
 | CANC-GAME / CANC-IMGUI | **Cancelled** — never product again |
 | CANC-AUK9 | Archived |
 | WONT-HM / WONT-LANG-3 | Global HM; C async v1 |
@@ -55,14 +56,15 @@
 
 | ID | Item | P | D | Status | Notes |
 |----|------|---|---|--------|-------|
-| **LANG-PERF** | Measure and improve hot paths (check/compile/run, ARC, net/fs) | 1 | L | **partial** | Wave1: BundledRustLld default + Cranelift flags. Wave2: SystemLinker PATH prefers `mold`/`ld.lld`/`ld`; stage scripts default **release**; `tools/microbench_lang_perf.sh`. Residual: JIT cold start (~100+ ms dominated by lower+cdylib), deeper ARC microbench |
+| **LANG-PERF** | Measure and improve hot paths (check/compile/run, ARC, net/fs) | 1 | L | **done** | Wave1: BundledRustLld + Cranelift flags. Wave2: mold/lld PATH, stage **release**, microbench. Wave3: ARC bench `tools/bench/arc_list_churn.orl`. Living: further JIT lower is Cranelift-bound (~40–50 ms tiny programs with release cdylib) — not a v1 gate. |
 | **LANG-RES** | Native residuals only if they block real programs | 2 | M | **partial** | Spec 14; not invent features |
 
-### Done this focus wave (DX + docs)
+### Done this focus wave (DX + docs + perf)
 
 | ID | Notes |
 |----|-------|
 | **LANG-DOC** | User docs EN/PT + root READMEs + examples catalog; living maintenance only after this |
+| **LANG-PERF** | AOT/JIT measured and improved; stage release default; harness in `tools/microbench_lang_perf.sh` |
 | **DX-VSCODE** | v0.3.2 local `.vsix` |
 | **DX-ZED** | `extensions/zed-ori` dev install |
 

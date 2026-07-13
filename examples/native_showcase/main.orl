@@ -1,10 +1,12 @@
 module app.native_showcase
 
 -- Custom traits, any[Trait], generics, enums, using+dispose.
-import ori.core = core
-import ori.io = io
-import ori.list = lists
-import ori.map = maps
+imports
+    ori.core = core
+    ori.io = io
+    ori.list = lists
+    ori.map = maps
+end
 
 trait Labelled
     label(self) -> string

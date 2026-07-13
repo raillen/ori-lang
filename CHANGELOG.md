@@ -35,6 +35,8 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`examples/README.md`:** trilha de aprendizado + catálogo alinhado.
 - **Smoke/release:** `tools/smoke_native_release.*` usam `examples/hello`
   (em vez de `hello_world` removido).
+- **Imports S3:** exemplos com 2+ imports usam bloco `imports … end`
+  (não pilha de `import` soltos).
 
 ### Corrigido (linguagem / exemplos)
 - **TLS / rustls:** enable feature `ring` + install default
@@ -53,6 +55,8 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Stage runtime default:** `tools/stage_native_runtime.sh` / `.ps1` default
   to **release** (override `--profile debug` or `ORI_STAGE_PROFILE`).
 - **Microbench:** `tools/microbench_lang_perf.sh` (check/run/compile samples).
+- **ARC bench:** `tools/bench/arc_list_churn.orl` (list push + nested lists).
+- **LANG-PERF closed** in `BACKLOG.md` (further JIT lower = living/Cranelift-bound).
 - Numbers: `docs/planning/perf-baseline-2026-07-13.md`.
 
 ### Documentação (LANG-DOC — fechado como onda)

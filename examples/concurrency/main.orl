@@ -1,10 +1,12 @@
 module app.concurrency
 
 -- task.spawn/join, channel, atomic (native).
-import ori.atomic = atomic
-import ori.channel = channel
-import ori.io = io
-import ori.task = task
+imports
+    ori.atomic = atomic
+    ori.channel = channel
+    ori.io = io
+    ori.task = task
+end
 
 main()
     const job: task.Job[int] = task.spawn(() => 41)

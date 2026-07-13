@@ -3,13 +3,15 @@ module app.path_time_io
 --- Demonstra os módulos path, time, io e fs da stdlib Ori.
 --- Cobre: manipulação de caminhos, medição de tempo, I/O e sistema de arquivos.
 
-import ori.fs = fs
-import ori.io = io
-import ori.math = math
-import ori.os = os
-import ori.path = path
-import ori.string = su
-import ori.time = time
+imports
+    ori.fs = fs
+    ori.io = io
+    ori.math = math
+    ori.os = os
+    ori.path = path
+    ori.string = su
+    ori.time = time
+end
 
 section(title: string)
     io.println("")
