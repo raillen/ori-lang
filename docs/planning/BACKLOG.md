@@ -56,15 +56,14 @@
 
 | ID | Item | P | D | Status | Notes |
 |----|------|---|---|--------|-------|
-| **LANG-PERF** | Measure and improve hot paths (check/compile/run, ARC, net/fs) | 1 | L | **done** | Wave1: BundledRustLld + Cranelift flags. Wave2: mold/lld PATH, stage **release**, microbench. Wave3: ARC bench `tools/bench/arc_list_churn.orl`. Living: further JIT lower is Cranelift-bound (~40–50 ms tiny programs with release cdylib) — not a v1 gate. |
-| **LANG-RES** | Native residuals only if they block real programs | 2 | M | **partial** | Spec 14; not invent features |
+| **LANG-RES** | Native residuals only if they block real programs | 2 | M | **partial** | Spec 14; not invent features. Reopen only with a concrete blocker program. |
 
 ### Done this focus wave (DX + docs + perf)
 
 | ID | Notes |
 |----|-------|
 | **LANG-DOC** | User docs EN/PT + root READMEs + examples catalog; living maintenance only after this |
-| **LANG-PERF** | AOT/JIT measured and improved; stage release default; harness in `tools/microbench_lang_perf.sh` |
+| **LANG-PERF** | Closed — waves 1–3; see `perf-baseline-2026-07-13.md` |
 | **DX-VSCODE** | v0.3.2 local `.vsix` |
 | **DX-ZED** | `extensions/zed-ori` dev install |
 
