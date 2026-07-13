@@ -28,12 +28,21 @@ function Get-WorkspaceVersion([string]$RepoRoot) {
     if (-not (Test-Path -LiteralPath $cargoToml -PathType Leaf)) {
         $cargoToml = Join-Path $RepoRoot "Cargo.toml"
     }
-    $match = Select-String -LiteralPath $cargoToml -Pattern '^\s*version\s*=\s*"([^"]+)"' | Select-Object -First 1
-    if ($null -eq $match) {
-        throw "Could not find workspace version in $cargoToml."
+    $inWorkspacePackage = $false
+    foreach ($line in Get-Content -LiteralPath $cargoToml) {
+        $text = [string]$line
+        if ($text.Trim() -eq "[workspace.package]") {
+            $inWorkspacePackage = $true
+            continue
+        }
+        if ($inWorkspacePackage -and $text.Trim().StartsWith("[")) {
+            break
+        }
+        if ($inWorkspacePackage -and $text -match '^\s*version\s*=\s*"([^"]+)"') {
+            return $Matches[1]
+        }
     }
-
-    return $match.Matches[0].Groups[1].Value
+    throw "Could not find [workspace.package] version in $cargoToml."
 }
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")

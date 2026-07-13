@@ -67,10 +67,10 @@ xcode-select --install
 
 ### Via release package (recomendado)
 
-1. Baixe o artefato do release/CI para o seu OS:
-   - Windows: `ori-…-windows-msvc.zip`
-   - Linux: `ori-…-linux-gnu.tar.gz` (ou `ori-x86_64-unknown-linux-gnu.tar.gz`)
-   - macOS Intel / Apple Silicon: tarball do triple correspondente
+1. Baixe o artefato do [GitHub Releases](https://github.com/raillen/ori-lang/releases) para o seu OS. Exemplo **v0.3.2**:
+   - Windows: `ori-v0.3.2-x86_64-pc-windows-msvc.zip`
+   - Linux: `ori-v0.3.2-x86_64-unknown-linux-gnu.tar.gz`
+   - macOS: ainda não empacotado no release pipeline (use build a partir do source ou estenda `release.yml`)
 
 2. Extraia em um diretório (ex.: `~/ori`, `C:\Tools\ori`).
 

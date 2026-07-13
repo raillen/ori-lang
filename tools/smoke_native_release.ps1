@@ -82,7 +82,11 @@ $stdlibDir = Join-Path $packageRootPath "stdlib"
 Push-Location $repoRoot
 try {
     if (-not $SkipBuild) {
-        Invoke-Checked { cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") build -p ori-driver -p ori-lsp --release } "cargo build -p ori-driver -p ori-lsp --release"
+        $manifest = Join-Path $repoRoot "compiler/Cargo.toml"
+        Write-Host "Building release CLI from $manifest (target root: $targetRoot)"
+        Invoke-Checked {
+            & cargo --manifest-path $manifest build -p ori-driver -p ori-lsp --release
+        } "cargo build -p ori-driver -p ori-lsp --release"
     }
 
     if (-not (Test-Path -LiteralPath $sourceOri -PathType Leaf)) {
@@ -114,39 +118,39 @@ try {
     }
     Invoke-Checked { & (Join-Path $PSScriptRoot "stage_native_runtime.ps1") @stageArgs } "stage_native_runtime.ps1"
 
-    $testSource = @'
-module app.package_smoke
-
-import ori.test = test
-import ori.task = task
-
-@test
-package_smoke_test()
-    check 1 + 1 == 2
-    test.assert(true, "package smoke test")
-end
-
-@test
-async package_async_smoke_test()
-    await task.sleep(1)
-    test.assert(true, "package async smoke test")
-end
-'@
+    # Build Ori fixtures as line arrays — avoid PowerShell here-strings that
+    # contain `@test` (can confuse older parsers / editors).
     $testPath = Join-Path $examplesDir "package_smoke_test.orl"
-    Set-Content -LiteralPath $testPath -Value $testSource -Encoding ASCII
+    @(
+        "module app.package_smoke"
+        ""
+        "import ori.test = test"
+        "import ori.task = task"
+        ""
+        "@test"
+        "package_smoke_test()"
+        "    check 1 + 1 == 2"
+        "    test.assert(true, `"package smoke test`")"
+        "end"
+        ""
+        "@test"
+        "async package_async_smoke_test()"
+        "    await task.sleep(1)"
+        "    test.assert(true, `"package async smoke test`")"
+        "end"
+    ) | Set-Content -LiteralPath $testPath -Encoding ascii
 
-    $stdlibSmokeSource = @'
-module app.stdlib_package_smoke
-
-import ori.io = io
-import ori.string (trim_all)
-
-main()
-    io.print(trim_all("hello   packaged   stdlib"))
-end
-'@
     $stdlibSmokePath = Join-Path $examplesDir "stdlib_package_smoke.orl"
-    Set-Content -LiteralPath $stdlibSmokePath -Value $stdlibSmokeSource -Encoding ASCII
+    @(
+        "module app.stdlib_package_smoke"
+        ""
+        "import ori.io = io"
+        "import ori.string (trim_all)"
+        ""
+        "main()"
+        "    io.print(trim_all(`"hello   packaged   stdlib`"))"
+        "end"
+    ) | Set-Content -LiteralPath $stdlibSmokePath -Encoding ascii
 
     $previousRequirePackagedRuntime = $env:ORI_REQUIRE_PACKAGED_RUNTIME
     $env:ORI_REQUIRE_PACKAGED_RUNTIME = "1"

@@ -60,10 +60,21 @@ jobs:
         if: matrix.smoke == 'powershell'
         shell: pwsh
         run: |
-          .\tools\package_native_release.ps1 `
-            -PackageRoot "compiler\target\dist\ori-${{ matrix.name }}" `
-            -ArchivePath "compiler\target\dist\ori-$env:GITHUB_REF_NAME-${{ matrix.name }}.zip" `
-            -Force
+          $ErrorActionPreference = "Stop"
+          $root = Resolve-Path .
+          $pkg = Join-Path $root "compiler\target\dist\ori-${{ matrix.name }}"
+          $archive = Join-Path $root "compiler\target\dist\ori-${{ github.ref_name }}-${{ matrix.name }}.zip"
+          Write-Host "PackageRoot=$pkg"
+          Write-Host "ArchivePath=$archive"
+          Write-Host "rustc: $(rustc -Vv | Out-String)"
+          & "$root\tools\package_native_release.ps1" -PackageRoot $pkg -ArchivePath $archive -Force
+          if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
+            throw "package_native_release.ps1 failed: $LASTEXITCODE"
+          }
+          if (-not (Test-Path -LiteralPath $archive)) {
+            throw "Archive not produced: $archive"
+          }
+          Get-Item $archive | Format-List FullName, Length
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
@@ -78,7 +89,8 @@ jobs:
     name: publish-release
     needs: package
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
+    # Publish even if one OS matrix leg fails (prefer partial release + fix follow-up).
+    if: always() && startsWith(github.ref, 'refs/tags/') && needs.package.result != 'cancelled'
     steps:
       - uses: actions/checkout@v4
 
@@ -87,9 +99,16 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+        continue-on-error: true
 
       - name: List assets
-        run: find dist -type f -ls
+        run: find dist -type f -ls || true
+
+      - name: Require at least one package asset
+        run: |
+          count=$(find dist -type f \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)
+          echo "asset_count=$count"
+          test "$count" -ge 1
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -98,6 +117,7 @@ jobs:
           name: Ori ${{ github.ref_name }}
           generate_release_notes: true
           prerelease: true
+          fail_on_unmatched_files: false
           files: |
             dist/*.tar.gz
             dist/*.zip
