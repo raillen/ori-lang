@@ -157,7 +157,7 @@ end
             "step_{index}(value: int) -> int\n    return value + {index}\nend\n"
         );
     }
-    source.push_str("main()\n    const item: Item = Item(id: 1, label: \"ori\")\n    var total: int = item.id\n");
+    source.push_str("main()\n    const item: Item = Item {id: 1, label: \"ori\"}\n    var total: int = item.id\n");
     for index in 0..function_count {
         let _ = writeln!(source, "    total = step_{index}(total)");
     }

@@ -36,35 +36,35 @@ circles_collide(a: Circle, b: Circle) -> bool
 end
 
 test_rectangles() -> void
-    const a: Rectangle = Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
-    const b: Rectangle = Rectangle(x: 5.0, y: 5.0, width: 10.0, height: 10.0)
-    const c: Rectangle = Rectangle(x: 20.0, y: 20.0, width: 10.0, height: 10.0)
+    const a: Rectangle = Rectangle { x: 0.0, y: 0.0, width: 10.0, height: 10.0 }
+    const b: Rectangle = Rectangle { x: 5.0, y: 5.0, width: 10.0, height: 10.0 }
+    const c: Rectangle = Rectangle { x: 20.0, y: 20.0, width: 10.0, height: 10.0 }
 
     test.assert(rects_collide(a, b), "rects a and b should collide")
     test.assert(not rects_collide(a, c), "rects a and c should not collide")
 end
 
 test_point_in_rect() -> void
-    const rect: Rectangle = Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
-    const inside: vec2.Vec2 = vec2.Vec2(x: 5.0, y: 5.0)
-    const outside: vec2.Vec2 = vec2.Vec2(x: 15.0, y: 15.0)
+    const rect: Rectangle = Rectangle { x: 0.0, y: 0.0, width: 10.0, height: 10.0 }
+    const inside: vec2.Vec2 = vec2.Vec2 {x: 5.0, y: 5.0}
+    const outside: vec2.Vec2 = vec2.Vec2 {x: 15.0, y: 15.0}
 
     test.assert(point_in_rect(inside, rect), "point should be in rect")
     test.assert(not point_in_rect(outside, rect), "point should not be in rect")
 end
 
 test_circles() -> void
-    const a: Circle = Circle(x: 0.0, y: 0.0, radius: 5.0)
-    const b: Circle = Circle(x: 8.0, y: 0.0, radius: 5.0)
-    const c: Circle = Circle(x: 20.0, y: 0.0, radius: 5.0)
+    const a: Circle = Circle { x: 0.0, y: 0.0, radius: 5.0 }
+    const b: Circle = Circle { x: 8.0, y: 0.0, radius: 5.0 }
+    const c: Circle = Circle { x: 20.0, y: 0.0, radius: 5.0 }
 
     test.assert(circles_collide(a, b), "circles a and b should collide")
     test.assert(not circles_collide(a, c), "circles a and c should not collide")
 end
 
 test_vec2_operations() -> void
-    const a: vec2.Vec2 = vec2.Vec2(x: 1.0, y: 2.0)
-    const b: vec2.Vec2 = vec2.Vec2(x: 3.0, y: 4.0)
+    const a: vec2.Vec2 = vec2.Vec2 {x: 1.0, y: 2.0}
+    const b: vec2.Vec2 = vec2.Vec2 {x: 3.0, y: 4.0}
 
     const sum: vec2.Vec2 = a + b
     test.assert(sum.x == 4.0, "sum.x should be 4.0")

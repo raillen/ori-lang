@@ -10,25 +10,25 @@ end
 
 implement core.Addable for Vec2
     add(self, other: Vec2) -> Vec2
-        return Vec2(x: self.x + other.x, y: self.y + other.y)
+        return Vec2 { x: self.x + other.x, y: self.y + other.y }
     end
 end
 
 implement core.Subtractable for Vec2
     subtract(self, other: Vec2) -> Vec2
-        return Vec2(x: self.x - other.x, y: self.y - other.y)
+        return Vec2 { x: self.x - other.x, y: self.y - other.y }
     end
 end
 
 implement core.Multiplicable for Vec2
     multiply(self, other: Vec2) -> Vec2
-        return Vec2(x: self.x * other.x, y: self.y * other.y)
+        return Vec2 { x: self.x * other.x, y: self.y * other.y }
     end
 end
 
 implement core.Divisible for Vec2
     divide(self, other: Vec2) -> Vec2
-        return Vec2(x: self.x / other.x, y: self.y / other.y)
+        return Vec2 { x: self.x / other.x, y: self.y / other.y }
     end
 end
 
@@ -53,9 +53,9 @@ end
 public normalize(v: Vec2) -> Vec2
     const mag: float = magnitude(v)
     if mag == 0.0
-        return Vec2(x: 0.0, y: 0.0)
+        return Vec2 { x: 0.0, y: 0.0 }
     end
-    return Vec2(x: v.x / mag, y: v.y / mag)
+    return Vec2 { x: v.x / mag, y: v.y / mag }
 end
 
 public distance(a: Vec2, b: Vec2) -> float
@@ -67,10 +67,10 @@ public distance_squared(a: Vec2, b: Vec2) -> float
 end
 
 public lerp(a: Vec2, b: Vec2, t: float) -> Vec2
-    return Vec2(
+    return Vec2 {
         x: a.x + (b.x - a.x) * t,
         y: a.y + (b.y - a.y) * t
-    )
+    }
 end
 
 public angle(v: Vec2) -> float
@@ -78,29 +78,25 @@ public angle(v: Vec2) -> float
 end
 
 public from_angle(angle_rad: float) -> Vec2
-    return Vec2(x: math.cos(angle_rad), y: math.sin(angle_rad))
+    return Vec2 {x: math.cos(angle_rad), y: math.sin(angle_rad)}
 end
 
 public negate(v: Vec2) -> Vec2
-    return Vec2(x: -v.x, y: -v.y)
+    return Vec2 { x: -v.x, y: -v.y }
 end
 
 public scale(v: Vec2, s: float) -> Vec2
-    return Vec2(x: v.x * s, y: v.y * s)
+    return Vec2 { x: v.x * s, y: v.y * s }
 end
 
 public min(a: Vec2, b: Vec2) -> Vec2
-    return Vec2(
-        x: if a.x < b.x then a.x else b.x,
-        y: if a.y < b.y then a.y else b.y
-    )
+    return Vec2 { x: if a.x < b.x then a.x else b.x,
+        y: if a.y < b.y then a.y else b.y }
 end
 
 public max(a: Vec2, b: Vec2) -> Vec2
-    return Vec2(
-        x: if a.x > b.x then a.x else b.x,
-        y: if a.y > b.y then a.y else b.y
-    )
+    return Vec2 { x: if a.x > b.x then a.x else b.x,
+        y: if a.y > b.y then a.y else b.y }
 end
 
 public clamp(v: Vec2, min_val: Vec2, max_val: Vec2) -> Vec2
@@ -109,9 +105,9 @@ end
 
 public reflect(v: Vec2, normal: Vec2) -> Vec2
     const d: float = dot(v, normal) * 2.0
-    return Vec2(x: v.x - normal.x * d, y: v.y - normal.y * d)
+    return Vec2 { x: v.x - normal.x * d, y: v.y - normal.y * d }
 end
 
 public perpendicular(v: Vec2) -> Vec2
-    return Vec2(x: -v.y, y: v.x)
+    return Vec2 { x: -v.y, y: v.x }
 end

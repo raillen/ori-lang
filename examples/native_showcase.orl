@@ -58,11 +58,11 @@ event(kind: int, user: User) -> Event
 end
 
 main()
-    using resource: Resource = Resource(id: 1)
+    using resource: Resource = Resource { id: 1 }
 
     const user: User = choose(
-        User(name: "Ada", role: "guest"),
-        User(name: "Grace", role: "admin"),
+        User { name: "Ada", role: "guest" },
+        User { name: "Grace", role: "admin" },
     )
     const boxed: any[Labelled] = user
 

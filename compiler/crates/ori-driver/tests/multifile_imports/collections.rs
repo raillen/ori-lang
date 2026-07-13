@@ -1007,9 +1007,9 @@ main()
     end
 
     const scores: heap.Heap[Score] = heap.new()
-    heap.push(scores, Score(value: 5))
-    heap.push(scores, Score(value: 2))
-    heap.push(scores, Score(value: 7))
+    heap.push(scores, Score {value: 5})
+    heap.push(scores, Score {value: 2})
+    heap.push(scores, Score {value: 7})
     match heap.pop(scores)
         case some(score):
             io.print(string(score.value))
@@ -1072,8 +1072,8 @@ end
 
 main()
     const pop_scores: heap.Heap[Score] = heap.new()
-    heap.push(pop_scores, Score(value: 5))
-    heap.push(pop_scores, Score(value: 2))
+    heap.push(pop_scores, Score {value: 5})
+    heap.push(pop_scores, Score {value: 2})
     match heap.pop(pop_scores)
         case some(score):
             heap.clear(pop_scores)
@@ -1083,8 +1083,8 @@ main()
     end
 
     const peek_scores: heap.Heap[Score] = heap.new()
-    heap.push(peek_scores, Score(value: 8))
-    heap.push(peek_scores, Score(value: 3))
+    heap.push(peek_scores, Score {value: 8})
+    heap.push(peek_scores, Score {value: 3})
     match heap.peek(peek_scores)
         case some(score):
             heap.clear(peek_scores)
@@ -1536,7 +1536,7 @@ end
 
 main()
     var total: int = 0
-    for value, index in Countdown(current: 3, min: 1)
+    for value, index in Countdown {current: 3, min: 1}
         total = total + value + index
     end
     io.print(string(total))
@@ -1713,7 +1713,7 @@ implement core.Equatable for Resource
 end
 
 main()
-    const resource: Resource = Resource(id: 7)
+    const resource: Resource = Resource {id: 7}
     const labels: map[Resource, int] = maps.new()
     maps.set(labels, resource, 42)
     io.print(string(maps.get(labels, resource)))

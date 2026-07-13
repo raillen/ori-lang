@@ -251,6 +251,16 @@ impl<'src> Parser<'src> {
                         span,
                     };
                 }
+                // `Type { field: value }` — explicit struct literal (S3)
+                Some(TokenKind::LBrace) => {
+                    let Expr::QualifiedIdent(ty) = &expr else {
+                        break;
+                    };
+                    let ty = ty.clone();
+                    let (fields, end) = self.parse_braced_field_inits_with_end()?;
+                    let span = span_start.cover(end);
+                    expr = Expr::StructLit { ty, fields, span };
+                }
                 // `[index]`
                 Some(TokenKind::LBracket) => {
                     self.advance();
@@ -409,7 +419,7 @@ impl<'src> Parser<'src> {
                 })
             }
 
-            // Grouped expression or tuple `(a, b)` or `(a)`
+            // Grouped expression, tuple `(a, b)`, or removed guided struct `(field: v)`
             TokenKind::LParen => {
                 self.advance();
                 if self.at(&TokenKind::RParen) {
@@ -417,6 +427,19 @@ impl<'src> Parser<'src> {
                     let end = self.advance().unwrap().span;
                     return Some(Expr::Tuple {
                         elements: Vec::new(),
+                        span: span.cover(end),
+                    });
+                }
+                // Removed guided struct: `(field: value, …)` — recover as anon struct lit.
+                if self.at_struct_field_label() {
+                    self.error(
+                        "parse.removed_struct_call_literal",
+                        "guided struct construction `(field: value)` is removed; write `{ field: value }` or `Type { field: value }`",
+                        span,
+                    );
+                    let (fields, end) = self.parse_paren_field_inits_rest()?;
+                    return Some(Expr::AnonStructLit {
+                        fields,
                         span: span.cover(end),
                     });
                 }
@@ -457,25 +480,8 @@ impl<'src> Parser<'src> {
                 })
             }
 
-            // Map literal `{ key: value, ... }`
-            TokenKind::LBrace => {
-                self.advance();
-                let mut entries = Vec::new();
-                while !self.at(&TokenKind::RBrace) && !self.at_eof() {
-                    let key = self.parse_expr()?;
-                    self.expect(&TokenKind::Colon)?;
-                    let value = self.parse_expr()?;
-                    entries.push((key, value));
-                    if !self.eat(&TokenKind::Comma) {
-                        break;
-                    }
-                }
-                let end = self.expect(&TokenKind::RBrace)?;
-                Some(Expr::Map {
-                    entries,
-                    span: span.cover(end),
-                })
-            }
+            // Brace literal: struct `{ field: v }` vs map `{ "k": v }` / `{ 1: v }`
+            TokenKind::LBrace => self.parse_brace_literal(span),
 
             // Set literal `set { a, b, c }`
             TokenKind::Set if self.peek_nth_kind(1) == Some(&TokenKind::LBrace) => {
@@ -501,12 +507,17 @@ impl<'src> Parser<'src> {
                 self.parse_closure_expr(span)
             }
 
-            // `.Variant` — shorthand enum variant
+            // `.Variant` — shorthand enum variant; `.{…}` is removed (S3)
             TokenKind::Dot => {
                 self.advance();
                 if self.at(&TokenKind::LBrace) {
-                    let fields = self.parse_braced_field_inits()?;
-                    let end = fields.last().map(|f| f.span).unwrap_or(span);
+                    self.error(
+                        "parse.removed_struct_call_literal",
+                        "`.{…}` anonymous struct literal is removed; write `{ field: value }` or `Type { field: value }`",
+                        span,
+                    );
+                    // Recover as anonymous struct so the rest of the file still typechecks.
+                    let (fields, end) = self.parse_braced_field_inits_with_end()?;
                     return Some(Expr::AnonStructLit {
                         fields,
                         span: span.cover(end),
@@ -514,8 +525,7 @@ impl<'src> Parser<'src> {
                 }
                 let variant = self.parse_name()?;
                 if self.at(&TokenKind::LParen) {
-                    let fields = self.parse_field_inits()?;
-                    let end = self.peek().map(|t| t.span).unwrap_or(variant.span);
+                    let (fields, end) = self.parse_field_inits_with_end()?;
                     Some(Expr::EnumVariantNamed {
                         ty: None,
                         variant,
@@ -523,10 +533,11 @@ impl<'src> Parser<'src> {
                         span: span.cover(end),
                     })
                 } else {
+                    let end = variant.span;
                     Some(Expr::EnumVariantUnit {
                         ty: None,
                         variant,
-                        span,
+                        span: span.cover(end),
                     })
                 }
             }
@@ -670,8 +681,67 @@ impl<'src> Parser<'src> {
         }
     }
 
-    pub fn parse_field_inits(&mut self) -> Option<Vec<FieldInit>> {
+    fn parse_field_inits_with_end(&mut self) -> Option<(Vec<FieldInit>, Span)> {
         self.expect(&TokenKind::LParen)?;
+        self.parse_paren_field_inits_rest()
+    }
+
+    fn parse_braced_field_inits_with_end(&mut self) -> Option<(Vec<FieldInit>, Span)> {
+        self.expect(&TokenKind::LBrace)?;
+        self.parse_braced_field_inits_rest()
+    }
+
+    /// Used by struct update `with { … } end`.
+    fn parse_braced_field_inits(&mut self) -> Option<Vec<FieldInit>> {
+        let (fields, _) = self.parse_braced_field_inits_with_end()?;
+        Some(fields)
+    }
+
+    /// `{ field: v }` vs `{ "k": v }` / `{ 1: v }` / `{}`.
+    ///
+    /// Disambiguation (S3): identifier before `:` → struct field; any other
+    /// key expression (literals, calls, …) → map entry.
+    fn parse_brace_literal(&mut self, span: Span) -> Option<Expr> {
+        self.advance(); // `{`
+        if self.at(&TokenKind::RBrace) {
+            let end = self.advance().unwrap().span;
+            return Some(Expr::Map {
+                entries: Vec::new(),
+                span: span.cover(end),
+            });
+        }
+        if self.at_struct_field_label() {
+            let (fields, end) = self.parse_braced_field_inits_rest()?;
+            return Some(Expr::AnonStructLit {
+                fields,
+                span: span.cover(end),
+            });
+        }
+        let mut entries = Vec::new();
+        while !self.at(&TokenKind::RBrace) && !self.at_eof() {
+            let key = self.parse_expr()?;
+            self.expect(&TokenKind::Colon)?;
+            let value = self.parse_expr()?;
+            entries.push((key, value));
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        let end = self.expect(&TokenKind::RBrace)?;
+        Some(Expr::Map {
+            entries,
+            span: span.cover(end),
+        })
+    }
+
+    /// `true` when the next tokens are `ident :` (struct field label).
+    fn at_struct_field_label(&self) -> bool {
+        matches!(self.peek_kind(), Some(TokenKind::Ident | TokenKind::Lazy))
+            && self.peek_nth_kind(1) == Some(&TokenKind::Colon)
+    }
+
+    /// Parse `field: expr, …` until `)`, opening `(` already consumed.
+    fn parse_paren_field_inits_rest(&mut self) -> Option<(Vec<FieldInit>, Span)> {
         let mut fields = Vec::new();
         while !self.at(&TokenKind::RParen) && !self.at_eof() {
             let name = self.parse_name()?;
@@ -687,12 +757,12 @@ impl<'src> Parser<'src> {
                 break;
             }
         }
-        self.expect(&TokenKind::RParen)?;
-        Some(fields)
+        let end = self.expect(&TokenKind::RParen)?;
+        Some((fields, end))
     }
 
-    fn parse_braced_field_inits(&mut self) -> Option<Vec<FieldInit>> {
-        self.expect(&TokenKind::LBrace)?;
+    /// Parse `field: expr, …` until `}`, opening `{` already consumed.
+    fn parse_braced_field_inits_rest(&mut self) -> Option<(Vec<FieldInit>, Span)> {
         let mut fields = Vec::new();
         while !self.at(&TokenKind::RBrace) && !self.at_eof() {
             let name = self.parse_name()?;
@@ -708,8 +778,8 @@ impl<'src> Parser<'src> {
                 break;
             }
         }
-        self.expect(&TokenKind::RBrace)?;
-        Some(fields)
+        let end = self.expect(&TokenKind::RBrace)?;
+        Some((fields, end))
     }
 
     fn unescape_string_content(&mut self, content: &str, base: usize) -> SmolStr {

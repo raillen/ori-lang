@@ -24,11 +24,9 @@ analyze(text: string) -> LogStats
         end
     end
 
-    return LogStats(
-        info_count: info_count,
+    return LogStats { info_count: info_count,
         warn_count: warn_count,
-        error_count: error_count,
-    )
+        error_count: error_count, }
 end
 
 main()

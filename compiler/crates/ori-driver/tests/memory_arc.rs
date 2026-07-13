@@ -152,7 +152,7 @@ end
     );
     assert!(success, "{stdout}");
     let lines = stdout.lines().collect::<Vec<_>>();
-    assert_eq!(lines.first(), Some(&"size:2"));
+    assert_eq!(lines.first(), Some {&"size:2"});
     let leaks_line = lines
         .iter()
         .find(|l| l.starts_with("leaks:"))
@@ -194,7 +194,7 @@ make_holder(n: int) -> Holder
         lists.push(xs, i)
         i = i + 1
     end
-    return Holder(items: xs)
+    return Holder {items: xs}
 end
 
 measure_holder(n: int) -> int
@@ -244,7 +244,7 @@ make_branch(n: int) -> Branch
         lists.push(xs, i * i)
         i = i + 1
     end
-    return Branch(leaf: Leaf(data: xs))
+    return Branch {leaf: Leaf(data: xs)}
 end
 
 measure_branch(n: int) -> int
@@ -346,7 +346,7 @@ maybe_box(n: int) -> optional[Box]
         lists.push(xs, i)
         i = i + 1
     end
-    return some(Box(items: xs))
+    return some(Box {items: xs})
 end
 
 measure_box(n: int) -> int
@@ -407,7 +407,7 @@ end
     );
     assert!(success, "{stdout}");
     let lines = stdout.lines().collect::<Vec<_>>();
-    assert_eq!(lines.first(), Some(&"size:2"));
+    assert_eq!(lines.first(), Some {&"size:2"});
     assert!(
         lines.iter().any(|l| l.starts_with("collected:")),
         "missing collected line: {stdout}"
@@ -439,8 +439,8 @@ build_and_measure() -> int
     const b_link: list[int] = lists.new()
     lists.push(a_link, 10)
     lists.push(b_link, 20)
-    const a: Peer = Peer(id: 1, link: b_link)
-    const b: Peer = Peer(id: 2, link: a_link)
+    const a: Peer = Peer {id: 1, link: b_link}
+    const b: Peer = Peer {id: 2, link: a_link}
     return a.id + b.id
 end
 
@@ -623,8 +623,8 @@ end
 build_one_cycle(seed: int) -> int
     const a_link: list[int] = lists.new()
     const b_link: list[int] = lists.new()
-    const a: Peer = Peer(id: seed, link: b_link)
-    const b: Peer = Peer(id: seed + 1, link: a_link)
+    const a: Peer = Peer {id: seed, link: b_link}
+    const b: Peer = Peer {id: seed + 1, link: a_link}
     return a.id + b.id
 end
 

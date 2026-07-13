@@ -1281,16 +1281,16 @@ impl<'a> Checker<'a> {
                 // propagate, cancel, fail). See `emit_async_terminal_cleanup` in native_backend.
                 let ann_ty = self.lower(&u.ty, tp);
                 self.check_collection_runtime_limits(&ann_ty, u.ty.span());
-                let val_ty = self.infer_expr(&u.value);
-                self.expect_assignable(&val_ty, &ann_ty, u.value.span());
+                // S3 context-typed `{…}` / `.Variant` need expected type on the RHS.
+                self.check_expr_assignable_to(&u.value, &ann_ty);
                 self.check_disposable_using(&ann_ty, u.name.span);
                 self.bind_checked(&u.name, ann_ty, false, true);
             }
             Stmt::Assign(a) => {
-                let rhs_ty = self.infer_expr(&a.value);
                 self.check_lvalue_mutable(&a.lvalue);
                 let lhs_ty = self.infer_lvalue_ty(&a.lvalue);
-                self.expect_assignable(&rhs_ty, &lhs_ty, a.value.span());
+                // Push expected type so context-typed struct/enum shorthand works on assign.
+                self.check_expr_assignable_to(&a.value, &lhs_ty);
             }
             Stmt::CompoundAssign(c) => {
                 let rhs_ty = self.infer_expr(&c.value);
@@ -1348,13 +1348,35 @@ impl<'a> Checker<'a> {
             Expr::AnonStructLit { fields, span } => {
                 self.check_anon_struct_literal(fields, expected, *span)
             }
+            Expr::StructLit { ty, fields, span } => {
+                let actual = self.check_struct_literal(ty, fields, *span);
+                self.expect_assignable(&actual, expected, *span);
+                actual
+            }
+            Expr::EnumVariantUnit { ty, variant, span } => {
+                let actual = self.check_enum_variant_unit(ty.as_ref(), variant, expected, *span);
+                self.expect_assignable(&actual, expected, *span);
+                actual
+            }
+            Expr::EnumVariantNamed {
+                ty,
+                variant,
+                fields,
+                span,
+            } => {
+                let actual =
+                    self.check_enum_variant_named(ty.as_ref(), variant, fields, expected, *span);
+                self.expect_assignable(&actual, expected, *span);
+                actual
+            }
             Expr::IfExpr {
                 condition,
                 then_expr,
                 else_expr,
                 ..
             } if expr_needs_expected_context(then_expr)
-                || expr_needs_expected_context(else_expr) =>
+                || expr_needs_expected_context(else_expr)
+                || expr_needs_expected_context(expr) =>
             {
                 let cond_ty = self.infer_expr(condition);
                 self.expect_bool(&cond_ty, condition.span());
@@ -1446,6 +1468,263 @@ impl<'a> Checker<'a> {
         }
 
         expected.clone()
+    }
+
+    fn check_struct_literal(
+        &mut self,
+        ty_name: &ori_ast::common::QualifiedName,
+        fields: &[ori_ast::expr::FieldInit],
+        span: ori_diagnostics::Span,
+    ) -> Ty {
+        let path = ty_name.to_string();
+        let Some(def_id) = self.resolve_def_id(&path) else {
+            self.sink.emit(
+                Diagnostic::error("type.undefined_name", format!("undefined type `{path}`"))
+                    .with_label(Label::primary(self.file_id, ty_name.span, "type used here"))
+                    .with_action("use a struct type that is defined or imported in this namespace"),
+            );
+            for field in fields {
+                self.infer_expr(&field.value);
+            }
+            return Ty::Error;
+        };
+        self.check_visibility(def_id, ty_name.span);
+        let def = self.def_map.get(def_id);
+        if def.kind != DefKind::Struct {
+            self.sink.emit(
+                Diagnostic::error(
+                    "type.type_mismatch",
+                    format!("`{path}` is not a struct type"),
+                )
+                .with_label(Label::primary(self.file_id, ty_name.span, "not a struct"))
+                .with_action("use a struct type before `{{ … }}`"),
+            );
+            for field in fields {
+                self.infer_expr(&field.value);
+            }
+            return Ty::Error;
+        }
+
+        let field_sig = self
+            .struct_sigs
+            .iter()
+            .find(|s| s.def_id == def_id)
+            .map(|s| s.fields.clone())
+            .unwrap_or_default();
+        let mut provided = HashSet::new();
+        for field in fields {
+            if !provided.insert(field.name.text.clone()) {
+                self.sink.emit(
+                    Diagnostic::error(
+                        "type.anon_struct_field_mismatch",
+                        format!("struct literal repeats field `{}`", field.name.text),
+                    )
+                    .with_label(Label::primary(
+                        self.file_id,
+                        field.name.span,
+                        "duplicate field",
+                    ))
+                    .with_action("keep each field only once"),
+                );
+                self.infer_expr(&field.value);
+                continue;
+            }
+            if let Some((_, expected)) = field_sig.iter().find(|(name, _)| name == &field.name.text)
+            {
+                self.check_expr_assignable_to(&field.value, expected);
+            } else {
+                self.infer_expr(&field.value);
+                self.sink.emit(
+                    Diagnostic::error(
+                        "type.no_such_field",
+                        format!("struct has no field `{}`", field.name.text),
+                    )
+                    .with_label(Label::primary(
+                        self.file_id,
+                        field.name.span,
+                        "unknown field",
+                    ))
+                    .with_action("use a field declared on the struct"),
+                );
+            }
+        }
+        for (name, _) in &field_sig {
+            if !provided.contains(name) {
+                self.sink.emit(
+                    Diagnostic::error(
+                        "type.missing_struct_field",
+                        format!("struct construction is missing field `{name}`"),
+                    )
+                    .with_label(Label::primary(self.file_id, span, "struct literal here"))
+                    .with_action(format!("provide `{name}` in the struct literal")),
+                );
+            }
+        }
+        Ty::Named(def_id, Vec::new())
+    }
+
+    fn check_enum_variant_unit(
+        &mut self,
+        ty_name: Option<&ori_ast::common::QualifiedName>,
+        variant: &ori_ast::common::Name,
+        expected: &Ty,
+        span: ori_diagnostics::Span,
+    ) -> Ty {
+        if let Some(qn) = ty_name {
+            let mut path = qn.clone();
+            path.parts.push(variant.clone());
+            path.span = path.span.cover(variant.span);
+            if let Some((def_id, _)) = self.resolve_enum_variant(&path) {
+                return Ty::Named(def_id, Vec::new());
+            }
+            self.sink.emit(
+                Diagnostic::error(
+                    "type.undefined_name",
+                    format!("undefined enum variant `{}.{}`", qn, variant.text),
+                )
+                .with_label(Label::primary(
+                    self.file_id,
+                    span,
+                    "variant used here",
+                )),
+            );
+            return Ty::Error;
+        }
+        // Shorthand `.Variant` — need expected enum type from context.
+        if let Some(sig) = self.enum_variant_sig_for_name(expected, variant) {
+            let _ = sig;
+            return expected.clone();
+        }
+        if expected.contains_infer() {
+            // Infer path used without expected context.
+            return Ty::Infer(0);
+        }
+        self.sink.emit(
+            Diagnostic::error(
+                "type.type_mismatch",
+                format!(
+                    "shorthand enum variant `.{}` needs an expected enum type, found {}",
+                    variant.text,
+                    expected.display()
+                ),
+            )
+            .with_label(Label::primary(self.file_id, span, "enum variant here"))
+            .with_action("annotate the binding or use `Enum.Variant`"),
+        );
+        Ty::Error
+    }
+
+    fn check_enum_variant_named(
+        &mut self,
+        ty_name: Option<&ori_ast::common::QualifiedName>,
+        variant: &ori_ast::common::Name,
+        fields: &[ori_ast::expr::FieldInit],
+        expected: &Ty,
+        span: ori_diagnostics::Span,
+    ) -> Ty {
+        let resolved = if let Some(qn) = ty_name {
+            let mut path = qn.clone();
+            path.parts.push(variant.clone());
+            path.span = path.span.cover(variant.span);
+            self.resolve_enum_variant(&path)
+        } else if let Some(_sig) = self.enum_variant_sig_for_name(expected, variant) {
+            if let Ty::Named(def_id, _) = expected {
+                Some((*def_id, variant.text.clone()))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let Some((def_id, _)) = resolved else {
+            for field in fields {
+                self.infer_expr(&field.value);
+            }
+            if ty_name.is_none() && expected.contains_infer() {
+                return Ty::Infer(0);
+            }
+            self.sink.emit(
+                Diagnostic::error(
+                    "type.undefined_name",
+                    format!("undefined enum variant `{}`", variant.text),
+                )
+                .with_label(Label::primary(
+                    self.file_id,
+                    span,
+                    "variant used here",
+                )),
+            );
+            return Ty::Error;
+        };
+
+        let variant_fields = self
+            .enum_sig(def_id)
+            .and_then(|sig| {
+                sig.variants
+                    .iter()
+                    .find(|v| v.name == variant.text)
+                    .map(|v| v.fields.clone())
+            })
+            .unwrap_or_default();
+
+        let mut provided = HashSet::new();
+        for field in fields {
+            if !provided.insert(field.name.text.clone()) {
+                self.sink.emit(
+                    Diagnostic::error(
+                        "type.anon_struct_field_mismatch",
+                        format!(
+                            "enum variant `{}` repeats field `{}`",
+                            variant.text, field.name.text
+                        ),
+                    )
+                    .with_label(Label::primary(
+                        self.file_id,
+                        field.name.span,
+                        "duplicate field",
+                    ))
+                    .with_action("keep each field only once"),
+                );
+                self.infer_expr(&field.value);
+                continue;
+            }
+            if let Some((_, field_ty)) = variant_fields
+                .iter()
+                .find(|(name, _)| name == &field.name.text)
+            {
+                self.check_expr_assignable_to(&field.value, field_ty);
+            } else {
+                self.infer_expr(&field.value);
+                self.sink.emit(
+                    Diagnostic::error(
+                        "type.no_such_field",
+                        format!(
+                            "enum variant `{}` has no field `{}`",
+                            variant.text, field.name.text
+                        ),
+                    )
+                    .with_label(Label::primary(
+                        self.file_id,
+                        field.name.span,
+                        "unknown field",
+                    )),
+                );
+            }
+        }
+        for (name, _) in &variant_fields {
+            if !provided.contains(name) {
+                self.sink.emit(
+                    Diagnostic::error(
+                        "type.enum_variant_named_fields_required",
+                        format!("enum variant `{}` is missing field `{name}`", variant.text),
+                    )
+                    .with_label(Label::primary(self.file_id, span, "variant construction"))
+                    .with_action(format!("provide `{name}`")),
+                );
+            }
+        }
+        Ty::Named(def_id, Vec::new())
     }
 
     fn expected_struct_fields(&self, expected: &Ty) -> Option<Vec<(SmolStr, Ty)>> {
@@ -1762,6 +2041,16 @@ impl<'a> Checker<'a> {
                 self.emit_anon_struct_type_unknown(&Ty::Infer(0), *span);
                 Ty::Error
             }
+            Expr::StructLit { ty, fields, span } => self.check_struct_literal(ty, fields, *span),
+            Expr::EnumVariantUnit { ty, variant, span } => {
+                self.check_enum_variant_unit(ty.as_ref(), variant, &Ty::Infer(0), *span)
+            }
+            Expr::EnumVariantNamed {
+                ty,
+                variant,
+                fields,
+                span,
+            } => self.check_enum_variant_named(ty.as_ref(), variant, fields, &Ty::Infer(0), *span),
             Expr::Unary { op, operand, span } => {
                 let t = self.infer_expr(operand);
                 match op {
@@ -2035,8 +2324,29 @@ impl<'a> Checker<'a> {
                                 return ret;
                             }
                         } else if def.kind == DefKind::Struct {
+                            // S3: `Type(...)` struct construction is removed.
+                            // Still check fields for cascade diagnostics, but poison the type
+                            // so recovery does not look like a successful construction.
+                            self.sink.emit(
+                                Diagnostic::error(
+                                    "parse.removed_struct_call_literal",
+                                    format!(
+                                        "struct construction via `{}(...)` is removed; write `{} {{ field: value }}` or `{{ field: value }}`",
+                                        path, path
+                                    ),
+                                )
+                                .with_label(Label::primary(
+                                    self.file_id,
+                                    expr.span(),
+                                    "use braced struct literal",
+                                ))
+                                .with_action(format!(
+                                    "write `{} {{ … }}` or context-typed `{{ … }}`",
+                                    path
+                                )),
+                            );
                             self.check_struct_constructor_args(def_id, args);
-                            return Ty::Named(def_id, Vec::new());
+                            return Ty::Error;
                         }
                     }
                     if let Some((def_id, _variant)) = self.resolve_enum_variant(q) {
@@ -4430,12 +4740,23 @@ impl<'a> Checker<'a> {
     }
 
     fn check_enum_variant_args(&mut self, args: &[Arg]) {
+        let mut provided = HashSet::new();
         for arg in args {
             let expr = match &arg.value {
                 ArgValue::Expr(e) | ArgValue::Spread(e) => e.as_ref(),
             };
-            self.infer_expr(expr);
-            if arg.label.is_none() {
+            if let Some(label) = &arg.label {
+                if !provided.insert(label.text.clone()) {
+                    self.sink.emit(
+                        Diagnostic::error(
+                            "type.anon_struct_field_mismatch",
+                            format!("enum variant repeats field `{}`", label.text),
+                        )
+                        .with_label(Label::primary(self.file_id, label.span, "duplicate field"))
+                        .with_action("keep each field only once"),
+                    );
+                }
+            } else {
                 self.sink.emit(
                     Diagnostic::error(
                         "type.enum_variant_named_fields_required",
@@ -4445,6 +4766,7 @@ impl<'a> Checker<'a> {
                     .with_action("write the argument as `field: value`"),
                 );
             }
+            self.infer_expr(expr);
         }
     }
 
@@ -5917,7 +6239,9 @@ fn expr_root_name(expr: &Expr) -> Option<&Name> {
 
 fn expr_needs_expected_context(expr: &Expr) -> bool {
     match expr {
-        Expr::AnonStructLit { .. } => true,
+        Expr::AnonStructLit { .. }
+        | Expr::EnumVariantUnit { ty: None, .. }
+        | Expr::EnumVariantNamed { ty: None, .. } => true,
         Expr::IfExpr {
             then_expr,
             else_expr,

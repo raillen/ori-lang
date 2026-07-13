@@ -489,7 +489,7 @@ public struct User
 end
 
 public make_user() -> User
-    return User(id: 34, name: "Ada")
+    return User { id: 34, name: "Ada" }
 end
 "#,
     );
@@ -705,7 +705,7 @@ end
 import app.model = model
 
 make_user() -> model.User
-    return model.User(id: 7, name: "Ada")
+    return model.User(id: 7, name: "Ada" )
 end
 
 main()
@@ -1118,7 +1118,7 @@ implement core.Displayable for Resource
 end
 
 main()
-    const resource: Resource = Resource(id: 7)
+    const resource: Resource = Resource { id: 7 }
     io.print(string(resource))
     io.print(string("ready"))
     io.print(f"value={resource}")
@@ -1164,7 +1164,7 @@ implement core.Displayable for Resource
 end
 
 main()
-    const resource: Resource = Resource(id: 7)
+    const resource: Resource = Resource { id: 7 }
     io.print(string(resource))
     io.print(string("ready"))
     io.print(f"value={resource}")
@@ -1200,7 +1200,7 @@ struct Secret
 end
 
 main()
-    const secret: Secret = Secret(id: 7)
+    const secret: Secret = Secret { id: 7 }
     const text: string = f"value={secret}"
 end
 "#,
@@ -2145,7 +2145,7 @@ main()
     io.print(string(pair.0))
     io.print(pair.1)
 
-    const p: Point = .{ x: bounded(), y: bounded(5) }
+    const p: Point = { x: bounded(), y: bounded(5) }
     io.print(string(p.x + p.y))
 end
 "#,
@@ -2371,7 +2371,7 @@ struct Positive
 end
 
 main()
-    const item: Positive = Positive(value: 4)
+    const item: Positive = Positive { value: 4 }
     io.print(string(item.value))
 end
 "#,
@@ -2400,7 +2400,7 @@ struct Positive
 end
 
 main()
-    const item: Positive = Positive(value: 0)
+    const item: Positive = Positive { value: 0 }
 end
 "#,
     );
@@ -2553,7 +2553,7 @@ same_any(value: any[Labelled]) -> any[Labelled]
 end
 
 main()
-    const picked: Tag = choose(Tag(label: "old"), Tag(label: "new"))
+    const picked: Tag = choose(Tag { label: "old" }, Tag { label: "new" })
     const boxed: any[Labelled] = picked
     io.print(generic_label(picked))
     io.print(any_label(picked))
@@ -2609,7 +2609,7 @@ implement traits.Named for User
 end
 
 public make_user(name: string) -> User
-    return User(name: name)
+    return User { name: name }
 end
 "#,
     );
@@ -2691,8 +2691,8 @@ identity(item: any[Scored]) -> any[Scored]
 end
 
 main()
-    const player: Player = Player(score: 37)
-    const booster: Booster = Booster(score: 20)
+    const player: Player = Player { score: 37 }
+    const booster: Booster = Booster { score: 20 }
     const item: any[Scored] = player
     const boosted: any[Scored] = booster
     io.print(string(item.score()))
@@ -2769,8 +2769,8 @@ identity(item: any[Scored]) -> any[Scored]
 end
 
 main()
-    const player: Player = Player(score: 37)
-    const booster: Booster = Booster(score: 20)
+    const player: Player = Player { score: 37 }
+    const booster: Booster = Booster { score: 20 }
     const item: any[Scored] = player
     const boosted: any[Scored] = booster
     io.print(string(item.score()))
@@ -2811,8 +2811,8 @@ implement Scored for Player
 end
 
 main()
-    const a: any[Scored] = Player(score: 1)
-    const b: any[Scored] = Player(score: 1)
+    const a: any[Scored] = Player { score: 1 }
+    const b: any[Scored] = Player { score: 1 }
     const same: bool = a == b
 end
 "#,
@@ -2847,8 +2847,8 @@ main()
     const g: func(int) -> int = do(x: int) => x + 1
     const closures_equal: bool = f == g
     const functions_equal: bool = first == second
-    const a: Handler = Handler(run: f)
-    const b: Handler = Handler(run: g)
+    const a: Handler = Handler { run: f }
+    const b: Handler = Handler { run: g }
     const handlers_equal: bool = a == b
 end
 "#,
@@ -2895,36 +2895,26 @@ struct User
 end
 
 main()
-    const left: User = User(
-        id: 1,
+    const left: User = User { id: 1,
         name: "Ada",
         scores: [10, 20],
-        address: Address(city: "Recife", zip: 50000),
-    )
-    const same: User = User(
-        id: 1,
+        address: Address { city: "Recife", zip: 50000 }, }
+    const same: User = User { id: 1,
         name: "Ada",
         scores: [10, 20],
-        address: Address(city: "Recife", zip: 50000),
-    )
-    const different_name: User = User(
-        id: 1,
+        address: Address { city: "Recife", zip: 50000 }, }
+    const different_name: User = User { id: 1,
         name: "Bia",
         scores: [10, 20],
-        address: Address(city: "Recife", zip: 50000),
-    )
-    const different_nested: User = User(
-        id: 1,
+        address: Address { city: "Recife", zip: 50000 }, }
+    const different_nested: User = User { id: 1,
         name: "Ada",
         scores: [10, 20],
-        address: Address(city: "Olinda", zip: 50000),
-    )
-    const different_list: User = User(
-        id: 1,
+        address: Address { city: "Olinda", zip: 50000 }, }
+    const different_list: User = User { id: 1,
         name: "Ada",
         scores: [10, 21],
-        address: Address(city: "Recife", zip: 50000),
-    )
+        address: Address { city: "Recife", zip: 50000 }, }
 
     io.print(string(left == same))
     io.print(string(left != different_name))
@@ -3111,9 +3101,9 @@ struct User
 end
 
 main()
-    const left: User = User(id: 1, name: "Ada", address: Address(city: "Recife", zip: 50000))
-    const same: User = User(id: 1, name: "Ada", address: Address(city: "Recife", zip: 50000))
-    const different: User = User(id: 1, name: "Ada", address: Address(city: "Olinda", zip: 50000))
+    const left: User = User { id: 1, name: "Ada", address: Address { city: "Recife", zip: 50000 } }
+    const same: User = User { id: 1, name: "Ada", address: Address { city: "Recife", zip: 50000 } }
+    const different: User = User { id: 1, name: "Ada", address: Address { city: "Olinda", zip: 50000 } }
 
     const users_equal: bool = left == same
     const users_different: bool = left != different
@@ -3270,13 +3260,13 @@ end
 
 implement core.Addable for Score
     add(self, other: Score) -> Score
-        return Score(value: self.value + other.value)
+        return Score {value: self.value + other.value}
     end
 end
 
 implement core.Subtractable for Score
     subtract(self, other: Score) -> Score
-        return Score(value: self.value - other.value)
+        return Score {value: self.value - other.value}
     end
 end
 
@@ -3293,8 +3283,8 @@ implement core.Comparable for Score
 end
 
 main()
-    const left: Score = Score(value: 3)
-    const right: Score = Score(value: 5)
+    const left: Score = Score { value: 3 }
+    const right: Score = Score { value: 5 }
     const sum: Score = left + right
     const diff: Score = right - left
     const same: bool = left == right
@@ -3339,13 +3329,13 @@ end
 
 implement core.Addable for Score
     add(self, other: Score) -> Score
-        return Score(value: self.value + other.value)
+        return Score {value: self.value + other.value}
     end
 end
 
 implement core.Subtractable for Score
     subtract(self, other: Score) -> Score
-        return Score(value: self.value - other.value)
+        return Score {value: self.value - other.value}
     end
 end
 
@@ -3362,13 +3352,13 @@ implement core.Comparable for Score
 end
 
 main()
-    const left: Score = Score(value: 3)
-    const right: Score = Score(value: 5)
+    const left: Score = Score { value: 3 }
+    const right: Score = Score { value: 5 }
     const sum: Score = left + right
     const diff: Score = right - left
     io.print(string(sum.value))
     io.print(string(diff.value))
-    io.print(if left == Score(value: 3) then "eq" else "bad")
+    io.print(if left == Score { value: 3 } then "eq" else "bad")
     io.print(if left != right then "ne" else "bad")
     io.print(if left < right then "lt" else "bad")
     io.print(if left <= right then "le" else "bad")
@@ -3411,19 +3401,19 @@ end
 
 implement core.Multiplicable for Vec2
     multiply(self, other: Vec2) -> Vec2
-        return Vec2(x: self.x * other.x, y: self.y * other.y)
+        return Vec2 { x: self.x * other.x, y: self.y * other.y }
     end
 end
 
 implement core.Divisible for Vec2
     divide(self, other: Vec2) -> Vec2
-        return Vec2(x: self.x / other.x, y: self.y / other.y)
+        return Vec2 { x: self.x / other.x, y: self.y / other.y }
     end
 end
 
 main()
-    const a: Vec2 = Vec2(x: 2.0, y: 3.0)
-    const b: Vec2 = Vec2(x: 4.0, y: 6.0)
+    const a: Vec2 = Vec2 { x: 2.0, y: 3.0 }
+    const b: Vec2 = Vec2 { x: 4.0, y: 6.0 }
     const product: Vec2 = a * b
     const quotient: Vec2 = b / a
 end
@@ -3457,19 +3447,19 @@ end
 
 implement core.Multiplicable for Value
     multiply(self, other: Value) -> Value
-        return Value(x: self.x * other.x, y: self.y * other.y)
+        return Value {x: self.x * other.x, y: self.y * other.y}
     end
 end
 
 implement core.Divisible for Value
     divide(self, other: Value) -> Value
-        return Value(x: self.x / other.x, y: self.y / other.y)
+        return Value {x: self.x / other.x, y: self.y / other.y}
     end
 end
 
 main()
-    const a: Value = Value(x: 2, y: 3)
-    const b: Value = Value(x: 4, y: 6)
+    const a: Value = Value { x: 2, y: 3 }
+    const b: Value = Value { x: 4, y: 6 }
     const product: Value = a * b
     const quotient: Value = b / a
     io.print(string(product.x))
@@ -3511,7 +3501,7 @@ end
 
 implement core.Addable for Label
     add(self, other: Label) -> Label
-        return Label(text: self.text + other.text)
+        return Label {text: self.text + other.text}
     end
 end
 
@@ -3528,11 +3518,11 @@ implement core.Comparable for Label
 end
 
 main()
-    const left: Label = Label(text: "ori")
-    const right: Label = Label(text: "-lang")
+    const left: Label = Label { text: "ori" }
+    const right: Label = Label { text: "-lang" }
     const joined: Label = left + right
     io.print(joined.text)
-    io.print(if joined == Label(text: "ori-lang") then "eq" else "bad")
+    io.print(if joined == Label { text: "ori-lang" } then "eq" else "bad")
     io.print(if left < right then "lt" else "bad")
 end
 "#,
@@ -3737,13 +3727,13 @@ implement Disposable for Resource
 end
 
 use_normal()
-    using first: Resource = Resource(id: 1)
-    using second: Resource = Resource(id: 2)
+    using first: Resource = Resource { id: 1 }
+    using second: Resource = Resource { id: 2 }
     io.print("inside")
 end
 
 use_return() -> int
-    using third: Resource = Resource(id: 3)
+    using third: Resource = Resource { id: 3 }
     return 7
 end
 
@@ -3752,14 +3742,14 @@ fail() -> result[int, string]
 end
 
 use_propagate() -> result[int, string]
-    using fourth: Resource = Resource(id: 4)
+    using fourth: Resource = Resource { id: 4 }
     const value: int = try fail()
     return success(value)
 end
 
 use_break()
     loop
-        using fifth: Resource = Resource(id: 5)
+        using fifth: Resource = Resource { id: 5 }
         break
     end
 end
@@ -3767,7 +3757,7 @@ end
 use_continue()
     var done: bool = false
     loop
-        using sixth: Resource = Resource(id: 6)
+        using sixth: Resource = Resource { id: 6 }
         if done
             break
         end
@@ -3842,7 +3832,7 @@ implement Disposable for Resource
 end
 
 main()
-    using resource: Resource = Resource(id: 1)
+    using resource: Resource = Resource { id: 1 }
     check false
 end
 "#,
@@ -3886,7 +3876,7 @@ implement Disposable for Resource
 end
 
 main()
-    using resource: Resource = Resource(id: 1)
+    using resource: Resource = Resource { id: 1 }
     panic("boom")
 end
 "#,
@@ -3981,7 +3971,7 @@ enum Status
 end
 
 make_user() -> User
-    return User(id: 10, name: "Ada")
+    return User { id: 10, name: "Ada" }
 end
 
 pair() -> tuple[int, string]
@@ -4066,7 +4056,7 @@ event(kind: int) -> Event
         return Event.Text(value: "ready")
     end
     if kind == 1
-        return Event.Record(user: User(name: "Ada"))
+        return Event.Record(user: User { name: "Ada" })
     end
     if kind == 2
         return Event.Pair(data: tuple(7, "seven"))
@@ -4152,7 +4142,7 @@ struct User
 end
 
 main()
-    const user: User = User(id: 1)
+    const user: User = User { id: 1 }
     const is_user: bool = user is User
     const is_int: bool = 1 is int
 end
@@ -4193,11 +4183,11 @@ describe(s: any[Shape]) -> bool
 end
 
 main()
-    const user: User = User(id: 1)
+    const user: User = User { id: 1 }
     const is_user: bool = user is User
     const is_circle: bool = user is Circle
     const is_int: bool = 1 is int
-    const shape: any[Shape] = Circle(radius: 3)
+    const shape: any[Shape] = Circle { radius: 3 }
     const is_shape_circle: bool = describe(shape)
 end
 "#,
@@ -4292,8 +4282,8 @@ require_marker for T: Marker (value: T) -> int
 end
 
 main()
-    const good: Good = Good(id: 1)
-    const plain: Plain = Plain(id: 2)
+    const good: Good = Good { id: 1 }
+    const plain: Plain = Plain { id: 2 }
     const ok: int = require_marker(good)
     const bad: int = require_marker(plain)
 end
@@ -4335,8 +4325,8 @@ reject_marker for T: not Marker (value: T) -> int
 end
 
 main()
-    const plain: Plain = Plain(id: 1)
-    const marked: Marked = Marked(id: 2)
+    const plain: Plain = Plain { id: 1 }
+    const marked: Marked = Marked { id: 2 }
     const ok: int = reject_marker(plain)
     const bad: int = reject_marker(marked)
 end
@@ -4410,7 +4400,7 @@ require_both for T: MarkerA, T: MarkerB (value: T) -> int
 end
 
 main()
-    const good: Good = Good(id: 1)
+    const good: Good = Good { id: 1 }
     const ok: int = require_both(good)
 end
 "#,
@@ -5174,7 +5164,7 @@ main()
     const m: map[string, int] = {"a": 1}
     const o: optional[int] = some(1)
     const r: result[int, string] = success(1)
-    const u: User = User(name: "Ada")
+    const u: User = User { name: "Ada" }
     const s: string = show(u)
     const id: int = identity(42)
     io.print(s)
@@ -5557,7 +5547,7 @@ require_hashable for T: core.Hashable (value: T) -> int
 end
 
 main()
-    using resource: Resource = Resource(id: 1)
+    using resource: Resource = Resource { id: 1 }
     const ok: int = require_hashable(resource)
 end
 "#,
@@ -5597,7 +5587,7 @@ import ori.Error = StdError
 import ori.io = io
 
 main()
-    const err: StdError = StdError(code: "E_TEST", message: "failed", cause: "")
+    const err: StdError = StdError { code: "E_TEST", message: "failed", cause: "" }
     io.print(err.code)
     io.print(err.message)
 end
@@ -5628,7 +5618,7 @@ fn build_c_backend_compiles_standard_error_type() {
 import ori.Error = StdError
 
 main()
-    const err: StdError = StdError(code: "E_C", message: "compiled", cause: "")
+    const err: StdError = StdError { code: "E_C", message: "compiled", cause: "" }
     const code: string = err.code
     const message: string = err.message
 end
@@ -7369,8 +7359,8 @@ implement Disposable for Resource
 end
 
 main()
-    using resource: Resource = Resource(id: 1)
-    resource = Resource(id: 2)
+    using resource: Resource = Resource { id: 1 }
+    resource = Resource { id: 2 }
 end
 "#,
     );
@@ -7396,10 +7386,10 @@ struct Counter
 end
 
 main()
-    const locked: Counter = Counter(value: 0)
+    const locked: Counter = Counter { value: 0 }
     locked.increment()
 
-    var open: Counter = Counter(value: 0)
+    var open: Counter = Counter { value: 0 }
     open.increment()
 end
 "#,
@@ -7837,7 +7827,7 @@ import app.model = model
 import ori.io = io
 
 main()
-    const user: model.User = model.User(id: 34, name: "Ada")
+    const user: model.User = model.User(id: 34, name: "Ada" )
     const status: model.Status = model.Status.Done(code: 8)
     io.print(string(user.id + model.stable_code(status)))
 end
@@ -7983,7 +7973,7 @@ total(a: Score, b: Score) -> Score
 end
 
 main()
-    const p: Player = Player(name: "Alice", score: 10)
+    const p: Player = Player { name: "Alice", score: 10 }
     const t: Score = total(p.score, 5)
 end
 "#,
@@ -8116,7 +8106,7 @@ struct Point
 end
 
 double(p: Point) -> Point
-    return Point(x: p.x * 2, y: p.y * 2, z: p.z * 2)
+    return Point { x: p.x * 2, y: p.y * 2, z: p.z * 2 }
 end
 
 extract_x(p: Point) -> int
@@ -8124,7 +8114,7 @@ extract_x(p: Point) -> int
 end
 
 main()
-    const base: Point = Point(x: 1, y: 2, z: 3)
+    const base: Point = Point { x: 1, y: 2, z: 3 }
 
     -- pipe operator `|>` allows calling functions like methods
     const answer: int = base |> double |> extract_x
@@ -8165,7 +8155,7 @@ struct Counter
 end
 
 main()
-    var counter: Counter = Counter(value: 1)
+    var counter: Counter = Counter { value: 1 }
     counter.value = 2
     counter.increment()
     io.print(string(counter.value))
@@ -8200,7 +8190,7 @@ struct Vec2
 end
 
 main()
-    const bad: Vec2 = .{ x: 1.0 }
+    const bad: Vec2 = { x: 1.0 }
 end
 "#,
     );
@@ -8222,7 +8212,7 @@ fn check_reports_anonymous_struct_without_expected_type() {
         r#"module app.main
 
 main()
-    .{ x: 1.0, y: 2.0 }
+    { x: 1.0, y: 2.0 }
 end
 "#,
     );
@@ -8248,7 +8238,7 @@ struct Config
 end
 
 main()
-    const a: Config = Config(verbose: false)
+    const a: Config = Config { verbose: false }
     const b: Config = a with
         verbose: true
     end
@@ -8348,7 +8338,7 @@ struct Point
 end
 
 main()
-    const base: Point = Point(x: 1, y: 2, z: 3)
+    const base: Point = Point { x: 1, y: 2, z: 3 }
     const moved: Point = base with { y: 20 } end
     const shifted: Point = moved with { x: 7, z: moved.z + 4 } end
 
@@ -8387,7 +8377,7 @@ struct Point
 end
 
 main()
-    const base: Point = Point(x: 1, y: 2, z: 3)
+    const base: Point = Point { x: 1, y: 2, z: 3 }
     const moved: Point = base with { y: 20 } end
     const shifted: Point = moved with { x: 7, z: moved.z + 4 } end
     const total: int = base.x + moved.y + shifted.z
@@ -8442,8 +8432,8 @@ describe(s: any[Shape])
 end
 
 main()
-    const c: any[Shape] = Circle(radius: 3)
-    const sq: any[Shape] = Square(side: 4)
+    const c: any[Shape] = Circle { radius: 3 }
+    const sq: any[Shape] = Square { side: 4 }
     describe(c)
     describe(sq)
 end
@@ -8884,7 +8874,7 @@ end
 
 make_resource(id: int) -> result[Resource, AppError]
     if id > 0
-        return success(Resource(id: id, name: "item-" + string(id)))
+        return success(Resource {id: id, name: "item-" + string(id)})
     end
     return error(AppError.Validation(message: "bad id"))
 end
@@ -10851,7 +10841,7 @@ import app.model (User)
 
 main()
     const total: int = plus(1, 2)
-    const user: User = User(name: "Ori")
+    const user: User = User { name: "Ori" }
 end
 "#,
     );
@@ -11272,8 +11262,8 @@ import ori.math.vec2 = vec2
 import ori.io = io
 
 main()
-    const a: vec2.Vec2 = vec2.Vec2(x: 1.0, y: 2.0)
-    const b: vec2.Vec2 = vec2.Vec2(x: 3.0, y: 4.0)
+    const a: vec2.Vec2 = vec2.Vec2(x: 1.0, y: 2.0 )
+    const b: vec2.Vec2 = vec2.Vec2(x: 3.0, y: 4.0 )
     const sum: vec2.Vec2 = a + b
     const diff: vec2.Vec2 = b - a
     const product: vec2.Vec2 = a * b
@@ -11325,7 +11315,7 @@ struct SDL_Rect
 end
 
 main()
-    const r: SDL_Rect = SDL_Rect(x: 0, y: 0, w: 100, h: 200)
+    const r: SDL_Rect = SDL_Rect { x: 0, y: 0, w: 100, h: 200 }
 end
 "#,
     );

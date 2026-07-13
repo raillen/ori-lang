@@ -34,9 +34,9 @@ end
 
 main()
     var tasks: list[Task] = []
-    lists.push(tasks, Task(title: "write example", done: true))
-    lists.push(tasks, Task(title: "run tests", done: false))
-    lists.push(tasks, Task(title: "update docs", done: false))
+    lists.push(tasks, Task { title: "write example", done: true })
+    lists.push(tasks, Task { title: "run tests", done: false })
+    lists.push(tasks, Task { title: "update docs", done: false })
 
     const command: string = args.get_or(1, "list")
     if command == "stats"

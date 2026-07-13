@@ -58,7 +58,7 @@ struct Player
 end
 
 main()
-    const player: Player = Player(score: 7)
+    const player: Player = Player {score: 7}
     const total: int = player.add(5)
 end
 "#,
@@ -97,7 +97,7 @@ struct Player
 end
 
 main()
-    const player: Player = Player(score: 7)
+    const player: Player = Player {score: 7}
     const total: int = player.add("bad")
 end
 "#,
@@ -130,7 +130,7 @@ implement Entity for Player
 end
 
 main()
-    const player: Player = Player(score: 42)
+    const player: Player = Player {score: 42}
     const id: int = player.id()
 end
 "#,
@@ -185,7 +185,7 @@ implement Beta for Thing
 end
 
 main()
-    const thing: Thing = Thing(name: "x")
+    const thing: Thing = Thing {name: "x"}
     const text: string = thing.output()
 end
 "#,
@@ -228,7 +228,7 @@ implement Beta for Thing
 end
 
 main()
-    const thing: Thing = Thing(name: "x")
+    const thing: Thing = Thing {name: "x"}
     const alpha: string = Alpha.output(thing)
     const beta: string = Beta.output(thing)
 end
@@ -269,7 +269,7 @@ implement Entity for Player
 end
 
 main()
-    const player: Player = Player(score: 42)
+    const player: Player = Player {score: 42}
     const id: int = player.id()
 end
 "#,
@@ -383,7 +383,7 @@ struct Counter
 end
 
 main()
-    const counter: Counter = Counter(value: 1)
+    const counter: Counter = Counter {value: 1}
     counter.increment()
 end
 "#,

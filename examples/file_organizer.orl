@@ -31,10 +31,10 @@ end
 plan_moves(files: list[string], output_root: string) -> list[PlannedMove]
     var moves: list[PlannedMove] = []
     for file_path in files
-        lists.push(moves, PlannedMove(
+        lists.push(moves, PlannedMove {
             from: file_path,
             to: destination_for(file_path, output_root),
-        ))
+        })
     end
     return moves
 end

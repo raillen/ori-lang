@@ -9,27 +9,27 @@ public struct Duration
 end
 
 public instant_now() -> Instant
-    return Instant(millis: ori.time.now())
+    return Instant {millis: ori.time.now()}
 end
 
 public duration_millis(value: int) -> Duration
-    return Duration(millis: value)
+    return Duration { millis: value }
 end
 
 public duration_seconds(value: int) -> Duration
-    return Duration(millis: value * 1000)
+    return Duration { millis: value * 1000 }
 end
 
 public duration_minutes(value: int) -> Duration
-    return Duration(millis: value * 60 * 1000)
+    return Duration { millis: value * 60 * 1000 }
 end
 
 public duration_hours(value: int) -> Duration
-    return Duration(millis: value * 60 * 60 * 1000)
+    return Duration { millis: value * 60 * 60 * 1000 }
 end
 
 public instant_from_unix_ms(value: int) -> Instant
-    return Instant(millis: value)
+    return Instant { millis: value }
 end
 
 public instant_to_unix_ms(value: Instant) -> int
@@ -41,19 +41,19 @@ public duration_to_millis(value: Duration) -> int
 end
 
 public elapsed_since(start: Instant) -> Duration
-    return Duration(millis: ori.time.now() - start.millis)
+    return Duration {millis: ori.time.now() - start.millis}
 end
 
 public between(start: Instant, finish: Instant) -> Duration
-    return Duration(millis: finish.millis - start.millis)
+    return Duration { millis: finish.millis - start.millis }
 end
 
 public add(value: Instant, duration: Duration) -> Instant
-    return Instant(millis: value.millis + duration.millis)
+    return Instant { millis: value.millis + duration.millis }
 end
 
 public sub(value: Instant, duration: Duration) -> Instant
-    return Instant(millis: value.millis - duration.millis)
+    return Instant { millis: value.millis - duration.millis }
 end
 
 public sleep_duration(duration: Duration)

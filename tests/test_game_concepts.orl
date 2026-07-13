@@ -85,27 +85,27 @@ end
 // ── Test Functions ────────────────────────────────────────
 
 test_rectangles() -> void
-    var a = Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
-    var b = Rectangle(x: 5.0, y: 5.0, width: 10.0, height: 10.0)
-    var c = Rectangle(x: 20.0, y: 20.0, width: 10.0, height: 10.0)
+    var a = Rectangle { x: 0.0, y: 0.0, width: 10.0, height: 10.0 }
+    var b = Rectangle { x: 5.0, y: 5.0, width: 10.0, height: 10.0 }
+    var c = Rectangle { x: 20.0, y: 20.0, width: 10.0, height: 10.0 }
 
     assert(rects_collide(a, b))
     assert(not rects_collide(a, c))
 end
 
 test_point_in_rect() -> void
-    var rect = Rectangle(x: 0.0, y: 0.0, width: 10.0, height: 10.0)
-    var inside = vec2.Vec2(x: 5.0, y: 5.0)
-    var outside = vec2.Vec2(x: 15.0, y: 15.0)
+    var rect = Rectangle { x: 0.0, y: 0.0, width: 10.0, height: 10.0 }
+    var inside = vec2.Vec2 {x: 5.0, y: 5.0}
+    var outside = vec2.Vec2 {x: 15.0, y: 15.0}
 
     assert(point_in_rect(inside, rect))
     assert(not point_in_rect(outside, rect))
 end
 
 test_circles() -> void
-    var a = Circle(x: 0.0, y: 0.0, radius: 5.0)
-    var b = Circle(x: 8.0, y: 0.0, radius: 5.0)
-    var c = Circle(x: 20.0, y: 0.0, radius: 5.0)
+    var a = Circle { x: 0.0, y: 0.0, radius: 5.0 }
+    var b = Circle { x: 8.0, y: 0.0, radius: 5.0 }
+    var c = Circle { x: 20.0, y: 0.0, radius: 5.0 }
 
     assert(circles_collide(a, b))
     assert(not circles_collide(a, c))
@@ -113,12 +113,12 @@ end
 
 test_timer() -> void
     var completed = false
-    var t = Timer(
+    var t = Timer {
         duration: 1.0,
         on_complete = do() =>
             completed = true
         end
-    )
+    }
 
     tick_timer(t, 0.5)
     assert(not completed)
@@ -128,11 +128,11 @@ test_timer() -> void
 end
 
 test_entity() -> void
-    var e = Entity(
+    var e = Entity {
         id: 1,
-        pos: vec2.Vec2(x: 100.0, y: 200.0),
-        vel: vec2.Vec2(x: 10.0, y: 0.0)
-    )
+        pos: vec2.Vec2 { x: 100.0, y: 200.0 },
+        vel: vec2.Vec2 { x: 10.0, y: 0.0 }
+    }
 
     assert(e.id == 1)
     assert(e.pos.x == 100.0)
@@ -145,8 +145,8 @@ test_entity() -> void
 end
 
 test_vec2_operations() -> void
-    var a = vec2.Vec2(x: 1.0, y: 2.0)
-    var b = vec2.Vec2(x: 3.0, y: 4.0)
+    var a = vec2.Vec2 {x: 1.0, y: 2.0}
+    var b = vec2.Vec2 {x: 3.0, y: 4.0}
 
     var sum = a + b
     assert(sum.x == 4.0)
