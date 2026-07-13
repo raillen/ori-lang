@@ -8,7 +8,8 @@ Este diretório contém o planejamento de maturidade, histórico de design e o b
 docs/planning/
 ├── README.md                           # Este índice explicativo
 ├── uso-real-pequeno-medio.md           # [Ativo] Plano de maturidade para uso real em projetos pequenos e médios
-├── PENDENTES.md                        # [Ativo] Backlog condensado e histórico de pendências operacionais
+├── PENDENTES.md                        # [Ativo] Backlog M2→M3→M1→M4
+├── stdlib-merge-policy.md              # [Ativo] M2 — API canônica ori.X + mesclagem
 ├── language-direction-decisions-2026-06-30.md # [Decisão] Decisões arquiteturais de direção da linguagem (ADR)
 ├── ori-surface-s3-auk9.md              # [Ativo] Decisões de superfície S3 (implementada no compiler; docs 0.3.0)
 ├── adr-ori-surface-s3-auk9.md          # [ADR] Aceito — superfície S3 / aposentar Auk9 como produto
