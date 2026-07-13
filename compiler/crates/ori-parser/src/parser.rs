@@ -408,6 +408,10 @@ fn expected_end_label(block_name: &str) -> &str {
     match block_name {
         "if some" => "if",
         "while some" => "while",
+        // Trait defaults / free methods share the `function` label.
+        "trait method" | "function" => "function",
+        // `base with { … } end struct` — same label as struct declarations.
+        "struct update" => "struct",
         other => other,
     }
 }

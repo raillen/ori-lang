@@ -131,7 +131,8 @@ impl<'src> Parser<'src> {
                 }
                 let block_start = lhs.span();
                 let updates = self.parse_braced_field_inits()?;
-                let end = self.expect_block_end(block_start, "struct update")?;
+                // Labeled form: `end struct` (same label as struct declarations).
+                let end = self.expect_block_end(block_start, "struct")?;
                 let span = lhs.span().cover(end);
                 lhs = Expr::StructUpdate {
                     base: Box::new(lhs),

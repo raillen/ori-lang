@@ -1853,6 +1853,85 @@ end
 }
 
 #[test]
+fn trait_default_accepts_labeled_end_function() {
+    let dir = TestDir::new("trait_default_end_function");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+trait Greetable
+    greet() -> string
+        return "hi"
+    end function
+end
+struct Person
+    name: string
+end
+implement Greetable for Person
+    greet() -> string
+        return self.name
+    end
+end
+main()
+    const p: Person = Person(name: "Ori")
+    const g: any<Greetable> = p
+    io.print(g.greet())
+end
+"#,
+    );
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+}
+
+#[test]
+fn trait_default_accepts_fat_arrow_body() {
+    let dir = TestDir::new("trait_default_fat_arrow");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+trait Doubler
+    double(x: int) -> int => x * 2
+end
+struct S
+end
+implement Doubler for S
+    double(x: int) -> int => x * 2
+end
+main()
+    const s: S = S()
+    const d: any<Doubler> = s
+    io.print(string(d.double(21)))
+end
+"#,
+    );
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+}
+
+#[test]
+fn expr_accepts_struct_update_labeled_end_struct() {
+    let dir = TestDir::new("struct_update_end_struct");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+struct Point
+    x: int
+    y: int
+end
+main()
+    const p: Point = Point(x: 1, y: 2)
+    const q: Point = p with { x: 10 } end struct
+    io.print(string(q.x))
+end
+"#,
+    );
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+}
+
+#[test]
 fn func_rejects_await_outside_async() {
     let dir = TestDir::new("func_await_outside");
     dir.write(

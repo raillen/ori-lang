@@ -130,6 +130,27 @@ const ENTRIES: &[ExplainEntry] = &[
         fix: "Write `case Variant:` or `case Variant(field: x):` instead of `case .Variant`.",
     },
     ExplainEntry {
+        code: "parse.poetic_call_nested",
+        severity: "error",
+        summary: "Nested poetic calls (juxtaposition without parentheses) are not allowed.",
+        cause: "S3 allows at most one paren-less call verb per expression (e.g. `print name`).",
+        fix: "Parenthesize the inner call: write `print greet(\"hello\")` or `print(greet(name))`, not `print greet name`.",
+    },
+    ExplainEntry {
+        code: "parse.end_label_mismatch",
+        severity: "error",
+        summary: "Labeled `end` does not match the opening construct.",
+        cause: "Optional labels after `end` (`end if`, `end match`, `end function`, …) must name the block they close.",
+        fix: "Use bare `end`, or match the opener (`end if` for `if`, `end function` for methods, `end struct` for structs/`with` updates).",
+    },
+    ExplainEntry {
+        code: "parse.do_removed",
+        severity: "error",
+        summary: "The `do` keyword for closures was removed.",
+        cause: "S3 closures use a bare parameter list: `(params) => expr` or `(params) … end`.",
+        fix: "Rewrite `do(x: int) => x * 2` as `(x: int) => x * 2` (and long forms as `(params) … end`).",
+    },
+    ExplainEntry {
         code: "match.non_exhaustive",
         severity: "error",
         summary: "`match` does not cover all cases.",

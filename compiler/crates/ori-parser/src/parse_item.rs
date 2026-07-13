@@ -665,13 +665,40 @@ impl<'src> Parser<'src> {
             let mvis = self.parse_visibility();
             let is_mut = self.at(&TokenKind::Mut);
             let sig = self.parse_func_signature(mvis)?;
+            // S3: single-expression default `name(params) -> T => expr` (no method `end`).
+            if self.eat(&TokenKind::FatArrow) && !is_mut {
+                let expr = self.parse_expr()?;
+                let expr_span = expr.span();
+                let body = ori_ast::stmt::Block {
+                    stmts: vec![ori_ast::stmt::Stmt::Return(ori_ast::stmt::ReturnStmt {
+                        value: Some(Box::new(expr)),
+                        span: expr_span,
+                    })],
+                    span: expr_span,
+                };
+                let decl = FuncDecl {
+                    visibility: sig.visibility,
+                    is_async: sig.is_async,
+                    is_mut: sig.is_mut,
+                    name: sig.name.clone(),
+                    type_params: sig.type_params.clone(),
+                    params: sig.params.clone(),
+                    return_ty: sig.return_ty.clone(),
+                    where_clause: sig.where_clause.clone(),
+                    body,
+                    span: sig.span.cover(expr_span),
+                };
+                members.push(TraitMember::Default(decl));
+                continue;
+            }
             // Required methods are followed by another member or `end`.
             // Default methods have a body (statement / expression) before `end`.
             // Bare call statements like `print("hi")` must not look like the next method.
             let has_body = !self.at_trait_member_start() && !self.at(&TokenKind::End);
             if has_body && !is_mut {
                 let body = self.parse_block()?;
-                let end = self.expect_block_end(sig.span, "trait method")?;
+                // Label matches free/struct methods: `end function`.
+                let end = self.expect_block_end(sig.span, "function")?;
                 let decl = FuncDecl {
                     visibility: sig.visibility,
                     is_async: sig.is_async,
