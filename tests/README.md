@@ -19,7 +19,8 @@ a redirect — no test files should be added here.
 ## Running the suite
 
 ```bash
-# Full workspace
+# Full workspace (from repo root)
+cd compiler
 cargo test --workspace
 
 # Focused checks
@@ -29,11 +30,8 @@ cargo test -p ori-runtime
 cargo test -p ori-lsp
 ```
 
-Complete testing manual:
-
-```text
-docs/guides/testing-manual.md
-```
+Testing guide: [docs/guides/testing.md](../docs/guides/testing.md)
+(PT maintainer notes: [testing.pt-BR.md](../docs/guides/testing.pt-BR.md)).
 
 Security and performance metrics:
 

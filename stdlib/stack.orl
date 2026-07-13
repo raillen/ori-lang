@@ -25,3 +25,4 @@ end
 public is_singleton[T](s: ori.stack.Stack[T]) -> bool
     return ori.stack.len(s) == 1
 end
+

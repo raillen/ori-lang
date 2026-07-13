@@ -6381,7 +6381,7 @@ impl<'a> Checker<'a> {
         }
         match ty {
             Ty::Opaque {
-                kind: OpaqueTy::File,
+                kind: OpaqueTy::File | OpaqueTy::Input | OpaqueTy::Output | OpaqueTy::Connection,
                 ..
             } => {}
             Ty::Named(type_def_id, _)

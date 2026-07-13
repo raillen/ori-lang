@@ -98,3 +98,41 @@ end
 public to_list(value: bytes) -> list[int]
     return ori.bytes.to_list(value)
 end
+
+
+-- STDLIB-1: lifted from bytes/algorithms
+public is_prefix_of(prefix: bytes, value: bytes) -> bool
+    return ori.bytes.starts_with(value, prefix)
+end
+
+public compare_lex(a: bytes, b: bytes) -> int
+    const av: list[int] = ori.bytes.to_list(a)
+    const bv: list[int] = ori.bytes.to_list(b)
+    const a_len: int = ori.list.len(av)
+    const b_len: int = ori.list.len(bv)
+    var min_len: int = a_len
+    if b_len < min_len
+        min_len = b_len
+    end
+    var i: int = 0
+    while i < min_len
+        if some(x) = ori.list.try_get(av, i)
+            if some(y) = ori.list.try_get(bv, i)
+                if x < y
+                    return -1
+                end
+                if x > y
+                    return 1
+                end
+            end
+        end
+        i = i + 1
+    end
+    if a_len < b_len
+        return -1
+    end
+    if a_len > b_len
+        return 1
+    end
+    return 0
+end

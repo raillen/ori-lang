@@ -7,6 +7,8 @@ public alias OptionalBytesResult = result[optional[bytes], string]
 public alias OptionalTextResult = result[optional[string], string]
 public alias WriteResult = result[int, string]
 public alias IoResult = result[void, string]
+public alias InputResult = result[ori.io.Input, string]
+public alias OutputResult = result[ori.io.Output, string]
 
 public print_line(value: string)
     ori.io.println(value)
@@ -15,6 +17,9 @@ end
 public try_read_line() -> optional[string]
     return ori.io.read_line()
 end
+
+-- open_input / open_output are Layer 1 only (no .orl re-wrap: same-name
+-- shadowing breaks C/debug stubs and monomorphization). Call ori.io.open_*.
 
 public read_bytes(input: ori.io.Input, max_bytes: int) -> OptionalBytesResult
     return ori.io.read(input, max_bytes)
@@ -45,3 +50,5 @@ end
 public write_text(output: ori.io.Output, text: string) -> WriteResult
     return ori.io.write(output, str.to_bytes(text))
 end
+
+-- flush / close_input / close_output: Layer 1 only (avoid same-name .orl shadows).

@@ -423,6 +423,48 @@ fn stdlib_c_func_ty_raw(c_name: &str) -> Ty {
                 Box::new(Ty::String),
             ))),
         ),
+        "ori_net_connect_async" | "ori_net_connect_tls_async" => (
+            vec![Ty::String, Ty::Int, Ty::Int],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(Ty::Infer(0)),
+                Box::new(Ty::String),
+            ))),
+        ),
+        "ori_net_accept_async" => (
+            vec![Ty::Infer(0)],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(Ty::Infer(0)),
+                Box::new(Ty::String),
+            ))),
+        ),
+        "ori_net_read_some_async" => (
+            vec![Ty::Infer(0), Ty::Int],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(Ty::Bytes),
+                Box::new(Ty::String),
+            ))),
+        ),
+        "ori_net_write_all_async" => (
+            vec![Ty::Infer(0), Ty::Bytes],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(Ty::Int),
+                Box::new(Ty::String),
+            ))),
+        ),
+        "ori_net_udp_recv_from_async" => (
+            vec![Ty::Infer(0), Ty::Int],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(Ty::Bytes),
+                Box::new(Ty::String),
+            ))),
+        ),
+        "ori_net_udp_send_to_async" => (
+            vec![Ty::Infer(0), Ty::String, Ty::Int, Ty::Bytes],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(Ty::Int),
+                Box::new(Ty::String),
+            ))),
+        ),
         "ori_files_append_text" => (
             vec![Ty::String, Ty::String],
             Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),

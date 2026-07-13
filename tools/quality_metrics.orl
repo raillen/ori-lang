@@ -2,7 +2,7 @@ module tools.quality_metrics
 
 import ori.fs = fs
 import ori.io = io
-import ori.os.utils = os_utils
+import ori.os = os_utils
 import ori.process = proc
 import ori.string = str
 import ori.time = time

@@ -28,3 +28,4 @@ public back_or[T](node: ori.doubly_linked_list.DoublyLinkedList[T], fallback: T)
     end
     return fallback
 end
+

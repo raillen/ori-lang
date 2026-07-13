@@ -57,8 +57,11 @@ enum Commands {
         action: DocAction,
     },
     /// Install an Ori package into the local package cache.
+    ///
+    /// Sources: `--path` (local), GitHub URL, or registry name (`name` / `name@version`
+    /// when `ORI_REGISTRY` is set).
     Install {
-        /// Package name or GitHub URL (e.g. `github.com/org/ori-pkg`).
+        /// Package name (`demo.math`), `name@version`, or GitHub URL.
         name: String,
         /// Local package directory or `ori.pkg.toml` path.
         #[arg(long)]
@@ -67,10 +70,37 @@ enum Commands {
         #[arg(long)]
         cache: Option<PathBuf>,
     },
-    /// Publish an Ori package to the registry (not yet available).
-    Publish {
-        /// Path to the package manifest or project root.
+    /// Fetch git/path dependencies declared by a project or package into the local cache.
+    ///
+    /// Reads `ori.proj` or `ori.pkg.toml` under `path` (default `.`) and materializes
+    /// `{ git = "..." }` dependencies (and path deps into the versioned cache layout).
+    /// Check/build also auto-fetch git deps when the cache is configured.
+    Get {
+        /// Project/package root, `ori.proj`, or `ori.pkg.toml` (default: current directory).
+        #[arg(default_value = ".")]
         path: PathBuf,
+        /// Override the package cache root (default: ORI_PACKAGE_CACHE or ~/.ori/packages).
+        #[arg(long)]
+        cache: Option<PathBuf>,
+    },
+    /// Publish an Ori package to the configured registry (`ORI_REGISTRY`).
+    ///
+    /// File registry (directory path): copies the package tree under
+    /// `{registry}/packages/{name}/{version}/` and writes `versions.json`.
+    /// HTTP(S) registry: uploads `{base}/packages/{name}/{version}.tar.gz` via PUT
+    /// (optional `ORI_REGISTRY_TOKEN` / `--token` Bearer auth).
+    Publish {
+        /// Path to the package root or `ori.pkg.toml`.
+        path: PathBuf,
+        /// Override `ORI_REGISTRY` (directory path or http(s) base URL).
+        #[arg(long)]
+        registry: Option<String>,
+        /// Bearer token for HTTP publish (`ORI_REGISTRY_TOKEN`).
+        #[arg(long)]
+        token: Option<String>,
+        /// Replace an existing `name@version` in the registry.
+        #[arg(long)]
+        force: bool,
     },
     /// Run functions marked with `@test` through the native runtime.
     Test {
@@ -373,17 +403,54 @@ fn main() {
             }
         }
 
-        Commands::Publish { path } => {
-            if let Err(e) = package::load_package_manifest(path) {
+        Commands::Get { path, cache } => {
+            match package::run_get_dependencies(package::GetDependenciesOptions {
+                path: path.clone(),
+                cache_root: cache.clone(),
+            }) {
+                Err(e) => {
+                    eprintln!("ori: {}", e);
+                    process::exit(2);
+                }
+                Ok(out) => {
+                    eprintln!("cache: {}", out.cache_root.display());
+                    if out.packages.is_empty() {
+                        eprintln!("  (no dependencies to fetch)");
+                    }
+                    for installed in out.packages {
+                        let status = if installed.already_installed {
+                            "cached"
+                        } else {
+                            "fetched"
+                        };
+                        eprintln!("  + {} v{} ({})", installed.name, installed.version, status);
+                    }
+                }
+            }
+        }
+
+        Commands::Publish {
+            path,
+            registry,
+            token,
+            force,
+        } => match package::run_publish_package(package::PublishPackageOptions {
+            path: path.clone(),
+            registry: registry.clone(),
+            token: token.clone(),
+            force: *force,
+        }) {
+            Err(e) => {
                 eprintln!("ori: {}", e);
                 process::exit(2);
             }
-            eprintln!(
-                "ori: remote registry publish is not available yet\n\
-                 package manifest `{}` is valid, but upload is not implemented",
-                path.display()
-            );
-            process::exit(2);
+            Ok(out) => {
+                eprintln!(
+                    "published {} v{} → {}",
+                    out.name, out.version, out.location
+                );
+                eprintln!("registry: {}", out.registry);
+            }
         }
 
         Commands::Test { file, filter } => match pipeline::run_test_with_options(

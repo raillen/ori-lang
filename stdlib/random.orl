@@ -31,3 +31,4 @@ end
 public is_empty_choice[T](items: list[T]) -> bool
     return lists.len(items) == 0
 end
+

@@ -1588,28 +1588,246 @@ static inline long long ori_arc_collect_cycles(void) {
     return collected;
 }
 
-static inline int64_t ori_string_len(ori_string_t s) { return s.len; }
-static inline ori_string_t ori_string_trim(ori_string_t s) { return s; }
-static inline ori_string_t ori_string_to_lower(ori_string_t s) { return s; }
-static inline ori_string_t ori_string_pad_left(ori_string_t s, int64_t len, ori_string_t pad) { return s; }
-static inline ori_string_t ori_string_pad_right(ori_string_t s, int64_t len, ori_string_t pad) { return s; }
-static inline ori_string_t ori_string_to_upper(ori_string_t s) { return s; }
-static inline ori_list_t ori_string_split(ori_string_t s, ori_string_t delimiter) { return (ori_list_t){0}; }
-static inline int64_t ori_list_len(ori_list_t list) { return list.len; }
-static inline ori_opt_i64_t ori_list_try_get(ori_list_t list, int64_t index) { return (ori_opt_i64_t){ .has_value = false, .value = 0 }; }
-static inline ori_string_t ori_string_join(ori_list_t list, ori_string_t sep) { return ORI_STR(""); }
-static inline int64_t ori_bytes_len(void* ptr) { return 0; }
-static inline uint8_t ori_bytes_get(void* ptr, int64_t index) { return 0; }
-static inline void* ori_bytes_from_list(ori_list_t list) { return NULL; }
-static inline bool ori_string_contains(ori_string_t s, ori_string_t sub) { return false; }
-static inline bool ori_string_starts_with(ori_string_t s, ori_string_t sub) { return false; }
-static inline bool ori_string_ends_with(ori_string_t s, ori_string_t sub) { return false; }
-static inline void* ori_list_get(ori_list_t list, int64_t index) { return NULL; }
-static inline void ori_io_close_input(void* ptr) {}
-static inline void ori_io_close_output(void* ptr) {}
-static inline uint8_t* ori_bytes_concat(uint8_t* left, uint8_t* right) { return NULL; }
-static inline ori_list_t ori_bytes_to_list(uint8_t* bytes) { return (ori_list_t){0}; }
-static inline uint8_t* ori_string_to_bytes(ori_string_t s) { return NULL; }
+/* LANG-2: real C/debug bodies for string / convert / io / list helpers. */
+static inline int64_t ori_string_len(ori_string_t s) { return (int64_t)s.len; }
+static inline int64_t ori_len(ori_string_t s) { return (int64_t)s.len; }
+static inline ori_string_t ori_string_dup_range(const char* data, size_t len) {
+    char* out = (char*)malloc(len + 1);
+    if (!out) abort();
+    if (len > 0) memcpy(out, data, len);
+    out[len] = '\0';
+    return (ori_string_t){ .data = out, .len = len };
+}
+static inline ori_string_t ori_string_trim_start(ori_string_t s) {
+    size_t i = 0;
+    while (i < s.len && isspace((unsigned char)s.data[i])) i++;
+    return ori_string_dup_range(s.data + i, s.len - i);
+}
+static inline ori_string_t ori_string_trim_end(ori_string_t s) {
+    size_t n = s.len;
+    while (n > 0 && isspace((unsigned char)s.data[n - 1])) n--;
+    return ori_string_dup_range(s.data, n);
+}
+static inline ori_string_t ori_string_trim(ori_string_t s) {
+    size_t start = 0;
+    size_t end = s.len;
+    while (start < end && isspace((unsigned char)s.data[start])) start++;
+    while (end > start && isspace((unsigned char)s.data[end - 1])) end--;
+    return ori_string_dup_range(s.data + start, end - start);
+}
+static inline ori_string_t ori_string_to_lower(ori_string_t s) {
+    char* out = (char*)malloc(s.len + 1);
+    if (!out) abort();
+    for (size_t i = 0; i < s.len; i++) out[i] = (char)tolower((unsigned char)s.data[i]);
+    out[s.len] = '\0';
+    return (ori_string_t){ .data = out, .len = s.len };
+}
+static inline ori_string_t ori_string_to_upper(ori_string_t s) {
+    char* out = (char*)malloc(s.len + 1);
+    if (!out) abort();
+    for (size_t i = 0; i < s.len; i++) out[i] = (char)toupper((unsigned char)s.data[i]);
+    out[s.len] = '\0';
+    return (ori_string_t){ .data = out, .len = s.len };
+}
+static inline ori_string_t ori_string_pad_left(ori_string_t s, int64_t width, ori_string_t pad) {
+    if (width <= (int64_t)s.len || pad.len == 0) return ori_string_dup_range(s.data, s.len);
+    size_t need = (size_t)width - s.len;
+    char* out = (char*)malloc((size_t)width + 1);
+    if (!out) abort();
+    for (size_t i = 0; i < need; i++) out[i] = pad.data[i % pad.len];
+    if (s.len > 0) memcpy(out + need, s.data, s.len);
+    out[width] = '\0';
+    return (ori_string_t){ .data = out, .len = (size_t)width };
+}
+static inline ori_string_t ori_string_pad_right(ori_string_t s, int64_t width, ori_string_t pad) {
+    if (width <= (int64_t)s.len || pad.len == 0) return ori_string_dup_range(s.data, s.len);
+    size_t need = (size_t)width - s.len;
+    char* out = (char*)malloc((size_t)width + 1);
+    if (!out) abort();
+    if (s.len > 0) memcpy(out, s.data, s.len);
+    for (size_t i = 0; i < need; i++) out[s.len + i] = pad.data[i % pad.len];
+    out[width] = '\0';
+    return (ori_string_t){ .data = out, .len = (size_t)width };
+}
+static inline bool ori_string_contains(ori_string_t s, ori_string_t sub) {
+    if (sub.len == 0) return true;
+    if (sub.len > s.len) return false;
+    for (size_t i = 0; i + sub.len <= s.len; i++) {
+        if (memcmp(s.data + i, sub.data, sub.len) == 0) return true;
+    }
+    return false;
+}
+static inline bool ori_string_starts_with(ori_string_t s, ori_string_t sub) {
+    if (sub.len > s.len) return false;
+    return sub.len == 0 || memcmp(s.data, sub.data, sub.len) == 0;
+}
+static inline bool ori_string_ends_with(ori_string_t s, ori_string_t sub) {
+    if (sub.len > s.len) return false;
+    return sub.len == 0 || memcmp(s.data + (s.len - sub.len), sub.data, sub.len) == 0;
+}
+static inline int64_t ori_string_index_of(ori_string_t s, ori_string_t sub) {
+    if (sub.len == 0) return 0;
+    if (sub.len > s.len) return -1;
+    for (size_t i = 0; i + sub.len <= s.len; i++) {
+        if (memcmp(s.data + i, sub.data, sub.len) == 0) return (int64_t)i;
+    }
+    return -1;
+}
+static inline ori_string_t ori_string_replace(ori_string_t s, ori_string_t from, ori_string_t to) {
+    if (from.len == 0) return ori_string_dup_range(s.data, s.len);
+    size_t count = 0;
+    for (size_t i = 0; i + from.len <= s.len; ) {
+        if (memcmp(s.data + i, from.data, from.len) == 0) {
+            count++;
+            i += from.len;
+        } else {
+            i++;
+        }
+    }
+    size_t out_len = s.len + count * to.len - count * from.len;
+    char* out = (char*)malloc(out_len + 1);
+    if (!out) abort();
+    size_t o = 0;
+    for (size_t i = 0; i < s.len; ) {
+        if (i + from.len <= s.len && memcmp(s.data + i, from.data, from.len) == 0) {
+            if (to.len > 0) memcpy(out + o, to.data, to.len);
+            o += to.len;
+            i += from.len;
+        } else {
+            out[o++] = s.data[i++];
+        }
+    }
+    out[out_len] = '\0';
+    return (ori_string_t){ .data = out, .len = out_len };
+}
+static inline ori_list_t ori_string_split(ori_string_t s, ori_string_t delimiter) {
+    ori_list_t out = ori_list_new(sizeof(ori_string_t));
+    if (delimiter.len == 0) {
+        ori_string_t whole = ori_string_dup_range(s.data, s.len);
+        ori_list_push(&out, &whole);
+        return out;
+    }
+    size_t start = 0;
+    for (size_t i = 0; i + delimiter.len <= s.len; ) {
+        if (memcmp(s.data + i, delimiter.data, delimiter.len) == 0) {
+            ori_string_t part = ori_string_dup_range(s.data + start, i - start);
+            ori_list_push(&out, &part);
+            i += delimiter.len;
+            start = i;
+        } else {
+            i++;
+        }
+    }
+    ori_string_t tail = ori_string_dup_range(s.data + start, s.len - start);
+    ori_list_push(&out, &tail);
+    return out;
+}
+static inline ori_list_t ori_string_chars(ori_string_t s) {
+    ori_list_t out = ori_list_new(sizeof(ori_string_t));
+    for (size_t i = 0; i < s.len; i++) {
+        ori_string_t ch = ori_string_dup_range(s.data + i, 1);
+        ori_list_push(&out, &ch);
+    }
+    return out;
+}
+static inline ori_string_t ori_string_join(ori_list_t list, ori_string_t sep) {
+    size_t total = 0;
+    for (size_t i = 0; i < list.len; i++) {
+        ori_string_t* part = (ori_string_t*)ori_list_at(&list, (int64_t)i);
+        total += part->len;
+        if (i + 1 < list.len) total += sep.len;
+    }
+    char* out = (char*)malloc(total + 1);
+    if (!out) abort();
+    size_t o = 0;
+    for (size_t i = 0; i < list.len; i++) {
+        ori_string_t* part = (ori_string_t*)ori_list_at(&list, (int64_t)i);
+        if (part->len > 0) {
+            memcpy(out + o, part->data, part->len);
+            o += part->len;
+        }
+        if (i + 1 < list.len && sep.len > 0) {
+            memcpy(out + o, sep.data, sep.len);
+            o += sep.len;
+        }
+    }
+    out[total] = '\0';
+    return (ori_string_t){ .data = out, .len = total };
+}
+static inline ori_string_t ori_string_repeat(ori_string_t s, int64_t count) {
+    if (count <= 0 || s.len == 0) return ori_string_dup_range("", 0);
+    size_t n = (size_t)count;
+    size_t total = s.len * n;
+    char* out = (char*)malloc(total + 1);
+    if (!out) abort();
+    for (size_t i = 0; i < n; i++) memcpy(out + i * s.len, s.data, s.len);
+    out[total] = '\0';
+    return (ori_string_t){ .data = out, .len = total };
+}
+static inline int64_t ori_list_len(ori_list_t list) { return (int64_t)list.len; }
+static inline ori_opt_i64_t ori_list_try_get(ori_list_t list, int64_t index) {
+    if (index < 0 || index >= (int64_t)list.len) {
+        return (ori_opt_i64_t){ .has_value = false, .value = 0 };
+    }
+    if (list.elem_size == sizeof(int64_t)) {
+        return (ori_opt_i64_t){ .has_value = true, .value = *((int64_t*)ori_list_at(&list, index)) };
+    }
+    return (ori_opt_i64_t){ .has_value = true, .value = 0 };
+}
+static inline void* ori_list_get(ori_list_t list, int64_t index) {
+    return ori_list_at(&list, index);
+}
+static inline void ori_io_eprint(ori_string_t s) {
+    fwrite(s.data, 1, s.len, stderr);
+    fputc('\n', stderr);
+    fflush(stderr);
+}
+static inline ori_opt_str_t ori_io_read_line(void) {
+#if defined(_WIN32)
+    char buf[4096];
+    if (!fgets(buf, (int)sizeof(buf), stdin)) {
+        return (ori_opt_str_t){ .has_value = false, .value = ORI_STR("") };
+    }
+    size_t n = strlen(buf);
+    while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r')) n--;
+    return (ori_opt_str_t){ .has_value = true, .value = ori_string_dup_range(buf, n) };
+#else
+    char* line = NULL;
+    size_t cap = 0;
+    ssize_t n = getline(&line, &cap, stdin);
+    if (n < 0) {
+        free(line);
+        return (ori_opt_str_t){ .has_value = false, .value = ORI_STR("") };
+    }
+    while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) n--;
+    ori_string_t value = ori_string_dup_range(line, (size_t)n);
+    free(line);
+    return (ori_opt_str_t){ .has_value = true, .value = value };
+#endif
+}
+static inline ori_opt_i64_t ori_string_to_int(ori_string_t s) {
+    char* owned = ori_string_to_c_owned(s);
+    char* end = NULL;
+    long long v = strtoll(owned, &end, 10);
+    bool ok = end != owned && end && *end == '\0';
+    free(owned);
+    return (ori_opt_i64_t){ .has_value = ok, .value = ok ? (int64_t)v : 0 };
+}
+/* ori_string_to_float is provided after codegen emits ori_opt_f64_t (optional[float]). */
+static inline int64_t ori_bytes_len(void* ptr) { (void)ptr; return 0; }
+static inline uint8_t ori_bytes_get(void* ptr, int64_t index) { (void)ptr; (void)index; return 0; }
+static inline void* ori_bytes_from_list(ori_list_t list) { (void)list; return NULL; }
+static inline void ori_io_close_input(void* ptr) { (void)ptr; }
+static inline void ori_io_close_output(void* ptr) { (void)ptr; }
+static inline uint8_t* ori_bytes_concat(uint8_t* left, uint8_t* right) { (void)left; (void)right; return NULL; }
+static inline ori_list_t ori_bytes_to_list(uint8_t* bytes) { (void)bytes; return (ori_list_t){0}; }
+static inline uint8_t* ori_string_to_bytes(ori_string_t s) {
+    uint8_t* out = (uint8_t*)malloc(s.len + 1);
+    if (!out) abort();
+    if (s.len > 0) memcpy(out, s.data, s.len);
+    out[s.len] = 0;
+    return out;
+}
 "#;
 
 // ── Codegen context ───────────────────────────────────────────────────────────

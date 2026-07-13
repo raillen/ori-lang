@@ -11,7 +11,9 @@ crate-type = ["staticlib", "rlib", "cdylib"]
 [dependencies]
 libc       = { workspace = true }
 serde_json = { workspace = true }
-rustls     = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+# `ring` crypto provider required so ClientConfig::builder() does not panic
+# (rustls 0.23 no longer auto-picks a provider without a feature).
+rustls     = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
 webpki-roots = "0.26"
 
 [dev-dependencies]

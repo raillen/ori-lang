@@ -16,6 +16,14 @@ public try_read_line() -> optional[string]
     return io.read_line()
 end
 
+public open_input(path: string) -> result[ori.io.Input, string]
+    return ori.io.open_input(path)
+end
+
+public open_output(path: string) -> result[ori.io.Output, string]
+    return ori.io.open_output(path)
+end
+
 public write(value: string)
     io.print(value)
 end

@@ -1672,16 +1672,22 @@ pub unsafe extern "C" fn ori_io_read_line() -> *mut u8 {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum RuntimeStreamKind {
     Stdin,
     Stdout,
     Stderr,
+    /// File opened for reading (`ori.io.open_input`).
+    FileRead,
+    /// File opened for writing (`ori.io.open_output`).
+    FileWrite,
 }
 
 struct RuntimeIoStream {
     kind: RuntimeStreamKind,
     closed: bool,
+    /// Owned file handle for `FileRead` / `FileWrite`; unused for stdio.
+    file: Option<std::fs::File>,
 }
 
 unsafe extern "C" fn ori_io_stream_destructor(ptr: *mut u8) {
@@ -1701,6 +1707,24 @@ unsafe fn alloc_stream(kind: RuntimeStreamKind) -> *mut u8 {
         RuntimeIoStream {
             kind,
             closed: false,
+            file: None,
+        },
+    );
+    payload as *mut u8
+}
+
+unsafe fn alloc_file_stream(kind: RuntimeStreamKind, file: std::fs::File) -> *mut u8 {
+    let layout_size = std::mem::size_of::<RuntimeIoStream>();
+    let payload = ori_alloc(layout_size, Some(ori_io_stream_destructor)) as *mut RuntimeIoStream;
+    if payload.is_null() {
+        return std::ptr::null_mut();
+    }
+    std::ptr::write(
+        payload,
+        RuntimeIoStream {
+            kind,
+            closed: false,
+            file: Some(file),
         },
     );
     payload as *mut u8
@@ -1721,6 +1745,30 @@ pub unsafe extern "C" fn ori_io_stderr() -> *mut u8 {
     alloc_stream(RuntimeStreamKind::Stderr)
 }
 
+/// Open a path as `ori.io.Input` (read-only file stream).
+///
+/// Returns `result[Input, string]`.
+#[no_mangle]
+pub unsafe extern "C" fn ori_io_open_input(path: *const u8) -> *mut u8 {
+    let path_str = cstr_str(path);
+    match std::fs::File::open(path_str) {
+        Ok(file) => new_result(true, alloc_file_stream(RuntimeStreamKind::FileRead, file)),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+/// Open a path as `ori.io.Output` (create/truncate write file stream).
+///
+/// Returns `result[Output, string]`.
+#[no_mangle]
+pub unsafe extern "C" fn ori_io_open_output(path: *const u8) -> *mut u8 {
+    let path_str = cstr_str(path);
+    match std::fs::File::create(path_str) {
+        Ok(file) => new_result(true, alloc_file_stream(RuntimeStreamKind::FileWrite, file)),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn ori_io_read(stream_ptr: *mut u8, max_bytes: i64) -> *mut u8 {
     if stream_ptr.is_null() {
@@ -1737,7 +1785,15 @@ pub unsafe extern "C" fn ori_io_read(stream_ptr: *mut u8, max_bytes: i64) -> *mu
     use std::io::Read;
     let read_result = match stream.kind {
         RuntimeStreamKind::Stdin => std::io::stdin().read(&mut buf),
-        RuntimeStreamKind::Stdout | RuntimeStreamKind::Stderr => {
+        RuntimeStreamKind::FileRead => {
+            let Some(ref mut file) = stream.file else {
+                return new_result(false, cstring_from_str("File input stream has no handle"));
+            };
+            file.read(&mut buf)
+        }
+        RuntimeStreamKind::Stdout
+        | RuntimeStreamKind::Stderr
+        | RuntimeStreamKind::FileWrite => {
             return new_result(false, cstring_from_str("Cannot read from output stream"));
         }
     };
@@ -1765,7 +1821,13 @@ pub unsafe extern "C" fn ori_io_write(stream_ptr: *mut u8, data: *const u8) -> *
     let write_result = match stream.kind {
         RuntimeStreamKind::Stdout => std::io::stdout().write(bytes),
         RuntimeStreamKind::Stderr => std::io::stderr().write(bytes),
-        RuntimeStreamKind::Stdin => {
+        RuntimeStreamKind::FileWrite => {
+            let Some(ref mut file) = stream.file else {
+                return new_result(false, cstring_from_str("File output stream has no handle"));
+            };
+            file.write(bytes)
+        }
+        RuntimeStreamKind::Stdin | RuntimeStreamKind::FileRead => {
             return new_result(false, cstring_from_str("Cannot write to input stream"));
         }
     };
@@ -1788,7 +1850,13 @@ pub unsafe extern "C" fn ori_io_flush(stream_ptr: *mut u8) -> *mut u8 {
     let flush_result = match stream.kind {
         RuntimeStreamKind::Stdout => std::io::stdout().flush(),
         RuntimeStreamKind::Stderr => std::io::stderr().flush(),
-        RuntimeStreamKind::Stdin => {
+        RuntimeStreamKind::FileWrite => {
+            let Some(ref mut file) = stream.file else {
+                return new_result(false, cstring_from_str("File output stream has no handle"));
+            };
+            file.flush()
+        }
+        RuntimeStreamKind::Stdin | RuntimeStreamKind::FileRead => {
             return new_result(false, cstring_from_str("Cannot flush input stream"));
         }
     };
@@ -1805,6 +1873,9 @@ pub unsafe extern "C" fn ori_io_close_input(stream_ptr: *mut u8) {
     }
     let stream = &mut *(stream_ptr as *mut RuntimeIoStream);
     stream.closed = true;
+    if matches!(stream.kind, RuntimeStreamKind::FileRead) {
+        stream.file = None;
+    }
 }
 
 #[no_mangle]
@@ -1814,6 +1885,9 @@ pub unsafe extern "C" fn ori_io_close_output(stream_ptr: *mut u8) {
     }
     let stream = &mut *(stream_ptr as *mut RuntimeIoStream);
     stream.closed = true;
+    if matches!(stream.kind, RuntimeStreamKind::FileWrite) {
+        stream.file = None;
+    }
 }
 
 // ── ori.string ────────────────────────────────────────────────────────────────
@@ -8005,7 +8079,17 @@ fn alloc_runtime_connection(stream: ConnectionTransport) -> Result<*mut u8, Stri
     Ok(payload as *mut u8)
 }
 
+fn ensure_rustls_crypto_provider() {
+    static INSTALL: OnceLock<()> = OnceLock::new();
+    INSTALL.get_or_init(|| {
+        // rustls 0.23 requires an explicit process-level CryptoProvider unless
+        // exactly one provider feature is selected *and* defaults are installed.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
 fn tls_client_config() -> Result<rustls::ClientConfig, String> {
+    ensure_rustls_crypto_provider();
     let mut root_store = rustls::RootCertStore::empty();
     root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
     Ok(rustls::ClientConfig::builder()
@@ -8194,6 +8278,345 @@ pub unsafe extern "C" fn ori_net_connect(host: *const u8, port: i64, timeout_ms:
         },
         Err(e) => new_result(false, cstring_from_str(&e)),
     }
+}
+
+/// STDLIB-4b/4k: await-able TCP connect — readiness-multiplexed I/O worker
+/// (poll-based on Unix; worker fallback elsewhere). Does not block the async
+/// executor while waiting.
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_connect_async(
+    host: *const u8,
+    port: i64,
+    timeout_ms: i64,
+) -> *mut OriFuture {
+    let host_str = cstr_str(host).to_string();
+    spawn_io_result_future(move || {
+        match std::ffi::CString::new(host_str) {
+            Ok(c_host) => ori_net_connect(c_host.as_ptr() as *const u8, port, timeout_ms),
+            Err(_) => new_result(false, cstring_from_str("invalid host string")),
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_connect_tls_async(
+    host: *const u8,
+    port: i64,
+    timeout_ms: i64,
+) -> *mut OriFuture {
+    let host_str = cstr_str(host).to_string();
+    // TLS handshake stays on the shared I/O pool (blocking path); still does not
+    // block the Ori async executor.
+    spawn_io_result_future(move || {
+        match std::ffi::CString::new(host_str) {
+            Ok(c_host) => ori_net_connect_tls(c_host.as_ptr() as *const u8, port, timeout_ms),
+            Err(_) => new_result(false, cstring_from_str("invalid host string")),
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_accept_async(listener_ptr: *mut u8) -> *mut OriFuture {
+    let listener_addr = listener_ptr as usize;
+    spawn_readiness_io_future(
+        move || listener_raw_fd(listener_addr as *mut u8),
+        IoInterest::Read,
+        move || ori_net_accept(listener_addr as *mut u8),
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_read_some_async(conn: *mut u8, max_bytes: i64) -> *mut OriFuture {
+    // Caller retains Connection across await; do not retain/release here
+    // (extra release races the async frame and yields "invalid connection").
+    let conn_addr = conn as usize;
+    spawn_readiness_io_future(
+        move || connection_raw_fd(conn_addr as *mut u8),
+        IoInterest::Read,
+        move || ori_net_read_some(conn_addr as *mut u8, max_bytes),
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_write_all_async(conn: *mut u8, data: *const u8) -> *mut OriFuture {
+    // Copy payload so the await frame may free the original bytes handle.
+    // STDLIB-4k: wait for POLLOUT then write without blocking the executor.
+    // Returns result[int, string] (bytes written) — avoids void-result await slots
+    // clobbering live Connection locals across suspension.
+    let conn_addr = conn as usize;
+    let owned = bytes_payload(data).to_vec();
+    let n = owned.len() as i64;
+    spawn_readiness_io_future(
+        move || connection_raw_fd(conn_addr as *mut u8),
+        IoInterest::Write,
+        move || {
+            if conn_addr == 0 {
+                return new_result(false, cstring_from_str("invalid connection"));
+            }
+            let connection = &mut *(conn_addr as *mut RuntimeConnection);
+            let Some(stream) = connection.stream.as_mut() else {
+                return new_result(false, cstring_from_str("connection closed"));
+            };
+            match stream.write_all(&owned) {
+                Ok(()) => new_result_i64_ok(n),
+                Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+            }
+        },
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_udp_recv_from_async(
+    sock_ptr: *mut u8,
+    max_bytes: i64,
+) -> *mut OriFuture {
+    let sock_addr = sock_ptr as usize;
+    spawn_readiness_io_future(
+        move || udp_raw_fd(sock_addr as *mut u8),
+        IoInterest::Read,
+        move || ori_net_udp_recv_from(sock_addr as *mut u8, max_bytes),
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_udp_send_to_async(
+    sock_ptr: *mut u8,
+    host: *const u8,
+    port: i64,
+    data: *const u8,
+) -> *mut OriFuture {
+    let sock_addr = sock_ptr as usize;
+    let host_str = cstr_str(host).to_string();
+    let owned = bytes_payload(data).to_vec();
+    spawn_readiness_io_future(
+        move || udp_raw_fd(sock_addr as *mut u8),
+        IoInterest::Write,
+        move || {
+            match std::ffi::CString::new(host_str) {
+                Ok(c_host) => {
+                    // Build a temporary NUL-terminated bytes buffer for payload.
+                    let mut payload = owned;
+                    payload.push(0);
+                    ori_net_udp_send_to(
+                        sock_addr as *mut u8,
+                        c_host.as_ptr() as *const u8,
+                        port,
+                        payload.as_ptr(),
+                    )
+                }
+                Err(_) => new_result(false, cstring_from_str("invalid host string")),
+            }
+        },
+    )
+}
+
+#[derive(Clone, Copy)]
+enum IoInterest {
+    Read,
+    Write,
+}
+
+struct IoJob {
+    interest: IoInterest,
+    fd_probe: Box<dyn Fn() -> Option<i32> + Send>,
+    work: Box<dyn FnOnce() -> *mut u8 + Send>,
+    future: usize,
+}
+
+struct IoReactor {
+    jobs: Mutex<VecDeque<IoJob>>,
+    available: Condvar,
+}
+
+static IO_REACTOR: OnceLock<IoReactor> = OnceLock::new();
+static IO_REACTOR_THREAD: OnceLock<()> = OnceLock::new();
+
+fn io_reactor() -> &'static IoReactor {
+    IO_REACTOR.get_or_init(|| IoReactor {
+        jobs: Mutex::new(VecDeque::new()),
+        available: Condvar::new(),
+    })
+}
+
+fn ensure_io_reactor_thread() {
+    IO_REACTOR_THREAD.get_or_init(|| {
+        std::thread::Builder::new()
+            .name("ori-io-reactor".into())
+            .spawn(|| io_reactor_loop())
+            .expect("spawn ori-io-reactor");
+    });
+}
+
+fn io_reactor_loop() {
+    let reactor = io_reactor();
+    loop {
+        let job = {
+            let mut jobs = reactor.jobs.lock().unwrap();
+            while jobs.is_empty() {
+                jobs = reactor.available.wait(jobs).unwrap();
+            }
+            jobs.pop_front().expect("non-empty after wait")
+        };
+
+        // STDLIB-4k: readiness wait via poll(2) when a live fd is available,
+        // then run the blocking-safe completion work. Multiplexes many waits
+        // on one reactor thread instead of one OS thread per I/O op.
+        if let Some(fd) = (job.fd_probe)() {
+            wait_fd_ready(fd, job.interest);
+        }
+        let result = (job.work)();
+        unsafe {
+            complete_future_owned(
+                job.future as *mut OriFuture,
+                OriFutureStatus::Ready,
+                result as i64,
+            );
+        }
+    }
+}
+
+fn wait_fd_ready(fd: i32, interest: IoInterest) {
+    #[cfg(unix)]
+    {
+        use std::os::raw::c_short;
+        let events: c_short = match interest {
+            IoInterest::Read => libc::POLLIN,
+            IoInterest::Write => libc::POLLOUT,
+        };
+        // Cap wait so a closed peer cannot hang the reactor forever.
+        let mut remaining_ms: i32 = 60_000;
+        while remaining_ms > 0 {
+            let mut pfd = libc::pollfd {
+                fd,
+                events,
+                revents: 0,
+            };
+            let slice_ms = remaining_ms.min(1_000);
+            let rc = unsafe { libc::poll(&mut pfd, 1, slice_ms) };
+            if rc < 0 {
+                break;
+            }
+            if rc > 0
+                && (pfd.revents
+                    & (events
+                        | libc::POLLERR
+                        | libc::POLLHUP
+                        | libc::POLLNVAL))
+                    != 0
+            {
+                break;
+            }
+            remaining_ms -= slice_ms;
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (fd, interest);
+        // Windows path: fall through immediately; work uses blocking sockets.
+    }
+}
+
+unsafe fn connection_raw_fd(conn: *mut u8) -> Option<i32> {
+    if conn.is_null() {
+        return None;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        let connection = &*(conn as *mut RuntimeConnection);
+        match connection.stream.as_ref()? {
+            ConnectionTransport::Plain(stream) => Some(stream.as_raw_fd()),
+            ConnectionTransport::Tls(stream) => Some(stream.get_ref().as_raw_fd()),
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = conn;
+        None
+    }
+}
+
+unsafe fn listener_raw_fd(listener_ptr: *mut u8) -> Option<i32> {
+    if listener_ptr.is_null() {
+        return None;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        let listener = &*(listener_ptr as *mut RuntimeListener);
+        Some(listener.listener.as_ref()?.as_raw_fd())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = listener_ptr;
+        None
+    }
+}
+
+unsafe fn udp_raw_fd(sock_ptr: *mut u8) -> Option<i32> {
+    if sock_ptr.is_null() {
+        return None;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsRawFd;
+        let socket = &*(sock_ptr as *mut RuntimeUdpSocket);
+        Some(socket.socket.as_ref()?.as_raw_fd())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = sock_ptr;
+        None
+    }
+}
+
+/// STDLIB-4k readiness path: register with the shared I/O reactor (poll-based).
+unsafe fn spawn_readiness_io_future(
+    fd_probe: impl Fn() -> Option<i32> + Send + 'static,
+    interest: IoInterest,
+    work: impl FnOnce() -> *mut u8 + Send + 'static,
+) -> *mut OriFuture {
+    let future = alloc_pending_future();
+    if future.is_null() {
+        return future;
+    }
+    ori_arc_retain(future as *mut u8);
+    ensure_io_reactor_thread();
+    let reactor = io_reactor();
+    {
+        let mut jobs = reactor.jobs.lock().unwrap();
+        jobs.push_back(IoJob {
+            interest,
+            fd_probe: Box::new(fd_probe),
+            work: Box::new(work),
+            future: future as usize,
+        });
+    }
+    reactor.available.notify_one();
+    future
+}
+
+/// Run blocking I/O on a worker thread and complete an `OriFuture`.
+/// Used for connect/TLS/FS where no pollable fd exists until after the op starts.
+/// Readiness-based net ops use `spawn_readiness_io_future` instead (STDLIB-4k).
+unsafe fn spawn_io_result_future(
+    work: impl FnOnce() -> *mut u8 + Send + 'static,
+) -> *mut OriFuture {
+    let future = alloc_pending_future();
+    if future.is_null() {
+        return future;
+    }
+    ori_arc_retain(future as *mut u8);
+    let future_addr = future as usize;
+    std::thread::spawn(move || {
+        let result = work();
+        complete_future_owned(
+            future_addr as *mut OriFuture,
+            OriFutureStatus::Ready,
+            result as i64,
+        );
+    });
+    future
 }
 
 #[no_mangle]

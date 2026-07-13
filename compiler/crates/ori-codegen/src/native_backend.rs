@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use cranelift_codegen::ir::{self, types, AbiParam, BlockArg, InstBuilder, MemFlags};
-use cranelift_codegen::settings;
+use cranelift_codegen::settings::{self, Configurable};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use cranelift_module::{DataDescription, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
@@ -186,6 +186,27 @@ fn cl_stdlib_abi_type(ty: StdlibNativeAbiTy, ptr_ty: types::Type) -> types::Type
 
 fn is_managed_ty(ty: &Ty) -> bool {
     ty.is_runtime_managed()
+}
+
+/// Opaque I/O handles must survive across `await` even when liveness analysis
+/// misses uses in nested match arms (e.g. `await write_all_async(client, …)` then
+/// `read_some(client)`). Auto-dropping them yields "invalid connection".
+fn is_async_keep_alive_resource_ty(ty: &Ty) -> bool {
+    match ty {
+        Ty::Opaque { kind, .. } => matches!(
+            kind,
+            OpaqueTy::Connection
+                | OpaqueTy::Listener
+                | OpaqueTy::File
+                | OpaqueTy::Input
+                | OpaqueTy::Output
+                | OpaqueTy::UdpSocket
+        ),
+        // Keep Result-wrapped handles if analysis stores the outer result binding.
+        Ty::Result(ok, _) => is_async_keep_alive_resource_ty(ok),
+        Ty::Optional(inner) => is_async_keep_alive_resource_ty(inner),
+        _ => false,
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -5238,6 +5259,14 @@ impl<'a> FuncCodegen<'a> {
             if let Some(local_index) = plan.locals.iter().position(|l| l.name == name) {
                 let offset = simple_async_frame_local_offset(plan, local_index, self.ptr_ty)
                     .expect("async frame local offset");
+                let ty = &plan.locals[local_index].ty;
+                if is_managed_ty(ty) {
+                    let old = self
+                        .builder
+                        .ins()
+                        .load(self.ptr_ty, MemFlags::new(), frame, offset as i32);
+                    self.emit_arc_update_edge_if_managed(ty, frame, old, val)?;
+                }
                 self.builder
                     .ins()
                     .store(MemFlags::new(), val, frame, offset as i32);
@@ -5248,12 +5277,32 @@ impl<'a> FuncCodegen<'a> {
             {
                 let offset = simple_async_frame_binding_offset(plan, await_index, self.ptr_ty)
                     .expect("async frame binding offset");
+                let ty = &plan.awaits[await_index]
+                    .binding
+                    .as_ref()
+                    .expect("binding checked above")
+                    .ty;
+                if is_managed_ty(ty) {
+                    let old = self
+                        .builder
+                        .ins()
+                        .load(self.ptr_ty, MemFlags::new(), frame, offset as i32);
+                    self.emit_arc_update_edge_if_managed(ty, frame, old, val)?;
+                }
                 self.builder
                     .ins()
                     .store(MemFlags::new(), val, frame, offset as i32);
             } else if let Some(param_index) = plan.params.iter().position(|p| p.name == name) {
                 let offset = simple_async_frame_param_offset(plan, param_index, self.ptr_ty)
                     .expect("async frame param offset");
+                let ty = &plan.params[param_index].ty;
+                if is_managed_ty(ty) {
+                    let old = self
+                        .builder
+                        .ins()
+                        .load(self.ptr_ty, MemFlags::new(), frame, offset as i32);
+                    self.emit_arc_update_edge_if_managed(ty, frame, old, val)?;
+                }
                 self.builder
                     .ins()
                     .store(MemFlags::new(), val, frame, offset as i32);
@@ -6632,6 +6681,14 @@ impl<'a> FuncCodegen<'a> {
                 kind: OpaqueTy::Connection,
                 ..
             } => Some(SmolStr::new("ori_net_close")),
+            Ty::Opaque {
+                kind: OpaqueTy::Input,
+                ..
+            } => Some(SmolStr::new("ori_io_close_input")),
+            Ty::Opaque {
+                kind: OpaqueTy::Output,
+                ..
+            } => Some(SmolStr::new("ori_io_close_output")),
             _ => None,
         }
     }
@@ -7482,7 +7539,10 @@ impl<'a> FuncCodegen<'a> {
         let mut dropped_any = false;
 
         for (index, param) in plan.params.iter().enumerate() {
-            if !is_managed_ty(&param.ty) || live_after.contains(&param.name) {
+            if !is_managed_ty(&param.ty)
+                || live_after.contains(&param.name)
+                || is_async_keep_alive_resource_ty(&param.ty)
+            {
                 continue;
             }
             let offset = simple_async_frame_param_offset(plan, index, self.ptr_ty)
@@ -7492,7 +7552,10 @@ impl<'a> FuncCodegen<'a> {
         }
 
         for (index, local) in plan.locals.iter().enumerate() {
-            if !is_managed_ty(&local.ty) || live_after.contains(&local.name) {
+            if !is_managed_ty(&local.ty)
+                || live_after.contains(&local.name)
+                || is_async_keep_alive_resource_ty(&local.ty)
+            {
                 continue;
             }
             let offset = simple_async_frame_local_offset(plan, index, self.ptr_ty)
@@ -7505,7 +7568,10 @@ impl<'a> FuncCodegen<'a> {
             let Some(binding) = &step.binding else {
                 continue;
             };
-            if !is_managed_ty(&binding.ty) || live_after.contains(&binding.name) {
+            if !is_managed_ty(&binding.ty)
+                || live_after.contains(&binding.name)
+                || is_async_keep_alive_resource_ty(&binding.ty)
+            {
                 continue;
             }
             let offset = simple_async_frame_binding_offset(plan, index, self.ptr_ty)
@@ -8316,6 +8382,7 @@ impl<'a> FuncCodegen<'a> {
                 v
             });
             self.builder.def_var(var, inner_val);
+            self.store_async_local_if_any(binding, inner_val)?;
         }
         self.emit_block(then)?;
         self.pop_scope();
@@ -8379,6 +8446,7 @@ impl<'a> FuncCodegen<'a> {
                 v
             });
             self.builder.def_var(var, inner_val);
+            self.store_async_local_if_any(binding, inner_val)?;
         }
         self.push_loop(header_blk, exit_blk);
         self.emit_block(body)?;
@@ -9790,7 +9858,7 @@ impl<'a> FuncCodegen<'a> {
             self.builder.switch_to_block(arm_blk);
             self.terminated = false;
             self.push_scope();
-            self.bind_pattern(&arm.pattern, scr, &scrutinee.ty);
+            self.bind_pattern(&arm.pattern, scr, &scrutinee.ty)?;
             self.emit_scoped_stmts(&arm.body)?;
             self.pop_scope();
             if !self.terminated {
@@ -9959,7 +10027,12 @@ impl<'a> FuncCodegen<'a> {
         }
     }
 
-    fn bind_pattern(&mut self, pat: &HirPattern, val: ir::Value, ty: &Ty) {
+    fn bind_pattern(
+        &mut self,
+        pat: &HirPattern,
+        val: ir::Value,
+        ty: &Ty,
+    ) -> Result<(), String> {
         match pat {
             HirPattern::Binding(name, bind_ty) => {
                 let bty = if *bind_ty == Ty::Infer(0) {
@@ -9974,6 +10047,11 @@ impl<'a> FuncCodegen<'a> {
                         v
                     });
                     self.builder.def_var(var, val);
+                    // Match bindings must land in the async frame: after `await`
+                    // resume, `reload_async_frame_vars` reloads locals from the
+                    // frame. Without this store, handles like Connection become
+                    // null across `await write_all_async` / nested match arms.
+                    self.store_async_local_if_any(name, val)?;
                 }
             }
             HirPattern::Variant {
@@ -9989,7 +10067,7 @@ impl<'a> FuncCodegen<'a> {
                                 let cl = cl_type(&fi.ty, self.ptr_ty).unwrap_or(types::I64);
                                 let fval =
                                     self.builder.ins().load(cl, MemFlags::new(), val, total_off);
-                                self.bind_pattern(fpat, fval, &fi.ty);
+                                self.bind_pattern(fpat, fval, &fi.ty)?;
                             }
                         }
                     }
@@ -10007,7 +10085,7 @@ impl<'a> FuncCodegen<'a> {
                     .builder
                     .ins()
                     .load(cl, MemFlags::new(), val, val_off as i32);
-                self.bind_pattern(inner, fval, inner_ty);
+                self.bind_pattern(inner, fval, inner_ty)?;
             }
             HirPattern::Ok_(inner) => {
                 let inner_ty = if let Ty::Result(ok, _) = ty {
@@ -10025,7 +10103,7 @@ impl<'a> FuncCodegen<'a> {
                     .builder
                     .ins()
                     .load(cl, MemFlags::new(), val, pay_off as i32);
-                self.bind_pattern(inner, fval, inner_ty);
+                self.bind_pattern(inner, fval, inner_ty)?;
             }
             HirPattern::Err_(inner) => {
                 let inner_ty = if let Ty::Result(_, err) = ty {
@@ -10043,7 +10121,7 @@ impl<'a> FuncCodegen<'a> {
                     .builder
                     .ins()
                     .load(cl, MemFlags::new(), val, pay_off as i32);
-                self.bind_pattern(inner, fval, inner_ty);
+                self.bind_pattern(inner, fval, inner_ty)?;
             }
             HirPattern::Tuple(patterns) => {
                 if let Ty::Tuple(elems) = ty {
@@ -10054,12 +10132,13 @@ impl<'a> FuncCodegen<'a> {
                             self.builder
                                 .ins()
                                 .load(cl, MemFlags::new(), val, *offset as i32);
-                        self.bind_pattern(pat, fval, elem_ty);
+                        self.bind_pattern(pat, fval, elem_ty)?;
                     }
                 }
             }
             _ => {}
         }
+        Ok(())
     }
 
     // == Expressions ==
@@ -13150,11 +13229,33 @@ impl<'a> FuncCodegen<'a> {
 
 // == Public entry points ==
 
+/// Cranelift flags for product codegen (LANG-PERF).
+///
+/// Defaults in cranelift leave `enable_verifier=true` and `opt_level=none`,
+/// which are correct for compiler-dev debugging but slow for end-user
+/// `ori run` / `ori compile`. We disable the verifier on the product path and
+/// use `speed` for AOT object emission / `none` for JIT (lower latency to first
+/// instruction on small programs).
+pub(crate) fn cranelift_product_flags(for_jit: bool) -> settings::Flags {
+    let mut builder = settings::builder();
+    // Verifier validates CL IR; expensive and only needed when debugging
+    // the backend itself. Failures still surface as hard errors from emit.
+    let _ = builder.set("enable_verifier", "false");
+    let opt = if for_jit { "none" } else { "speed" };
+    let _ = builder.set("opt_level", opt);
+    // Position-independent code for PIE-friendly object files / shared runtimes.
+    // (JITBuilder::with_flags forces is_pic=false after applying caller flags.)
+    if !for_jit {
+        let _ = builder.set("is_pic", "true");
+    }
+    settings::Flags::new(builder)
+}
+
 /// Construct an `ObjectModule` configured for the host target with the
 /// standard Cranelift settings. Used by `emit_native` (AOT) and available to
 /// callers that need to build a compatible module by hand.
 fn make_object_module() -> Result<ObjectModule, String> {
-    let flags = settings::Flags::new(settings::builder());
+    let flags = cranelift_product_flags(false);
     let isa = cranelift_native::builder()
         .map_err(|e| format!("native ISA unavailable: {e}"))?
         .finish(flags)
@@ -13300,18 +13401,19 @@ impl NativeLinker {
             }
         }
 
-        // Default path (Rust removal): prefer system linker, then bundled rust-lld.
-        // The system linker avoids a runtime dependency on rust-lld (which is
-        // shipped from the Rust toolchain). Requiring the OS linker (Visual
-        // Studio Build Tools on Windows, build-essential on Linux,
-        // Xcode Command Line Tools on macOS) is acceptable because those are
-        // standard development prerequisites and do not tie Ori to Rust.
-        // Opt back into the legacy `rustc` driver with `ORI_USE_RUSTC_DRIVER=1`.
+        // Default path (LANG-PERF + Rust removal for end users):
+        // 1. Bundled `rust-lld` when packaged/discovered — faster AOT than GNU
+        //    `ld` on measured Linux (~2.5s vs ~4s for examples/hello) and does
+        //    **not** require `rustc` (only the lld binary, staged under
+        //    `runtime/bin/` in release packages).
+        // 2. System linker (OS toolchain) — always available fallback.
+        // 3. Legacy `rustc` driver when neither is available or
+        //    `ORI_USE_RUSTC_DRIVER=1`.
         if !env_flag("ORI_USE_RUSTC_DRIVER") {
-            if let Ok(strategy) = discover_system_linker() {
+            if let Ok(strategy) = discover_bundled_rust_lld() {
                 return Ok(Self { strategy });
             }
-            if let Ok(strategy) = discover_bundled_rust_lld() {
+            if let Ok(strategy) = discover_system_linker() {
                 return Ok(Self { strategy });
             }
         }

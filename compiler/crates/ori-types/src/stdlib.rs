@@ -162,35 +162,37 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.io.println" => "ori_io_print", c_backend),
     stdlib!("ori.mem.string_as_ptr" => "ori_mem_string_as_ptr", c_backend),
     stdlib!("ori.mem.string_len" => "ori_mem_string_len", c_backend),
-    stdlib!("ori.io.eprint" => "ori_io_eprint"),
-    stdlib!("ori.io.eprintln" => "ori_io_eprint"),
-    stdlib!("ori.io.read_line" => "ori_io_read_line"),
+    stdlib!("ori.io.eprint" => "ori_io_eprint", c_backend),
+    stdlib!("ori.io.eprintln" => "ori_io_eprint", c_backend),
+    stdlib!("ori.io.read_line" => "ori_io_read_line", c_backend),
     stdlib!("ori.io.stdin" => "ori_io_stdin"),
     stdlib!("ori.io.stdout" => "ori_io_stdout"),
     stdlib!("ori.io.stderr" => "ori_io_stderr"),
+    stdlib!("ori.io.open_input" => "ori_io_open_input"),
+    stdlib!("ori.io.open_output" => "ori_io_open_output"),
     stdlib!("ori.io.read" => "ori_io_read"),
     stdlib!("ori.io.write" => "ori_io_write"),
     stdlib!("ori.io.flush" => "ori_io_flush"),
     stdlib!("ori.io.close_input" => "ori_io_close_input"),
     stdlib!("ori.io.close_output" => "ori_io_close_output"),
-    stdlib!("ori.string.len" => "ori_string_len"),
-    stdlib!("ori.string.concat" => "ori_string_concat"),
-    stdlib!("ori.string.split" => "ori_string_split"),
-    stdlib!("ori.string.slice" => "ori_string_slice"),
-    stdlib!("ori.string.contains" => "ori_string_contains"),
-    stdlib!("ori.string.starts_with" => "ori_string_starts_with"),
-    stdlib!("ori.string.ends_with" => "ori_string_ends_with"),
-    stdlib!("ori.string.trim" => "ori_string_trim"),
-    stdlib!("ori.string.trim_start" => "ori_string_trim_start"),
-    stdlib!("ori.string.trim_end" => "ori_string_trim_end"),
-    stdlib!("ori.string.to_upper" => "ori_string_to_upper"),
-    stdlib!("ori.string.to_lower" => "ori_string_to_lower"),
-    stdlib!("ori.string.replace" => "ori_string_replace"),
-    stdlib!("ori.string.chars" => "ori_string_chars"),
+    stdlib!("ori.string.len" => "ori_string_len", c_backend),
+    stdlib!("ori.string.concat" => "ori_string_concat", c_backend),
+    stdlib!("ori.string.split" => "ori_string_split", c_backend),
+    stdlib!("ori.string.slice" => "ori_string_slice", c_backend),
+    stdlib!("ori.string.contains" => "ori_string_contains", c_backend),
+    stdlib!("ori.string.starts_with" => "ori_string_starts_with", c_backend),
+    stdlib!("ori.string.ends_with" => "ori_string_ends_with", c_backend),
+    stdlib!("ori.string.trim" => "ori_string_trim", c_backend),
+    stdlib!("ori.string.trim_start" => "ori_string_trim_start", c_backend),
+    stdlib!("ori.string.trim_end" => "ori_string_trim_end", c_backend),
+    stdlib!("ori.string.to_upper" => "ori_string_to_upper", c_backend),
+    stdlib!("ori.string.to_lower" => "ori_string_to_lower", c_backend),
+    stdlib!("ori.string.replace" => "ori_string_replace", c_backend),
+    stdlib!("ori.string.chars" => "ori_string_chars", c_backend),
     stdlib!("string", [] => "ori_to_string", c_backend),
     stdlib!("int", [] => "ori_to_int", c_backend),
     stdlib!("float", [] => "ori_to_float", c_backend),
-    stdlib!("len", [] => "ori_len"),
+    stdlib!("len", [] => "ori_len", c_backend),
     stdlib!("ori.list.new", ["list.new"] => "ori_list_new"),
     stdlib!("ori.list.push", ["list.push"] => "ori_list_push"),
     stdlib!("ori.list.get", ["list.get"] => "ori_list_get"),
@@ -541,11 +543,11 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
         c_backend
     ),
     stdlib!("ori.iter.flatten", ["iter.flatten"] => "ori_iter_flatten", c_backend),
-    stdlib!("ori.string.index_of", ["string.index_of"] => "ori_string_index_of"),
-    stdlib!("ori.string.join", ["string.join"] => "ori_string_join"),
-    stdlib!("ori.string.repeat", ["string.repeat"] => "ori_string_repeat"),
-    stdlib!("ori.string.pad_left", ["string.pad_left"] => "ori_string_pad_left"),
-    stdlib!("ori.string.pad_right", ["string.pad_right"] => "ori_string_pad_right"),
+    stdlib!("ori.string.index_of", ["string.index_of"] => "ori_string_index_of", c_backend),
+    stdlib!("ori.string.join", ["string.join"] => "ori_string_join", c_backend),
+    stdlib!("ori.string.repeat", ["string.repeat"] => "ori_string_repeat", c_backend),
+    stdlib!("ori.string.pad_left", ["string.pad_left"] => "ori_string_pad_left", c_backend),
+    stdlib!("ori.string.pad_right", ["string.pad_right"] => "ori_string_pad_right", c_backend),
     stdlib!("ori.string.parse_int", ["string.parse_int"] => "ori_string_parse_int"),
     stdlib!("ori.string.parse_float", ["string.parse_float"] => "ori_string_parse_float"),
     stdlib!("ori.string.to_bytes", ["string.to_bytes"] => "ori_string_to_bytes"),
@@ -557,9 +559,10 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.bytes.from_hex", ["bytes.from_hex"] => "ori_bytes_from_hex"),
     stdlib!("ori.bytes.decode_utf8", ["bytes.decode_utf8"] => "ori_bytes_decode_utf8"),
     stdlib!("ori.bytes.get", ["bytes.get"] => "ori_bytes_get"),
-    stdlib!("ori.convert.float_to_string", ["float_to_string"] => "ori_float_to_string"),
-    stdlib!("ori.convert.bool_to_string", ["bool_to_string"] => "ori_bool_to_string"),
-    stdlib!("ori.convert.string_to_int", ["string_to_int"] => "ori_string_to_int"),
+    stdlib!("ori.convert.float_to_string", ["float_to_string"] => "ori_float_to_string", c_backend),
+    stdlib!("ori.convert.bool_to_string", ["bool_to_string"] => "ori_bool_to_string", c_backend),
+    stdlib!("ori.convert.string_to_int", ["string_to_int"] => "ori_string_to_int", c_backend),
+    // float optional return type is emitted by C codegen; body stays native/extern.
     stdlib!("ori.convert.string_to_float", ["string_to_float"] => "ori_string_to_float"),
     stdlib!(
         "ori.fs.read_text",
@@ -675,17 +678,45 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     ),
     stdlib!("ori.net.connect", ["net.connect"] => "ori_net_connect"),
     stdlib!("ori.net.connect_tls", ["net.connect_tls"] => "ori_net_connect_tls"),
+    stdlib!(
+        "ori.net.connect_async",
+        ["net.connect_async"] => "ori_net_connect_async"
+    ),
+    stdlib!(
+        "ori.net.connect_tls_async",
+        ["net.connect_tls_async"] => "ori_net_connect_tls_async"
+    ),
     stdlib!("ori.net.listen", ["net.listen"] => "ori_net_listen"),
     stdlib!("ori.net.accept", ["net.accept"] => "ori_net_accept"),
+    stdlib!(
+        "ori.net.accept_async",
+        ["net.accept_async"] => "ori_net_accept_async"
+    ),
     stdlib!("ori.net.close_listener", ["net.close_listener"] => "ori_net_close_listener"),
     stdlib!("ori.net.listener_port", ["net.listener_port"] => "ori_net_listener_port"),
     stdlib!("ori.net.udp_bind", ["net.udp_bind"] => "ori_net_udp_bind"),
     stdlib!("ori.net.udp_send_to", ["net.udp_send_to"] => "ori_net_udp_send_to"),
+    stdlib!(
+        "ori.net.udp_send_to_async",
+        ["net.udp_send_to_async"] => "ori_net_udp_send_to_async"
+    ),
     stdlib!("ori.net.udp_recv_from", ["net.udp_recv_from"] => "ori_net_udp_recv_from"),
+    stdlib!(
+        "ori.net.udp_recv_from_async",
+        ["net.udp_recv_from_async"] => "ori_net_udp_recv_from_async"
+    ),
     stdlib!("ori.net.udp_close", ["net.udp_close"] => "ori_net_udp_close"),
     stdlib!("ori.net.udp_local_port", ["net.udp_local_port"] => "ori_net_udp_local_port"),
     stdlib!("ori.net.read_some", ["net.read_some"] => "ori_net_read_some"),
+    stdlib!(
+        "ori.net.read_some_async",
+        ["net.read_some_async"] => "ori_net_read_some_async"
+    ),
     stdlib!("ori.net.write_all", ["net.write_all"] => "ori_net_write_all"),
+    stdlib!(
+        "ori.net.write_all_async",
+        ["net.write_all_async"] => "ori_net_write_all_async"
+    ),
     stdlib!("ori.net.close", ["net.close"] => "ori_net_close"),
     stdlib!("ori.net.is_closed", ["net.is_closed"] => "ori_net_is_closed"),
     stdlib!("ori.math.trunc", ["math.trunc"] => "ori_math_trunc", c_backend),
@@ -768,6 +799,14 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.io.read_line" => (vec![], Ty::Optional(Box::new(Ty::String))),
         "ori.io.stdin" => (vec![], input_ty()),
         "ori.io.stdout" | "ori.io.stderr" => (vec![], output_ty()),
+        "ori.io.open_input" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(input_ty()), Box::new(Ty::String)),
+        ),
+        "ori.io.open_output" => (
+            vec![Ty::String],
+            Ty::Result(Box::new(output_ty()), Box::new(Ty::String)),
+        ),
         "ori.io.read" => (
             vec![input_ty(), Ty::Int],
             Ty::Result(
@@ -1612,6 +1651,13 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             vec![Ty::String, Ty::Int, Ty::Int],
             Ty::Result(Box::new(connection_ty()), Box::new(Ty::String)),
         ),
+        "ori.net.connect_async" | "ori.net.connect_tls_async" => (
+            vec![Ty::String, Ty::Int, Ty::Int],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(connection_ty()),
+                Box::new(Ty::String),
+            ))),
+        ),
         "ori.net.listen" => (
             vec![Ty::String, Ty::Int],
             Ty::Result(Box::new(listener_ty()), Box::new(Ty::String)),
@@ -1619,6 +1665,13 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.net.accept" => (
             vec![listener_ty()],
             Ty::Result(Box::new(connection_ty()), Box::new(Ty::String)),
+        ),
+        "ori.net.accept_async" => (
+            vec![listener_ty()],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(connection_ty()),
+                Box::new(Ty::String),
+            ))),
         ),
         "ori.net.close_listener" => (vec![listener_ty()], Ty::Void),
         "ori.net.listener_port" => (vec![listener_ty()], Ty::Int),
@@ -1630,9 +1683,23 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             vec![udp_socket_ty(), Ty::String, Ty::Int, Ty::Bytes],
             Ty::Result(Box::new(Ty::Int), Box::new(Ty::String)),
         ),
+        "ori.net.udp_send_to_async" => (
+            vec![udp_socket_ty(), Ty::String, Ty::Int, Ty::Bytes],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(Ty::Int),
+                Box::new(Ty::String),
+            ))),
+        ),
         "ori.net.udp_recv_from" => (
             vec![udp_socket_ty(), Ty::Int],
             Ty::Result(Box::new(Ty::Bytes), Box::new(Ty::String)),
+        ),
+        "ori.net.udp_recv_from_async" => (
+            vec![udp_socket_ty(), Ty::Int],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(Ty::Bytes),
+                Box::new(Ty::String),
+            ))),
         ),
         "ori.net.udp_close" => (vec![udp_socket_ty()], Ty::Void),
         "ori.net.udp_local_port" => (vec![udp_socket_ty()], Ty::Int),
@@ -1640,9 +1707,23 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             vec![connection_ty(), Ty::Int],
             Ty::Result(Box::new(Ty::Bytes), Box::new(Ty::String)),
         ),
+        "ori.net.read_some_async" => (
+            vec![connection_ty(), Ty::Int],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(Ty::Bytes),
+                Box::new(Ty::String),
+            ))),
+        ),
         "ori.net.write_all" => (
             vec![connection_ty(), Ty::Bytes],
             Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
+        ),
+        "ori.net.write_all_async" => (
+            vec![connection_ty(), Ty::Bytes],
+            Ty::Future(Box::new(Ty::Result(
+                Box::new(Ty::Int),
+                Box::new(Ty::String),
+            ))),
         ),
         "ori.net.close" => (vec![connection_ty()], Ty::Void),
         "ori.net.is_closed" => (vec![connection_ty()], Ty::Bool),
@@ -1664,6 +1745,7 @@ pub fn stdlib_native_abi(
         "ori_io_print" | "ori_io_eprint" => (vec![Ptr, I64], None),
         "ori_io_read_line" => (vec![], Some(Ptr)),
         "ori_io_stdin" | "ori_io_stdout" | "ori_io_stderr" => (vec![], Some(Ptr)),
+        "ori_io_open_input" | "ori_io_open_output" => (vec![Ptr], Some(Ptr)),
         "ori_io_read" => (vec![Ptr, I64], Some(Ptr)),
         "ori_io_write" => (vec![Ptr, Ptr], Some(Ptr)),
         "ori_io_flush" => (vec![Ptr], Some(Ptr)),
@@ -1986,15 +2068,16 @@ pub fn stdlib_native_abi(
         "ori_bytes_from_list" => (vec![Ptr], Some(Ptr)),
         "ori_bytes_to_list" => (vec![Ptr], Some(Ptr)),
         "ori_process_run" | "ori_process_run_capture" => (vec![Ptr, Ptr], Some(Ptr)),
-        "ori_net_connect" | "ori_net_connect_tls" => (vec![Ptr, I64, I64], Some(Ptr)),
+        "ori_net_connect" | "ori_net_connect_tls" | "ori_net_connect_async"
+        | "ori_net_connect_tls_async" => (vec![Ptr, I64, I64], Some(Ptr)),
         "ori_net_listen" | "ori_net_udp_bind" => (vec![Ptr, I64], Some(Ptr)),
-        "ori_net_accept" => (vec![Ptr], Some(Ptr)),
+        "ori_net_accept" | "ori_net_accept_async" => (vec![Ptr], Some(Ptr)),
         "ori_net_close_listener" | "ori_net_udp_close" => (vec![Ptr], None),
         "ori_net_listener_port" | "ori_net_udp_local_port" => (vec![Ptr], Some(I64)),
-        "ori_net_udp_send_to" => (vec![Ptr, Ptr, I64, Ptr], Some(Ptr)),
-        "ori_net_udp_recv_from" => (vec![Ptr, I64], Some(Ptr)),
-        "ori_net_read_some" => (vec![Ptr, I64], Some(Ptr)),
-        "ori_net_write_all" => (vec![Ptr, Ptr], Some(Ptr)),
+        "ori_net_udp_send_to" | "ori_net_udp_send_to_async" => (vec![Ptr, Ptr, I64, Ptr], Some(Ptr)),
+        "ori_net_udp_recv_from" | "ori_net_udp_recv_from_async" => (vec![Ptr, I64], Some(Ptr)),
+        "ori_net_read_some" | "ori_net_read_some_async" => (vec![Ptr, I64], Some(Ptr)),
+        "ori_net_write_all" | "ori_net_write_all_async" => (vec![Ptr, Ptr], Some(Ptr)),
         "ori_net_close" => (vec![Ptr], None),
         "ori_net_is_closed" => (vec![Ptr], Some(I8)),
         "ori_math_trunc" | "ori_math_ln" | "ori_math_exp" | "ori_math_asin" | "ori_math_acos"
@@ -2273,19 +2356,36 @@ mod tests {
         assert!(flagged("int"), "int builtin should be c_backend");
         assert!(flagged("float"), "float builtin should be c_backend");
 
+        // LANG-2: io eprint/read_line + string + convert + len now ship C bodies.
+        assert!(flagged("ori.io.eprint"), "io.eprint should be c_backend");
+        assert!(
+            flagged("ori.io.read_line"),
+            "io.read_line should be c_backend"
+        );
+        assert!(flagged("ori.string.len"), "string.len should be c_backend");
+        assert!(
+            flagged("ori.string.contains"),
+            "string.contains should be c_backend"
+        );
+        assert!(
+            flagged("ori.convert.float_to_string"),
+            "convert.float_to_string should be c_backend"
+        );
+        assert!(
+            flagged("ori.convert.bool_to_string"),
+            "convert.bool_to_string should be c_backend"
+        );
+        assert!(
+            flagged("ori.convert.string_to_int"),
+            "convert.string_to_int should be c_backend"
+        );
+        assert!(
+            !flagged("ori.convert.string_to_float"),
+            "string_to_float stays native (optional[float] typedef order)"
+        );
+        assert!(flagged("len"), "len builtin should be c_backend");
+
         // Rows documented as "no" (native-only or extern stubs).
-        assert!(
-            !flagged("ori.io.eprint"),
-            "io.eprint should NOT be c_backend"
-        );
-        assert!(
-            !flagged("ori.io.read_line"),
-            "io.read_line should NOT be c_backend"
-        );
-        assert!(
-            !flagged("ori.string.len"),
-            "string.* should NOT be c_backend"
-        );
         assert!(!flagged("ori.bytes.len"), "bytes.* should NOT be c_backend");
         assert!(!flagged("ori.list.new"), "list.* should NOT be c_backend");
         assert!(!flagged("ori.map.new"), "map.* should NOT be c_backend");
@@ -2306,7 +2406,6 @@ mod tests {
             !flagged("ori.test.live_allocations"),
             "test leak checks NOT c_backend"
         );
-        assert!(!flagged("len"), "len builtin should NOT be c_backend");
         assert!(!flagged("ori.panic"), "panic should NOT be c_backend");
     }
 

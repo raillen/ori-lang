@@ -43,3 +43,4 @@ public current_dir_or(fallback: string) -> string
     end
     return fallback
 end
+

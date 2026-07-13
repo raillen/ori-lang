@@ -66,8 +66,13 @@ pub fn run_jit(
             }
             None
         });
-    let mut builder = JITBuilder::new(cranelift_module::default_libcall_names())
-        .map_err(|e| format!("JITBuilder: {e}"))?;
+    // Product flags: verifier off, opt_level none for faster `ori run` startup.
+    // `with_flags` takes string pairs (not a Flags object).
+    let mut builder = JITBuilder::with_flags(
+        &[("enable_verifier", "false"), ("opt_level", "none")],
+        cranelift_module::default_libcall_names(),
+    )
+    .map_err(|e| format!("JITBuilder: {e}"))?;
     builder.symbol_lookup_fn(lookup);
     let module = JITModule::new(builder);
 

@@ -141,6 +141,7 @@ struct ProjectDependency {
     name: String,
     path: Option<PathBuf>,
     version: Option<String>,
+    git: Option<crate::package::GitDependencySpec>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1723,15 +1724,50 @@ fn parse_project_dependency(
                 "dependencies.version",
                 manifest,
             )?),
+            git: None,
         });
     }
     if value.starts_with('{') {
         let table = parse_manifest_inline_table(value, manifest)?;
-        let path = table.get("path").map(|path| root.join(path));
         let version = table.get("version").cloned();
+        if let Some(git_url) = table.get("git").cloned() {
+            if table.contains_key("path") {
+                return Err(format!(
+                    "project manifest `{}` dependency `{name}` cannot combine `git` and `path`",
+                    manifest.display()
+                ));
+            }
+            let rev = table.get("rev").cloned();
+            let tag = table.get("tag").cloned();
+            let branch = table.get("branch").cloned();
+            let pin_count = [rev.is_some(), tag.is_some(), branch.is_some()]
+                .into_iter()
+                .filter(|v| *v)
+                .count();
+            if pin_count > 1 {
+                return Err(format!(
+                    "project manifest `{}` dependency `{name}` may set only one of `rev`, `tag`, or `branch`",
+                    manifest.display()
+                ));
+            }
+            let git_version = version.clone();
+            return Ok(ProjectDependency {
+                name,
+                path: None,
+                version,
+                git: Some(crate::package::GitDependencySpec {
+                    url: git_url,
+                    rev,
+                    tag,
+                    branch,
+                    version: git_version,
+                }),
+            });
+        }
+        let path = table.get("path").map(|path| root.join(path));
         if path.is_none() {
             return Err(format!(
-                "project manifest `{}` dependency `{name}` needs `path` for local resolution",
+                "project manifest `{}` dependency `{name}` needs `path` or `git`",
                 manifest.display()
             ));
         }
@@ -1739,10 +1775,11 @@ fn parse_project_dependency(
             name,
             path,
             version,
+            git: None,
         });
     }
     Err(format!(
-        "project manifest `{}` dependency `{name}` must be a quoted version or `{{ path = \"...\" }}`",
+        "project manifest `{}` dependency `{name}` must be a quoted version, `{{ path = \"...\" }}`, or `{{ git = \"...\" }}`",
         manifest.display()
     ))
 }
@@ -1910,13 +1947,37 @@ fn add_project_dependencies(
     config: &ProjectConfig,
     context: &mut ImportContext,
 ) -> Result<(), String> {
+    let cache_root = crate::package::default_package_cache_root().ok();
     for dependency in &config.dependencies {
-        let Some(path) = &dependency.path else {
+        if let Some(git) = &dependency.git {
+            let cache = cache_root.clone().ok_or_else(|| {
+                "package.cache_home_missing: set ORI_PACKAGE_CACHE to resolve git dependencies"
+                    .to_string()
+            })?;
+            let root =
+                crate::package::ensure_git_dependency_cached(&dependency.name, git, &cache)?;
+            let import_dependency =
+                import_dependency_from_root(&dependency.name, &root, dependency.version.as_deref())?;
+            add_import_dependency(context, import_dependency);
             continue;
-        };
-        let import_dependency =
-            import_dependency_from_root(&dependency.name, path, dependency.version.as_deref())?;
-        add_import_dependency(context, import_dependency);
+        }
+        if let Some(path) = &dependency.path {
+            let import_dependency =
+                import_dependency_from_root(&dependency.name, path, dependency.version.as_deref())?;
+            add_import_dependency(context, import_dependency);
+            continue;
+        }
+        if let Some(version) = &dependency.version {
+            let cache = cache_root.clone().ok_or_else(|| {
+                "package.cache_home_missing: set ORI_PACKAGE_CACHE to resolve version dependencies"
+                    .to_string()
+            })?;
+            let root =
+                crate::package::resolve_cached_version_package(&dependency.name, version, &cache)?;
+            let import_dependency =
+                import_dependency_from_root(&dependency.name, &root, Some(version))?;
+            add_import_dependency(context, import_dependency);
+        }
     }
     Ok(())
 }
@@ -1926,14 +1987,53 @@ fn add_package_manifest_dependencies(
     context: &mut ImportContext,
 ) -> Result<(), String> {
     let manifest = crate::package::load_package_manifest(manifest_path)?;
+    let cache_root = crate::package::default_package_cache_root().ok();
     for dependency in &manifest.dependencies {
-        if let crate::package::DependencyRequirement::Path { path, version } =
-            &dependency.requirement
-        {
-            let root = manifest.root.join(path);
-            let import_dependency =
-                import_dependency_from_root(&dependency.name, &root, version.as_deref())?;
-            add_import_dependency(context, import_dependency);
+        match &dependency.requirement {
+            crate::package::DependencyRequirement::Path { path, version } => {
+                let root = manifest.root.join(path);
+                let import_dependency =
+                    import_dependency_from_root(&dependency.name, &root, version.as_deref())?;
+                add_import_dependency(context, import_dependency);
+            }
+            crate::package::DependencyRequirement::Git {
+                url,
+                rev,
+                tag,
+                branch,
+                version,
+            } => {
+                let cache = cache_root.clone().ok_or_else(|| {
+                    "package.cache_home_missing: set ORI_PACKAGE_CACHE to resolve git dependencies"
+                        .to_string()
+                })?;
+                let spec = crate::package::GitDependencySpec {
+                    url: url.clone(),
+                    rev: rev.clone(),
+                    tag: tag.clone(),
+                    branch: branch.clone(),
+                    version: version.clone(),
+                };
+                let root =
+                    crate::package::ensure_git_dependency_cached(&dependency.name, &spec, &cache)?;
+                let import_dependency =
+                    import_dependency_from_root(&dependency.name, &root, version.as_deref())?;
+                add_import_dependency(context, import_dependency);
+            }
+            crate::package::DependencyRequirement::Version(version) => {
+                let cache = cache_root.clone().ok_or_else(|| {
+                    "package.cache_home_missing: set ORI_PACKAGE_CACHE to resolve version dependencies"
+                        .to_string()
+                })?;
+                let root = crate::package::resolve_cached_version_package(
+                    &dependency.name,
+                    version,
+                    &cache,
+                )?;
+                let import_dependency =
+                    import_dependency_from_root(&dependency.name, &root, Some(version))?;
+                add_import_dependency(context, import_dependency);
+            }
         }
     }
     for lib in manifest.native_libs {

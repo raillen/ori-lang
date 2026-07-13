@@ -1074,6 +1074,142 @@ end
     assert_eq!(stdout.trim(), "41");
 }
 
+/// STDLIB-4b/4k: await-able TCP connect/read/write on loopback (poll reactor).
+#[test]
+fn compile_runs_net_connect_async_loopback() {
+    let dir = TestDir::new("compile_net_connect_async_loopback");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io = io
+import ori.net = net
+import ori.string = str
+import ori.task = task
+
+serve_once(listener: net.Listener)
+    match net.accept(listener)
+        case ok(server_conn):
+            match net.read_some(server_conn, 64)
+                case ok(_):
+                    match net.write_all(server_conn, str.to_bytes("pong"))
+                        case ok(_):
+                            net.close(server_conn)
+                        case err(_):
+                    end
+                case err(_):
+            end
+        case err(_):
+    end
+    net.close_listener(listener)
+end
+
+async main()
+    match net.listen("127.0.0.1", 0)
+        case ok(listener):
+            const port: int = net.listener_port(listener)
+            const server_job: task.Job[void] = task.run_blocking(() -> void
+                serve_once(listener)
+            end)
+            match await net.connect_async("127.0.0.1", port, 5000)
+                case ok(client):
+                    const payload: bytes = str.to_bytes("ping")
+                    match await net.write_all_async(client, payload)
+                        case ok(_):
+                            match await net.read_some_async(client, 64)
+                                case ok(data):
+                                    match str.from_bytes(data)
+                                        case ok(text):
+                                            io.print(text)
+                                        case err(_):
+                                            io.print("decode_err")
+                                    end
+                                case err(_):
+                                    io.print("read_err")
+                            end
+                        case err(_):
+                            io.print("write_err")
+                    end
+                    net.close(client)
+                case err(_):
+                    io.print("connect_err")
+            end
+            match task.join(server_job)
+                case ok(_):
+                case err(_):
+            end
+        case err(_):
+            io.print("listen_err")
+    end
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "net_connect_async_loopback");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    let process = Command::new(&exe).output().unwrap();
+    assert!(process.status.success(), "{:?}", process);
+    let stdout = String::from_utf8(process.stdout).unwrap();
+    assert_eq!(stdout.trim(), "pong");
+}
+
+/// STDLIB-4k: UDP send/recv async via readiness poll reactor on loopback.
+#[test]
+fn compile_runs_net_udp_async_loopback() {
+    let dir = TestDir::new("compile_net_udp_async_loopback");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io = io
+import ori.net = net
+import ori.string = str
+
+async main()
+    match net.udp_bind("127.0.0.1", 0)
+        case ok(server):
+            const port: int = net.udp_local_port(server)
+            match net.udp_bind("127.0.0.1", 0)
+                case ok(client):
+                    const payload: bytes = str.to_bytes("udp-async")
+                    match await net.udp_send_to_async(client, "127.0.0.1", port, payload)
+                        case ok(_):
+                            match await net.udp_recv_from_async(server, 64)
+                                case ok(data):
+                                    match str.from_bytes(data)
+                                        case ok(text):
+                                            io.print(text)
+                                        case err(_):
+                                            io.print("decode_err")
+                                    end
+                                case err(_):
+                                    io.print("recv_err")
+                            end
+                        case err(_):
+                            io.print("send_err")
+                    end
+                    net.udp_close(client)
+                case err(_):
+                    io.print("client_bind_err")
+            end
+            net.udp_close(server)
+        case err(_):
+            io.print("server_bind_err")
+    end
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "net_udp_async_loopback");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    let process = Command::new(&exe).output().unwrap();
+    assert!(process.status.success(), "{:?}", process);
+    let stdout = String::from_utf8(process.stdout).unwrap();
+    assert_eq!(stdout.trim(), "udp-async");
+}
+
 #[test]
 fn compile_runs_async_fs_read_and_write_native() {
     let dir = TestDir::new("compile_async_fs_read_write_native");
@@ -1329,6 +1465,54 @@ end
         text.contains("C backend does not support async functions yet; use the native backend"),
         "{text}"
     );
+}
+
+/// LANG-1: non-async permanent exclusion — `for` without iterator ABI → native_unsupported.
+#[test]
+fn compile_rejects_for_iterable_without_native_abi() {
+    let dir = TestDir::new("compile_rejects_for_iterable_without_native_abi");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io = io
+
+main()
+    const n: int = 3
+    for x in n
+        io.print(string(x))
+    end
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "for_iterable_no_abi");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe));
+    match out {
+        Ok(check) => {
+            assert!(
+                check.has_errors,
+                "expected native_unsupported for for-over-int, got ok: {:?}",
+                check.diagnostics
+            );
+            let text = check
+                .diagnostics
+                .iter()
+                .map(|d| format!("{}: {}", d.code, d.message))
+                .collect::<Vec<_>>()
+                .join("\n");
+            assert!(
+                text.contains("native_unsupported") || text.contains("iterable") || text.contains("for"),
+                "{text}"
+            );
+        }
+        Err(err) => {
+            assert!(
+                err.contains("native_unsupported") || err.contains("iterable") || err.contains("for"),
+                "{err}"
+            );
+        }
+    }
 }
 
 #[test]

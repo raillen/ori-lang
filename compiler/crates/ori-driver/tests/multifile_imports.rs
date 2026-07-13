@@ -3612,6 +3612,100 @@ end
     compile_c_source(&dir, "c_string_equality", &out.c_source);
 }
 
+/// LANG-2: C/debug compiles string helpers + int conversion builtins.
+#[test]
+fn build_c_backend_compiles_string_helpers_and_int_to_string() {
+    let dir = TestDir::new("c_string_helpers_int");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io = io
+import ori.string = str
+
+main()
+    const n: int = 42
+    const text: string = string(n)
+    const upper: string = str.to_upper("ori")
+    const has: bool = str.contains("hello", "ell")
+    io.print(text)
+    io.print(upper)
+    io.print(string(has))
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(out.c_source.contains("ori_string_to_upper"));
+    assert!(out.c_source.contains("ori_string_contains"));
+    compile_c_source(&dir, "c_string_helpers_int", &out.c_source);
+}
+
+/// LANG-2: C/debug compiles convert + eprint + string trim/replace surface.
+#[test]
+fn build_c_backend_compiles_convert_eprint_and_string_surface() {
+    let dir = TestDir::new("c_convert_eprint_string");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io = io
+import ori.string = str
+
+main()
+    -- Use L1 convert aliases without loading convert.orl helpers
+    -- (param name `default` is a C keyword in generated signatures).
+    const fs: string = float_to_string(1.5)
+    const bs: string = bool_to_string(true)
+    const trimmed: string = str.trim("  hi  ")
+    const replaced: string = str.replace("aa", "a", "b")
+    const n: int = str.len(trimmed)
+    io.eprint(fs)
+    io.eprint(bs)
+    io.print(trimmed)
+    io.print(replaced)
+    io.print(string(n))
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(out.c_source.contains("ori_float_to_string"));
+    assert!(out.c_source.contains("ori_bool_to_string"));
+    assert!(out.c_source.contains("ori_io_eprint"));
+    assert!(out.c_source.contains("ori_string_trim"));
+    assert!(out.c_source.contains("ori_string_replace"));
+    assert!(out.c_source.contains("ori_string_len"));
+    compile_c_source(&dir, "c_convert_eprint_string", &out.c_source);
+}
+
+/// LANG-2: C/debug compiles format + math together (common debug path).
+#[test]
+fn build_c_backend_compiles_format_and_math_combo() {
+    let dir = TestDir::new("c_format_math_combo");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.format = fmt
+import ori.math = math
+
+main()
+    const h: string = fmt.hex(255)
+    const a: float = math.abs(-3.5)
+    const _u: string = h
+    const _b: float = a
+end
+"#,
+    );
+
+    let out = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    compile_c_source(&dir, "c_format_math_combo", &out.c_source);
+}
+
 #[test]
 fn check_accepts_lazy_type_and_stdlib_once_force() {
     let dir = TestDir::new("lazy_type_once_force");
@@ -11087,8 +11181,7 @@ fn check_accepts_flattened_stdlib_parent_selective_imports() {
 import ori.map = maps
 import ori.map (get_or, merge_string_int)
 import ori.bytes = bytes_mod
-import ori.bytes.algorithms (compare_lex)
-import ori.bytes.utils (is_empty)
+import ori.bytes (compare_lex, is_empty)
 
 main()
     const m: map[string, int] = maps.new()
@@ -11108,6 +11201,75 @@ end
 
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+/// STDLIB-1: L1 + true L2 helpers are available via `ori.X` without nested imports.
+#[test]
+fn compile_runs_stdlib_parent_canonical_no_utils_import() {
+    let dir = TestDir::new("stdlib_parent_canonical_no_utils");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.bytes = bytes_mod
+import ori.format = fmt
+import ori.fs = fs
+import ori.graph = graph
+import ori.io = io
+import ori.list = lists
+import ori.math = math
+import ori.os = os
+import ori.queue = queue
+import ori.random = random
+import ori.set = sets
+import ori.tree = tree
+
+main()
+    -- L1 via parent path (no .utils)
+    io.print(fmt.hex(255))
+    io.print(string(os.pid() > 0))
+    io.print(string(math.log10(100.0) > 1.9))
+    const shuffled: list[int] = random.shuffle([1, 2, 3])
+    io.print(string(lists.len(shuffled) == 3))
+    match fs.create_dir_all(".")
+        case ok(_):
+            io.print("dir_ok")
+        case err(_):
+            io.print("dir_err")
+    end
+
+    -- L2 helpers that lived under utils/algorithms (parent only)
+    io.print(fmt.number_int(42))
+    io.print(string(os.env_or("PATH", "") != ""))
+    const q: queue.Queue[int] = queue.from_list([10, 20])
+    io.print(string(queue.peek_or(q, -1)))
+    const left: bytes = bytes_mod.from_list([1, 2])
+    const right: bytes = bytes_mod.from_list([1, 3])
+    io.print(string(bytes_mod.compare_lex(left, right) < 0))
+    io.print(string(bytes_mod.is_prefix_of(bytes_mod.from_list([1]), left)))
+    const g: graph.Graph[string] = graph.new(false)
+    graph.add_edge(g, "a", "b")
+    graph.add_edge(g, "b", "c")
+    io.print(string(graph.has_path(g, "a", "c")))
+    io.print(string(sets.intersection_size_string(sets.from_list(["x", "y"]), sets.from_list(["y", "z"]))))
+    const t: tree.Tree[int] = tree.new(1)
+    io.print(string(tree.is_leaf(t, tree.root(t))))
+    io.print_line("ok")
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "stdlib_parent_canonical_no_utils");
+    let normalized = stdout.replace("\r\n", "\n");
+    assert!(
+        normalized.contains("ff") || normalized.contains("FF"),
+        "expected hex output, got: {stdout:?}"
+    );
+    assert!(normalized.contains("true"), "stdout: {stdout:?}");
+    assert!(normalized.contains("42"), "stdout: {stdout:?}");
+    assert!(normalized.contains("10"), "queue peek, stdout: {stdout:?}");
+    assert!(normalized.contains("1\n") || normalized.contains("\n1\n"), "set size, stdout: {stdout:?}");
+    assert!(normalized.contains("ok"), "stdout: {stdout:?}");
 }
 
 #[test]
@@ -11464,6 +11626,210 @@ end
 
     let out = run_build(&dir.path("main.orl")).unwrap();
     assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn compile_runs_io_file_stream_adapters_native() {
+    // STDLIB-3: open_input / open_output + using dispose for streams
+    let dir = TestDir::new("io_file_stream_adapters");
+    let path = dir.path("note.txt");
+    let path_lit = path.to_string_lossy().replace('\\', "/");
+    dir.write(
+        "main.orl",
+        &format!(
+            r#"module app.main
+
+import ori.io = io
+import ori.string = str
+import ori.io (open_input, open_output, write_text, read_text, flush, close_input, close_output)
+
+main()
+    match open_output("{path}")
+        case ok(out):
+            match write_text(out, "hello-stream")
+                case ok(_):
+                    match flush(out)
+                        case ok(_):
+                            close_output(out)
+                        case err(m):
+                            io.println(m)
+                    end
+                case err(m):
+                    io.println(m)
+            end
+        case err(m):
+            io.println(m)
+    end
+    match open_input("{path}")
+        case ok(input):
+            match read_text(input, 64)
+                case ok(maybe):
+                    if some(text) = maybe
+                        io.println(text)
+                    end
+                    close_input(input)
+                case err(m):
+                    io.println(m)
+            end
+        case err(m):
+            io.println(m)
+    end
+    match open_output("{path}")
+        case ok(out2_raw):
+            using out2: ori.io.Output = out2_raw
+            match write_text(out2, "using-ok")
+                case ok(_):
+                    match flush(out2)
+                        case ok(_):
+                        case err(_):
+                    end
+                case err(_):
+            end
+        case err(_):
+    end
+end
+"#,
+            path = path_lit
+        ),
+    );
+
+    let exe = exe_path(&dir, "io_file_streams");
+    let out = match run_compile(&dir.path("main.orl"), Path::new(&exe)) {
+        Ok(o) => o,
+        Err(e) => panic!("compile error: {e}"),
+    };
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("hello-stream"),
+        "stdout={stdout:?}"
+    );
+}
+
+#[test]
+fn check_accepts_http_parse_and_build_request() {
+    // STDLIB-2: pure parse/build without network
+    let dir = TestDir::new("http_parse_build");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.net.http = http
+import ori.io = io
+import ori.string = str
+
+main()
+    const req: string = http.build_request("GET", "/hi", "example.com", "", "")
+    if not str.contains(req, "GET /hi HTTP/1.1")
+        io.println("bad request")
+        return
+    end
+    if not str.contains(req, "Host: example.com")
+        io.println("bad host")
+        return
+    end
+    const raw: string = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nhello"
+    match http.parse_response(raw)
+        case ok(resp):
+            if resp.status != 200
+                io.println("bad status")
+                return
+            end
+            if resp.body != "hello"
+                io.println("bad body")
+                return
+            end
+            io.println("http-ok")
+        case err(msg):
+            io.println(msg)
+    end
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn compile_runs_http_get_loopback_native() {
+    // STDLIB-2: thin client against a local TCP server
+    let dir = TestDir::new("http_get_loopback");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io = io
+import ori.net = net
+import ori.net.http = http
+import ori.string = str
+import ori.task = task
+
+serve_http_once(listener: net.Listener)
+    match net.accept(listener)
+        case ok(conn):
+            match net.read_some(conn, 1024)
+                case ok(_):
+                    const body: string = "pong"
+                    const resp: string = "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\npong"
+                    match net.write_all(conn, str.to_bytes(resp))
+                        case ok(_):
+                            net.close(conn)
+                        case err(_):
+                    end
+                case err(_):
+            end
+        case err(_):
+    end
+    net.close_listener(listener)
+end
+
+main()
+    match net.listen("127.0.0.1", 0)
+        case ok(listener):
+            const port: int = net.listener_port(listener)
+            const job: task.Job[void] = task.run_blocking(() -> void
+                serve_http_once(listener)
+            end)
+            match http.get_plain("127.0.0.1", port, "/", 5000)
+                case ok(resp):
+                    if resp.status == 200
+                        if resp.body == "pong"
+                            io.println("http-loopback-ok")
+                        else
+                            io.println(resp.body)
+                        end
+                    else
+                        io.println(string(resp.status))
+                    end
+                case err(msg):
+                    io.println(msg)
+            end
+            match task.join(job)
+                case ok(_):
+                case err(_):
+            end
+        case err(msg):
+            io.println(msg)
+    end
+end
+"#,
+    );
+    let exe = exe_path(&dir, "http_loopback");
+    let out = match run_compile(&dir.path("main.orl"), Path::new(&exe)) {
+        Ok(o) => o,
+        Err(e) => panic!("compile error: {e}"),
+    };
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(
+        stdout.contains("http-loopback-ok"),
+        "stdout={stdout:?} stderr={:?}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[test]

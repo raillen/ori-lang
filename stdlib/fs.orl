@@ -30,3 +30,11 @@ end
 public move_path(from: string, to: string) -> IoResult
     return ori.fs.rename(from, to)
 end
+
+-- STDLIB-4 MVP (async-friendly FS): use Layer 1 `ori.fs.read_text_async` /
+-- `write_text_async` (await-able). Do not re-export `task` here — importing
+-- task from this module would pull concurrency into every `import ori.fs`
+-- consumer (including C/debug of json helpers). Net uses
+-- `connect_*_in_background` for Job-style offload. True non-blocking kernel
+-- I/O remains STDLIB-4b.
+

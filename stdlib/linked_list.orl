@@ -21,3 +21,4 @@ public front_or[T](node: ori.linked_list.LinkedList[T], fallback: T) -> T
     end
     return fallback
 end
+

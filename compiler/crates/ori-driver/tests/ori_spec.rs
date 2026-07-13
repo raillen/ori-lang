@@ -5,7 +5,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use ori_driver::package::{run_install_package, InstallPackageOptions};
+use ori_driver::package::{
+    run_get_dependencies, run_install_package, run_publish_package, GetDependenciesOptions,
+    InstallPackageOptions, PublishPackageOptions,
+};
 use ori_driver::pipeline::{
     run_build, run_check, run_compile, run_doc, run_fmt, run_new_project, CheckOutput,
     NewProjectKind, NewProjectOptions,
@@ -3649,9 +3652,468 @@ end
         source: Some(dir.path("app")),
         cache_root: Some(dir.path("cache")),
     })
-    .expect_err("remote dependency should fail before registry support");
+    .expect_err("version dependency without cache/registry should fail");
 
-    assert!(err.contains("package.registry_unavailable"), "{err}");
+    assert!(
+        err.contains("package.cache_miss")
+            || err.contains("package.registry_unconfigured")
+            || err.contains("package.registry_miss")
+            || err.contains("package.registry_unavailable"),
+        "{err}"
+    );
+}
+
+/// PKG-3: publish to a file registry, install by name@version, resolve imports on check.
+#[test]
+fn package_registry_publish_install_and_resolve_on_check() {
+    let dir = TestDir::new("package_registry_publish_install");
+    dir.write(
+        "math/ori.pkg.toml",
+        r#"[package]
+name = "demo.math"
+version = "0.4.0"
+entry = "src/lib.orl"
+ori_version = "0.3.0"
+description = "registry math"
+"#,
+    );
+    dir.write(
+        "math/src/lib.orl",
+        r#"module demo.math
+
+public six() -> int
+    return 6
+end
+"#,
+    );
+
+    let registry = dir.path("registry");
+    let cache = dir.path("cache");
+    std::fs::create_dir_all(&registry).unwrap();
+
+    let published = run_publish_package(PublishPackageOptions {
+        path: dir.path("math"),
+        registry: Some(registry.display().to_string()),
+        token: None,
+        force: false,
+    })
+    .expect("publish to file registry");
+    assert_eq!(published.name, "demo.math");
+    assert_eq!(published.version, "0.4.0");
+    assert!(registry
+        .join("packages/demo.math/0.4.0/ori.pkg.toml")
+        .is_file());
+    assert!(registry
+        .join("packages/demo.math/versions.json")
+        .is_file());
+    assert!(registry.join("index.json").is_file());
+
+    std::env::set_var("ORI_REGISTRY", &registry);
+    std::env::set_var("ORI_PACKAGE_CACHE", &cache);
+
+    let installed = run_install_package(InstallPackageOptions {
+        name: "demo.math@0.4.0".to_string(),
+        source: None,
+        cache_root: Some(cache.clone()),
+    })
+    .expect("install from registry");
+    assert!(
+        installed
+            .packages
+            .iter()
+            .any(|p| p.name == "demo.math" && p.version == "0.4.0"),
+        "{:?}",
+        installed.packages
+    );
+    assert!(cache.join("demo.math/0.4.0/src/lib.orl").is_file());
+
+    // Fresh consumer: version-only dependency, resolved via registry → cache.
+    let cache2 = dir.path("cache2");
+    std::env::set_var("ORI_PACKAGE_CACHE", &cache2);
+    dir.write(
+        "app/ori.pkg.toml",
+        r#"[package]
+name = "demo.app"
+version = "0.1.0"
+entry = "src/main.orl"
+ori_version = "0.3.0"
+
+[dependencies]
+demo.math = "0.4.0"
+"#,
+    );
+    dir.write(
+        "app/src/main.orl",
+        r#"module demo.app
+
+import demo.math (six)
+
+main()
+    const value: int = six()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("app/ori.pkg.toml")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(cache2.join("demo.math/0.4.0/ori.pkg.toml").is_file());
+
+    // install by name alone uses latest from versions.json
+    let cache3 = dir.path("cache3");
+    let latest = run_install_package(InstallPackageOptions {
+        name: "demo.math".to_string(),
+        source: None,
+        cache_root: Some(cache3.clone()),
+    })
+    .expect("install latest from registry");
+    assert!(
+        latest.packages.iter().any(|p| p.version == "0.4.0"),
+        "{:?}",
+        latest.packages
+    );
+
+    std::env::remove_var("ORI_REGISTRY");
+    std::env::remove_var("ORI_PACKAGE_CACHE");
+}
+
+#[test]
+fn package_manifest_rejects_git_and_path_together() {
+    let dir = TestDir::new("package_manifest_git_path_conflict");
+    dir.write(
+        "pkg/ori.pkg.toml",
+        r#"[package]
+name = "demo.bad"
+version = "0.1.0"
+entry = "src/lib.orl"
+ori_version = "0.3.0"
+
+[dependencies]
+other = { git = "https://example.com/x.git", path = "../x" }
+"#,
+    );
+    dir.write(
+        "pkg/src/lib.orl",
+        r#"module demo.bad
+public z() -> int
+    return 0
+end
+"#,
+    );
+    let err = run_install_package(InstallPackageOptions {
+        name: "demo.bad".to_string(),
+        source: Some(dir.path("pkg")),
+        cache_root: Some(dir.path("cache")),
+    })
+    .expect_err("git+path must fail");
+    assert!(
+        err.contains("git") && err.contains("path"),
+        "{err}"
+    );
+}
+
+#[test]
+fn package_manifest_rejects_invalid_version() {
+    let dir = TestDir::new("package_manifest_bad_version");
+    dir.write(
+        "pkg/ori.pkg.toml",
+        r#"[package]
+name = "demo.bad"
+version = "1.0"
+entry = "src/lib.orl"
+ori_version = "0.3.0"
+"#,
+    );
+    dir.write(
+        "pkg/src/lib.orl",
+        r#"module demo.bad
+public z() -> int
+    return 0
+end
+"#,
+    );
+    let err = ori_driver::package::load_package_manifest(dir.path("pkg")).expect_err("bad version");
+    assert!(err.contains("version"), "{err}");
+}
+
+#[test]
+fn package_publish_refuses_overwrite_without_force() {
+    let dir = TestDir::new("package_publish_no_overwrite");
+    dir.write(
+        "pkg/ori.pkg.toml",
+        r#"[package]
+name = "demo.once"
+version = "1.0.0"
+entry = "src/lib.orl"
+ori_version = "0.3.0"
+"#,
+    );
+    dir.write(
+        "pkg/src/lib.orl",
+        r#"module demo.once
+
+public id() -> int
+    return 1
+end
+"#,
+    );
+    let registry = dir.path("registry");
+    std::fs::create_dir_all(&registry).unwrap();
+    run_publish_package(PublishPackageOptions {
+        path: dir.path("pkg"),
+        registry: Some(registry.display().to_string()),
+        token: None,
+        force: false,
+    })
+    .unwrap();
+    let err = run_publish_package(PublishPackageOptions {
+        path: dir.path("pkg"),
+        registry: Some(registry.display().to_string()),
+        token: None,
+        force: false,
+    })
+    .expect_err("second publish without --force");
+    assert!(err.contains("package.publish_exists"), "{err}");
+    run_publish_package(PublishPackageOptions {
+        path: dir.path("pkg"),
+        registry: Some(registry.display().to_string()),
+        token: None,
+        force: true,
+    })
+    .expect("force publish");
+}
+
+fn init_git_package_repo(root: &std::path::Path) {
+    let status = std::process::Command::new("git")
+        .arg("init")
+        .arg("-b")
+        .arg("main")
+        .arg(root)
+        .status()
+        .expect("git init");
+    assert!(status.success(), "git init failed");
+    let _ = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["config", "user.email", "ori-test@example.com"])
+        .status();
+    let _ = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["config", "user.name", "ori-test"])
+        .status();
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["add", "."])
+        .status()
+        .expect("git add");
+    assert!(status.success(), "git add failed");
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["commit", "-m", "initial"])
+        .status()
+        .expect("git commit");
+    assert!(status.success(), "git commit failed");
+}
+
+/// PKG-1/PKG-2: git dependency is fetched into the cache and imports resolve on check.
+#[test]
+fn package_git_dependency_fetches_and_resolves_during_check() {
+    let dir = TestDir::new("package_git_dependency_check");
+    dir.write(
+        "remote_math/ori.pkg.toml",
+        r#"[package]
+name = "demo.math"
+version = "0.2.0"
+entry = "src/lib.orl"
+ori_version = "0.3.0"
+"#,
+    );
+    dir.write(
+        "remote_math/src/lib.orl",
+        r#"module demo.math
+
+public three() -> int
+    return 3
+end
+"#,
+    );
+    init_git_package_repo(&dir.path("remote_math"));
+
+    let git_url = dir.path("remote_math").display().to_string();
+    dir.write(
+        "app/ori.pkg.toml",
+        &format!(
+            r#"[package]
+name = "demo.app"
+version = "0.1.0"
+entry = "src/main.orl"
+ori_version = "0.3.0"
+
+[dependencies]
+demo.math = {{ git = "{git_url}", branch = "main", version = "0.2.0" }}
+"#
+        ),
+    );
+    dir.write(
+        "app/src/main.orl",
+        r#"module demo.app
+
+import demo.math (three)
+
+main()
+    const value: int = three()
+end
+"#,
+    );
+
+    let cache = dir.path("cache");
+    std::env::set_var("ORI_PACKAGE_CACHE", &cache);
+
+    let get_out = run_get_dependencies(GetDependenciesOptions {
+        path: dir.path("app"),
+        cache_root: Some(cache.clone()),
+    })
+    .expect("ori get should fetch git dependency");
+    assert!(
+        get_out
+            .packages
+            .iter()
+            .any(|p| p.name == "demo.math" && p.version == "0.2.0"),
+        "{:?}",
+        get_out.packages
+    );
+    assert!(cache.join("demo.math/0.2.0/ori.pkg.toml").is_file());
+
+    let out = run_check(&dir.path("app/ori.pkg.toml")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+
+    std::env::remove_var("ORI_PACKAGE_CACHE");
+}
+
+#[test]
+fn project_git_dependency_resolves_during_check_from_ori_proj() {
+    let dir = TestDir::new("project_git_dependency_check");
+    dir.write(
+        "remote_lib/ori.pkg.toml",
+        r#"[package]
+name = "demo.util"
+version = "1.0.0"
+entry = "src/lib.orl"
+ori_version = "0.3.0"
+"#,
+    );
+    dir.write(
+        "remote_lib/src/lib.orl",
+        r#"module demo.util
+
+public four() -> int
+    return 4
+end
+"#,
+    );
+    init_git_package_repo(&dir.path("remote_lib"));
+
+    let git_url = dir.path("remote_lib").display().to_string();
+    dir.write(
+        "app/ori.proj",
+        &format!(
+            r#"manifest = 1
+name = "demo.app"
+version = "0.1.0"
+kind = "app"
+entry = "src/main.orl"
+
+[source]
+root = "src"
+root_namespace = "demo.app"
+
+[dependencies]
+demo.util = {{ git = "{git_url}", branch = "main" }}
+"#
+        ),
+    );
+    dir.write(
+        "app/src/main.orl",
+        r#"module demo.app
+
+import demo.util (four)
+
+main()
+    const value: int = four()
+end
+"#,
+    );
+
+    let cache = dir.path("cache");
+    std::env::set_var("ORI_PACKAGE_CACHE", &cache);
+
+    let out = run_check(&dir.path("app/ori.proj")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(cache.join("demo.util/1.0.0/ori.pkg.toml").is_file());
+
+    std::env::remove_var("ORI_PACKAGE_CACHE");
+}
+
+#[test]
+fn package_version_dependency_resolves_from_cache_after_install() {
+    let dir = TestDir::new("package_version_from_cache");
+    dir.write(
+        "math/ori.pkg.toml",
+        r#"[package]
+name = "demo.math"
+version = "0.3.0"
+entry = "src/lib.orl"
+ori_version = "0.3.0"
+"#,
+    );
+    dir.write(
+        "math/src/lib.orl",
+        r#"module demo.math
+
+public five() -> int
+    return 5
+end
+"#,
+    );
+
+    let cache = dir.path("cache");
+    run_install_package(InstallPackageOptions {
+        name: "demo.math".to_string(),
+        source: Some(dir.path("math")),
+        cache_root: Some(cache.clone()),
+    })
+    .unwrap();
+
+    dir.write(
+        "app/ori.pkg.toml",
+        r#"[package]
+name = "demo.app"
+version = "0.1.0"
+entry = "src/main.orl"
+ori_version = "0.3.0"
+
+[dependencies]
+demo.math = "0.3.0"
+"#,
+    );
+    dir.write(
+        "app/src/main.orl",
+        r#"module demo.app
+
+import demo.math (five)
+
+main()
+    const value: int = five()
+end
+"#,
+    );
+
+    std::env::set_var("ORI_PACKAGE_CACHE", &cache);
+    let out = run_check(&dir.path("app/ori.pkg.toml")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    std::env::remove_var("ORI_PACKAGE_CACHE");
 }
 
 #[test]

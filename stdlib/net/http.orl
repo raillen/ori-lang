@@ -1,0 +1,211 @@
+module ori.net.http
+
+-- STDLIB-2: low-level HTTP/1.1 helpers over ori.net TCP/TLS.
+-- Build requests, parse responses, thin blocking GET/POST clients.
+
+import ori.net = net
+import ori.string = str
+import ori.bytes = bytes_mod
+import ori.convert = conv
+import ori.list = lists
+
+public alias ResponseResult = result[Response, string]
+public alias TextResult = result[string, string]
+
+public struct Response
+    status: int
+    status_text: string
+    headers: string
+    body: string
+end
+
+public build_request(
+    method: string,
+    path: string,
+    host: string,
+    extra_headers: string,
+    body: string
+) -> string
+    var req: string = method
+    req = str.concat(req, " ")
+    req = str.concat(req, path)
+    req = str.concat(req, " HTTP/1.1\r\nHost: ")
+    req = str.concat(req, host)
+    req = str.concat(req, "\r\nConnection: close\r\n")
+    if not str.is_empty(extra_headers)
+        req = str.concat(req, extra_headers)
+        if not str.ends_with(extra_headers, "\r\n")
+            req = str.concat(req, "\r\n")
+        end
+    end
+    if not str.is_empty(body)
+        const blen: int = str.len(body)
+        req = str.concat(req, "Content-Length: ")
+        req = str.concat(req, string(blen))
+        req = str.concat(req, "\r\n")
+    end
+    req = str.concat(req, "\r\n")
+    if not str.is_empty(body)
+        req = str.concat(req, body)
+    end
+    return req
+end
+
+public parse_response(raw: string) -> ResponseResult
+    const sep: string = "\r\n\r\n"
+    const at: int = str.index_of(raw, sep)
+    if at < 0
+        return err("HTTP message missing header/body separator")
+    end
+    const head: string = str.slice(raw, 0, at)
+    const body: string = str.slice(raw, at + 4, str.len(raw))
+    const lines: list[string] = str.split(head, "\r\n")
+    if lists.len(lines) == 0
+        return err("empty HTTP response")
+    end
+    const status_line: string = lines[0]
+    -- "HTTP/1.1 200 OK"
+    const sp1: int = str.index_of(status_line, " ")
+    if sp1 < 0
+        return err("malformed HTTP status line")
+    end
+    const after_ver: string = str.slice(status_line, sp1 + 1, str.len(status_line))
+    const sp2: int = str.index_of(after_ver, " ")
+    var code_text: string = after_ver
+    var status_text: string = ""
+    if sp2 >= 0
+        code_text = str.slice(after_ver, 0, sp2)
+        status_text = str.slice(after_ver, sp2 + 1, str.len(after_ver))
+    end
+    if some(code) = conv.string_to_int(code_text)
+        var headers: string = ""
+        const nl: int = str.index_of(head, "\r\n")
+        if nl >= 0
+            headers = str.slice(head, nl + 2, str.len(head))
+        end
+        return ok(Response {
+            status: code,
+            status_text: status_text,
+            headers: headers,
+            body: body
+        })
+    end
+    return err("invalid HTTP status code")
+end
+
+public read_all_text(conn: net.Connection, max_bytes: int) -> TextResult
+    var acc: string = ""
+    var total: int = 0
+    loop
+        if total >= max_bytes
+            break
+        end
+        match net.read_some(conn, 4096)
+            case ok(chunk):
+                if bytes_mod.len(chunk) == 0
+                    break
+                end
+                match str.from_bytes(chunk)
+                    case ok(text):
+                        acc = str.concat(acc, text)
+                        total = total + str.len(text)
+                    case err(msg):
+                        return err(msg)
+                end
+            case err(msg):
+                return err(msg)
+        end
+    end
+    return ok(acc)
+end
+
+public read_response(conn: net.Connection, max_total: int) -> ResponseResult
+    match read_all_text(conn, max_total)
+        case ok(raw):
+            return parse_response(raw)
+        case err(msg):
+            return err(msg)
+    end
+    return err("read_response failed")
+end
+
+exchange_on(conn: net.Connection, request: string, max_response: int) -> ResponseResult
+    match net.write_all(conn, str.to_bytes(request))
+        case ok(_):
+            match read_response(conn, max_response)
+                case ok(resp):
+                    net.close(conn)
+                    return ok(resp)
+                case err(msg):
+                    net.close(conn)
+                    return err(msg)
+            end
+        case err(msg):
+            net.close(conn)
+            return err(msg)
+    end
+    return err("exchange failed")
+end
+
+exchange(
+    host: string,
+    port: int,
+    use_tls: bool,
+    timeout_ms: int,
+    request: string,
+    max_response: int
+) -> ResponseResult
+    if use_tls
+        match net.connect_tls(host, port, timeout_ms)
+            case ok(conn):
+                return exchange_on(conn, request, max_response)
+            case err(msg):
+                return err(msg)
+        end
+    else
+        match net.connect(host, port, timeout_ms)
+            case ok(conn):
+                return exchange_on(conn, request, max_response)
+            case err(msg):
+                return err(msg)
+        end
+    end
+    return err("connect failed")
+end
+
+public get(
+    host: string,
+    port: int,
+    path: string,
+    use_tls: bool,
+    timeout_ms: int
+) -> ResponseResult
+    const req: string = build_request("GET", path, host, "", "")
+    return exchange(host, port, use_tls, timeout_ms, req, 1048576)
+end
+
+public post(
+    host: string,
+    port: int,
+    path: string,
+    body: string,
+    content_type: string,
+    use_tls: bool,
+    timeout_ms: int
+) -> ResponseResult
+    var extra: string = ""
+    if not str.is_empty(content_type)
+        extra = str.concat("Content-Type: ", content_type)
+        extra = str.concat(extra, "\r\n")
+    end
+    const req: string = build_request("POST", path, host, extra, body)
+    return exchange(host, port, use_tls, timeout_ms, req, 1048576)
+end
+
+public get_tls(host: string, path: string, timeout_ms: int) -> ResponseResult
+    return get(host, 443, path, true, timeout_ms)
+end
+
+public get_plain(host: string, port: int, path: string, timeout_ms: int) -> ResponseResult
+    return get(host, port, path, false, timeout_ms)
+end
