@@ -1,10 +1,10 @@
 module examples.process_runner
 
-import ori.io as io
-import ori.os.utils as os
-import ori.process as process
-import ori.process.utils as process_utils
-import ori.string only (trim_all)
+import ori.io = io
+import ori.os.utils = os
+import ori.process = process
+import ori.process.utils = process_utils
+import ori.string (trim_all)
 
 echo_command() -> string
     if os.is_windows()

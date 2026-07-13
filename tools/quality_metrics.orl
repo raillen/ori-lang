@@ -1,11 +1,11 @@
 module tools.quality_metrics
 
-import ori.fs as fs
-import ori.io as io
-import ori.os.utils as os_utils
-import ori.process as proc
-import ori.string as str
-import ori.time as time
+import ori.fs = fs
+import ori.io = io
+import ori.os.utils = os_utils
+import ori.process = proc
+import ori.string = str
+import ori.time = time
 
 write_file(path: string, content: string)
     match fs.write_text(path, content)

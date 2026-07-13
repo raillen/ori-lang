@@ -817,7 +817,7 @@ fn run_repl(color: bool) -> i32 {
 }
 
 fn repl_source(imports: &[String], bindings: &[String], statement: Option<&str>) -> String {
-    let mut source = String::from("namespace repl.main\n\nimport ori.io as io\n");
+    let mut source = String::from("namespace repl.main\n\nimport ori.io = io\n");
     for import in imports {
         source.push_str(import);
         source.push('\n');

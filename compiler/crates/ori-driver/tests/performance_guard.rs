@@ -30,7 +30,7 @@ fn check_deep_import_graph_has_stable_performance_shape() {
             format!("module app.mod{index}\n\npublic value() -> int\n    return {index}\nend\n")
         } else {
             format!(
-                "module app.mod{index}\n\nimport app.mod{} as next\n\npublic value() -> int\n    return next.value() + 1\nend\n",
+                "module app.mod{index}\n\nimport app.mod{} = next\n\npublic value() -> int\n    return next.value() + 1\nend\n",
                 index + 1
             )
         };
@@ -38,7 +38,7 @@ fn check_deep_import_graph_has_stable_performance_shape() {
     }
     dir.write(
         "main.orl",
-        "module app.main\n\nimport app.mod0 as entry\n\nmain()\n    const total: int = entry.value()\nend\n",
+        "module app.main\n\nimport app.mod0 = entry\n\nmain()\n    const total: int = entry.value()\nend\n",
     );
 
     let started = Instant::now();
@@ -85,7 +85,7 @@ fn strict_generated_code_runtime_probe() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 fib(n: int) -> int
     if n <= 1

@@ -1260,7 +1260,7 @@ pub fn run_new_project(
         NewProjectKind::App => (
             "app",
             "src/main.orl",
-            "module app.main\n\nimport ori.io as io\n\nmain()\n    io.println(\"Hello, Ori!\")\nend\n",
+            "module app.main\n\nimport ori.io = io\n\nmain()\n    io.println(\"Hello, Ori!\")\nend\n",
         ),
         NewProjectKind::Lib => (
             "lib",
@@ -4281,16 +4281,16 @@ pub fn format_summary_text(summary: &SummaryOutput) -> String {
                     .iter()
                     .map(|item| {
                         if let Some(alias) = &item.alias {
-                            format!("{} as {}", item.name, alias)
+                            format!("{} = {}", item.name, alias)
                         } else {
                             item.name.clone()
                         }
                     })
                     .collect::<Vec<_>>()
                     .join(", ");
-                out.push_str(&format!("    import {} only ({})\n", import.path, selected));
+                out.push_str(&format!("    import {} ({})\n", import.path, selected));
             } else if let Some(alias) = &import.alias {
-                out.push_str(&format!("    import {} as {}\n", import.path, alias));
+                out.push_str(&format!("    import {} = {}\n", import.path, alias));
             } else {
                 out.push_str(&format!("    import {}\n", import.path));
             }

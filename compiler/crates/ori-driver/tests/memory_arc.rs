@@ -102,8 +102,8 @@ fn compile_runs_native_no_managed_no_leak() {
         &dir,
         r#"module app.main
 
-import ori.io as io
-import ori.test as test
+import ori.io = io
+import ori.test = test
 
 main()
     io.print("hello")
@@ -129,9 +129,9 @@ fn compile_runs_native_single_list_no_leak() {
         &dir,
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.test as test
+import ori.io = io
+import ori.list = lists
+import ori.test = test
 
 exercise_list() -> int
     const xs: list<int> = lists.new()
@@ -179,9 +179,9 @@ fn compile_runs_native_struct_with_managed_field_no_leak() {
         &dir,
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.test as test
+import ori.io = io
+import ori.list = lists
+import ori.test = test
 
 struct Holder
     items: list<int>
@@ -225,9 +225,9 @@ fn compile_runs_native_nested_struct_arc_cascade_no_leak() {
         &dir,
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.test as test
+import ori.io = io
+import ori.list = lists
+import ori.test = test
 
 struct Leaf
     data: list<int>
@@ -275,9 +275,9 @@ fn compile_runs_native_enum_with_managed_payload_no_leak() {
         &dir,
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.test as test
+import ori.io = io
+import ori.list = lists
+import ori.test = test
 
 enum Shape
     Empty
@@ -328,9 +328,9 @@ fn compile_runs_native_optional_struct_no_leak() {
         &dir,
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.test as test
+import ori.io = io
+import ori.list = lists
+import ori.test = test
 
 struct Box
     items: list<int>
@@ -390,9 +390,9 @@ fn compile_runs_native_cycle_collector_runs() {
         &dir,
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.test as test
+import ori.io = io
+import ori.list = lists
+import ori.test = test
 
 main()
     const xs: list<int> = lists.new()
@@ -425,9 +425,9 @@ fn compile_runs_native_orphan_cycle_reclaimed() {
         &dir,
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.test as test
+import ori.io = io
+import ori.list = lists
+import ori.test = test
 
 struct Peer
     id: int
@@ -483,9 +483,9 @@ fn compile_runs_native_loop_managed_allocations_no_leak() {
         &dir,
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.test as test
+import ori.io = io
+import ori.list = lists
+import ori.test = test
 
 main()
     var i: int = 0
@@ -521,9 +521,9 @@ fn compile_runs_native_leak_check_env_aborts_on_intentional_leak() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.test as test
+import ori.io = io
+import ori.list = lists
+import ori.test = test
 
 var kept: list<int> = lists.new()
 
@@ -578,8 +578,8 @@ fn compile_runs_native_leak_check_env_clean() {
         &dir,
         r#"module app.main
 
-import ori.io as io
-import ori.test as test
+import ori.io = io
+import ori.test = test
 
 main()
     io.print("clean")
@@ -611,9 +611,9 @@ fn compile_runs_native_cycle_stress_10k() {
         &dir,
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.test as test
+import ori.io = io
+import ori.list = lists
+import ori.test = test
 
 struct Peer
     id: int
@@ -674,11 +674,11 @@ fn compile_runs_native_linked_list_and_graph_no_leak() {
         &dir,
         r#"module app.main
 
-import ori.io as io
-import ori.graph as graph
-import ori.linked_list as llist
-import ori.list as lists
-import ori.test as test
+import ori.io = io
+import ori.graph = graph
+import ori.linked_list = llist
+import ori.list = lists
+import ori.test = test
 
 exercise_collections(seed: int) -> int
     const xs: llist.LinkedList<int> = llist.new()

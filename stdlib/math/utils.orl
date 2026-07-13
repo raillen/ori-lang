@@ -1,6 +1,6 @@
 module ori.math.utils
 
-import ori.math as math
+import ori.math = math
 
 public sign(n: int) -> int
     if n < 0

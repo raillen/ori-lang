@@ -1,8 +1,8 @@
 module examples.task_cli
 
-import ori.args as args
-import ori.io as io
-import ori.list as lists
+import ori.args = args
+import ori.io = io
+import ori.list = lists
 
 struct Task
     title: string

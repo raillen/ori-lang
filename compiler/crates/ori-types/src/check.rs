@@ -4988,8 +4988,13 @@ impl<'a> Checker<'a> {
         loop {
             let prefix = &name[..prefix_end];
             if let Some(full_ns) = self.aliases.get(prefix) {
-                let root = prefix.split('.').next().unwrap_or(prefix);
-                self.used_aliases.insert(SmolStr::new(root));
+                // Mark the matched key (short alias, reexport path like `api.util`,
+                // or bare whole-module path). Also mark the first segment so
+                // `api.util.answer` counts the `import app.facade = api` as used.
+                self.used_aliases.insert(SmolStr::new(prefix));
+                if let Some(root) = prefix.split('.').next() {
+                    self.used_aliases.insert(SmolStr::new(root));
+                }
                 let suffix = &name[prefix_end..];
                 if suffix.is_empty() {
                     return full_ns.to_string();
@@ -6153,29 +6158,33 @@ fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
 }
 
 fn import_visible_bindings(import: &ImportDecl) -> Vec<(SmolStr, Span)> {
-    if import.selected.is_empty() {
-        let alias = import
-            .alias
-            .as_ref()
-            .map(|a| a.text.clone())
-            .unwrap_or_else(|| import.path.last().text.clone());
-        let alias_span = import.alias.as_ref().map(|a| a.span).unwrap_or(import.span);
-        return vec![(alias, alias_span)];
+    if !import.selected.is_empty() {
+        return import
+            .selected
+            .iter()
+            .map(|item| {
+                let alias = selected_import_alias(item);
+                let span = item
+                    .alias
+                    .as_ref()
+                    .map(|a| a.span)
+                    .unwrap_or(item.name.span);
+                (alias, span)
+            })
+            .collect();
     }
 
-    import
-        .selected
-        .iter()
-        .map(|item| {
-            let alias = selected_import_alias(item);
-            let span = item
-                .alias
-                .as_ref()
-                .map(|a| a.span)
-                .unwrap_or(item.name.span);
-            (alias, span)
-        })
-        .collect()
+    if let Some(alias) = &import.alias {
+        // Explicit `import path = alias`.
+        return vec![(alias.text.clone(), alias.span)];
+    }
+
+    // Bare whole-module import: only the full path is usable; track that key
+    // for unused-import warnings (matches identity entry in `import_aliases`).
+    vec![(
+        SmolStr::new(import.path.to_string()),
+        import.span,
+    )]
 }
 
 fn selected_import_alias(item: &ImportItem) -> SmolStr {

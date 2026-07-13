@@ -121,11 +121,11 @@ sh tools/smoke_native_release.sh
 ## 最初のプログラム
 
 ```ori
-namespace app.hello
+module app.hello
 
-import ori.io as io
+import ori.io = io
 
-func main()
+main()
     io.print("Hello, Ori!")
 
     const answer: int = 21 * 2
@@ -198,11 +198,11 @@ Ori の中心モデルは小さく保たれています。
 `result` の例:
 
 ```ori
-namespace app.errors
+module app.errors
 
-import ori.io as io
+import ori.io = io
 
-func divide(a: int, b: int) -> result<int, string>
+divide(a: int, b: int) -> result<int, string>
     if b == 0
         return error("division by zero")
     end
@@ -210,7 +210,7 @@ func divide(a: int, b: int) -> result<int, string>
     return success(a / b)
 end
 
-func main() -> result<void, string>
+main() -> result<void, string>
     const value: int = divide(84, 2)?
     io.print(f"value: {value}")
     return success()

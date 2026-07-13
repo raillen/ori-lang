@@ -1,7 +1,7 @@
 module examples.stack_demo
 
-import ori.io as io
-import ori.stack as stack
+import ori.io = io
+import ori.stack = stack
 
 main()
     const history: stack.Stack<string> = stack.new()

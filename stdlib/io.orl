@@ -1,6 +1,6 @@
 module ori.io
 
-import ori.string as str
+import ori.string = str
 
 public print_line(value: string)
     ori.io.println(value)

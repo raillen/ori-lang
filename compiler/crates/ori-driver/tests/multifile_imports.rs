@@ -119,6 +119,40 @@ public answer() -> int
 end
 "#,
     );
+    // S3 bare import: no implicit last-segment alias — full path only.
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import app.util
+
+main()
+    const value: int = app.util.answer()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        !diagnostic_codes(&out).contains(&"bind.unused_import"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_bare_import_does_not_create_last_segment_alias() {
+    let dir = TestDir::new("bare_import_no_alias");
+    dir.write(
+        "util.orl",
+        r#"module app.util
+
+public answer() -> int
+    return 11
+end
+"#,
+    );
     dir.write(
         "main.orl",
         r#"module app.main
@@ -132,9 +166,87 @@ end
     );
 
     let out = run_check(&dir.path("main.orl")).unwrap();
-    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(out.has_errors, "{:?}", out.diagnostics);
     assert!(
-        !diagnostic_codes(&out).contains(&"bind.unused_import"),
+        diagnostic_codes(&out).contains(&"name.undefined"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_accepts_path_eq_alias_and_imports_block() {
+    let dir = TestDir::new("imports_block_s3");
+    dir.write(
+        "util.orl",
+        r#"module app.util
+
+public answer() -> int
+    return 7
+end
+"#,
+    );
+    dir.write(
+        "math.orl",
+        r#"module app.math
+
+public add(a: int, b: int) -> int
+    return a + b
+end
+"#,
+    );
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+imports
+  app.util = util, app.math (add)
+end
+
+main()
+    const value: int = util.answer()
+    const total: int = add(value, 1)
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn check_reports_removed_import_as_and_only() {
+    let dir = TestDir::new("import_as_only_removed");
+    dir.write(
+        "util.orl",
+        r#"module app.util
+
+public answer() -> int
+    return 1
+end
+"#,
+    );
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import app.util as util
+import app.util only (answer)
+
+main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    let codes = diagnostic_codes(&out);
+    assert!(
+        codes.contains(&"parse.import_as_removed"),
+        "{:?}",
+        out.diagnostics
+    );
+    assert!(
+        codes.contains(&"parse.import_only_removed"),
         "{:?}",
         out.diagnostics
     );
@@ -261,9 +373,9 @@ fn compile_runs_for_in_over_list_string_without_corruption() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.string as str
+import ori.io = io
+import ori.list = lists
+import ori.string = str
 
 main()
     var acc: string = ""
@@ -300,14 +412,14 @@ end
         "facade.orl",
         r#"module app.facade
 
-public import app.util as util
+public import app.util = util
 "#,
     );
     dir.write(
         "main.orl",
         r#"module app.main
 
-import app.facade as api
+import app.facade = api
 
 main()
     const value: int = api.util.answer(40)
@@ -345,14 +457,14 @@ end
         "facade.orl",
         r#"module app.facade
 
-public import app.model as model
+public import app.model = model
 "#,
     );
     dir.write(
         "main.orl",
         r#"module app.main
 
-import app.facade as api
+import app.facade = api
 
 make_user() -> api.model.User
     return api.model.make_user()
@@ -389,7 +501,7 @@ end
         "main.orl",
         r#"module app.main
 
-import app.util as util
+import app.util = util
 
 main()
     const value: int = util.add_one()
@@ -418,7 +530,7 @@ end
         "main.orl",
         r#"module app.main
 
-import app.util as util
+import app.util = util
 
 main()
     const value: int = util.add_one("bad")
@@ -451,7 +563,7 @@ end
         "main.orl",
         r#"module app.main
 
-import app.model as model
+import app.model = model
 
 pass(user: model.User) -> model.User
     return model.same(user)
@@ -489,7 +601,7 @@ end
         "main.orl",
         r#"module app.main
 
-import app.model as model
+import app.model = model
 
 user_id(user: model.User) -> int
     return user.id
@@ -520,7 +632,7 @@ end
         "main.orl",
         r#"module app.main
 
-import app.model as model
+import app.model = model
 
 user_name(user: model.User) -> string
     return user.name
@@ -550,7 +662,7 @@ end
         "main.orl",
         r#"module app.main
 
-import app.model as model
+import app.model = model
 
 make_user() -> model.User
     return model.User(id: 7, name: "Ada")
@@ -585,7 +697,7 @@ end
         "main.orl",
         r#"module app.main
 
-import app.model as model
+import app.model = model
 
 ready() -> model.Status
     return model.Status.Ready
@@ -660,8 +772,8 @@ end
         "main.orl",
         r#"module app.main
 
-import left.user as left
-import right.user as right
+import left.user = left
+import right.user = right
 
 take_left(user: left.User) -> left.User
     return left.same(user)
@@ -699,7 +811,7 @@ public const LIMIT: int = 21
         "main.orl",
         r#"module app.main
 
-import app.config as config
+import app.config = config
 
 main()
     const value: int = config.LIMIT
@@ -731,8 +843,8 @@ public const LIMIT: int = 21
         "main.orl",
         r#"module app.main
 
-import app.config as config
-import ori.io as io
+import app.config = config
+import ori.io = io
 
 main()
     io.print(string(config.LIMIT))
@@ -761,7 +873,7 @@ fn compile_uses_top_level_constant_global_data() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 const LIMIT: int = 31
 
@@ -792,7 +904,7 @@ fn compile_updates_top_level_mutable_global() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 var counter: int = 2
 
@@ -828,9 +940,9 @@ fn compile_runs_top_level_managed_globals_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.map as maps
+import ori.io = io
+import ori.list = lists
+import ori.map = maps
 
 const PREFIX: string = "start"
 var current: string = "one"
@@ -877,8 +989,8 @@ fn compile_runs_string_stdlib_len_concat_and_slice() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.string as str
+import ori.io = io
+import ori.string = str
 
 main()
     const joined: string = str.concat("ab", "cdef")
@@ -910,7 +1022,7 @@ fn compile_runs_native_to_string_parts() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     io.print(string(-120))
@@ -952,8 +1064,8 @@ fn compile_runs_displayable_string_conversion_native() {
         "main.orl",
         r##"module app.main
 
-import ori.core as core
-import ori.io as io
+import ori.core = core
+import ori.io = io
 
 struct Resource
     id: int
@@ -998,8 +1110,8 @@ fn build_c_backend_displayable_string_conversion() {
         "main.orl",
         r##"module app.main
 
-import ori.core as core
-import ori.io as io
+import ori.core = core
+import ori.io = io
 
 struct Resource
     id: int
@@ -1066,7 +1178,7 @@ fn compile_runs_native_interpolation_with_string_length_helper() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     const name: string = "Ori"
@@ -1094,8 +1206,8 @@ fn compile_runs_extended_string_stdlib() {
     let dir = TestDir::new("compile_extended_string_stdlib");
     dir.write("main.orl", r#"module app.main
 
-import ori.io as io
-import ori.string as str
+import ori.io = io
+import ori.string = str
 
 main()
     const trimmed: string = str.trim("  Abc Def  ")
@@ -1132,9 +1244,9 @@ fn compile_runs_more_string_and_conversion_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.convert as conv
-import ori.io as io
-import ori.string as str
+import ori.convert = conv
+import ori.io = io
+import ori.string = str
 
 main()
     const parts: list<string> = str.split("a,b,c", ",")
@@ -1217,8 +1329,8 @@ fn compile_runs_list_index_set_and_len() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
+import ori.io = io
+import ori.list = lists
 
 main()
     var values: list<int> = [10, 20, 30]
@@ -1250,7 +1362,7 @@ fn compile_runs_io_read_line() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     match io.read_line()
@@ -1295,7 +1407,7 @@ fn check_reports_stdlib_call_type_error() {
         "main.orl",
         r#"module app.main
 
-import ori.string as str
+import ori.string = str
 
 main()
     const bad: string = str.concat("a", 1)
@@ -1315,8 +1427,8 @@ fn compile_runs_math_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.math as math
+import ori.io = io
+import ori.math = math
 
 main()
     io.print(string(math.abs(-9)))
@@ -1351,8 +1463,8 @@ fn compile_runs_more_math_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.math as math
+import ori.io = io
+import ori.math = math
 
 main()
     const floored: int = math.floor(3.9)
@@ -1403,8 +1515,8 @@ fn compile_runs_math_float_overloads() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.math as math
+import ori.io = io
+import ori.math = math
 
 main()
     const a: float = math.abs(-2.5)
@@ -1440,7 +1552,7 @@ fn build_c_backend_compiles_math_stdlib_surface() {
         "main.orl",
         r#"module app.main
 
-import ori.math as math
+import ori.math = math
 
 main()
     const floored: int = math.floor(3.9)
@@ -1483,9 +1595,9 @@ fn compile_runs_string_split_and_chars() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.string as str
+import ori.io = io
+import ori.list = lists
+import ori.string = str
 
 main()
     const parts: list<string> = str.split("red,blue", ",")
@@ -1509,10 +1621,10 @@ fn compile_runs_set_and_map_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.map as maps
-import ori.set as sets
-import ori.core as core
+import ori.io = io
+import ori.map = maps
+import ori.set = sets
+import ori.core = core
 
 struct Token
     id: int
@@ -1561,8 +1673,8 @@ fn check_accepts_string_map_keys_string_set_values_and_rejects_unsupported_hash_
         "main.orl",
         r#"module app.main
 
-import ori.map as maps
-import ori.set as sets
+import ori.map = maps
+import ori.set = sets
 
 main()
     const ok_map: map<string, int> = maps.new()
@@ -1603,7 +1715,7 @@ fn check_list_stdlib_preserves_element_types() {
         "main.orl",
         r#"module app.main
 
-import ori.list as lists
+import ori.list = lists
 
 main()
     var values: list<int> = [1, 2]
@@ -1639,8 +1751,8 @@ fn check_map_set_stdlib_preserves_key_value_and_element_types() {
         "main.orl",
         r#"module app.main
 
-import ori.map as maps
-import ori.set as sets
+import ori.map = maps
+import ori.set = sets
 
 main()
     const labels: map<int, string> = maps.new()
@@ -1722,7 +1834,7 @@ fn compile_runs_optional_result_or_helper_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 maybe() -> optional<int>
     return some(7)
@@ -1799,7 +1911,7 @@ fn compile_runs_result_or_wrap_helper_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 parse(flag: bool) -> result<int, string>
     if flag
@@ -1940,8 +2052,8 @@ end
         "main.orl",
         r#"module app.main
 
-import app.math as math
-import ori.io as io
+import app.math = math
+import ori.io = io
 
 add(base: int, step: int = 5) -> int
     return base + step
@@ -1977,7 +2089,7 @@ fn compile_runs_p4_grammar_forms_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 struct Point
     x: int
@@ -2112,8 +2224,8 @@ end
         "main.orl",
         r#"module app.main
 
-import app.math as math
-import ori.io as io
+import app.math = math
+import ori.io = io
 
 pair(left: int, right: int) -> int
     return left * 10 + right
@@ -2148,7 +2260,7 @@ fn compile_runs_native_parameter_contracts() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 require_positive(value: int if it > 0) -> int
     return value
@@ -2212,7 +2324,7 @@ fn compile_runs_native_struct_field_contracts() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 struct Positive
     value: int if it > 0
@@ -2272,7 +2384,7 @@ fn compile_runs_variadic_parameters_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 sum(seed: int, values: int...) -> int
     var total: int = seed
@@ -2322,7 +2434,7 @@ fn compile_runs_generic_function_monomorphization_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 identity<T>(value: T) -> T
     return value
@@ -2368,7 +2480,7 @@ fn compile_runs_managed_generic_trait_and_any_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 trait Labelled
     label(self) -> string
@@ -2444,7 +2556,7 @@ end
         "models.orl",
         r#"module app.models
 
-public import app.traits as traits
+public import app.traits = traits
 
 public struct User
     name: string
@@ -2465,8 +2577,8 @@ end
         "main.orl",
         r#"module app.main
 
-import app.models as models
-import ori.io as io
+import app.models = models
+import ori.io = io
 
 main()
     const user: models.User = models.make_user("Ada")
@@ -2496,7 +2608,7 @@ fn compile_runs_any_trait_dynamic_dispatch_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 struct Player
     score: int
@@ -2574,7 +2686,7 @@ fn build_c_backend_compiles_any_trait_dynamic_dispatch() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 struct Player
     score: int
@@ -2728,7 +2840,7 @@ fn compile_runs_struct_structural_equality_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 struct Address
     city: string
@@ -2793,7 +2905,7 @@ fn compile_runs_list_structural_equality_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     const left: list<int> = [1, 2, 3]
@@ -2827,9 +2939,9 @@ fn compile_runs_set_map_structural_equality_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.map as maps
-import ori.set as sets
+import ori.io = io
+import ori.map = maps
+import ori.set = sets
 
 main()
     const left_set: set<int> = sets.new()
@@ -2988,8 +3100,8 @@ fn build_c_backend_set_map_structural_equality() {
         "main.orl",
         r#"module app.main
 
-import ori.map as maps
-import ori.set as sets
+import ori.map = maps
+import ori.set = sets
 
 main()
     const left_set: set<int> = set { 1, 2 }
@@ -3041,7 +3153,7 @@ fn compile_runs_optional_result_inequality_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 fail_a() -> result<int, string>
     return error("a")
@@ -3110,7 +3222,7 @@ fn build_lowers_operator_overloads_through_core_traits() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
+import ori.core = core
 
 struct Score
     value: int
@@ -3178,8 +3290,8 @@ fn compile_runs_operator_overloads_native() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
-import ori.io as io
+import ori.core = core
+import ori.io = io
 
 struct Score
     value: int
@@ -3250,7 +3362,7 @@ fn build_lowers_mul_div_operator_overloads_through_core_traits() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
+import ori.core = core
 
 struct Vec2
     x: float
@@ -3295,8 +3407,8 @@ fn compile_runs_mul_div_operator_overloads_native() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
-import ori.io as io
+import ori.core = core
+import ori.io = io
 
 struct Value
     x: int
@@ -3349,9 +3461,9 @@ fn compile_runs_managed_operator_overloads_native() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
-import ori.io as io
-import ori.string as strings
+import ori.core = core
+import ori.io = io
+import ori.string = strings
 
 struct Label
     text: string
@@ -3427,7 +3539,7 @@ fn check_accepts_lazy_type_and_stdlib_once_force() {
         "main.orl",
         r#"module app.main
 
-import ori.lazy as lz
+import ori.lazy = lz
 
 main()
     const delayed: lazy<int> = lz.once(do() => 41)
@@ -3448,7 +3560,7 @@ fn build_c_backend_compiles_lazy_once_force() {
         "main.orl",
         r#"module app.main
 
-import ori.lazy as lz
+import ori.lazy = lz
 
 main()
     const delayed: lazy<int> = lz.once(do() => 41)
@@ -3472,7 +3584,7 @@ fn build_c_backend_emits_json_parse_extern_without_c_lowering() {
         "main.orl",
         r#"module app.main
 
-import ori.json as json
+import ori.json = json
 
 main()
     const parsed: result<json.Value, string> = json.parse("{}")
@@ -3499,8 +3611,8 @@ fn build_c_backend_reports_unsupported_feature_diagnostic() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.lazy as lz
+import ori.io = io
+import ori.lazy = lz
 
 main()
     const delayed: lazy<void> = lz.once(do() => io.print("x"))
@@ -3528,8 +3640,8 @@ fn compile_runs_native_lazy_once_force_once() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.lazy as lz
+import ori.io = io
+import ori.lazy = lz
 
 var calls: int = 0
 
@@ -3566,7 +3678,7 @@ fn compile_runs_using_dispose_on_native_scope_exit() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 var disposed: int = 0
 
@@ -3673,7 +3785,7 @@ fn compile_runs_using_dispose_before_native_check_trap() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 trait Disposable
     mut dispose(self)
@@ -3717,7 +3829,7 @@ fn compile_runs_using_dispose_before_native_panic() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 trait Disposable
     mut dispose(self)
@@ -3763,7 +3875,7 @@ fn compile_runs_result_match_and_propagation() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 parse(flag: bool) -> result<int, string>
     if flag
@@ -3816,7 +3928,7 @@ fn compile_runs_native_composite_values_and_patterns() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 struct User
     id: int
@@ -3896,7 +4008,7 @@ fn compile_runs_deep_match_with_managed_enum_payload_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 struct User
     name: string
@@ -4770,7 +4882,7 @@ fn check_reports_import_after_declaration() {
 ready()
 end
 
-import ori.io as io
+import ori.io = io
 "#,
     );
 
@@ -4884,7 +4996,7 @@ fn check_accepts_trait_required_empty_methods_and_default_path_call() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 trait Drawable
     draw()
@@ -4921,7 +5033,7 @@ const LIMIT: int = "bad"
         "main.orl",
         r#"module app.main
 
-import app.config as config
+import app.config = config
 
 main()
 end
@@ -4947,7 +5059,7 @@ public const LIMIT: int = 21
         "main.orl",
         r#"module app.main
 
-import app.config as config
+import app.config = config
 
 main()
     const value: string = config.LIMIT
@@ -4986,22 +5098,22 @@ fn check_accepts_implemented_stdlib_import_allowlist() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
-import ori.io as io
-import ori.fs as fs
-import ori.files as files
-import ori.string as str
-import ori.bytes as bytes_mod
-import ori.list as lists
-import ori.map as maps
-import ori.set as sets
-import ori.tree as tree
-import ori.hash_table as hash_table
-import ori.graph as graph
-import ori.math as math
-import ori.convert as conv
-import ori.iter as iter
-import ori.Error as StdError
+import ori.core = core
+import ori.io = io
+import ori.fs = fs
+import ori.files = files
+import ori.string = str
+import ori.bytes = bytes_mod
+import ori.list = lists
+import ori.map = maps
+import ori.set = sets
+import ori.tree = tree
+import ori.hash_table = hash_table
+import ori.graph = graph
+import ori.math = math
+import ori.convert = conv
+import ori.iter = iter
+import ori.Error = StdError
 
 main()
 end
@@ -5019,7 +5131,7 @@ fn check_accepts_core_traits_and_using_core_disposable() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
+import ori.core = core
 
 struct Resource
     id: int
@@ -5055,7 +5167,7 @@ fn check_accepts_json_stdlib_import() {
         "main.orl",
         r#"module app.main
 
-import ori.json as json
+import ori.json = json
 
 main()
     const parsed: result<json.Value, string> = json.parse("{}")
@@ -5074,8 +5186,8 @@ fn compile_runs_standard_error_type_native() {
         "main.orl",
         r#"module app.main
 
-import ori.Error as StdError
-import ori.io as io
+import ori.Error = StdError
+import ori.io = io
 
 main()
     const err: StdError = StdError(code: "E_TEST", message: "failed", cause: "")
@@ -5106,7 +5218,7 @@ fn build_c_backend_compiles_standard_error_type() {
         "main.orl",
         r#"module app.main
 
-import ori.Error as StdError
+import ori.Error = StdError
 
 main()
     const err: StdError = StdError(code: "E_C", message: "compiled", cause: "")
@@ -5140,7 +5252,7 @@ fn compile_runs_test_assert_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.test as test
+import ori.test = test
 
 main()
     test.assert(1 + 1 == 2, "math still works")
@@ -5169,7 +5281,7 @@ fn compile_runs_generic_test_assert_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.test as test
+import ori.test = test
 
 main()
     test.assert_eq("ori", "ori")
@@ -5201,7 +5313,7 @@ fn test_runner_reports_test_fail_stdlib_failure() {
         "main.orl",
         r#"module app.main
 
-import ori.test as test
+import ori.test = test
 
 @test
 test_failure()
@@ -5228,7 +5340,7 @@ fn build_c_backend_compiles_test_assert_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.test as test
+import ori.test = test
 
 main()
     test.assert(true, "ok")
@@ -5261,7 +5373,7 @@ fn build_c_backend_compiles_generic_test_assert_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.test as test
+import ori.test = test
 
 main()
     test.assert_eq("ori", "ori")
@@ -5296,10 +5408,10 @@ fn compile_runs_iter_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.iter as iter
-import ori.list as lists
-import ori.map as maps
+import ori.io = io
+import ori.iter = iter
+import ori.list = lists
+import ori.map = maps
 
 main()
     const values: list<int> = [1, 2, 3, 4]
@@ -5398,11 +5510,11 @@ fn compile_runs_generic_iter_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.iter as iter
-import ori.list as lists
-import ori.map as maps
-import ori.string as strings
+import ori.io = io
+import ori.iter = iter
+import ori.list = lists
+import ori.map = maps
+import ori.string = strings
 
 main()
     const words: list<string> = ["pear", "fig", "apple", "fig"]
@@ -5479,7 +5591,7 @@ fn build_c_backend_compiles_iter_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.iter as iter
+import ori.iter = iter
 
 main()
     const values: list<int> = [1, 2, 3, 4]
@@ -5572,8 +5684,8 @@ fn compile_runs_format_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.format as fmt
-import ori.io as io
+import ori.format = fmt
+import ori.io = io
 
 main()
     io.print(fmt.number(12.345, 2))
@@ -5611,7 +5723,7 @@ fn build_c_backend_compiles_format_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.format as fmt
+import ori.format = fmt
 
 main()
     const number: string = fmt.number(12.345, 2)
@@ -5646,9 +5758,9 @@ fn compile_runs_os_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lst
-import ori.os as os
+import ori.io = io
+import ori.list = lst
+import ori.os = os
 
 main()
     const env_value: optional<string> = os.env("ORI_TEST_OS_VALUE")
@@ -5701,7 +5813,7 @@ fn build_c_backend_compiles_os_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.os as os
+import ori.os = os
 
 stop()
     os.exit(0)
@@ -5736,9 +5848,9 @@ fn compile_runs_random_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.random as rng
+import ori.io = io
+import ori.list = lists
+import ori.random = rng
 
 main()
     const number: int = rng.int(1, 3)
@@ -5791,9 +5903,9 @@ fn compile_runs_generic_random_choice_and_shuffle_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.random as rng
+import ori.io = io
+import ori.list = lists
+import ori.random = rng
 
 main()
     const words: list<string> = ["alpha", "beta", "gamma"]
@@ -5828,8 +5940,8 @@ fn compile_runs_json_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.json as json
+import ori.io = io
+import ori.json = json
 
 main()
     const parsed: result<json.Value, string> = json.parse("{\"name\":\"ori\",\"ok\":true}")
@@ -5876,7 +5988,7 @@ fn build_c_backend_compiles_random_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.random as rng
+import ori.random = rng
 
 main()
     const number: int = rng.int(1, 3)
@@ -5917,8 +6029,8 @@ fn compile_runs_time_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.time as time
+import ori.io = io
+import ori.time = time
 
 main()
     time.sleep(0)
@@ -5949,7 +6061,7 @@ fn build_c_backend_compiles_time_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.time as time
+import ori.time = time
 
 main()
     time.sleep(0)
@@ -5977,8 +6089,8 @@ fn compile_runs_mem_stdlib_intrinsics_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.mem as mem
+import ori.io = io
+import ori.mem = mem
 
 main()
     const value: int = 41
@@ -6018,7 +6130,7 @@ fn build_c_backend_compiles_mem_stdlib_intrinsics() {
         "main.orl",
         r#"module app.main
 
-import ori.mem as mem
+import ori.mem = mem
 
 main()
     const value: int = 41
@@ -6049,7 +6161,7 @@ fn check_reports_unknown_stdlib_import() {
         "main.orl",
         r#"module app.main
 
-import ori.nope as nope
+import ori.nope = nope
 
 main()
 end
@@ -6187,8 +6299,8 @@ end
         "main.orl",
         r#"module app.main
 
-import app.a as m
-import app.b as m
+import app.a = m
+import app.b = m
 
 main()
 end
@@ -6216,7 +6328,7 @@ end
         "main.orl",
         r#"module app.main
 
-import app.util as helper
+import app.util = helper
 
 helper()
 end
@@ -6256,8 +6368,8 @@ end
         "main.orl",
         r#"module app.main
 
-import app.a as a
-import app.b as b
+import app.a = a
+import app.b = b
 
 main()
     const x: int = a.value()
@@ -6286,7 +6398,7 @@ end
         "main.orl",
         r#"module app.main
 
-import app.util as util
+import app.util = util
 
 main()
     const value: int = util.secret()
@@ -6315,7 +6427,7 @@ end
         "main.orl",
         r#"module app.main
 
-import app.util as util
+import app.util = util
 
 main()
 end
@@ -6343,8 +6455,8 @@ end
         "main.orl",
         r#"module app.main
 
-import app.util as util
-import ori.io as io
+import app.util = util
+import ori.io = io
 
 main()
     io.print(string(util.answer()))
@@ -6378,7 +6490,7 @@ end
         "b.orl",
         r#"module app.b
 
-import app.c as c
+import app.c = c
 
 public value() -> int
     return c.value()
@@ -6389,7 +6501,7 @@ end
         "a.orl",
         r#"module app.a
 
-import app.b as b
+import app.b = b
 
 public value() -> int
     return b.value()
@@ -6400,8 +6512,8 @@ end
         "main.orl",
         r#"module app.main
 
-import app.a as a
-import ori.io as io
+import app.a = a
+import ori.io = io
 
 main()
     io.print(string(a.value()))
@@ -6898,7 +7010,7 @@ fn build_if_some_generates_c() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 get_value(flag: bool) -> optional<int>
     if flag
@@ -6931,7 +7043,7 @@ fn build_c_backend_compiles_runtime_abi_values() {
         "main.orl",
         r#"module app.main
 
-import ori.string as str
+import ori.string = str
 
 maybe(flag: bool) -> optional<int>
     if flag
@@ -7006,7 +7118,7 @@ end
         "src/main.orl",
         r#"module app.main
 
-import app.util as util
+import app.util = util
 
 main()
     const value: int = util.answer()
@@ -7041,7 +7153,7 @@ end
         "src/main.orl",
         r#"module app.main
 
-import app.model as model
+import app.model = model
 
 id(user: model.User) -> int
     return user.id
@@ -7314,8 +7426,8 @@ end
         "src/main.orl",
         r#"module app.main
 
-import app.model as model
-import ori.io as io
+import app.model = model
+import ori.io = io
 
 main()
     const user: model.User = model.User(id: 34, name: "Ada")
@@ -7346,7 +7458,7 @@ fn compile_runs_native_closure_capture_and_higher_order_call() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 apply_twice(value: int, f: func(int) -> int) -> int
     return f(f(value))
@@ -7388,7 +7500,7 @@ fn compile_runs_native_block_closure_with_arc_hooks() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     const prefix: string = "value"
@@ -7481,7 +7593,7 @@ fn compile_type_alias_works_end_to_end_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 alias Count = int
 
@@ -7517,10 +7629,10 @@ fn compile_runs_map_set_literals_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.map as maps
-import ori.set as sets
+import ori.io = io
+import ori.list = lists
+import ori.map = maps
+import ori.set = sets
 
 main()
     const my_map: map<int, int> = { 10: 100, 20: 200 }
@@ -7552,7 +7664,7 @@ fn compile_runs_index_slicing_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     const text: string = "hello world"
@@ -7588,7 +7700,7 @@ fn compile_runs_pipe_operator_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 struct Point
     x: int
@@ -7635,7 +7747,7 @@ fn compile_runs_field_assignment_and_implicit_self_method_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 struct Counter
     value: int
@@ -7820,7 +7932,7 @@ fn compile_runs_struct_update_expression_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 struct Point
     x: int
@@ -7888,7 +8000,7 @@ fn compile_is_check_on_any_trait_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 trait Shape
     area(self) -> int
@@ -7962,10 +8074,10 @@ fn compile_runs_fs_stdlib_canonical_and_compat_aliases() {
         &format!(
             r#"module app.main
 
-import ori.bytes as bytes_mod
-import ori.fs as fs
-import ori.files as files
-import ori.io as io
+import ori.bytes = bytes_mod
+import ori.fs = fs
+import ori.files = files
+import ori.io = io
 
 main()
     const input_path: string = "{input}"
@@ -8065,8 +8177,8 @@ fn compile_runs_fs_bytes_preserve_nul_native() {
         &format!(
             r#"module app.main
 
-import ori.fs as fs
-import ori.io as io
+import ori.fs = fs
+import ori.io = io
 
 main()
     match fs.read_bytes("{input}")
@@ -8109,7 +8221,7 @@ fn compile_runs_escaped_literals_and_fstrings() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     io.print("line\nnext")
@@ -8161,7 +8273,7 @@ fn compile_runs_triple_string_baseline_and_f_triple_string() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     const name: string = "Ada"
@@ -8197,7 +8309,7 @@ fn compile_runs_short_circuit_without_rhs_side_effects() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 explode() -> bool
     panic("short-circuit failed")
@@ -8232,7 +8344,7 @@ fn compile_runtime_panics_on_integer_division_by_zero() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     var zero: int = 0
@@ -8256,7 +8368,7 @@ fn compile_runs_float_division_by_zero_as_infinity() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     var zero: float = 0.0
@@ -8324,9 +8436,9 @@ end
         "main.orl",
         r#"module app.main
 
-import app.util as util
-import ori.io as io
-import ori.iter as iter
+import app.util = util
+import ori.io = io
+import ori.iter = iter
 
 var disposed: int = 0
 
@@ -8525,7 +8637,7 @@ fn compile_runs_unicode_identifier_and_contextual_times() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     const times: int = 2
@@ -8607,8 +8719,8 @@ fn compile_runs_bytes_stdlib() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.string as str
+import ori.io = io
+import ori.string = str
 
 main()
     const b1: bytes = "hello".to_bytes()
@@ -8690,8 +8802,8 @@ fn compile_runs_bytes_preserve_nul_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.string as str
+import ori.io = io
+import ori.string = str
 
 main()
     const raw: bytes = b"\x41\x00\x42"
@@ -8745,7 +8857,7 @@ fn compile_runs_unicode_string_len_and_slice_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     const text: string = "\u{00e1}\u{00e9}"
@@ -8861,7 +8973,7 @@ fn compile_runtime_panics_on_invalid_string_slice_bounds() {
         "main.orl",
         r#"module app.main
 
-import ori.string as str
+import ori.string = str
 
 main()
     str.slice("abc", -1, 1)
@@ -8893,7 +9005,7 @@ fn compile_runtime_panics_on_invalid_list_slice_bounds() {
         "main.orl",
         r#"module app.main
 
-import ori.list as lists
+import ori.list = lists
 
 main()
     const values: list<int> = [1]
@@ -9149,10 +9261,10 @@ fn fmt_preserves_collection_syntax_semantics() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.map as maps
-import ori.queue as queue
-import ori.set as sets
+import ori.io = io
+import ori.map = maps
+import ori.queue = queue
+import ori.set = sets
 
 main()
 const values: map<int, int> = {1: 10, 2: 20}
@@ -9231,7 +9343,7 @@ public const value: int = 1
         "main.orl",
         r#"module app.main
 
-import app.legacy as legacy
+import app.legacy = legacy
 
 main()
     const current: int = legacy.value
@@ -9367,8 +9479,8 @@ fn compile_runs_stdlib_source_module_string_utils() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.string as su
+import ori.io = io
+import ori.string = su
 
 main()
     io.print(string(su.is_empty("")))
@@ -9391,8 +9503,8 @@ fn compile_runs_stdlib_source_module_string_utils_layer2() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.string as su
+import ori.io = io
+import ori.string = su
 
 main()
     io.print(su.default("", "fb"))
@@ -9420,8 +9532,8 @@ fn compile_runs_stdlib_source_module_string_utils_layer2_expanded() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.string as su
+import ori.io = io
+import ori.string = su
 
 main()
     io.print(su.reverse("abc"))
@@ -9444,8 +9556,8 @@ fn compile_runs_stdlib_source_module_list_utils() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lu
+import ori.io = io
+import ori.list = lu
 
 main()
     const items: list<string> = ["a", "b", "c"]
@@ -9470,9 +9582,9 @@ fn compile_runs_stdlib_source_module_convert_utils() {
         "main.orl",
         r#"module app.main
 
-import ori.convert as conv
-import ori.convert.utils as cu
-import ori.io as io
+import ori.convert = conv
+import ori.convert.utils = cu
+import ori.io = io
 
 main()
     io.print(string(cu.parse_int_or("41", 0) + 1))
@@ -9494,8 +9606,8 @@ fn compile_runs_stdlib_source_module_map_utils() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.map as mu
+import ori.io = io
+import ori.map = mu
 
 main()
     const scores: map<string, int> = { "a": 1, "b": 2 }
@@ -9518,8 +9630,8 @@ fn compile_runs_stdlib_source_module_set_utils() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.set.utils as su
+import ori.io = io
+import ori.set.utils = su
 
 main()
     const tags: set<string> = su.from_list(["a", "b", "a"])
@@ -9542,10 +9654,10 @@ fn compile_runs_stdlib_source_module_bytes_utils() {
         "main.orl",
         r#"module app.main
 
-import ori.bytes as bytes_mod
-import ori.bytes.utils as bu
-import ori.io as io
-import ori.string as str
+import ori.bytes = bytes_mod
+import ori.bytes.utils = bu
+import ori.io = io
+import ori.string = str
 
 main()
     const a: bytes = str.to_bytes("ab")
@@ -9571,8 +9683,8 @@ fn compile_runs_stdlib_source_module_math_utils() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.math.utils as mu
+import ori.io = io
+import ori.math.utils = mu
 
 main()
     io.print(string(mu.sign(-3)))
@@ -9596,9 +9708,9 @@ fn compile_runs_stdlib_source_module_string_utils_layer2_full() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.string as su
+import ori.io = io
+import ori.list = lists
+import ori.string = su
 
 main()
     io.print(su.left("hello", 2))
@@ -9623,8 +9735,8 @@ fn compile_runs_stdlib_source_module_list_utils_expanded() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lu
+import ori.io = io
+import ori.list = lu
 
 main()
     const one: list<int> = lu.singleton(42)
@@ -9644,8 +9756,8 @@ fn compile_runs_stdlib_source_module_convert_utils_expanded() {
         "main.orl",
         r#"module app.main
 
-import ori.convert.utils as cu
-import ori.io as io
+import ori.convert.utils = cu
+import ori.io = io
 
 main()
     io.print(string(cu.parse_bool_or("true", false)))
@@ -9665,8 +9777,8 @@ fn compile_runs_stdlib_source_module_list_algorithms() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as la
+import ori.io = io
+import ori.list = la
 
 main()
     const nums: list<int> = [1, 2, 3, 4]
@@ -9690,10 +9802,10 @@ fn compile_runs_stdlib_source_module_tree_algorithms() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.list as lists
-import ori.tree as tree
-import ori.tree.algorithms as ta
+import ori.io = io
+import ori.list = lists
+import ori.tree = tree
+import ori.tree.algorithms = ta
 
 main()
     const outline: tree.Tree<string> = tree.new("root")
@@ -9722,9 +9834,9 @@ fn compile_runs_stdlib_source_module_graph_algorithms() {
         "main.orl",
         r#"module app.main
 
-import ori.graph as graph
-import ori.graph.algorithms as ga
-import ori.io as io
+import ori.graph = graph
+import ori.graph.algorithms = ga
+import ori.io = io
 
 main()
     const g: graph.Graph<string> = graph.new(false)
@@ -9749,8 +9861,8 @@ fn compile_runs_stdlib_source_module_validate() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.validate as validate
+import ori.io = io
+import ori.validate = validate
 
 main()
     io.print(string(validate.between(5, 1, 10)))
@@ -9774,8 +9886,8 @@ fn compile_runs_stdlib_source_module_path() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.path as path
+import ori.io = io
+import ori.path = path
 
 main()
     io.print(path.base_name("foo/bar/baz.txt"))
@@ -9805,8 +9917,8 @@ fn compile_runs_stdlib_source_module_path_edge_cases() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.path as path
+import ori.io = io
+import ori.path = path
 
 main()
     io.print(path.relative("a/b", "a/b/c"))
@@ -9831,9 +9943,9 @@ fn compile_runs_stdlib_source_module_json_utils() {
         &format!(
             r#"module app.main
 
-import ori.io as io
-import ori.json as json
-import ori.json.utils as ju
+import ori.io = io
+import ori.json = json
+import ori.json.utils = ju
 
 main()
     const path: string = "{json_path}"
@@ -9869,9 +9981,9 @@ fn compile_runs_stdlib_source_module_io_and_time_utils() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.io.utils as iu
-import ori.time.utils as tu
+import ori.io = io
+import ori.io.utils = iu
+import ori.time.utils = tu
 
 main()
     iu.print_line("line")
@@ -9896,8 +10008,8 @@ fn compile_runs_stdlib_source_module_fs_utils() {
         &format!(
             r#"module app.main
 
-import ori.fs.utils as fu
-import ori.io as io
+import ori.fs.utils = fu
+import ori.io = io
 
 main()
     match fu.create_dir_all("{dir_path}")
@@ -9933,8 +10045,8 @@ fn compile_runs_stdlib_source_module_string_utils_gap_parity() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.string as su
+import ori.io = io
+import ori.string = su
 
 main()
     io.print(string(su.last_index_of("abab", "ab")))
@@ -9960,11 +10072,11 @@ fn compile_runs_stdlib_source_module_bytes_utils_gap_parity() {
         "main.orl",
         r#"module app.main
 
-import ori.bytes as bytes_mod
-import ori.bytes.utils as bu
-import ori.io as io
-import ori.list as lists
-import ori.string as str
+import ori.bytes = bytes_mod
+import ori.bytes.utils = bu
+import ori.io = io
+import ori.list = lists
+import ori.string = str
 
 main()
     const payload: bytes = str.to_bytes("hello")
@@ -9993,8 +10105,8 @@ fn compile_runs_stdlib_source_module_math_utils_gap_parity() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.math.utils as mu
+import ori.io = io
+import ori.math.utils = mu
 
 main()
     io.print(string(mu.deg_to_rad(180.0) > 3.0))
@@ -10017,8 +10129,8 @@ fn compile_runs_stdlib_source_module_map_utils_gap_parity() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.map as mu
+import ori.io = io
+import ori.map = mu
 
 main()
     const empty: map<string, int> = {}
@@ -10041,10 +10153,10 @@ fn compile_runs_stdlib_layer1_os_current_dir_and_lazy_is_consumed() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.lazy as lz
-import ori.os as os_mod
-import ori.string as string_mod
+import ori.io = io
+import ori.lazy = lz
+import ori.os = os_mod
+import ori.string = string_mod
 
 main()
     match os_mod.current_dir()
@@ -10073,8 +10185,8 @@ fn compile_runs_stdlib_layer1_math_extensions() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.math as math
+import ori.io = io
+import ori.math = math
 
 main()
     io.print(string(math.trunc(3.9) == 3.0))
@@ -10095,11 +10207,11 @@ fn compile_runs_stdlib_layer1_process_utils() {
     #[cfg(windows)]
     let source = r#"module app.main
 
-import ori.bytes as bytes_mod
-import ori.io as io
-import ori.process as proc
-import ori.process.utils as pu
-import ori.string as string_mod
+import ori.bytes = bytes_mod
+import ori.io = io
+import ori.process = proc
+import ori.process.utils = pu
+import ori.string = string_mod
 
 main()
     var c_flag: string = "c"
@@ -10121,9 +10233,9 @@ end
     #[cfg(not(windows))]
     let source = r#"module app.main
 
-import ori.io as io
-import ori.process as proc
-import ori.process.utils as pu
+import ori.io = io
+import ori.process = proc
+import ori.process.utils = pu
 
 main()
     match proc.run_capture("echo", ["hi"])
@@ -10149,32 +10261,32 @@ fn check_accepts_stdlib_gap_parity_imports() {
         "main.orl",
         r#"module app.main
 
-import ori.validate as validate
-import ori.path as path
-import ori.json.utils as json_utils
-import ori.io.utils as io_utils
-import ori.fs.utils as fs_utils
-import ori.time.utils as time_utils
-import ori.test.utils as test_utils
-import ori.process.utils as process_utils
-import ori.concurrent.utils as concurrent_utils
-import ori.format.utils as format_utils
-import ori.iter.utils as iter_utils
-import ori.net.utils as net_utils
-import ori.os.utils as os_utils
-import ori.random.utils as random_utils
-import ori.queue.utils as queue_utils
-import ori.stack.utils as stack_utils
-import ori.deque.utils as deque_utils
-import ori.heap.utils as heap_utils
-import ori.hash_table.utils as hash_table_utils
-import ori.linked_list.utils as linked_list_utils
-import ori.doubly_linked_list.utils as doubly_linked_list_utils
-import ori.map as map_algorithms
-import ori.set.algorithms as set_algorithms
-import ori.string as string_algorithms
-import ori.bytes.algorithms as bytes_algorithms
-import ori.math.algorithms as math_algorithms
+import ori.validate = validate
+import ori.path = path
+import ori.json.utils = json_utils
+import ori.io.utils = io_utils
+import ori.fs.utils = fs_utils
+import ori.time.utils = time_utils
+import ori.test.utils = test_utils
+import ori.process.utils = process_utils
+import ori.concurrent.utils = concurrent_utils
+import ori.format.utils = format_utils
+import ori.iter.utils = iter_utils
+import ori.net.utils = net_utils
+import ori.os.utils = os_utils
+import ori.random.utils = random_utils
+import ori.queue.utils = queue_utils
+import ori.stack.utils = stack_utils
+import ori.deque.utils = deque_utils
+import ori.heap.utils = heap_utils
+import ori.hash_table.utils = hash_table_utils
+import ori.linked_list.utils = linked_list_utils
+import ori.doubly_linked_list.utils = doubly_linked_list_utils
+import ori.map = map_algorithms
+import ori.set.algorithms = set_algorithms
+import ori.string = string_algorithms
+import ori.bytes.algorithms = bytes_algorithms
+import ori.math.algorithms = math_algorithms
 
 main()
 end
@@ -10192,7 +10304,7 @@ fn check_stdlib_source_module_unknown_still_reports_error() {
         "main.orl",
         r#"module app.main
 
-import ori.string.nonexistent as sn
+import ori.string.nonexistent = sn
 "#,
     );
 
@@ -10212,25 +10324,25 @@ fn compile_runs_stdlib_layer2_remaining_utils() {
         "main.orl",
         r#"module app.main
 
-import ori.deque as deque
-import ori.deque.utils as deque_utils
-import ori.format.utils as format_utils
-import ori.hash_table as hash_table
-import ori.hash_table.utils as hash_table_utils
-import ori.heap as heap
-import ori.heap.utils as heap_utils
-import ori.io as io
-import ori.iter.utils as iter_utils
-import ori.linked_list as linked_list
-import ori.linked_list.utils as linked_list_utils
-import ori.os.utils as os_utils
-import ori.path as path
-import ori.queue as queue
-import ori.queue.utils as queue_utils
-import ori.random.utils as random_utils
-import ori.stack as stack
-import ori.stack.utils as stack_utils
-import ori.validate as validate
+import ori.deque = deque
+import ori.deque.utils = deque_utils
+import ori.format.utils = format_utils
+import ori.hash_table = hash_table
+import ori.hash_table.utils = hash_table_utils
+import ori.heap = heap
+import ori.heap.utils = heap_utils
+import ori.io = io
+import ori.iter.utils = iter_utils
+import ori.linked_list = linked_list
+import ori.linked_list.utils = linked_list_utils
+import ori.os.utils = os_utils
+import ori.path = path
+import ori.queue = queue
+import ori.queue.utils = queue_utils
+import ori.random.utils = random_utils
+import ori.stack = stack
+import ori.stack.utils = stack_utils
+import ori.validate = validate
 
 main()
     io.print(format_utils.hex(255))
@@ -10273,15 +10385,15 @@ fn compile_runs_stdlib_layer3_algorithms_extensions() {
         "main.orl",
         r#"module app.main
 
-import ori.bytes.algorithms as bytes_algorithms
-import ori.io as io
-import ori.map as maps
-import ori.map as map_algorithms
-import ori.math.algorithms as math_algorithms
-import ori.set.algorithms as set_algorithms
-import ori.set as sets
-import ori.string as str
-import ori.string as string_algorithms
+import ori.bytes.algorithms = bytes_algorithms
+import ori.io = io
+import ori.map = maps
+import ori.map = map_algorithms
+import ori.math.algorithms = math_algorithms
+import ori.set.algorithms = set_algorithms
+import ori.set = sets
+import ori.string = str
+import ori.string = string_algorithms
 
 main()
     var base: map<string, int> = maps.new()
@@ -10327,8 +10439,8 @@ end
         "main.orl",
         r#"module app.main
 
-import app.math only (add as plus)
-import app.model only (User)
+import app.math (add = plus)
+import app.model (User)
 
 main()
     const total: int = plus(1, 2)
@@ -10371,8 +10483,8 @@ end
         "main.orl",
         r#"module app.main
 
-import app.a only (value)
-import app.b only (value)
+import app.a (value)
+import app.b (value)
 
 main()
 end
@@ -10404,7 +10516,7 @@ end
         "main.orl",
         r#"module app.main
 
-import app.math only (missing)
+import app.math (missing)
 
 main()
 end
@@ -10427,9 +10539,9 @@ fn check_accepts_flattened_stdlib_selective_imports() {
         "main.orl",
         r#"module app.main
 
-import ori.fs only (read_text_or)
-import ori.list only (singleton, sum_int)
-import ori.string only (is_empty, truncate as cut)
+import ori.fs (read_text_or)
+import ori.list (singleton, sum_int)
+import ori.string (is_empty, truncate = cut)
 
 main()
     const empty: bool = is_empty("")
@@ -10452,9 +10564,9 @@ fn check_keeps_stdlib_flattened_paths_compatible() {
         "main.orl",
         r#"module app.main
 
-import ori.fs.utils as fu
-import ori.list as lu
-import ori.string as su
+import ori.fs.utils = fu
+import ori.list = lu
+import ori.string = su
 
 main()
     const empty: bool = su.is_empty("")
@@ -10477,11 +10589,11 @@ fn check_accepts_flattened_stdlib_parent_selective_imports() {
         "main.orl",
         r#"module app.main
 
-import ori.map as maps
-import ori.map only (get_or, merge_string_int)
-import ori.bytes as bytes_mod
-import ori.bytes.algorithms only (compare_lex)
-import ori.bytes.utils only (is_empty)
+import ori.map = maps
+import ori.map (get_or, merge_string_int)
+import ori.bytes = bytes_mod
+import ori.bytes.algorithms (compare_lex)
+import ori.bytes.utils (is_empty)
 
 main()
     const m: map<string, int> = maps.new()
@@ -10510,9 +10622,9 @@ fn compile_runs_stdlib_io_streams_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.string as str
-import ori.io only (write_bytes, flush, close_output)
+import ori.io = io
+import ori.string = str
+import ori.io (write_bytes, flush, close_output)
 
 main()
     const out: ori.io.Output = io.stdout()
@@ -10550,10 +10662,10 @@ fn compile_runs_net_tcp_listen_accept_loopback() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.net as net
-import ori.string as str
-import ori.task as task
+import ori.io = io
+import ori.net = net
+import ori.string = str
+import ori.task = task
 
 serve_once(listener: net.Listener)
     match net.accept(listener)
@@ -10623,9 +10735,9 @@ fn compile_runs_net_udp_loopback() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.net as net
-import ori.string as str
+import ori.io = io
+import ori.net = net
+import ori.string = str
 
 main()
     match net.udp_bind("127.0.0.1", 0)
@@ -10666,8 +10778,8 @@ fn compile_runs_net_connect_tls_reports_error_on_refused_port() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.net as net
+import ori.io = io
+import ori.net = net
 
 main()
     match net.connect_tls("127.0.0.1", 59999, 500)
@@ -10691,7 +10803,7 @@ fn check_accepts_net_v2_flatten_selective_imports() {
         "main.orl",
         r#"module app.main
 
-import ori.net only (connect_tls, listen, udp_bind, listener_port)
+import ori.net (connect_tls, listen, udp_bind, listener_port)
 
 main()
 end
@@ -10709,9 +10821,9 @@ fn compile_runs_stdlib_io_utils_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.io.utils as iu
-import ori.string as str
+import ori.io = io
+import ori.io.utils = iu
+import ori.string = str
 
 main()
     const out: ori.io.Output = io.stdout()
@@ -10749,8 +10861,8 @@ fn compile_runs_vec2_stdlib_native() {
         "main.orl",
         r#"module app.main
 
-import ori.math.vec2 as vec2
-import ori.io as io
+import ori.math.vec2 = vec2
+import ori.io = io
 
 main()
     const a: vec2.Vec2 = vec2.Vec2(x: 1.0, y: 2.0)
@@ -10843,7 +10955,7 @@ fn build_accepts_buffer_type() {
         "main.orl",
         r#"module app.main
 
-import ori.buffer as buf
+import ori.buffer = buf
 
 struct MyBuffer
     data: buf.Buffer<int>

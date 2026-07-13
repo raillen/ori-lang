@@ -1,8 +1,8 @@
 module app.tree_demo
 
-import ori.io as io
-import ori.list as lists
-import ori.tree as tree
+import ori.io = io
+import ori.list = lists
+import ori.tree = tree
 
 main()
     const outline: tree.Tree<string> = tree.new("book")

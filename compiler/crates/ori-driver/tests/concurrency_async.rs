@@ -59,9 +59,9 @@ fn check_accepts_concurrency_stdlib_types() {
         "main.orl",
         r#"module app.main
 
-import ori.task as task
-import ori.channel as channel
-import ori.atomic as atomic
+import ori.task = task
+import ori.channel = channel
+import ori.atomic = atomic
 
 main()
     const job: task.Job<int> = task.spawn(do() => 41)
@@ -88,7 +88,7 @@ fn check_accepts_async_func_and_await_types() {
         "main.orl",
         r#"module app.main
 
-import ori.task as task
+import ori.task = task
 
 async compute() -> int
     return 41
@@ -113,7 +113,7 @@ fn fmt_preserves_async_state_machine_surface() {
         "main.orl",
         r#"module app.main
 
-import ori.task as task
+import ori.task = task
 
 async main()
 await task.sleep(1)
@@ -151,7 +151,7 @@ fn check_rejects_await_outside_async_func() {
         "main.orl",
         r#"module app.main
 
-import ori.task as task
+import ori.task = task
 
 main()
     await task.sleep(1)
@@ -191,7 +191,7 @@ fn check_rejects_non_transferable_spawn_capture() {
         "main.orl",
         r#"module app.main
 
-import ori.task as task
+import ori.task = task
 
 main()
     const callback: func() -> int = do() => 1
@@ -216,7 +216,7 @@ fn check_rejects_non_transferable_channel_value() {
         "main.orl",
         r#"module app.main
 
-import ori.channel as channel
+import ori.channel = channel
 
 main()
     const ch: channel.Channel<func() -> int> = channel.create()
@@ -238,7 +238,7 @@ fn check_allows_using_inside_async_func() {
         "main.orl",
         r#"module app.main
 
-import ori.task as task
+import ori.task = task
 
 trait Disposable
     mut dispose(self)
@@ -271,8 +271,8 @@ fn check_rejects_keyword_import_aliases_without_hanging() {
         "main.orl",
         r#"module app.main
 
-import ori.map as map
-import ori.set as set
+import ori.map = map
+import ori.set = set
 
 main()
     const lookup: map<int, int> = { 1: 40, 2: 41 }
@@ -296,8 +296,8 @@ fn compile_runs_task_spawn_join_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 main()
     const job: task.Job<int> = task.spawn(do() => 41)
@@ -328,7 +328,7 @@ fn compile_runs_async_main_and_await_ready_future_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 async compute() -> int
     return 41
@@ -358,9 +358,9 @@ fn compile_async_function_call_returns_before_first_await_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
-import ori.time as time
+import ori.io = io
+import ori.task = task
+import ori.time = time
 
 async delayed() -> int
     await task.sleep(250)
@@ -398,8 +398,8 @@ fn compile_runs_simple_async_state_machine_reads_await_value_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async delayed() -> int
     await task.sleep(1)
@@ -435,8 +435,8 @@ fn compile_runs_simple_async_state_machine_two_await_states_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async left() -> int
     await task.sleep(1)
@@ -478,8 +478,8 @@ fn compile_runs_simple_async_state_machine_scalar_param_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async add_later(base: int) -> int
     await task.sleep(1)
@@ -510,8 +510,8 @@ fn compile_runs_simple_async_state_machine_return_await_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async delayed() -> int
     await task.sleep(1)
@@ -546,8 +546,8 @@ fn compile_runs_async_await_in_call_argument_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async delayed() -> int
     await task.sleep(1)
@@ -586,8 +586,8 @@ fn compile_runs_async_await_inside_operator_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async left() -> int
     await task.sleep(1)
@@ -627,8 +627,8 @@ fn compile_runs_async_await_in_condition_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async flag() -> bool
     await task.sleep(1)
@@ -660,8 +660,8 @@ fn compile_runs_simple_async_state_machine_managed_param_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async echo_later(text: string) -> string
     await task.sleep(1)
@@ -692,8 +692,8 @@ fn compile_runs_simple_async_state_machine_managed_await_binding_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async load_text() -> string
     await task.sleep(1)
@@ -729,8 +729,8 @@ fn compile_runs_async_main_with_two_awaits_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async left() -> int
     await task.sleep(1)
@@ -767,7 +767,7 @@ fn compile_runs_async_result_question_mark_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 async compute() -> result<int, string>
     return success(41)
@@ -807,7 +807,7 @@ fn compile_runs_async_result_question_mark_error_state_machine_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 async fail() -> result<int, string>
     return error("bad")
@@ -847,8 +847,8 @@ fn compile_runs_async_state_machine_tail_control_flow_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async main()
     const values: list<int> = [1, 2, 3]
@@ -894,10 +894,10 @@ fn compile_runs_managed_collections_across_await_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.map as maps
-import ori.set as sets
-import ori.task as task
+import ori.io = io
+import ori.map = maps
+import ori.set = sets
+import ori.task = task
 
 async main()
     const label: string = "answer"
@@ -935,8 +935,8 @@ fn compile_runs_managed_struct_across_await_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 struct User
     name: string
@@ -969,8 +969,8 @@ fn compile_runs_managed_enum_payload_across_await_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 struct User
     name: string
@@ -1013,8 +1013,8 @@ fn compile_runs_managed_closure_capture_across_await_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async main()
     const prefix: string = "value"
@@ -1047,8 +1047,8 @@ fn compile_runs_await_task_sleep_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async compute() -> int
     await task.sleep(1)
@@ -1085,8 +1085,8 @@ fn compile_runs_async_fs_read_and_write_native() {
         &format!(
             r#"module app.main
 
-import ori.fs as fs
-import ori.io as io
+import ori.fs = fs
+import ori.io = io
 
 async main()
     const read_result: result<string, string> = await fs.read_text_async("{input}")
@@ -1130,8 +1130,8 @@ fn test_runner_accepts_async_test_functions() {
         "main.orl",
         r#"module app.main
 
-import ori.task as task
-import ori.test as test
+import ori.task = task
+import ori.test = test
 
 @test
 async async_check()
@@ -1154,7 +1154,7 @@ fn fmt_preserves_async_func_and_await_indentation() {
         "main.orl",
         r#"module app.main
 
-import ori.task as task
+import ori.task = task
 
 async main()
 await task.sleep(1)
@@ -1179,10 +1179,10 @@ fn compile_runs_channel_atomic_and_block_on_native() {
         "main.orl",
         r#"module app.main
 
-import ori.atomic as atomic
-import ori.channel as channel
-import ori.io as io
-import ori.task as task
+import ori.atomic = atomic
+import ori.channel = channel
+import ori.io = io
+import ori.task = task
 
 main()
     const ch: channel.Channel<int> = channel.create()
@@ -1217,10 +1217,10 @@ fn compile_runs_transferable_collections_through_channel_native() {
         "main.orl",
         r#"module app.main
 
-import ori.channel as channel
-import ori.deque as deque
-import ori.io as io
-import ori.queue as queue
+import ori.channel = channel
+import ori.deque = deque
+import ori.io = io
+import ori.queue = queue
 
 main()
     const q: queue.Queue<int> = queue.new()
@@ -1275,7 +1275,7 @@ fn native_backend_accepts_async_await_shape_nested_await() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 async compute() -> int
     return 1
@@ -1336,7 +1336,7 @@ fn c_backend_rejects_concurrency_runtime_calls() {
         "main.orl",
         r#"module app.main
 
-import ori.task as task
+import ori.task = task
 
 main()
     task.block_on(task.sleep(1))
@@ -1368,8 +1368,8 @@ fn compile_runs_async_await_in_loop_and_branch_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async compute(x: int) -> int
     await task.sleep(1)
@@ -1423,8 +1423,8 @@ fn compile_runs_async_await_with_managed_variables_in_branch_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async get_prefix(flag: bool) -> string
     await task.sleep(1)
@@ -1476,8 +1476,8 @@ fn compile_runs_async_using_dispose_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 trait Disposable
     mut dispose(self)
@@ -1543,8 +1543,8 @@ fn compile_runs_async_using_dispose_on_cancel() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 trait Disposable
     mut dispose(self)
@@ -1604,8 +1604,8 @@ fn compile_runs_async_using_dispose_on_break() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 trait Disposable
     mut dispose(self)
@@ -1669,10 +1669,10 @@ fn compile_runs_async_file_using_dispose_on_cancel() {
         &format!(
             r#"module app.main
 
-import ori.fs as fs
-import ori.io as io
-import ori.bytes as bytes_mod
-import ori.task as task
+import ori.fs = fs
+import ori.io = io
+import ori.bytes = bytes_mod
+import ori.task = task
 
 async worker(token: task.CancelToken, path: string) -> result<int, string>
     using file: fs.File = fs.open_write(path)?
@@ -1727,8 +1727,8 @@ fn compile_runs_async_await_in_match_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async compute(x: int) -> int
     await task.sleep(1)
@@ -1776,8 +1776,8 @@ fn compile_runs_async_await_in_for_loop_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async compute(x: int) -> int
     await task.sleep(1)
@@ -1824,8 +1824,8 @@ fn compile_runs_async_await_in_deeply_nested_bodies_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 
 async compute(x: int) -> int
     await task.sleep(1)
@@ -1885,9 +1885,9 @@ fn fmt_preserves_async_spawn_nested_using_and_multiline_match_idempotent() {
     let dir = TestDir::new("fmt_async_audit_idempotent");
     let source = r#"module app.main
 
-import ori.fs as fs
-import ori.io as io
-import ori.task as task
+import ori.fs = fs
+import ori.io = io
+import ori.task = task
 
 async work(n: int) -> int
 await task.sleep(1)

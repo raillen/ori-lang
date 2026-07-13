@@ -9,7 +9,7 @@ fn summary_lists_transitive_imports() {
     let main = dir.join("main.orl");
     std::fs::write(
         &main,
-        "module app.main\nimport app.lib as lib\nmain() -> void\nend\n",
+        "module app.main\nimport app.lib = lib\nmain() -> void\nend\n",
     )
     .unwrap();
 

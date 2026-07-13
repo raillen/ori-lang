@@ -1,7 +1,7 @@
 module examples.heap_demo
 
-import ori.heap as heap
-import ori.io as io
+import ori.heap = heap
+import ori.io = io
 
 main()
     const pending: heap.Heap<int> = heap.new()

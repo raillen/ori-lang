@@ -103,7 +103,7 @@ pub fn snippet_completion_items() -> Vec<CompletionItem> {
         ),
         snippet(
             "main",
-            "module ${1:app.main}\n\nimport ori.io as io\n\nmain() -> void\n    ${0}\nend",
+            "module ${1:app.main}\n\nimport ori.io = io\n\nmain() -> void\n    ${0}\nend",
         ),
         snippet(
             "async fn",
@@ -130,7 +130,7 @@ pub fn snippet_completion_items() -> Vec<CompletionItem> {
             "using ${1:name}: ${2:Type} = ${3:expr}\n    ${0}\nend",
         ),
         snippet("check", "check ${1:condition}, \"${2:message}\""),
-        snippet("import", "import ${1:ori.module} as ${2:alias}"),
+        snippet("import", "import ${1:ori.module} = ${2:alias}"),
     ]
 }
 

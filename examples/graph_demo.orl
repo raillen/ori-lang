@@ -1,8 +1,8 @@
 module app.graph_demo
 
-import ori.graph as graph
-import ori.io as io
-import ori.list as lists
+import ori.graph = graph
+import ori.io = io
+import ori.list = lists
 
 main()
     const tasks: graph.Graph<string> = graph.new(true)

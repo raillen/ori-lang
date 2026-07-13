@@ -4,18 +4,18 @@ module app.generics_showcase
 --- Cada coleção é testada com int e string para validar
 --- que a parametrização <T> funciona em todo o pipeline.
 
-import ori.deque as deque
-import ori.deque.utils as deque_utils
-import ori.doubly_linked_list as dll
-import ori.doubly_linked_list.utils as dll_utils
-import ori.io as io
-import ori.linked_list as ll
-import ori.linked_list.utils as ll_utils
-import ori.list as lists
-import ori.queue as queue
-import ori.queue.utils as queue_utils
-import ori.stack as stack
-import ori.stack.utils as stack_utils
+import ori.deque = deque
+import ori.deque.utils = deque_utils
+import ori.doubly_linked_list = dll
+import ori.doubly_linked_list.utils = dll_utils
+import ori.io = io
+import ori.linked_list = ll
+import ori.linked_list.utils = ll_utils
+import ori.list = lists
+import ori.queue = queue
+import ori.queue.utils = queue_utils
+import ori.stack = stack
+import ori.stack.utils = stack_utils
 
 section(title: string)
     io.println("")

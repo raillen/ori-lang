@@ -1,6 +1,6 @@
 module ori.net
 
-import ori.net as net
+import ori.net = net
 
 public connect_tls(host: string, port: int, timeout_ms: int) -> result<net.Connection, string>
     return net.connect_tls(host, port, timeout_ms)

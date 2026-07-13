@@ -1,7 +1,7 @@
 module examples.deque_demo
 
-import ori.deque as deque
-import ori.io as io
+import ori.deque = deque
+import ori.io = io
 
 main()
     const window: deque.Deque<int> = deque.new()

@@ -1,7 +1,7 @@
 module ori.json.utils
 
-import ori.fs as fs
-import ori.json as json
+import ori.fs = fs
+import ori.json = json
 
 public read(file_path: string) -> result<json.Value, string>
     match fs.read_text(file_path)

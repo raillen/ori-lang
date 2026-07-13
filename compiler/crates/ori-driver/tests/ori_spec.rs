@@ -71,7 +71,7 @@ fn lex_accepts_line_comment_in_expression() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     const x: int = 1 + -- comment inline
         2
@@ -89,7 +89,7 @@ fn lex_accepts_multiline_block_comment() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 --|
 line 1
 line 2
@@ -244,7 +244,7 @@ fn lex_accepts_integer_literal_variants() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     const a: int = 1_000_000
     const b: int = 0xFF
@@ -282,7 +282,7 @@ fn lex_accepts_string_escape_sequences() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     const s: string = "backslash: \\ quote: \" newline: \n return: \r tab: \t null: \0 smile: \u{1F600}"
     io.print(s)
@@ -299,7 +299,7 @@ fn lex_accepts_triple_quote_multiline_string() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     const s: string = """line one
     line two
@@ -318,7 +318,7 @@ fn lex_accepts_interpolated_string() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 struct User
     name: string
 end
@@ -338,7 +338,7 @@ fn lex_accepts_byte_string() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     const b: bytes = b"\xFF\x00"
     io.print("ok")
@@ -375,7 +375,7 @@ fn lex_accepts_range_literals() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     var total: int = 0
     for i in 0..9
@@ -401,7 +401,7 @@ fn lex_accepts_times_as_contextual_identifier() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     var times: int = 1
     times = times + 2
@@ -436,7 +436,7 @@ fn type_accepts_all_primitives() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     const b: bool = true
     const i: int = 42
@@ -465,7 +465,7 @@ fn type_default_int_and_float() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 takes_int(x: int)
 end
 takes_float(x: float)
@@ -487,7 +487,7 @@ fn type_accepts_struct_literal_construction() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 struct Point
     x: int
     y: int
@@ -508,7 +508,7 @@ fn type_accepts_enum_named_variants() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 enum Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
@@ -570,7 +570,7 @@ fn type_accepts_tuple() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     const pair: tuple<int, string> = tuple(1, "one")
     io.print(string(pair.0))
@@ -609,7 +609,7 @@ fn type_accepts_optional_some_and_none() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     const x: optional<int> = some(5)
     const y: optional<int> = none
@@ -635,7 +635,7 @@ fn type_accepts_result_success_and_error() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 divide(a: int, b: int) -> result<int, string>
     if b == 0
         return error("zero")
@@ -684,7 +684,7 @@ fn type_accepts_equality_on_int_and_string() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     check 1 + 1 == 2, "int equality"
     check "ab" == "ab", "string equality"
@@ -754,7 +754,7 @@ fn type_accepts_type_alias() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 alias UserId = int
 alias Callback = func(string) -> bool
 takes_id(id: UserId)
@@ -775,7 +775,7 @@ fn type_alias_accepts_underlying_type_interchangeably() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 alias UserId = int
 takes_int(x: int)
     io.print(string(x))
@@ -798,7 +798,7 @@ fn expr_accepts_arithmetic_and_division() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     const a: int = 10 / 3
     const b: int = 10 % 3
@@ -819,8 +819,8 @@ fn expr_float_division_by_zero_is_infinity() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
-import ori.math as math
+import ori.io = io
+import ori.math = math
 main()
     const inf: float = 10.0 / 0.0
     io.print(string(inf))
@@ -865,7 +865,7 @@ fn expr_short_circuit_and_skips_side_effect() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 check_bool(x: int) -> bool
     return x > 0
 end
@@ -999,9 +999,9 @@ fn expr_accepts_pipe_operator() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
-import ori.list as lists
-import ori.iter as iter
+import ori.io = io
+import ori.list = lists
+import ori.iter = iter
 main()
     const items: list<int> = [1, 2, 3]
     const doubled: list<int> = iter.map(items, do(x: int) => x * 2)
@@ -1019,7 +1019,7 @@ fn expr_accepts_inline_if_expression() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     const label: string = if true then "pass" else "fail"
     io.print(label)
@@ -1089,7 +1089,7 @@ fn expr_accepts_anonymous_struct_literal() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 struct Vec2
     x: float
     y: float
@@ -1135,7 +1135,7 @@ fn expr_accepts_struct_update_with() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 struct Config
     timeout: int
     retries: int
@@ -1162,7 +1162,7 @@ fn expr_accepts_collection_literals() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     const items: list<string> = ["a", "b", "c"]
     const scores: map<int, string> = {1: "one", 2: "two"}
@@ -1181,8 +1181,8 @@ fn expr_accepts_index_and_slice() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
-import ori.list as lists
+import ori.io = io
+import ori.list = lists
 main()
     const items: list<int> = [10, 20, 30]
     io.print(string(items[0]))
@@ -1224,7 +1224,7 @@ fn stmt_accepts_var_mutation() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     var x: int = 0
     x += 5
@@ -1263,7 +1263,7 @@ fn stmt_accepts_if_some_binding() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 maybe_user() -> optional<string>
     return some("Ada")
 end
@@ -1286,7 +1286,7 @@ fn stmt_accepts_while_some_loop() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     var source: optional<int> = some(3)
     while some(n) = source
@@ -1306,7 +1306,7 @@ fn stmt_accepts_loop_with_break_continue() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     var counter: int = 0
     loop
@@ -1349,7 +1349,7 @@ fn stmt_accepts_for_loop_with_index() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     for item, index in ["a", "b", "c"]
         io.print(f"{index}: {item}")
@@ -1367,7 +1367,7 @@ fn stmt_accepts_repeat() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     var total: int = 0
     repeat 3
@@ -1387,7 +1387,7 @@ fn stmt_accepts_repeat_with_times_keyword() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     var total: int = 0
     repeat 3 times
@@ -1497,7 +1497,7 @@ fn stmt_accepts_match_with_case_else() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 enum Color
     Red
     Green
@@ -1528,7 +1528,7 @@ fn stmt_accepts_check_assertion() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     check true, "should pass"
     io.print("ok")
@@ -1545,7 +1545,7 @@ fn stmt_check_failure_causes_panic() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     io.print("start")
     check false, "intentional failure"
@@ -1573,7 +1573,7 @@ fn func_accepts_named_parameters_with_defaults() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 connect(host: string, port: int = 80)
     io.print(f"{host}:{port}")
 end
@@ -1667,7 +1667,7 @@ fn func_rejects_closure_capturing_var() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.iter as iter
+import ori.iter = iter
 main()
     var total: int = 0
     const mapped: list<int> = iter.map([1, 2], do(x: int) => x + total)
@@ -1689,7 +1689,7 @@ fn func_rejects_await_outside_async() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.task as task
+import ori.task = task
 main()
     const v: int = await task.sleep(1)
 end
@@ -1710,7 +1710,7 @@ fn func_accepts_async_func_and_await() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.task as task
+import ori.task = task
 async compute() -> int
     await task.sleep(1)
     return 42
@@ -1758,8 +1758,8 @@ fn func_compile_runs_async_main_native() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
-import ori.task as task
+import ori.io = io
+import ori.task = task
 async answer() -> int
     await task.sleep(1)
     return 42
@@ -1787,7 +1787,7 @@ fn trait_accepts_required_and_default_methods() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 trait Greetable
     name(self) -> string
     greet(self) -> string
@@ -1848,7 +1848,7 @@ fn trait_accepts_any_dynamic_dispatch() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 trait Drawable
     draw(self) -> string
 end
@@ -1887,7 +1887,7 @@ fn trait_object_equality_works() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 trait Drawable
     draw(self) -> string
 end
@@ -1965,7 +1965,7 @@ fn error_accepts_result_with_propagation_chain() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 step1() -> result<int, string>
     return success(1)
 end
@@ -1997,7 +1997,7 @@ fn error_compile_runs_integer_division_by_zero_causes_panic() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     const x: int = 10 / 0
     io.print(string(x))
@@ -2020,8 +2020,8 @@ fn error_compile_runs_index_out_of_bounds_causes_panic() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
-import ori.list as lists
+import ori.io = io
+import ori.list = lists
 main()
     const items: list<int> = [1, 2, 3]
     const x: int = items[99]
@@ -2045,7 +2045,7 @@ fn error_panic_explicit_causes_runtime_panic() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     panic("test panic")
     io.print("unreachable")
@@ -2067,7 +2067,7 @@ fn error_todo_causes_runtime_panic() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     io.print("before")
     todo()
@@ -2098,7 +2098,7 @@ fn error_unreachable_causes_runtime_panic() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     io.print("before")
     unreachable()
@@ -2131,7 +2131,7 @@ fn mem_value_semantics_isolate_copies() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 struct Point
     x: int
     y: int
@@ -2161,7 +2161,7 @@ fn mem_using_calls_dispose_on_normal_return() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 trait Disposable
     mut dispose(self)
 end
@@ -2188,7 +2188,7 @@ fn mem_compile_multiple_using_lifo_order() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 trait Disposable
     mut dispose(self)
 end
@@ -2251,7 +2251,7 @@ fn generic_accepts_type_inference() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 wrap<T>(value: T) -> optional<T>
     return some(value)
 end
@@ -2273,7 +2273,7 @@ fn generic_accepts_where_constraint() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 trait Labelled
     label(self) -> string
 end
@@ -2334,7 +2334,7 @@ fn generic_accepts_negative_constraint() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 trait Disposable
     mut dispose(self)
 end
@@ -2388,7 +2388,7 @@ fn generic_accepts_generic_struct() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 struct Pair<A, B>
     first: A
     second: B
@@ -2490,7 +2490,7 @@ fn crosscut_accepts_full_pipeline_program() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 
 trait Disposable
     mut dispose(self)
@@ -2579,7 +2579,7 @@ end
     dir.write(
         "main.orl",
         r#"module app.main
-import app.util as util
+import app.util = util
 main()
     const x: int = util.hidden()
 end
@@ -2664,13 +2664,13 @@ end
     dir.write(
         "facade.orl",
         r#"module app.facade
-public import app.util as util
+public import app.util = util
 "#,
     );
     dir.write(
         "main.orl",
         r#"module app.main
-import app.facade as api
+import app.facade = api
 main()
     const x: int = api.util.answer()
 end
@@ -2757,7 +2757,7 @@ fn crosscut_fmt_preserves_valid_source_unchanged() {
     let dir = TestDir::new("crosscut_fmt_idempotent");
     let source = r#"module app.main
 
-import ori.io as io
+import ori.io = io
 
 main()
     io.print("hello")
@@ -2852,8 +2852,8 @@ demo.math = { path = "../local_math", version = "0.1.0" }
         "app/src/main.orl",
         r#"module demo.app
 
-import demo.math only (one)
-import ori.io as io
+import demo.math (one)
+import ori.io = io
 
 main()
     io.print(string(one()))
@@ -2911,7 +2911,7 @@ demo.math = { path = "../local_math", version = "0.1.0" }
         "app/src/main.orl",
         r#"module demo.app
 
-import demo.math only (one)
+import demo.math (one)
 
 main()
     const value: int = one()
@@ -2968,7 +2968,7 @@ demo.math = { path = "../math", version = "0.1.0" }
         "app/src/main.orl",
         r#"module demo.app
 
-import demo.math only (two)
+import demo.math (two)
 
 main()
     const value: int = two()
@@ -3020,10 +3020,10 @@ fn stdlib_real_project_helpers_typecheck() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.args as args
-import ori.config as config
-import ori.log as log
-import ori.time only (Instant, Duration, add, between, duration_seconds, duration_to_millis, instant_from_unix_ms)
+import ori.args = args
+import ori.config = config
+import ori.log = log
+import ori.time (Instant, Duration, add, between, duration_seconds, duration_to_millis, instant_from_unix_ms)
 
 main()
     const start: Instant = instant_from_unix_ms(1000)
@@ -3049,7 +3049,7 @@ fn crosscut_build_generates_c_source_with_entry_point() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     io.print("c build")
 end
@@ -3145,9 +3145,9 @@ fn fs_file_handle_native() {
         &format!(
             r#"module app.main
 
-import ori.fs as fs
-import ori.io as io
-import ori.bytes as bytes_mod
+import ori.fs = fs
+import ori.io = io
+import ori.bytes = bytes_mod
 
 write_helper(path: string) -> result<void, string>
     using file: fs.File = fs.open_write(path)?
@@ -3199,8 +3199,8 @@ fn task_cancellation_native() {
         "main.orl",
         r#"module app.main
 
-import ori.task as task
-import ori.io as io
+import ori.task = task
+import ori.io = io
 
 async worker(token: task.CancelToken)
     io.println("worker started")
@@ -3255,9 +3255,9 @@ fn compile_runs_structural_equality_advanced_native() {
         "main.orl",
         r#"module app.main
 
-import ori.io as io
-import ori.map as maps
-import ori.core as core
+import ori.io = io
+import ori.map = maps
+import ori.core = core
 
 struct Pair<A, B>
     first: A
@@ -3323,7 +3323,7 @@ fn build_c_backend_structural_equality_advanced() {
         "main.orl",
         r#"module app.main
 
-import ori.core as core
+import ori.core = core
 
 struct Pair<A, B>
     first: A

@@ -1,8 +1,8 @@
 module app.native_showcase
 
-import ori.io as io
-import ori.list as lists
-import ori.map as maps
+import ori.io = io
+import ori.list = lists
+import ori.map = maps
 
 trait Labelled
     label(self) -> string

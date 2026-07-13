@@ -137,11 +137,11 @@ sh tools/package_native_release.sh
 ## A first program
 
 ```ori
-namespace app.hello
+module app.hello
 
-import ori.io as io
+import ori.io = io
 
-func main()
+main()
     io.print("Hello, Ori!")
 
     const answer: int = 21 * 2
@@ -221,7 +221,7 @@ Long symbol documentation can live outside the `.orl` file:
 ```text
 oridoc 1
 
-namespace app.math
+module app.math
 
 doc func add
     summary:
@@ -244,7 +244,7 @@ manifest and `.oridoc` contract. For a shorter workflow guide, use
 Ori's core model is small:
 
 - every file starts with `namespace`;
-- imports create local aliases or explicit selective names with `only (...)`;
+- imports create local aliases or explicit selective names with `(...)`;
 - top-level declarations are private unless marked `public`;
 - `struct` and `enum` define data;
 - `trait` and `implement` define behavior;
@@ -258,11 +258,11 @@ Ori's core model is small:
 Example with `result`:
 
 ```ori
-namespace app.errors
+module app.errors
 
-import ori.io as io
+import ori.io = io
 
-func divide(a: int, b: int) -> result<int, string>
+divide(a: int, b: int) -> result<int, string>
     if b == 0
         return error("division by zero")
     end
@@ -270,7 +270,7 @@ func divide(a: int, b: int) -> result<int, string>
     return success(a / b)
 end
 
-func main() -> result<void, string>
+main() -> result<void, string>
     const value: int = try divide(84, 2)
     io.print(f"value: {value}")
     return success()
