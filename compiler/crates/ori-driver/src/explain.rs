@@ -49,8 +49,8 @@ const ENTRIES: &[ExplainEntry] = &[
         code: "type.unused_result",
         severity: "warning",
         summary: "A `result` value is computed but discarded.",
-        cause: "Calling a function returning `result[T, E]` without `?`, `match`, or explicit handling.",
-        fix: "Use `const _ = expr`, propagate with `?`, or handle `success`/`error` explicitly.",
+        cause: "Calling a function returning `result[T, E]` without `try`, `match`, or explicit handling.",
+        fix: "Use `const _ = expr`, propagate with `try expr`, or handle `success`/`error` explicitly.",
     },
     ExplainEntry {
         code: "project.circular_import",
@@ -107,6 +107,27 @@ const ENTRIES: &[ExplainEntry] = &[
         summary: "Unexpected token at this position.",
         cause: "Syntax does not match Ori grammar (often a missing `end`, comma, or keyword).",
         fix: "Read the surrounding block structure; ensure each `if`/`func`/`struct` has a matching `end`.",
+    },
+    ExplainEntry {
+        code: "parse.question_propagate_removed",
+        severity: "error",
+        summary: "Postfix `?` error/absence propagation was removed.",
+        cause: "S3 surface keeps only the prefix form `try expr` for propagation.",
+        fix: "Rewrite `expr?` as `try expr` (and keep a compatible `optional`/`result` return type).",
+    },
+    ExplainEntry {
+        code: "parse.else_if_removed",
+        severity: "error",
+        summary: "Chained conditionals must use `elif`, not `else if`.",
+        cause: "S3 surface dropped the two-token `else if` form.",
+        fix: "Replace `else if cond` with `elif cond`.",
+    },
+    ExplainEntry {
+        code: "parse.case_dot_variant_removed",
+        severity: "error",
+        summary: "Match enum variants no longer use a leading `.`.",
+        cause: "S3 match cases write bare `Variant` / `Variant(...)` without a leading dot.",
+        fix: "Write `case Variant:` or `case Variant(field: x):` instead of `case .Variant`.",
     },
     ExplainEntry {
         code: "match.non_exhaustive",

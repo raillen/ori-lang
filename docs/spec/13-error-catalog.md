@@ -62,6 +62,9 @@ when the compiler starts producing it.
 | `parse.removed_angle_type` | error | Angle-bracket type arguments `Type<…>` are removed; use `Type[…]` |
 | `parse.removed_of_type` | error | `of` / `map of K to V` type forms are removed; use `list[T]`, `map[K, V]`, … |
 | `parse.removed_where_bound` | error | `where T is Trait` / `where T is not Trait` bounds are removed; use `for T: Trait` |
+| `parse.question_propagate_removed` | error | Source used removed postfix `?` propagation; use `try expr` |
+| `parse.else_if_removed` | error | Source used removed `else if`; use `elif` for chained conditionals |
+| `parse.case_dot_variant_removed` | error | Source used removed leading `.` on a match enum variant; write `case Variant` / `case Variant(...)` |
 | `parse.tuple_arity` | error | Tuple type or expression has invalid arity |
 | `parse.unterminated_block` | error | End-delimited block reaches end of file before `end` |
 | `parse.unterminated_string` | error | String literal starts but is not closed |
@@ -109,9 +112,9 @@ when the compiler starts producing it.
 | `type.numeric_literal_out_of_range` | error | Numeric literal does not fit its target type |
 | `type.pattern_mismatch` | error | Pattern is incompatible with the matched value type |
 | `type.positional_after_named_arg` | error | Positional argument appears after a named argument |
-| `type.propagate_err_mismatch` | error | `try`/`?` would propagate an incompatible result error type |
-| `type.propagate_not_result_or_optional` | error | `try`/`?` was used on a value that is not `result` or `optional` |
-| `type.propagate_return_mismatch` | error | `try`/`?` was used in a function with an incompatible return type |
+| `type.propagate_err_mismatch` | error | `try` would propagate an incompatible result error type |
+| `type.propagate_not_result_or_optional` | error | `try` was used on a value that is not `result` or `optional` |
+| `type.propagate_return_mismatch` | error | `try` was used in a function with an incompatible return type |
 | `type.repeat_count_not_int` | error | `repeat` count must be an `int` |
 | `type.return_mismatch` | error | Returned value type does not match function return type |
 | `type.spread_non_list` | error | Spread argument is not a list |

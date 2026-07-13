@@ -3601,7 +3601,7 @@ end
 
 use_propagate() -> result[int, string]
     using fourth: Resource = Resource(id: 4)
-    const value: int = fail()?
+    const value: int = try fail()
     return success(value)
 end
 
@@ -3773,7 +3773,7 @@ parse(flag: bool) -> result[int, string]
 end
 
 add_one(flag: bool) -> result[int, string]
-    const value: int = parse(flag)?
+    const value: int = try parse(flag)
     return success(value + 1)
 end
 
@@ -4079,12 +4079,12 @@ maybe(flag: bool) -> optional[int]
 end
 
 add_one(flag: bool) -> result[int, string]
-    const value: int = parse(flag)?
+    const value: int = try parse(flag)
     return success(value + 1)
 end
 
 unwrap_optional(flag: bool) -> optional[int]
-    const value: int = maybe(flag)?
+    const value: int = try maybe(flag)
     return some(value + 1)
 end
 
@@ -4557,7 +4557,7 @@ end
 
 main(status: Status)
     match status
-    case .Ready:
+    case Ready:
         return
     end
 end
@@ -4843,6 +4843,7 @@ end
     assert!(diagnostic_codes(&out).contains(&"parse.func_removed"));
 }
 
+
 #[test]
 fn check_reports_removed_angle_type() {
     let dir = TestDir::new("removed_angle_type");
@@ -5036,6 +5037,181 @@ end
         "bracket types and for-bounds must parse: {:?}",
         out.diagnostics
     );
+}
+
+#[test]
+fn check_reports_question_propagate_removed() {
+    let dir = TestDir::new("question_propagate_removed");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+produce() -> result[int, string]
+    return success(1)
+end
+
+wrapped() -> result[int, string]
+    const x: int = produce()?
+    return success(x)
+end
+
+main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.question_propagate_removed"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_reports_else_if_removed() {
+    let dir = TestDir::new("else_if_removed");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+main()
+    if true
+        return
+    else if false
+        return
+    end
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.else_if_removed"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_accepts_elif_chain() {
+    let dir = TestDir::new("elif_chain");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+grade(n: int) -> string
+    if n > 0
+        return "pos"
+    elif n < 0
+        return "neg"
+    else
+        return "zero"
+    end
+end
+
+main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn check_accepts_multi_elif_chain() {
+    let dir = TestDir::new("multi_elif_chain");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+letter(score: int) -> string
+    if score >= 90
+        return "A"
+    elif score >= 80
+        return "B"
+    elif score >= 70
+        return "C"
+    elif score >= 60
+        return "D"
+    else
+        return "F"
+    end
+end
+
+main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn check_reports_case_dot_variant_removed() {
+    let dir = TestDir::new("case_dot_variant_removed");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+enum Status
+    Ready
+    Done
+end
+
+main(status: Status)
+    match status
+    case .Ready:
+        return
+    case Done:
+        return
+    end
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.case_dot_variant_removed"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_accepts_match_enum_cases_without_leading_dot() {
+    let dir = TestDir::new("match_enum_no_dot");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+enum Shape
+    Point
+    Circle(radius: int)
+end
+
+label(s: Shape) -> string
+    match s
+    case Point:
+        return "point"
+    case Circle(radius):
+        return "circle"
+    end
+    return ""
+end
+
+main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
 }
 
 #[test]
@@ -8562,7 +8738,7 @@ make_resource(id: int) -> result[Resource, AppError]
 end
 
 load() -> result[Resource, AppError]
-    const resource: Resource = make_resource(util.seed())?
+    const resource: Resource = try make_resource(util.seed())
     return success(resource)
 end
 
@@ -8597,7 +8773,7 @@ main()
         end
     case error(err):
         match err
-        case .Validation(message):
+        case Validation(message):
             io.print(message)
         end
     end
@@ -9291,7 +9467,7 @@ test_formatting()
 check 1 == 1
 if 1 == 1
 check 2 == 2
-else if 2 == 3
+elif 2 == 3
 check false
 else
 check true
@@ -9317,7 +9493,7 @@ test_formatting()
     check 1 == 1
     if 1 == 1
         check 2 == 2
-    else if 2 == 3
+    elif 2 == 3
         check false
     else
         check true

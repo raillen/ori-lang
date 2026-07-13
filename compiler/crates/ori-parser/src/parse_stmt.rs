@@ -12,7 +12,8 @@ use ori_lexer::TokenKind;
 use smol_str::SmolStr;
 
 /// Tokens that terminate a block (without consuming them).
-const BLOCK_TERMINATORS: &[TokenKind] = &[TokenKind::End, TokenKind::Else, TokenKind::Case];
+const BLOCK_TERMINATORS: &[TokenKind] =
+    &[TokenKind::End, TokenKind::Else, TokenKind::Elif, TokenKind::Case];
 
 impl<'src> Parser<'src> {
     /// Parse a block: zero or more statements, stopping at a terminator token.
@@ -170,10 +171,21 @@ impl<'src> Parser<'src> {
         let mut else_ifs = Vec::new();
         let mut else_block = None;
         loop {
-            if self.at(&TokenKind::Else) {
+            if self.at(&TokenKind::Elif) {
                 self.advance();
+                let cond = self.parse_expr()?;
+                let block = self.parse_block()?;
+                else_ifs.push((Box::new(cond), block));
+            } else if self.at(&TokenKind::Else) {
+                let else_span = self.advance().unwrap().span;
                 if self.at(&TokenKind::If) {
-                    self.advance(); // else if
+                    // S3 cutover: `else if` is a hard error; recover as `elif`.
+                    let if_span = self.advance().unwrap().span;
+                    self.error(
+                        "parse.else_if_removed",
+                        "`else if` was removed; use `elif` for chained conditionals",
+                        else_span.cover(if_span),
+                    );
                     let cond = self.parse_expr()?;
                     let block = self.parse_block()?;
                     else_ifs.push((Box::new(cond), block));

@@ -41,7 +41,7 @@ public binary_search_int(items: list[int], target: int) -> int
         const value: int = items[mid]
         if value == target
             return mid
-        else if value < target
+        elif value < target
             lo = mid + 1
         else
             hi = mid - 1

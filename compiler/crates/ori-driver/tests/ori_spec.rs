@@ -889,7 +889,7 @@ produce() -> result[int, string]
     return success(1)
 end
 main()
-    const x: int = produce()?
+    const x: int = try produce()
 end
 "#,
     );
@@ -912,7 +912,7 @@ a() -> result[int, string]
     return success(1)
 end
 b() -> result[int, int]
-    const x: int = a()?
+    const x: int = try a()
     return success(x)
 end
 main()
@@ -1973,8 +1973,8 @@ step2(x: int) -> result[int, string]
     return success(x + 1)
 end
 pipeline() -> result[int, string]
-    const a: int = step1()?
-    const b: int = step2(a)?
+    const a: int = try step1()
+    const b: int = try step2(a)
     return success(b)
 end
 main()
@@ -3150,16 +3150,16 @@ import ori.io as io
 import ori.bytes as bytes_mod
 
 write_helper(path: string) -> result[void, string]
-    using file: fs.File = fs.open_write(path)?
-    const n: int = fs.write(file, b"hello using file")?
+    using file: fs.File = try fs.open_write(path)
+    const n: int = try fs.write(file, b"hello using file")
     io.println(f"written: {{n}}")
     return success()
 end
 
 read_helper(path: string) -> result[string, string]
-    using file: fs.File = fs.open_read(path)?
-    const data: bytes = fs.read(file, 20)?
-    const s: string = bytes_mod.decode_utf8(data)?
+    using file: fs.File = try fs.open_read(path)
+    const data: bytes = try fs.read(file, 20)
+    const s: string = try bytes_mod.decode_utf8(data)
     return success(s)
 end
 

@@ -47,11 +47,17 @@ enum BlockKind {
 }
 
 fn should_dedent_before(line: &str) -> bool {
-    line == "end" || line == "else" || line.starts_with("else if ") || line.starts_with("case ")
+    line == "end"
+        || line == "else"
+        || line.starts_with("elif ")
+        || line.starts_with("case ")
 }
 
 fn closes_current_block_before_opening(line: &str) -> bool {
-    line == "end" || line == "else" || line.starts_with("else if ") || line.starts_with("case ")
+    line == "end"
+        || line == "else"
+        || line.starts_with("elif ")
+        || line.starts_with("case ")
 }
 
 fn opens_block_after(line: &str, next_line: Option<&str>, block_stack: &[BlockKind]) -> bool {
@@ -60,7 +66,7 @@ fn opens_block_after(line: &str, next_line: Option<&str>, block_stack: &[BlockKi
     }
 
     line == "else"
-        || line.starts_with("else if ")
+        || line.starts_with("elif ")
         || line.starts_with("case ")
         || line == "loop"
         || line.starts_with("if ")

@@ -35,6 +35,8 @@ pub fn keyword_completion_items() -> Vec<CompletionItem> {
         "var",
         "if",
         "else",
+        "elif",
+        "try",
         "while",
         "for",
         "in",

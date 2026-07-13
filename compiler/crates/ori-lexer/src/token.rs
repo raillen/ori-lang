@@ -78,6 +78,9 @@ pub enum TokenKind {
     If,
     #[token("else")]
     Else,
+    /// Canonical chained-conditional keyword (S3 surface). Replaces `else if`.
+    #[token("elif")]
+    Elif,
     #[token("while")]
     While,
     #[token("for")]
@@ -350,6 +353,7 @@ impl TokenKind {
             TokenKind::Var => "`var`",
             TokenKind::If => "`if`",
             TokenKind::Else => "`else`",
+            TokenKind::Elif => "`elif`",
             TokenKind::While => "`while`",
             TokenKind::For => "`for`",
             TokenKind::In => "`in`",

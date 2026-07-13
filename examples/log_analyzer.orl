@@ -17,9 +17,9 @@ analyze(text: string) -> LogStats
     for row in lines(text)
         if has_prefix(row, "[info]")
             info_count = info_count + 1
-        else if has_prefix(row, "[warn]")
+        elif has_prefix(row, "[warn]")
             warn_count = warn_count + 1
-        else if has_prefix(row, "[error]")
+        elif has_prefix(row, "[error]")
             error_count = error_count + 1
         end
     end

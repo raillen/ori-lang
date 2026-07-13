@@ -10786,7 +10786,7 @@ impl<'a> FuncCodegen<'a> {
                 self.builder.ins().select(cv, tv, ev)
             }
             HirExprKind::Propagate(inner) => {
-                // `expr?` — load has_value/is_ok flag; if false, early return; else unwrap
+                // `try expr` / Propagate — load has_value/is_ok; if false, early return; else unwrap
                 let ptr = self.emit_expr(inner)?;
                 let flag = self.builder.ins().load(types::I8, MemFlags::new(), ptr, 0);
                 let ok_blk = self.builder.create_block();

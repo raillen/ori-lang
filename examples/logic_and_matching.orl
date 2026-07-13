@@ -5,7 +5,7 @@ import ori.io as io
 check_status(score: int)
     if score >= 90
         io.print("Excellent!")
-    else if score >= 70
+    elif score >= 70
         io.print("Good job.")
     else
         io.print("Keep practicing.")

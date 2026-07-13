@@ -890,7 +890,7 @@ struct Lowerer<'a> {
     scopes: Vec<Scope>,
     /// `import ori.io as io` → `io` maps to `ori.io`.
     aliases: HashMap<SmolStr, SmolStr>,
-    /// Current function's return type (for `?` desugaring).
+    /// Current function's return type (for `try` propagation lowering).
     ret_ty: Ty,
     /// Inner return type for async functions. `None` means the current function
     /// returns synchronously.
