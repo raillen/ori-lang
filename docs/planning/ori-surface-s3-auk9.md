@@ -529,6 +529,8 @@ Quando a superfície S3 estiver definida (e na implementação/`0.3.0`):
 | **8b.3** | Global HM | **Continua proibida** (decisão Ori 2026-07-01) |
 | **8b.4** | API pública | **`pub`, params e retornos de API: anotar** (aliases ok; não esconder `result` difícil) |
 | **8b.5** | Quando implementar | **`0.3.1` entregue** (2026-07-13) — omissão local no checker + testes + docs |
+| **8b.6** | Ampliação pós-0.3.1 | **Opção B** — RHS “óbvio” estendido (decisão 2026-07-13); **não** C/D/E |
+| **8b.7** | Escopo da B | **Chamadas com retorno único conhecido** + **campo/index** em receptor já tipado; **não** contexto de uso (C) nem HM |
 
 ### Pode omitir (lista inicial de implementação)
 
@@ -624,6 +626,7 @@ rodar e pular PR11 até a tag 0.3.0.
 | 2026-07-12 | 7.1 A, 7.2 A (+ `print greet("hello")`), 7.3 A; 7.4 em propostas |
 | 2026-07-12 | 7.4 B `(u)=>`; (ata errada: “pipe fora do 0.3”); bloco 7 fechado; abertura do bloco 8 |
 | 2026-07-13 | **7.5 corrigido:** pipe `\|\>` **permanece** na Ori; Auk9 arquivada como produto; prioridade curto/médio prazo redefinida |
+| 2026-07-13 | Pipe confirmado pelo usuário; inferência ampla = **B** (calls + campo/index); push tags 0.3.x |
 | 2026-07-12 | Bloco 8 fechado; abertura 8b (inferência local) antes do 9 |
 | 2026-07-12 | 8b fechado (Nim-local, API explícita, impl após S3); abertura do bloco 9 |
 | 2026-07-12 | Bloco 9 fechado; ADR + PR plan para execute-plan criados |
