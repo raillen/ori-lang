@@ -62,11 +62,17 @@ impl<'src> Parser<'src> {
                 Some(Pattern::Tuple(pats, span.cover(end)))
             }
 
-            // `.Variant` — shorthand enum variant
+            // S3: match cases use bare `Variant` / `Variant(...)` — leading dot is an error.
             TokenKind::Dot => {
-                self.advance();
+                let dot_span = self.advance().unwrap().span;
+                self.error(
+                    "parse.case_dot_variant_removed",
+                    "leading `.` on match enum variants was removed; write `case Variant` or `case Variant(...)`",
+                    dot_span,
+                );
+                // Recover by parsing the remainder as a non-shorthand variant pattern.
                 let name = self.parse_name()?;
-                self.parse_variant_pattern(name, true)
+                self.parse_variant_pattern(name, false)
             }
 
             // Literal: `true`, `false`, integer, float, string

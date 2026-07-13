@@ -263,14 +263,16 @@ impl<'src> Parser<'src> {
                         span,
                     };
                 }
-                // `?` propagation
+                // S3: postfix `?` propagation removed — only `try expr` remains.
                 Some(TokenKind::Question) => {
-                    let end = self.advance().unwrap().span;
-                    let span = span_start.cover(end);
-                    expr = Expr::Try {
-                        expr: Box::new(expr),
-                        span,
-                    };
+                    let q_span = self.advance().unwrap().span;
+                    self.error(
+                        "parse.question_propagate_removed",
+                        "postfix `?` was removed; use `try expr` for error/optional propagation",
+                        q_span,
+                    );
+                    // Leave the left-hand expression unwrapped so recovery does not
+                    // silently restore try semantics.
                 }
                 _ => break,
             }

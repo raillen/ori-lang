@@ -21,6 +21,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Alterado
 - **Sintaxe S3 (P0 — superfície de arquivo):** cabeçalho canônico `module path` (substitui `namespace`; `namespace` → `parse.namespace_removed`). Declarações de função sem keyword `func` (`name(...)`, `async name(...)`, métodos de trait/apply/struct/extern iguais); `func` em declaração → `parse.func_removed`. Tipo callable `func(T) -> R` permanece. Omissões de `->` inalteradas. Formatter, snippets VS Code e templates `ori new` alinhados. Fixtures/stdlib/examples do repo migrados para a nova forma.
+- **Sintaxe S3 (fluxo):** propagação só com `try expr` (postfix `expr?` → `parse.question_propagate_removed`); cadeias condicionais com `elif` (`else if` → `parse.else_if_removed`); patterns de enum no `match` sem ponto (`case Variant` / `case Variant(...)`; `case .Variant` → `parse.case_dot_variant_removed`). If-expressão Ori `if cond then a else b` mantida.
 - **Codegen/Link (Rust removal default):** `NativeLinker::discover()` agora tenta **`SystemLinker` antes de `BundledRustLld`** no caminho default (quando nenhuma flag de opt-in está setada). Isso elimina a dependência implícita do binário `rust-lld` (proveniente da toolchain Rust) para usuários finais que já possuem o linker do sistema instalado (Visual Studio Build Tools no Windows, `build-essential` no Linux, Xcode Command Line Tools no macOS). O fallback para `BundledRustLld` e `RustcDriver` permanece quando o system linker não é encontrado. Opt-out via `ORI_USE_RUSTC_DRIVER=1`.
 
 ### Corrigido

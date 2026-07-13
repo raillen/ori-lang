@@ -49,8 +49,8 @@ const ENTRIES: &[ExplainEntry] = &[
         code: "type.unused_result",
         severity: "warning",
         summary: "A `result` value is computed but discarded.",
-        cause: "Calling a function returning `result<T, E>` without `?`, `match`, or explicit handling.",
-        fix: "Use `const _ = expr`, propagate with `?`, or handle `success`/`error` explicitly.",
+        cause: "Calling a function returning `result<T, E>` without `try`, `match`, or explicit handling.",
+        fix: "Use `const _ = expr`, propagate with `try expr`, or handle `success`/`error` explicitly.",
     },
     ExplainEntry {
         code: "project.circular_import",

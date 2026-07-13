@@ -107,7 +107,7 @@ pub struct ReturnStmt {
 pub struct IfStmt {
     pub condition: Box<Expr>,
     pub then_block: Block,
-    /// `else if cond … end` chains.
+    /// `elif cond …` chains (historical field name; surface form is `elif`).
     pub else_ifs: Vec<(Box<Expr>, Block)>,
     pub else_block: Option<Block>,
     pub span: Span,

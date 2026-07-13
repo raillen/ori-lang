@@ -2099,7 +2099,7 @@ impl<'a> Checker<'a> {
                         } else {
                             self.sink.emit(Diagnostic::error(
                                 "type.propagate_return_mismatch",
-                                format!("cannot use `try`/`?` propagation on a `result` in a function that returns `{}`", cur_ret.display())
+                                format!("cannot use `try` propagation on a `result` in a function that returns `{}`", cur_ret.display())
                             ).with_label(Label::primary(self.file_id, *span, "propagated here")));
                         }
                         *ok.clone()
@@ -2112,7 +2112,7 @@ impl<'a> Checker<'a> {
                         if !matches!(&cur_ret, Ty::Optional(_)) {
                             self.sink.emit(Diagnostic::error(
                                 "type.propagate_return_mismatch",
-                                format!("cannot use `try`/`?` propagation on an `optional` in a function that returns `{}`", cur_ret.display())
+                                format!("cannot use `try` propagation on an `optional` in a function that returns `{}`", cur_ret.display())
                             ).with_label(Label::primary(self.file_id, *span, "propagated here")));
                         }
                         *ok.clone()
@@ -2120,7 +2120,7 @@ impl<'a> Checker<'a> {
                     _ => {
                         self.sink.emit(Diagnostic::error(
                             "type.propagate_not_result_or_optional",
-                            format!("`try`/`?` propagation can only be applied to `result` or `optional`, found `{}`", inner.display())
+                            format!("`try` propagation can only be applied to `result` or `optional`, found `{}`", inner.display())
                         ).with_label(Label::primary(self.file_id, *span, "cannot propagate here")));
                         Ty::Error
                     }

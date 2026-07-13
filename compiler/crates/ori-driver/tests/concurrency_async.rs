@@ -774,7 +774,7 @@ async compute() -> result<int, string>
 end
 
 async use_value() -> result<int, string>
-    const value: int = (await compute())?
+    const value: int = try (await compute())
     return success(value)
 end
 
@@ -814,7 +814,7 @@ async fail() -> result<int, string>
 end
 
 async use_value() -> result<int, string>
-    const value: int = (await fail())?
+    const value: int = try (await fail())
     return success(value)
 end
 
@@ -1675,8 +1675,8 @@ import ori.bytes as bytes_mod
 import ori.task as task
 
 async worker(token: task.CancelToken, path: string) -> result<int, string>
-    using file: fs.File = fs.open_write(path)?
-    fs.write(file, b"ok")?
+    using file: fs.File = try fs.open_write(path)
+    try fs.write(file, b"ok")
     const fut: future<void> = task.sleep(5000)
     task.associate(token, fut)
     await fut
@@ -1894,12 +1894,12 @@ await task.sleep(1)
 return n * 2
 end
 
-handle(path: string) -> result<int, string>
-using file: fs.File = fs.open_read(path)?
+process_file(path: string) -> result<int, string>
+using file: fs.File = try fs.open_read(path)
 match fs.read(file, 100)
 case success(data):
-using copy: fs.File = fs.open_write(path)?
-fs.write(copy, data)?
+using copy: fs.File = try fs.open_write(path)
+try fs.write(copy, data)
 return success(10)
 case error(msg):
 return error(msg)
@@ -1948,7 +1948,7 @@ end
     // labels at the same indent as `match` (switch/case style) with bodies one
     // level deeper.
     assert!(
-        once.contains("    using file: fs.File = fs.open_read(path)?\n    match fs.read(file, 100)\n    case success(data):\n        using copy: fs.File = fs.open_write(path)?\n        fs.write(copy, data)?\n        return success(10)\n    case error(msg):\n        return error(msg)\n    end\n"),
+        once.contains("    using file: fs.File = try fs.open_read(path)\n    match fs.read(file, 100)\n    case success(data):\n        using copy: fs.File = try fs.open_write(path)\n        try fs.write(copy, data)\n        return success(10)\n    case error(msg):\n        return error(msg)\n    end\n"),
         "nested using + match arm indentation: {once}"
     );
     // Multi-line match: `match` and `case` at 4, bodies at 8, `end` at 4.
