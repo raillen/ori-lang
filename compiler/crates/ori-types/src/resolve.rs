@@ -155,6 +155,18 @@ pub fn resolve_many<S: Into<SmolStr>>(
         }
     }
 
+    // ── Phase 1b: free binds (`slot = freeFn` on apply) after all funcs exist ─
+    // Aliases `namespace.Type.slot` → free function DefId so inherent method
+    // lookup and HIR call the bound function.
+    for (file, file_id) in files {
+        let namespace = SmolStr::new(file.namespace.name.to_string());
+        for item in &file.items {
+            if let Item::Apply(apply) = &item.item {
+                register_apply_free_binds(&namespace, apply, &mut def_map, *file_id, sink);
+            }
+        }
+    }
+
     // ── Phase 2: lower function signatures ───────────────────────────────────
     let reexports = collect_reexports(files);
 
@@ -350,7 +362,9 @@ pub fn resolve_many<S: Into<SmolStr>>(
                         .map(|def_id| Ty::Named(def_id, Vec::new()))
                         .unwrap_or(Ty::Infer(0));
 
-                    // Free methods: inherent on the type (`namespace.Type.method`).
+                    // Free methods + free binds: inherent on the type.
+                    // Binds were aliased in phase 1b (`Type.slot` → free fn DefId);
+                    // missing targets are already diagnosed there.
                     for member in &apply.free_members {
                         if let ori_ast::item::ApplyMember::Method(m) = member {
                             resolve_apply_method_func_sig(
@@ -781,7 +795,6 @@ pub fn resolve_many<S: Into<SmolStr>>(
                         });
                     }
                 }
-                Item::Func(_) => {}
             }
         }
     }
@@ -1327,6 +1340,47 @@ fn builtin_core_trait_sigs(core_traits: &[(SmolStr, DefId)]) -> Vec<TraitSig> {
             }
         })
         .collect()
+}
+
+/// Phase 1b: alias free bind slots to free functions for inherent method lookup.
+fn register_apply_free_binds(
+    ns: &str,
+    apply: &ori_ast::item::ApplyDecl,
+    def_map: &mut DefMap,
+    file_id: FileId,
+    sink: &mut DiagnosticSink,
+) {
+    let type_name = apply.for_type.last().text.as_str();
+    for member in &apply.free_members {
+        let ori_ast::item::ApplyMember::Bind { slot, target, span } = member else {
+            continue;
+        };
+        let target_path = format!("{}.{}", ns, target.text);
+        let Some(target_def_id) = def_map.lookup(&target_path) else {
+            sink.emit(
+                Diagnostic::error(
+                    "name.undefined",
+                    format!("bind target `{}` was not found", target.text),
+                )
+                .with_label(Label::primary(file_id, target.span, "unknown function"))
+                .with_action("bind to a free function declared in this module"),
+            );
+            continue;
+        };
+        let slot_path = SmolStr::new(format!("{}.{}.{}", ns, type_name, slot.text));
+        if def_map.lookup(&slot_path).is_some() {
+            sink.emit(
+                Diagnostic::error(
+                    "name.duplicate",
+                    format!("duplicate definition `{}.{}`", type_name, slot.text),
+                )
+                .with_label(Label::primary(file_id, *span, "defined again here"))
+                .with_action("rename or remove one of the definitions"),
+            );
+            continue;
+        }
+        def_map.alias_path(slot_path, target_def_id);
+    }
 }
 
 fn register_def(

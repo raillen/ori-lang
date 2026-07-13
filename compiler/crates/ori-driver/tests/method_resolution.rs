@@ -413,6 +413,113 @@ end
 }
 
 #[test]
+fn build_lowers_free_bind_as_inherent_method() {
+    let dir = TestDir::new("free_bind_inherent");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+struct Point
+    x: int
+    y: int
+end
+
+pointDebugName(p: Point) -> string
+    return "point"
+end
+
+apply Point
+    debugName = pointDebugName
+end
+
+main()
+    const p: Point = Point(x: 1, y: 2)
+    const name: string = p.debugName()
+end
+"#,
+    );
+
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+
+    let build = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!build.has_errors, "{:?}", build.diagnostics);
+    assert!(
+        build.c_source.contains("ORI__app_dot_main_dot_pointDebugName")
+            || build.c_source.contains("pointDebugName"),
+        "{}",
+        build.c_source
+    );
+}
+
+#[test]
+fn build_lowers_free_method_only_on_apply() {
+    let dir = TestDir::new("free_method_only");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+struct Point
+    x: int
+end
+
+apply Point
+    freeMethod(self) -> int
+        return self.x
+    end
+end
+
+main()
+    const p: Point = Point(x: 3)
+    const v: int = p.freeMethod()
+end
+"#,
+    );
+
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+
+    let build = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!build.has_errors, "{:?}", build.diagnostics);
+    assert!(
+        build
+            .c_source
+            .contains("ORI__app_dot_main_dot_Point_dot_freeMethod"),
+        "{}",
+        build.c_source
+    );
+}
+
+#[test]
+fn check_rejects_free_member_after_use_section() {
+    let dir = TestDir::new("free_after_use");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+struct Point
+end
+
+trait Marker
+end
+
+apply Point
+    use Marker
+    end
+
+    freeLate(self) -> int
+        return 1
+    end
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(diagnostic_codes(&out).contains(&"parse.apply_member_after_use"));
+}
+
+#[test]
 fn build_lowers_apply_bind_to_free_function() {
     let dir = TestDir::new("apply_bind");
     dir.write(
@@ -502,6 +609,28 @@ end
 "#,
     );
     let out = run_check(&dir.path("legacy_to.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(diagnostic_codes(&out).contains(&"parse.apply_trait_to_removed"));
+
+    dir.write(
+        "legacy_for.orl",
+        r#"module app.main
+
+struct Player
+end
+
+trait Entity
+    id(self) -> int
+end
+
+apply Entity for Player
+    id(self) -> int
+        return 1
+    end
+end
+"#,
+    );
+    let out = run_check(&dir.path("legacy_for.orl")).unwrap();
     assert!(out.has_errors);
     assert!(diagnostic_codes(&out).contains(&"parse.apply_trait_to_removed"));
 }

@@ -959,9 +959,11 @@ struct Resource
     id: int
 end
 
-implement core.Displayable for Resource
-    display(self) -> string
-        return "Resource#" + string(self.id)
+apply Resource
+    use core.Displayable
+        display(self) -> string
+            return "Resource#" + string(self.id)
+        end
     end
 end
 
@@ -1005,9 +1007,11 @@ struct Resource
     id: int
 end
 
-implement core.Displayable for Resource
-    display(self) -> string
-        return "Resource#" + string(self.id)
+apply Resource
+    use core.Displayable
+        display(self) -> string
+            return "Resource#" + string(self.id)
+        end
     end
 end
 

@@ -3369,8 +3369,12 @@ impl<'a> Lowerer<'a> {
                                 let def = self.def_map.get(*def_id);
                                 let method_path =
                                     SmolStr::new(format!("{}.{}", def.path, method_name.text));
-                                let resolved = if self.def_map.lookup(&method_path).is_some() {
-                                    Some((method_path, Ty::Infer(0)))
+                                // Free binds alias `Type.slot` → free fn DefId; use the
+                                // canonical def path so codegen calls the free function.
+                                let resolved = if let Some(m_def_id) =
+                                    self.def_map.lookup(&method_path)
+                                {
+                                    Some((self.def_map.get(m_def_id).path.clone(), Ty::Infer(0)))
                                 } else {
                                     self.trait_method_func_for_type(*def_id, method_name.as_str())
                                 };
@@ -3537,8 +3541,9 @@ impl<'a> Lowerer<'a> {
                     if let Ty::Named(def_id, _) = &obj_h.ty {
                         let def = self.def_map.get(*def_id);
                         let m_path = format!("{}.{}", def.path, field.text);
-                        if self.def_map.lookup(&m_path).is_some() {
-                            resolved_method = Some(SmolStr::new(m_path));
+                        if let Some(m_def_id) = self.def_map.lookup(&m_path) {
+                            // Free binds: alias path → free fn; use canonical path.
+                            resolved_method = Some(self.def_map.get(m_def_id).path.clone());
                         } else if let Some((m_path, return_ty)) =
                             self.trait_method_func_for_type(*def_id, field.as_str())
                         {

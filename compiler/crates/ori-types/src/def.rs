@@ -80,6 +80,17 @@ impl DefMap {
         self.by_path.get(path).copied()
     }
 
+    /// Alias `path` to an existing definition (e.g. free bind `Type.slot` → free function).
+    ///
+    /// No-op if `path` is already registered. Used so inherent method lookup
+    /// (`namespace.Type.slot`) resolves to the bound free function's `DefId`.
+    pub fn alias_path(&mut self, path: SmolStr, existing: DefId) {
+        if self.by_path.contains_key(&path) {
+            return;
+        }
+        self.by_path.insert(path, existing);
+    }
+
     pub fn get(&self, id: DefId) -> &Def {
         if id.0 >= self.defs.len() as u32 {
             static DUMMY_DEF: std::sync::OnceLock<Def> = std::sync::OnceLock::new();
