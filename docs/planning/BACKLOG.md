@@ -20,9 +20,10 @@
 3. Package/CI reliability (Linux tar.gz + deb already shipped)  
 4. Local DX (VS Code / Zed — **no** store publish)
 
-**Do not prioritize unless reopened:** multi-OS DIST, Marketplace, ECO demos, M4 self-host.
+**Do not prioritize unless reopened:** multi-OS DIST, ECO demos, M4 self-host.
 
-**Discontinued forever in product conversations:** `ori-game`, `ori-imgui` (removed; do not re-open).
+**Discontinued forever in product conversations:** `ori-game`, `ori-imgui` (removed; do not re-open).  
+**Cancelled (editor distribution):** **TOOL-MP** (VS Code Marketplace / Open VSX) — install only via repo script `tools/install_vscode_extension.sh` (local `.vsix`).
 
 ---
 
@@ -82,9 +83,14 @@ Do **not** pull these into “what’s next” until the user re-opens them:
 | ID | Item |
 |----|------|
 | DIST-1 / DIST-2 / DIST-3 / DIST-4 | Multi-OS packages (Win/macOS), smoke matrix, extra triples — Linux ship + deb **done** |
-| TOOL-MP | VS Code Marketplace / Open VSX publish |
-| ECO-1 / ECO-2 | External demos (raylib/sqlite community packages) |
+| ECO-1 / ECO-2 | External demos (raylib/sqlite community packages) — discuss before any port |
 | M4 | Self-hosting |
+
+### Cancelled this wave
+
+| ID | Notes |
+|----|-------|
+| **TOOL-MP** | No Marketplace/Open VSX. Local install: `tools/install_vscode_extension.sh` |
 
 ---
 

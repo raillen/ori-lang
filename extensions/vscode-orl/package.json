@@ -178,8 +178,8 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "package:vsix": "npm run compile && npx @vscode/vsce package --no-dependencies",
-    "install:local": "npm run package:vsix && code --install-extension ./vscode-orl-0.3.2.vsix --force",
-    "install:cursor": "npm run package:vsix && cursor --install-extension ./vscode-orl-0.3.2.vsix --force"
+    "install:local": "npm run package:vsix && node -e \"const v=require('./package.json').version; require('child_process').execSync('code --install-extension ./vscode-orl-'+v+'.vsix --force',{stdio:'inherit'})\"",
+    "install:cursor": "npm run package:vsix && node -e \"const v=require('./package.json').version; require('child_process').execSync('cursor --install-extension ./vscode-orl-'+v+'.vsix --force',{stdio:'inherit'})\""
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

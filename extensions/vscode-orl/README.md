@@ -2,9 +2,9 @@
 
 Local language support for **Ori** (`.orl`): LSP, grammar, snippets, doctor.
 
-**Install:** local `.vsix` only for now — **no Marketplace publish**.
+**Install:** local `.vsix` only — **no Marketplace** (TOOL-MP cancelled).
 
-Surface: **S3 `0.3.0`** + inference B **`0.3.1`** · extension version **`0.3.2`**.
+Surface: **S3** + inference B · extension version matches package (**0.3.4**).
 
 ## Features
 
@@ -44,12 +44,23 @@ F5 in VS Code → Extension Development Host.
 
 ### Local install (no Marketplace)
 
+From the monorepo root (recommended):
+
 ```bash
+# detects code | cursor | Flatpak com.visualstudio.code
+./tools/install_vscode_extension.sh
+
+# or force Flatpak VS Code:
+./tools/install_vscode_extension.sh --editor flatpak
+```
+
+From the extension directory:
+
+```bash
+npm install
 npm run package:vsix
-# VS Code:
-code --install-extension ./vscode-orl-0.3.2.vsix --force
-# Cursor:
-npm run install:cursor
+npm run install:local    # needs `code` on PATH
+# or: npm run install:cursor
 ```
 
 Repo smoke:
