@@ -4888,6 +4888,48 @@ end
 }
 
 #[test]
+fn check_reports_removed_of_and_angle_in_same_block() {
+    // Single-arg `of` recovery must return AST so the block continues and later
+    // removed forms still emit diagnostics (Issue 2 from PR3 review).
+    let dir = TestDir::new("removed_of_and_angle_same_block");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+main()
+    const a: list of int = [1]
+    const b: list<int> = [1]
+    const c: map of string to int = {"x": 1}
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    let codes = diagnostic_codes(&out);
+    assert!(
+        codes.contains(&"parse.removed_of_type"),
+        "expected of-form errors: {:?}",
+        out.diagnostics
+    );
+    assert!(
+        codes.contains(&"parse.removed_angle_type"),
+        "angle form after of must still be reported: {:?}",
+        out.diagnostics
+    );
+    let of_count = out
+        .diagnostics
+        .iter()
+        .filter(|d| d.code == "parse.removed_of_type")
+        .count();
+    assert!(
+        of_count >= 2,
+        "expected both `list of` and `map of` diagnostics, got {of_count}: {:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
 fn check_reports_removed_where_bound() {
     let dir = TestDir::new("removed_where_bound");
     dir.write(
@@ -4913,6 +4955,28 @@ end
         diagnostic_codes(&out).contains(&"parse.removed_where_bound"),
         "{:?}",
         out.diagnostics
+    );
+    let where_diag = out
+        .diagnostics
+        .iter()
+        .find(|d| d.code == "parse.removed_where_bound")
+        .expect("where diagnostic");
+    assert!(
+        where_diag.message.contains("`where T is Trait`"),
+        "message must name the removed form, not the replacement: {}",
+        where_diag.message
+    );
+    assert!(
+        where_diag.message.contains("`for T: Trait`"),
+        "message must suggest Auk9-style bounds: {}",
+        where_diag.message
+    );
+    assert!(
+        !where_diag
+            .message
+            .starts_with("`for T: Trait` bounds are removed"),
+        "must not claim the new form is removed: {}",
+        where_diag.message
     );
 }
 

@@ -9,14 +9,27 @@ macro_rules! primitive_type {
     }};
 }
 
+/// Single-arg built-ins: `list[T]` (canonical) or recover `list of T` as AST + error.
 macro_rules! single_bracket_type {
     ($self:expr, $span:expr, $variant:ident) => {{
         $self.advance();
-        if $self.reject_removed_of_type() {
-            return None;
+        if $self.at_contextual("of") {
+            let of_span = $self.current_span();
+            $self.error(
+                "parse.removed_of_type",
+                "`of` type forms are removed; write `list[T]`, `optional[T]`, `result[T, E]`, …",
+                of_span,
+            );
+            $self.advance(); // of
+            // Recovery: build the type so the surrounding statement/block continues
+            // and later diagnostics (e.g. angle forms) are still reported.
+            let inner = $self.parse_type()?;
+            let end = inner.span();
+            Some(Type::$variant(Box::new(inner), $span.cover(end)))
+        } else {
+            let (inner, end) = $self.parse_single_type_arg()?;
+            Some(Type::$variant(Box::new(inner), $span.cover(end)))
         }
-        let (inner, end) = $self.parse_single_type_arg()?;
-        Some(Type::$variant(Box::new(inner), $span.cover(end)))
     }};
 }
 
@@ -53,8 +66,29 @@ impl<'src> Parser<'src> {
             // ── Multi-arg generic built-in types ──────────────────────────────
             TokenKind::ResultKw => {
                 self.advance();
-                if self.reject_removed_of_type() {
-                    return None;
+                if self.at_contextual("of") {
+                    let of_span = self.current_span();
+                    self.error(
+                        "parse.removed_of_type",
+                        "`of` type forms are removed; write `result[T, E]`",
+                        of_span,
+                    );
+                    self.advance(); // of
+                    let ok = self.parse_type()?;
+                    if self.at_contextual("to") || self.at_contextual("of") {
+                        self.advance();
+                    }
+                    // Recovery: second type if present; else reuse ok for a complete AST.
+                    let err = if self
+                        .peek_kind()
+                        .is_some_and(|k| self.kind_can_start_type(k))
+                    {
+                        self.parse_type()?
+                    } else {
+                        ok.clone()
+                    };
+                    let end = err.span();
+                    return Some(Type::Result(Box::new(ok), Box::new(err), span.cover(end)));
                 }
                 let (args, end) = self.parse_type_arg_list(2)?;
                 Some(Type::Result(
@@ -91,8 +125,17 @@ impl<'src> Parser<'src> {
             }
             TokenKind::Any => {
                 self.advance();
-                if self.reject_removed_of_type() {
-                    return None;
+                if self.at_contextual("of") {
+                    let of_span = self.current_span();
+                    self.error(
+                        "parse.removed_of_type",
+                        "`of` type forms are removed; write `any[Trait]`",
+                        of_span,
+                    );
+                    self.advance(); // of
+                    let trait_name = self.parse_qualified_name()?;
+                    let end = trait_name.span;
+                    return Some(Type::Any(trait_name, span.cover(end)));
                 }
                 let open = match self.peek_kind() {
                     Some(TokenKind::LBracket) => TokenKind::LBracket,
@@ -121,8 +164,31 @@ impl<'src> Parser<'src> {
             }
             TokenKind::Tuple => {
                 self.advance();
-                if self.reject_removed_of_type() {
-                    return None;
+                if self.at_contextual("of") {
+                    let of_span = self.current_span();
+                    self.error(
+                        "parse.removed_of_type",
+                        "`of` type forms are removed; write `tuple[T, U, …]`",
+                        of_span,
+                    );
+                    self.advance(); // of
+                                    // Recovery: one or more types until a non-type token.
+                    let mut args = Vec::new();
+                    if self
+                        .peek_kind()
+                        .is_some_and(|k| self.kind_can_start_type(k))
+                    {
+                        args.push(self.parse_type()?);
+                        while self.eat(&TokenKind::Comma)
+                            && self
+                                .peek_kind()
+                                .is_some_and(|k| self.kind_can_start_type(k))
+                        {
+                            args.push(self.parse_type()?);
+                        }
+                    }
+                    let end = args.last().map(|t| t.span()).unwrap_or(of_span);
+                    return Some(Type::Tuple(args, span.cover(end)));
                 }
                 let (args, end) = self.parse_type_arg_list_free()?;
                 Some(Type::Tuple(args, span.cover(end)))
@@ -210,31 +276,48 @@ impl<'src> Parser<'src> {
         Some(types)
     }
 
-    /// Emit `parse.removed_of_type` when the next token is contextual `of`.
-    /// Returns true when the of-form was rejected (caller should stop).
-    fn reject_removed_of_type(&mut self) -> bool {
-        if !self.at_contextual("of") {
-            return false;
-        }
-        let of_span = self.current_span();
-        self.error(
-            "parse.removed_of_type",
-            "`of` type forms are removed; write `list[T]`, `optional[T]`, `result[T, E]`, …",
-            of_span,
-        );
-        // Recovery: consume `of` and attempt to parse a single trailing type so the
-        // surrounding declaration can keep going.
-        self.advance();
-        let _ = self.parse_type();
-        true
-    }
-
     fn error_removed_angle_type(&mut self, span: ori_diagnostics::Span) {
         self.error(
             "parse.removed_angle_type",
             "angle-bracket type arguments are removed; write `Type[...]` (e.g. `list[T]`)",
             span,
         );
+    }
+
+    /// True when the current token can start a type (for of-form recovery).
+    fn kind_can_start_type(&self, kind: &TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::BoolTy
+                | TokenKind::IntTy
+                | TokenKind::Int8Ty
+                | TokenKind::Int16Ty
+                | TokenKind::Int32Ty
+                | TokenKind::Int64Ty
+                | TokenKind::U8Ty
+                | TokenKind::U16Ty
+                | TokenKind::U32Ty
+                | TokenKind::U64Ty
+                | TokenKind::FloatTy
+                | TokenKind::Float32Ty
+                | TokenKind::Float64Ty
+                | TokenKind::StringTy
+                | TokenKind::BytesTy
+                | TokenKind::Void
+                | TokenKind::Optional
+                | TokenKind::List
+                | TokenKind::Set
+                | TokenKind::Range
+                | TokenKind::Lazy
+                | TokenKind::Handle
+                | TokenKind::ResultKw
+                | TokenKind::Map
+                | TokenKind::Any
+                | TokenKind::Tuple
+                | TokenKind::Func
+                | TokenKind::Ident
+                | TokenKind::SelfKw
+        )
     }
 
     /// Parse exactly one type argument in `[T]` (or recover from `<T>`).

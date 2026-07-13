@@ -432,7 +432,7 @@ impl<'src> Parser<'src> {
         false
     }
 
-    /// Reject legacy `for T: Trait` (S3). Still parses for recovery when present.
+    /// Reject legacy `where T is Trait` (S3). Still parses for recovery when present.
     pub fn parse_where_clause_opt(&mut self) -> Option<WhereClause> {
         if !self.at(&TokenKind::Where) {
             return None;
@@ -440,7 +440,7 @@ impl<'src> Parser<'src> {
         let start = self.current_span();
         self.error(
             "parse.removed_where_bound",
-            "`for T: Trait` bounds are removed; write `for T: Trait` after the name (Auk9-style)",
+            "`where T is Trait` bounds are removed; write `for T: Trait` after the name (Auk9-style)",
             start,
         );
         self.parse_legacy_where_clause_recovery()
