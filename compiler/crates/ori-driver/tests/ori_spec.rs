@@ -1110,7 +1110,7 @@ fn expr_accepts_typed_struct_brace_literal() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 struct User
     name: string
     age: int
@@ -1131,7 +1131,7 @@ fn expr_disambiguates_map_literal_from_struct() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 struct User
     name: string
     age: int
@@ -1226,7 +1226,7 @@ fn expr_accepts_context_typed_struct_on_assign() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 struct Point
     x: int
     y: int
@@ -1899,7 +1899,7 @@ fn func_accepts_fat_arrow_expression_body() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 double(x: int) -> int => x * 2
 main()
     io.print(string(double(21)))
@@ -1916,12 +1916,12 @@ fn expr_accepts_paren_arrow_closure() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
-import ori.list as lists
-import ori.iter as iter
+import ori.io = io
+import ori.list = lists
+import ori.iter = iter
 main()
-    const items: list<int> = [1, 2, 3]
-    const doubled: list<int> = iter.map(items, (x: int) => x * 2)
+    const items: list[int] = [1, 2, 3]
+    const doubled: list[int] = iter.map(items, (x: int) => x * 2)
     io.print(string(lists.len(doubled)))
 end
 "#,
@@ -1936,12 +1936,12 @@ fn expr_accepts_long_paren_closure() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
-import ori.list as lists
-import ori.iter as iter
+import ori.io = io
+import ori.list = lists
+import ori.iter = iter
 main()
-    const items: list<int> = [1, 2]
-    const doubled: list<int> = iter.map(items, (x: int) -> int
+    const items: list[int] = [1, 2]
+    const doubled: list[int] = iter.map(items, (x: int) -> int
         return x * 2
     end)
     io.print(string(lists.len(doubled)))
@@ -1958,9 +1958,9 @@ fn expr_rejects_do_closure_keyword() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.iter as iter
+import ori.iter = iter
 main()
-    const mapped: list<int> = iter.map([1], do(x: int) => x)
+    const mapped: list[int] = iter.map([1], do(x: int) => x)
 end
 "#,
     );
@@ -1979,7 +1979,7 @@ fn expr_accepts_poetic_call_and_parenthesized_arg_call() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 greet(name: string) -> string => name
 main()
     const who: string = "Ori"
@@ -1998,7 +1998,7 @@ fn expr_rejects_nested_poetic_call() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 greet(name: string) -> string => name
 main()
     io.print greet "hello"
@@ -2020,7 +2020,7 @@ fn stmt_accepts_labeled_end() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 main()
     if true
         io.print("ok")
@@ -2066,7 +2066,7 @@ fn trait_default_accepts_labeled_end_function() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 trait Greetable
     greet() -> string
         return "hi"
@@ -2075,14 +2075,16 @@ end
 struct Person
     name: string
 end
-implement Greetable for Person
-    greet() -> string
-        return self.name
+apply Person
+    use Greetable
+        greet() -> string
+            return self.name
+        end
     end
 end
 main()
-    const p: Person = Person(name: "Ori")
-    const g: any<Greetable> = p
+    const p: Person = Person { name: "Ori" }
+    const g: any[Greetable] = p
     io.print(g.greet())
 end
 "#,
@@ -2097,18 +2099,20 @@ fn trait_default_accepts_fat_arrow_body() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 trait Doubler
     double(x: int) -> int => x * 2
 end
 struct S
 end
-implement Doubler for S
-    double(x: int) -> int => x * 2
+apply S
+    use Doubler
+        double(x: int) -> int => x * 2
+    end
 end
 main()
-    const s: S = S()
-    const d: any<Doubler> = s
+    const s: S = S {}
+    const d: any[Doubler] = s
     io.print(string(d.double(21)))
 end
 "#,
@@ -2123,13 +2127,13 @@ fn expr_accepts_struct_update_labeled_end_struct() {
     dir.write(
         "main.orl",
         r#"module app.main
-import ori.io as io
+import ori.io = io
 struct Point
     x: int
     y: int
 end
 main()
-    const p: Point = Point(x: 1, y: 2)
+    const p: Point = Point { x: 1, y: 2 }
     const q: Point = p with { x: 10 } end struct
     io.print(string(q.x))
 end
