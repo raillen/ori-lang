@@ -158,7 +158,6 @@ Supported operations:
 value.or(fallback)         -- unwrap or use fallback
 value.or_return()          -- unwrap or propagate from enclosing function
 try value                  -- unwrap or propagate from enclosing function
-value?                     -- compact form of try value
 ```
 
 Current status: `.or(fallback)` is accepted for `optional<T>` and
@@ -206,14 +205,14 @@ value.or(fallback)                   -- unwrap success or use fallback
 value.or_return()                    -- unwrap success or propagate error
 value.or_wrap("context message")    -- keep success, add context to error
 try value                            -- unwrap success or propagate error
-value?                               -- compact form of try value
 ```
 
 Current status: `.or(fallback)` and `.or_return()` are accepted. `.or_wrap(...)`
 is accepted for `result<T, string>` and returns `success(v)` unchanged or
 `error(context + ": " + e)` for `error(e)`. The context expression is evaluated
-only on the error path. Use `try`, `?`, or `match` when explicit error handling
-is clearer.
+only on the error path. Use `try` or `match` when explicit error handling is
+clearer. Postfix `expr?` was removed (S3); the compiler emits
+`parse.question_propagate_removed`.
 
 Pattern matching:
 

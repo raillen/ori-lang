@@ -109,6 +109,27 @@ const ENTRIES: &[ExplainEntry] = &[
         fix: "Read the surrounding block structure; ensure each `if`/`func`/`struct` has a matching `end`.",
     },
     ExplainEntry {
+        code: "parse.question_propagate_removed",
+        severity: "error",
+        summary: "Postfix `?` error/absence propagation was removed.",
+        cause: "S3 surface keeps only the prefix form `try expr` for propagation.",
+        fix: "Rewrite `expr?` as `try expr` (and keep a compatible `optional`/`result` return type).",
+    },
+    ExplainEntry {
+        code: "parse.else_if_removed",
+        severity: "error",
+        summary: "Chained conditionals must use `elif`, not `else if`.",
+        cause: "S3 surface dropped the two-token `else if` form.",
+        fix: "Replace `else if cond` with `elif cond`.",
+    },
+    ExplainEntry {
+        code: "parse.case_dot_variant_removed",
+        severity: "error",
+        summary: "Match enum variants no longer use a leading `.`.",
+        cause: "S3 match cases write bare `Variant` / `Variant(...)` without a leading dot.",
+        fix: "Write `case Variant:` or `case Variant(field: x):` instead of `case .Variant`.",
+    },
+    ExplainEntry {
         code: "match.non_exhaustive",
         severity: "error",
         summary: "`match` does not cover all cases.",

@@ -4930,6 +4930,36 @@ end
 }
 
 #[test]
+fn check_accepts_multi_elif_chain() {
+    let dir = TestDir::new("multi_elif_chain");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+letter(score: int) -> string
+    if score >= 90
+        return "A"
+    elif score >= 80
+        return "B"
+    elif score >= 70
+        return "C"
+    elif score >= 60
+        return "D"
+    else
+        return "F"
+    end
+end
+
+main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
 fn check_reports_case_dot_variant_removed() {
     let dir = TestDir::new("case_dot_variant_removed");
     dir.write(

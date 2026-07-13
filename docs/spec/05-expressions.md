@@ -186,10 +186,10 @@ surface.
 
 ---
 
-## Error Propagation (`try` and `?`)
+## Error Propagation (`try`)
 
-`try expr` propagates errors and absence upward. `expr?` is the compact form
-with the same semantics.
+`try expr` is the only surface form for error/absence propagation (S3). It is a
+prefix form. Postfix `expr?` is rejected with `parse.question_propagate_removed`.
 
 On `result<T, E>`:
 
@@ -209,9 +209,8 @@ const value: T = try maybe_value
 
 Rules:
 - The enclosing function's return type must be compatible with the propagated type.
-- `try` or `?` on `result<T, E>` requires the enclosing function to return `result<_, E>`.
-- `try` or `?` on `optional<T>` requires the enclosing function to return `optional<_>`.
-- `try` is a prefix form. `?` is a postfix compact form in the postfix operator group.
+- `try` on `result<T, E>` requires the enclosing function to return `result<_, E>`.
+- `try` on `optional<T>` requires the enclosing function to return `optional<_>`.
 
 ---
 

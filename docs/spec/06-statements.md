@@ -85,14 +85,20 @@ end
 
 if score >= 90
     io.print("A")
-else if score >= 80
+elif score >= 80
     io.print("B")
 else
     io.print("C")
 end
 ```
 
+Chained conditionals use `elif` (S3). The form `else if` is rejected with
+`parse.else_if_removed`.
+
 The condition must be `bool`. There is no truthy/falsy coercion.
+
+Inline if-expression (expression context, not a statement) keeps the Ori form
+`if cond then a else b` — see chapter 05.
 
 ---
 
@@ -276,20 +282,24 @@ case else:
 end
 ```
 
-**Shorthand enum variant** (when enum type is known):
+**Enum variants** in `case` arms are written **without** a leading dot (S3):
 
 ```ori
 match direction
-case .North:
+case North:
     move_north()
-case .South:
+case South:
     move_south()
-case .East:
+case East:
     move_east()
-case .West:
+case West:
     move_west()
 end
 ```
+
+Leading-dot patterns such as `case .North:` are rejected with
+`parse.case_dot_variant_removed`. Enum *literals* outside match may still use
+other forms (see later chapters / S3 block 4).
 
 ---
 
@@ -306,7 +316,7 @@ the binding goes out of scope, regardless of how the scope exits:
 
 - Normal `end` of block
 - `return`
-- `try`/`?` propagation
+- `try` propagation
 - `break` or `continue`
 - Panic
 

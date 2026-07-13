@@ -357,7 +357,7 @@ pub enum HirExprKind {
     Ok_(Box<HirExpr>),
     Err_(Box<HirExpr>),
 
-    // `expr?` desugared: propagate None or Err upward
+    // `try expr` lowered: propagate None or Err upward
     Propagate(Box<HirExpr>),
 
     // `await expr` desugared by the native backend through the executor.

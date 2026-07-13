@@ -11,8 +11,8 @@ Ori has two distinct constructs for absence and failure:
 
 | Construct | Use | Propagation |
 |---|---|---|
-| `optional<T>` | A value that may be absent | `try`, `?`, or `if some` |
-| `result<T, E>` | An operation that may fail | `try` or `?` |
+| `optional<T>` | A value that may be absent | `try`, or `if some` / `match` |
+| `result<T, E>` | An operation that may fail | `try`, or `match` |
 
 There are no exceptions. There is no `null`. There is no `throw`/`catch`.
 
@@ -78,7 +78,7 @@ const user: User = find_user(id).or_return()
 ```
 
 Current status: `.or_return()` is accepted as shorthand for propagation. The
-older `.or_return(value)` form is not implemented. Use `try`, `?`,
+older `.or_return(value)` form is not implemented. Use `try`,
 `if some(...) = ...`, or `match` when explicit control flow is clearer.
 
 **`try` propagation** — unwrap or propagate absence:
@@ -92,7 +92,7 @@ func get_user_name(id: int) -> optional<string>
 end
 ```
 
-`find_user(id)?` is the compact form with the same semantics.
+Postfix `find_user(id)?` is not valid surface syntax (S3); write `try find_user(id)`.
 
 ---
 
@@ -133,7 +133,8 @@ Rules for `try` on `result<T, E>`:
 3. If `E != F`: a compile error. Use explicit conversion. For `result<T, string>`,
    `.or_wrap(context)` can add string context before propagation.
 
-`read_config(path)?` is the compact form with the same semantics.
+Postfix `read_config(path)?` is not valid surface syntax (S3); write
+`try read_config(path)`.
 
 ### `.or_wrap(context)`
 
@@ -165,13 +166,11 @@ end
 
 ---
 
-## `try` and `?` — Propagation
+## `try` — Propagation
 
-`try expr` is the readable propagation form. It works on both `optional<T>` and
-`result<T, E>`.
-
-`expr?` is the compact form with the same semantics. Prefer `try` in examples,
-guides, public docs, and code where readability is more important than brevity.
+`try expr` is the only surface form for propagation (S3). It works on both
+`optional<T>` and `result<T, E>`. Postfix `expr?` is rejected with
+`parse.question_propagate_removed`.
 
 **Behavior summary:**
 
@@ -186,16 +185,16 @@ The enclosing function's return type must be compatible:
 
 | Expression type | Required enclosing return type |
 |---|---|
-| `try optional<T>` / `optional<T>?` | `optional<_>` |
-| `try result<T, E>` / `result<T, E>?` | `result<_, E>` or `result<_, F>` where `E` converts to `F` |
+| `try optional<T>` | `optional<_>` |
+| `try result<T, E>` | `result<_, E>` or `result<_, F>` where `E` converts to `F` |
 
-Using `try` or `?` in a function that returns `void` or an incompatible type is
-a compile error.
+Using `try` in a function that returns `void` or an incompatible type is a
+compile error.
 
 Backend status:
 
-- The native backend supports `try` and `?` propagation.
-- The C backend supports `try` and `?` propagation for `optional<T>` and
+- The native backend supports `try` propagation.
+- The C backend supports `try` propagation for `optional<T>` and
   `result<T, E>` when the enclosing function returns a compatible
   `optional<_>` or `result<_, E>`.
 
@@ -211,9 +210,9 @@ intended stable shape for future stdlib APIs:
 
 ```ori
 trait Error
-    func message() -> string
+    message() -> string
 
-    func cause() -> optional<any<Error>>
+    cause() -> optional<any<Error>>
         return none
     end
 end
@@ -235,7 +234,7 @@ struct ValidationError
 end
 
 implement Error for ValidationError
-    func message() -> string
+    message() -> string
         return f"validation failed on '{self.field}': {self.reason}"
     end
 end
@@ -253,19 +252,19 @@ enum AppError
 end
 
 implement Error for AppError
-    func message() -> string
+    message() -> string
         match self
-        case .Network(error):
+        case Network(error):
             return error.message()
-        case .Validation(error):
+        case Validation(error):
             return error.message()
-        case .Parse(error):
+        case Parse(error):
             return error.message()
         end
     end
 end
 
-func run(input: string) -> result<Output, AppError>
+run(input: string) -> result<Output, AppError>
 ```
 
 This guarantees exhaustive handling at the call site.

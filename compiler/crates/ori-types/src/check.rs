@@ -1921,7 +1921,7 @@ impl<'a> Checker<'a> {
                         let cur_ret = self.current_return_ty.clone().unwrap_or(Ty::Infer(0));
                         return match &obj_ty {
                             Ty::Optional(inner) => {
-                                // .or_return() desugars to `obj?` — propagates none
+                                // .or_return() has the same propagation semantics as `try obj`
                                 // In a function returning T (not optional<T>), this is an error
                                 if let Ty::Optional(ret_inner) = &cur_ret {
                                     if !inner.is_assignable_to(ret_inner) {
@@ -1934,11 +1934,11 @@ impl<'a> Checker<'a> {
                                     }
                                     *inner.clone()
                                 } else {
-                                    *inner.clone() // will be caught by ? logic
+                                    *inner.clone() // will be caught by try-propagation logic
                                 }
                             }
                             Ty::Result(ok, err) => {
-                                // .or_return() desugars to `obj?` — propagates error
+                                // .or_return() has the same propagation semantics as `try obj`
                                 if let Ty::Result(ret_ok, ret_err) = &cur_ret {
                                     if !ok.is_assignable_to(ret_ok) {
                                         self.sink.emit(
