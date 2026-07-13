@@ -1,0 +1,95 @@
+# ADR — Ori Surface S3 (sintaxe Auk9-inspired)
+
+**Status:** Aceito  
+**Data:** 2026-07-12  
+**Versão de quebra:** `0.3.0` (superfície + docs) · `0.3.1` (inferência local)  
+**Registro vivo de decisões:** [`ori-surface-s3-auk9.md`](ori-surface-s3-auk9.md)  
+**Plano de implementação /execute-plan:** [`pr-plan-ori-surface-s3.md`](pr-plan-ori-surface-s3.md)
+
+---
+
+## Contexto
+
+A Ori (`0.2.x`) tem **features e maturidade** de linguagem compilada AOT (async,
+traits, stdlib, LSP, runtime). A Auk9 explorou uma **superfície de leitura**
+(ritmo visual / “poema”) que queremos na Ori, **sem** reimplementar o motor na
+Auk9 e **sem** competir como produto de mercado.
+
+Decisão de produto: **aposentar a Auk9 como linguagem/produto**; absorver a
+pele na Ori; Auk9 permanece lab de referência até o corte.
+
+---
+
+## Decisão
+
+Adotar a **superfície S3** na Ori:
+
+| Camada | Ação |
+|--------|------|
+| Features / runtime / async / traits **semântica** | **Manter caminho Ori** |
+| Gramática e ritmo de leitura | **O mais próximo possível da Auk9**, com exceções documentadas |
+| Release | **Corte seco** no `0.3.0` publicado (forma antiga = erro) |
+| Dev interno | Fases + script de migração; dual **apenas** em branch de trabalho se útil |
+| Identidade | `.orl`, CLI `ori`, stdlib `ori.*` |
+
+Exceções conscientes vs Auk9 pura:
+
+| Tópico | Ori-S3 | Auk9 |
+|--------|--------|------|
+| Alias de import | `import ori.io = io` (path → apelido) | `import io = ori.io` |
+| If-expressão | `if cond then a else b` (Ori) | if-expr só em `=>` |
+| Default em trait | corpo = default (sem keyword `default`) | keyword `default` |
+| Closure | `(u) => …` | `do(u) => …` |
+| Inferência | Nim-local **depois** (`0.3.1`) | anotações rígidas na v1 Auk9 |
+| Pipe `\|>` | fora do 0.3 | rejeitado na Auk9 |
+
+---
+
+## Propósito da linguagem (normativo para manifesto)
+
+A Ori **não** visa competir com linguagens de mercado. Existe para:
+
+1. Estudo de compiladores e design de linguagens  
+2. Explorar limites da programação assistida por IA  
+3. Legibilidade / neurodivergência (carga cognitiva baixa)
+
+---
+
+## Consequências
+
+### Positivas
+
+- Uma linguagem só (Ori) com cara de poema e motor maduro  
+- Documentação e exemplos alinhados a **uma forma canônica por conceito**  
+- Auk9 deixa de consumir esforço de paridade de features  
+
+### Negativas / custos
+
+- Breaking change grande (`0.3.0`)  
+- Migração de stdlib, testes, examples (game/imgui **depois**, 9.4 B)  
+- Risco de bugs de parser em poetic call / struct-vs-map  
+
+### Mitigações
+
+- Script `ori migrate-syntax` (melhor esforço)  
+- PR plan fatiado para `/execute-plan`  
+- Inferência local **fora** do big-bang (`0.3.1`)  
+- Checklist de pronto antes da tag  
+
+---
+
+## Fora de escopo deste ADR
+
+- Self-hosting, registry remoto, pipe `|>`  
+- Inferência global HM (continua proibida)  
+- Migrar `ori-game` / `ori-imgui` no mesmo dia do 0.3.0 (plano B: depois)  
+- Reimplementar features Ori na Auk9  
+
+---
+
+## Referências
+
+- `docs/planning/ori-surface-s3-auk9.md` — tabela completa de decisões 0–9  
+- `docs/planning/pr-plan-ori-surface-s3.md` — DAG de PRs  
+- `auk9-lang` — lab de sintaxe (read-only)  
+- Spec Ori atual: `docs/spec/*` (será reescrita no 0.3.0)  
