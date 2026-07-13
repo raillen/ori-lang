@@ -2783,7 +2783,13 @@ impl<'a> Checker<'a> {
                 let param_tys: Vec<Ty> = closure
                     .params
                     .iter()
-                    .map(|param| self.lower(&param.ty, &[]))
+                    .map(|param| {
+                        param
+                            .ty
+                            .as_ref()
+                            .map(|ty| self.lower(ty, &[]))
+                            .unwrap_or(Ty::Infer(0))
+                    })
                     .collect();
                 let declared_ret = closure.return_ty.as_ref().map(|ty| self.lower(ty, &[]));
 

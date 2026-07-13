@@ -47,21 +47,25 @@ enum BlockKind {
 }
 
 fn should_dedent_before(line: &str) -> bool {
-    line == "end"
+    is_end_line(line)
         || line == "else"
         || line.starts_with("elif ")
         || line.starts_with("case ")
 }
 
 fn closes_current_block_before_opening(line: &str) -> bool {
-    line == "end"
+    is_end_line(line)
         || line == "else"
         || line.starts_with("elif ")
         || line.starts_with("case ")
 }
 
+fn is_end_line(line: &str) -> bool {
+    line == "end" || line.starts_with("end ")
+}
+
 fn opens_block_after(line: &str, next_line: Option<&str>, block_stack: &[BlockKind]) -> bool {
-    if is_comment_line(line) || line == "end" || line.starts_with("@") {
+    if is_comment_line(line) || is_end_line(line) || line.starts_with("@") {
         return false;
     }
 
@@ -133,9 +137,15 @@ fn declaration_line_without_modifiers(mut line: &str) -> &str {
 
 /// S3 function form: `name(...)` / `name[T](...)` / `name for T: Trait (...)`.
 ///
+/// Expression bodies (`=> expr`) do not open an indent block.
+///
 /// TODO(S3 PR9 migrate-syntax): drop legacy `func name(...)` recognition once
 /// the migrate tooling lands and no format-only dual surface is needed.
 fn is_function_decl_line(line: &str) -> bool {
+    // `name(params) -> T => expr` is a single-line body — no indent increase.
+    if line.contains("=>") {
+        return false;
+    }
     if let Some(rest) = line.strip_prefix("func ") {
         return is_named_function_head(rest);
     }
@@ -190,6 +200,28 @@ mod tests {
         assert!(out.contains("    return 2\n"));
         assert!(out.contains("    end\n"));
         assert!(out.contains("f()\n"));
+    }
+
+    #[test]
+    fn fmt_dedents_labeled_end() {
+        let src = "module App\nf()\nif x\nreturn 1\nend if\nend\n";
+        let out = format_source_text(src);
+        assert_eq!(
+            out,
+            "module App\nf()\n    if x\n        return 1\n    end if\nend\n"
+        );
+        assert_eq!(format_source_text(&out), out);
+    }
+
+    #[test]
+    fn fmt_keeps_fat_arrow_func_flat() {
+        let src = "module App\ndouble(x: int) -> int => x * 2\nmain()\nreturn double(21)\nend\n";
+        let out = format_source_text(src);
+        assert_eq!(
+            out,
+            "module App\ndouble(x: int) -> int => x * 2\nmain()\n    return double(21)\nend\n"
+        );
+        assert_eq!(format_source_text(&out), out);
     }
 
     #[test]

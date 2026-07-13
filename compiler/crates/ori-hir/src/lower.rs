@@ -3975,7 +3975,11 @@ impl<'a> Lowerer<'a> {
             .iter()
             .map(|param| HirParam {
                 name: param.name.text.clone(),
-                ty: self.lower_ast_ty(&param.ty, tp),
+                ty: param
+                    .ty
+                    .as_ref()
+                    .map(|ty| self.lower_ast_ty(ty, tp))
+                    .unwrap_or(Ty::Infer(0)),
                 default: None,
                 contract: None,
                 variadic: false,

@@ -50,11 +50,11 @@ end
 -- Blocking TCP/TLS I/O runs on a worker thread via task.run_blocking (same = task.spawn).
 -- Join the returned job from sync code; from async code prefer spawning before await boundaries.
 public connect_in_background(host: string, port: int, timeout_ms: int) -> task.Job[result[net.Connection, string]]
-    return task.run_blocking(do() => connect(host, port, timeout_ms))
+    return task.run_blocking(() => connect(host, port, timeout_ms))
 end
 
 public connect_tls_in_background(host: string, port: int, timeout_ms: int) -> task.Job[result[net.Connection, string]]
-    return task.run_blocking(do() => connect_tls(host, port, timeout_ms))
+    return task.run_blocking(() => connect_tls(host, port, timeout_ms))
 end
 
 public listen_local(port: int) -> result[net.Listener, string]

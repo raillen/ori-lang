@@ -1004,7 +1004,7 @@ import ori.list = lists
 import ori.iter = iter
 main()
     const items: list[int] = [1, 2, 3]
-    const doubled: list[int] = iter.map(items, do(x: int) => x * 2)
+    const doubled: list[int] = iter.map(items, (x: int) => x * 2)
     io.print(string(lists.len(doubled)))
 end
 "#,
@@ -1878,7 +1878,7 @@ fn func_rejects_closure_capturing_var() {
 import ori.iter = iter
 main()
     var total: int = 0
-    const mapped: list[int] = iter.map([1, 2], do(x: int) => x + total)
+    const mapped: list[int] = iter.map([1, 2], (x: int) => x + total)
 end
 "#,
     );
@@ -1889,6 +1889,254 @@ end
         "{:?}",
         out.diagnostics
     );
+}
+
+// ─── S3 rhythm: => bodies, poetic call, labeled end, (params)=> closures ─────
+
+#[test]
+fn func_accepts_fat_arrow_expression_body() {
+    let dir = TestDir::new("func_fat_arrow_body");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+double(x: int) -> int => x * 2
+main()
+    io.print(string(double(21)))
+end
+"#,
+    );
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+}
+
+#[test]
+fn expr_accepts_paren_arrow_closure() {
+    let dir = TestDir::new("expr_paren_arrow_closure");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+import ori.list as lists
+import ori.iter as iter
+main()
+    const items: list<int> = [1, 2, 3]
+    const doubled: list<int> = iter.map(items, (x: int) => x * 2)
+    io.print(string(lists.len(doubled)))
+end
+"#,
+    );
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+}
+
+#[test]
+fn expr_accepts_long_paren_closure() {
+    let dir = TestDir::new("expr_long_paren_closure");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+import ori.list as lists
+import ori.iter as iter
+main()
+    const items: list<int> = [1, 2]
+    const doubled: list<int> = iter.map(items, (x: int) -> int
+        return x * 2
+    end)
+    io.print(string(lists.len(doubled)))
+end
+"#,
+    );
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+}
+
+#[test]
+fn expr_rejects_do_closure_keyword() {
+    let dir = TestDir::new("expr_do_removed");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.iter as iter
+main()
+    const mapped: list<int> = iter.map([1], do(x: int) => x)
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.do_removed"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn expr_accepts_poetic_call_and_parenthesized_arg_call() {
+    let dir = TestDir::new("expr_poetic_call_ok");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+greet(name: string) -> string => name
+main()
+    const who: string = "Ori"
+    io.print who
+    io.print greet("hello")
+end
+"#,
+    );
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+}
+
+#[test]
+fn expr_rejects_nested_poetic_call() {
+    let dir = TestDir::new("expr_poetic_call_nested");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+greet(name: string) -> string => name
+main()
+    io.print greet "hello"
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.poetic_call_nested"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn stmt_accepts_labeled_end() {
+    let dir = TestDir::new("stmt_labeled_end");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+main()
+    if true
+        io.print("ok")
+    end if
+    match 1
+        case 1:
+            io.print("one")
+        case else:
+            io.print("other")
+    end match
+end
+"#,
+    );
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+}
+
+#[test]
+fn stmt_rejects_end_label_mismatch() {
+    let dir = TestDir::new("stmt_end_label_mismatch");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+main()
+    if true
+        return
+    end match
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.end_label_mismatch"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn trait_default_accepts_labeled_end_function() {
+    let dir = TestDir::new("trait_default_end_function");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+trait Greetable
+    greet() -> string
+        return "hi"
+    end function
+end
+struct Person
+    name: string
+end
+implement Greetable for Person
+    greet() -> string
+        return self.name
+    end
+end
+main()
+    const p: Person = Person(name: "Ori")
+    const g: any<Greetable> = p
+    io.print(g.greet())
+end
+"#,
+    );
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+}
+
+#[test]
+fn trait_default_accepts_fat_arrow_body() {
+    let dir = TestDir::new("trait_default_fat_arrow");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+trait Doubler
+    double(x: int) -> int => x * 2
+end
+struct S
+end
+implement Doubler for S
+    double(x: int) -> int => x * 2
+end
+main()
+    const s: S = S()
+    const d: any<Doubler> = s
+    io.print(string(d.double(21)))
+end
+"#,
+    );
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+}
+
+#[test]
+fn expr_accepts_struct_update_labeled_end_struct() {
+    let dir = TestDir::new("struct_update_end_struct");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+struct Point
+    x: int
+    y: int
+end
+main()
+    const p: Point = Point(x: 1, y: 2)
+    const q: Point = p with { x: 10 } end struct
+    io.print(string(q.x))
+end
+"#,
+    );
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
 }
 
 #[test]
@@ -3450,7 +3698,7 @@ end
 
 main()
     const token: task.CancelToken = task.create_token()
-    const job: task.Job[void] = task.spawn(do() -> void
+    const job: task.Job[void] = task.spawn(() -> void
         task.block_on(worker(token))
     end)
 

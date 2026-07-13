@@ -272,7 +272,10 @@ pub enum BinaryOp {
     Or,
 }
 
-/// A closure expression: `do(params) => expr` or `do(params) block end`.
+/// A closure expression: `(params) => expr` or `(params) block end`.
+///
+/// S3 surface: no `do` / `fn` / `given` keyword; parameter types may be omitted
+/// when the surrounding call provides context (e.g. `iter.map`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClosureExpr {
     pub params: Vec<ClosureParam>,
@@ -284,7 +287,8 @@ pub struct ClosureExpr {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClosureParam {
     pub name: Name,
-    pub ty: Type,
+    /// Omitted when written as `(u) => …`; filled by type checking context.
+    pub ty: Option<Type>,
     pub span: Span,
 }
 

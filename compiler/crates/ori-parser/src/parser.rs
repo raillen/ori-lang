@@ -11,6 +11,9 @@ pub(crate) struct Parser<'src> {
     pub source: &'src str,
     pub file_id: FileId,
     pub sink: &'src mut DiagnosticSink,
+    /// When false, juxtaposition is not parsed as a poetic call (used inside
+    /// poetic arguments so `print greet name` can be rejected as nested).
+    pub allow_poetic: bool,
 }
 
 impl<'src> Parser<'src> {
@@ -26,6 +29,7 @@ impl<'src> Parser<'src> {
             source,
             file_id,
             sink,
+            allow_poetic: true,
         };
         p.skip_trivia();
         p
@@ -111,23 +115,80 @@ impl<'src> Parser<'src> {
     }
 
     pub fn expect_block_end(&mut self, start: Span, block_name: &'static str) -> Option<Span> {
-        if self.peek_kind() == Some(&TokenKind::End) {
-            return Some(self.advance().unwrap().span);
+        if self.peek_kind() != Some(&TokenKind::End) {
+            if self.at_eof() {
+                let diag = Diagnostic::error(
+                    "parse.unterminated_block",
+                    format!("{block_name} block is not closed"),
+                )
+                .with_label(Label::primary(self.file_id, start, "block starts here"))
+                .with_why("Ori blocks must be closed with `end`")
+                .with_action(format!("add `end` to close this {block_name} block"));
+                self.sink.emit(diag);
+                return None;
+            }
+            return self.expect(&TokenKind::End);
         }
 
-        if self.at_eof() {
-            let diag = Diagnostic::error(
-                "parse.unterminated_block",
-                format!("{block_name} block is not closed"),
-            )
-            .with_label(Label::primary(self.file_id, start, "block starts here"))
-            .with_why("Ori blocks must be closed with `end`")
-            .with_action(format!("add `end` to close this {block_name} block"));
-            self.sink.emit(diag);
+        let end_span = self.advance().unwrap().span;
+        // Optional labeled end: `end if`, `end match`, … (same line only).
+        if let Some((label, label_span)) = self.peek_end_label_same_line(end_span) {
+            self.advance();
+            let expected = expected_end_label(block_name);
+            if label != expected {
+                self.error(
+                    "parse.end_label_mismatch",
+                    format!(
+                        "labeled `end {label}` does not match opening `{expected}`",
+                    ),
+                    end_span.cover(label_span),
+                );
+            }
+            return Some(end_span.cover(label_span));
+        }
+        Some(end_span)
+    }
+
+    /// Optional construct label after `end` on the same source line.
+    fn peek_end_label_same_line(&self, end_span: Span) -> Option<(&'static str, Span)> {
+        let tok = self.peek()?;
+        if self.source_has_newline_between(end_span.end, tok.span.start) {
             return None;
         }
+        let label = match &tok.kind {
+            TokenKind::If => "if",
+            TokenKind::Match => "match",
+            TokenKind::While => "while",
+            TokenKind::For => "for",
+            TokenKind::Loop => "loop",
+            TokenKind::Repeat => "repeat",
+            TokenKind::Struct => "struct",
+            TokenKind::Enum => "enum",
+            TokenKind::Trait => "trait",
+            TokenKind::Implement => "implement",
+            TokenKind::Extern => "extern",
+            TokenKind::Ident => match self.slice(tok.span) {
+                "function" => "function",
+                "closure" => "closure",
+                _ => return None,
+            },
+            _ => return None,
+        };
+        Some((label, tok.span))
+    }
 
-        self.expect(&TokenKind::End)
+    pub fn source_has_newline_between(&self, start: u32, end: u32) -> bool {
+        if start >= end {
+            return false;
+        }
+        self.source[start as usize..end as usize].contains('\n')
+    }
+
+    pub fn same_line_as_span_end(&self, span: Span) -> bool {
+        let Some(tok) = self.peek() else {
+            return false;
+        };
+        !self.source_has_newline_between(span.end, tok.span.start)
     }
 
     /// Consume and return `true` if the current token matches `kind`.
@@ -498,6 +559,19 @@ impl<'src> Parser<'src> {
         while !self.at_eof() && !self.at_any(sync) {
             self.advance();
         }
+    }
+}
+
+/// Map internal block names (`if some`, `function`, …) to the optional `end` label.
+fn expected_end_label(block_name: &str) -> &str {
+    match block_name {
+        "if some" => "if",
+        "while some" => "while",
+        // Trait defaults / free methods share the `function` label.
+        "trait method" | "function" => "function",
+        // `base with { … } end struct` — same label as struct declarations.
+        "struct update" => "struct",
+        other => other,
     }
 }
 
