@@ -380,17 +380,17 @@ impl Ty {
             Ty::Void => "void".into(),
             Ty::Never => "never".into(),
             Ty::Error => "<error>".into(),
-            Ty::Optional(t) => format!("optional<{}>", t.display()),
-            Ty::Result(ok, err) => format!("result<{}, {}>", ok.display(), err.display()),
-            Ty::List(t) => format!("list<{}>", t.display()),
-            Ty::Map(k, v) => format!("map<{}, {}>", k.display(), v.display()),
-            Ty::Set(t) => format!("set<{}>", t.display()),
-            Ty::Range(t) => format!("range<{}>", t.display()),
-            Ty::Lazy(t) => format!("lazy<{}>", t.display()),
-            Ty::Handle(t) => format!("handle<{}>", t.display()),
-            Ty::Future(t) => format!("future<{}>", t.display()),
-            Ty::TaskJob(t) => format!("task.Job<{}>", t.display()),
-            Ty::Channel(t) => format!("channel.Channel<{}>", t.display()),
+            Ty::Optional(t) => format!("optional[{}]", t.display()),
+            Ty::Result(ok, err) => format!("result[{}, {}]", ok.display(), err.display()),
+            Ty::List(t) => format!("list[{}]", t.display()),
+            Ty::Map(k, v) => format!("map[{}, {}]", k.display(), v.display()),
+            Ty::Set(t) => format!("set[{}]", t.display()),
+            Ty::Range(t) => format!("range[{}]", t.display()),
+            Ty::Lazy(t) => format!("lazy[{}]", t.display()),
+            Ty::Handle(t) => format!("handle[{}]", t.display()),
+            Ty::Future(t) => format!("future[{}]", t.display()),
+            Ty::TaskJob(t) => format!("task.Job[{}]", t.display()),
+            Ty::Channel(t) => format!("channel.Channel[{}]", t.display()),
             Ty::AtomicInt => "atomic.AtomicInt".into(),
             Ty::TaskJoinError => "task.JoinError".into(),
             Ty::ChannelSendError => "channel.SendError".into(),
@@ -404,17 +404,17 @@ impl Ty {
                         .map(|arg| arg.display())
                         .collect::<Vec<_>>()
                         .join(", ");
-                    format!("{}<{}>", kind.display_name(), args)
+                    format!("{}[{}]", kind.display_name(), args)
                 }
             }
-            Ty::Any(d) => format!("any<{:?}>", d),
+            Ty::Any(d) => format!("any[{:?}]", d),
             Ty::Tuple(ts) => {
                 let inner = ts
                     .iter()
                     .map(|t| t.display())
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("tuple<{}>", inner)
+                format!("tuple[{}]", inner)
             }
             Ty::Func { params, ret } => {
                 let ps = params
@@ -433,7 +433,7 @@ impl Ty {
                         .map(|a| a.display())
                         .collect::<Vec<_>>()
                         .join(", ");
-                    format!("<def {:?}><{}>", id, as_)
+                    format!("<def {:?}>[{}]", id, as_)
                 }
             }
             Ty::Param { name, .. } => name.to_string(),

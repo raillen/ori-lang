@@ -2,32 +2,32 @@ module ori.set.algorithms
 
 import ori.set as sets
 
-public union_string(a: set<string>, b: set<string>) -> set<string>
+public union_string(a: set[string], b: set[string]) -> set[string]
     return sets.union(a, b)
 end
 
-public intersection_string(a: set<string>, b: set<string>) -> set<string>
+public intersection_string(a: set[string], b: set[string]) -> set[string]
     return sets.intersection(a, b)
 end
 
-public difference_string(a: set<string>, b: set<string>) -> set<string>
+public difference_string(a: set[string], b: set[string]) -> set[string]
     return sets.difference(a, b)
 end
 
-public intersection_size_string(a: set<string>, b: set<string>) -> int
-    const inter: set<string> = sets.intersection(a, b)
+public intersection_size_string(a: set[string], b: set[string]) -> int
+    const inter: set[string] = sets.intersection(a, b)
     return sets.len(inter)
 end
 
-public is_disjoint_string(a: set<string>, b: set<string>) -> bool
-    const inter: set<string> = sets.intersection(a, b)
+public is_disjoint_string(a: set[string], b: set[string]) -> bool
+    const inter: set[string] = sets.intersection(a, b)
     return sets.is_empty(inter)
 end
 
-public union_int(a: set<int>, b: set<int>) -> set<int>
+public union_int(a: set[int], b: set[int]) -> set[int]
     return sets.union(a, b)
 end
 
-public intersection_int(a: set<int>, b: set<int>) -> set<int>
+public intersection_int(a: set[int], b: set[int]) -> set[int]
     return sets.intersection(a, b)
 end

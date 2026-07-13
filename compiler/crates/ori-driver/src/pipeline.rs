@@ -3587,459 +3587,459 @@ struct StdlibDocSignature {
 const COLLECTION_STDLIB_DOC_SIGNATURES: &[StdlibDocSignature] = &[
     StdlibDocSignature {
         module: "ori.deque",
-        signature: "deque.new<T>() -> deque.Deque<T>",
+        signature: "deque.new[T]() -> deque.Deque[T]",
     },
     StdlibDocSignature {
         module: "ori.deque",
-        signature: "deque.push_front<T>(d: deque.Deque<T>, value: T) -> void",
+        signature: "deque.push_front[T](d: deque.Deque[T], value: T) -> void",
     },
     StdlibDocSignature {
         module: "ori.deque",
-        signature: "deque.push_back<T>(d: deque.Deque<T>, value: T) -> void",
+        signature: "deque.push_back[T](d: deque.Deque[T], value: T) -> void",
     },
     StdlibDocSignature {
         module: "ori.deque",
-        signature: "deque.pop_front<T>(d: deque.Deque<T>) -> optional<T>",
+        signature: "deque.pop_front[T](d: deque.Deque[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.deque",
-        signature: "deque.pop_back<T>(d: deque.Deque<T>) -> optional<T>",
+        signature: "deque.pop_back[T](d: deque.Deque[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.deque",
-        signature: "deque.front<T>(d: deque.Deque<T>) -> optional<T>",
+        signature: "deque.front[T](d: deque.Deque[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.deque",
-        signature: "deque.back<T>(d: deque.Deque<T>) -> optional<T>",
+        signature: "deque.back[T](d: deque.Deque[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.deque",
-        signature: "deque.len<T>(d: deque.Deque<T>) -> int",
+        signature: "deque.len[T](d: deque.Deque[T]) -> int",
     },
     StdlibDocSignature {
         module: "ori.deque",
-        signature: "deque.is_empty<T>(d: deque.Deque<T>) -> bool",
+        signature: "deque.is_empty[T](d: deque.Deque[T]) -> bool",
     },
     StdlibDocSignature {
         module: "ori.deque",
-        signature: "deque.clear<T>(d: deque.Deque<T>) -> void",
+        signature: "deque.clear[T](d: deque.Deque[T]) -> void",
     },
     StdlibDocSignature {
         module: "ori.deque",
-        signature: "deque.to_list<T>(d: deque.Deque<T>) -> list<T>",
+        signature: "deque.to_list[T](d: deque.Deque[T]) -> list[T]",
     },
     StdlibDocSignature {
         module: "ori.queue",
-        signature: "queue.new<T>() -> queue.Queue<T>",
+        signature: "queue.new[T]() -> queue.Queue[T]",
     },
     StdlibDocSignature {
         module: "ori.queue",
-        signature: "queue.enqueue<T>(q: queue.Queue<T>, value: T) -> void",
+        signature: "queue.enqueue[T](q: queue.Queue[T], value: T) -> void",
     },
     StdlibDocSignature {
         module: "ori.queue",
-        signature: "queue.dequeue<T>(q: queue.Queue<T>) -> optional<T>",
+        signature: "queue.dequeue[T](q: queue.Queue[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.queue",
-        signature: "queue.peek<T>(q: queue.Queue<T>) -> optional<T>",
+        signature: "queue.peek[T](q: queue.Queue[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.queue",
-        signature: "queue.len<T>(q: queue.Queue<T>) -> int",
+        signature: "queue.len[T](q: queue.Queue[T]) -> int",
     },
     StdlibDocSignature {
         module: "ori.queue",
-        signature: "queue.is_empty<T>(q: queue.Queue<T>) -> bool",
+        signature: "queue.is_empty[T](q: queue.Queue[T]) -> bool",
     },
     StdlibDocSignature {
         module: "ori.queue",
-        signature: "queue.clear<T>(q: queue.Queue<T>) -> void",
+        signature: "queue.clear[T](q: queue.Queue[T]) -> void",
     },
     StdlibDocSignature {
         module: "ori.queue",
-        signature: "queue.to_list<T>(q: queue.Queue<T>) -> list<T>",
+        signature: "queue.to_list[T](q: queue.Queue[T]) -> list[T]",
     },
     StdlibDocSignature {
         module: "ori.stack",
-        signature: "stack.new<T>() -> stack.Stack<T>",
+        signature: "stack.new[T]() -> stack.Stack[T]",
     },
     StdlibDocSignature {
         module: "ori.stack",
-        signature: "stack.push<T>(s: stack.Stack<T>, value: T) -> void",
+        signature: "stack.push[T](s: stack.Stack[T], value: T) -> void",
     },
     StdlibDocSignature {
         module: "ori.stack",
-        signature: "stack.pop<T>(s: stack.Stack<T>) -> optional<T>",
+        signature: "stack.pop[T](s: stack.Stack[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.stack",
-        signature: "stack.peek<T>(s: stack.Stack<T>) -> optional<T>",
+        signature: "stack.peek[T](s: stack.Stack[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.stack",
-        signature: "stack.len<T>(s: stack.Stack<T>) -> int",
+        signature: "stack.len[T](s: stack.Stack[T]) -> int",
     },
     StdlibDocSignature {
         module: "ori.stack",
-        signature: "stack.is_empty<T>(s: stack.Stack<T>) -> bool",
+        signature: "stack.is_empty[T](s: stack.Stack[T]) -> bool",
     },
     StdlibDocSignature {
         module: "ori.stack",
-        signature: "stack.clear<T>(s: stack.Stack<T>) -> void",
+        signature: "stack.clear[T](s: stack.Stack[T]) -> void",
     },
     StdlibDocSignature {
         module: "ori.stack",
-        signature: "stack.to_list<T>(s: stack.Stack<T>) -> list<T>",
+        signature: "stack.to_list[T](s: stack.Stack[T]) -> list[T]",
     },
     StdlibDocSignature {
         module: "ori.linked_list",
-        signature: "linked_list.new<T>() -> linked_list.LinkedList<T>",
+        signature: "linked_list.new[T]() -> linked_list.LinkedList[T]",
     },
     StdlibDocSignature {
         module: "ori.linked_list",
-        signature: "linked_list.push_front<T>(list: linked_list.LinkedList<T>, value: T) -> void",
+        signature: "linked_list.push_front[T](list: linked_list.LinkedList[T], value: T) -> void",
     },
     StdlibDocSignature {
         module: "ori.linked_list",
-        signature: "linked_list.push_back<T>(list: linked_list.LinkedList<T>, value: T) -> void",
+        signature: "linked_list.push_back[T](list: linked_list.LinkedList[T], value: T) -> void",
     },
     StdlibDocSignature {
         module: "ori.linked_list",
-        signature: "linked_list.pop_front<T>(list: linked_list.LinkedList<T>) -> optional<T>",
+        signature: "linked_list.pop_front[T](list: linked_list.LinkedList[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.linked_list",
-        signature: "linked_list.front<T>(list: linked_list.LinkedList<T>) -> optional<T>",
+        signature: "linked_list.front[T](list: linked_list.LinkedList[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.linked_list",
-        signature: "linked_list.len<T>(list: linked_list.LinkedList<T>) -> int",
+        signature: "linked_list.len[T](list: linked_list.LinkedList[T]) -> int",
     },
     StdlibDocSignature {
         module: "ori.linked_list",
-        signature: "linked_list.is_empty<T>(list: linked_list.LinkedList<T>) -> bool",
+        signature: "linked_list.is_empty[T](list: linked_list.LinkedList[T]) -> bool",
     },
     StdlibDocSignature {
         module: "ori.linked_list",
-        signature: "linked_list.clear<T>(list: linked_list.LinkedList<T>) -> void",
+        signature: "linked_list.clear[T](list: linked_list.LinkedList[T]) -> void",
     },
     StdlibDocSignature {
         module: "ori.linked_list",
-        signature: "linked_list.to_list<T>(list: linked_list.LinkedList<T>) -> list<T>",
+        signature: "linked_list.to_list[T](list: linked_list.LinkedList[T]) -> list[T]",
     },
     StdlibDocSignature {
         module: "ori.doubly_linked_list",
-        signature: "doubly_linked_list.new<T>() -> doubly_linked_list.DoublyLinkedList<T>",
+        signature: "doubly_linked_list.new[T]() -> doubly_linked_list.DoublyLinkedList[T]",
     },
     StdlibDocSignature {
         module: "ori.doubly_linked_list",
-        signature: "doubly_linked_list.push_front<T>(list: doubly_linked_list.DoublyLinkedList<T>, value: T) -> void",
+        signature: "doubly_linked_list.push_front[T](list: doubly_linked_list.DoublyLinkedList[T], value: T) -> void",
     },
     StdlibDocSignature {
         module: "ori.doubly_linked_list",
-        signature: "doubly_linked_list.push_back<T>(list: doubly_linked_list.DoublyLinkedList<T>, value: T) -> void",
+        signature: "doubly_linked_list.push_back[T](list: doubly_linked_list.DoublyLinkedList[T], value: T) -> void",
     },
     StdlibDocSignature {
         module: "ori.doubly_linked_list",
-        signature: "doubly_linked_list.pop_front<T>(list: doubly_linked_list.DoublyLinkedList<T>) -> optional<T>",
+        signature: "doubly_linked_list.pop_front[T](list: doubly_linked_list.DoublyLinkedList[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.doubly_linked_list",
-        signature: "doubly_linked_list.pop_back<T>(list: doubly_linked_list.DoublyLinkedList<T>) -> optional<T>",
+        signature: "doubly_linked_list.pop_back[T](list: doubly_linked_list.DoublyLinkedList[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.doubly_linked_list",
-        signature: "doubly_linked_list.front<T>(list: doubly_linked_list.DoublyLinkedList<T>) -> optional<T>",
+        signature: "doubly_linked_list.front[T](list: doubly_linked_list.DoublyLinkedList[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.doubly_linked_list",
-        signature: "doubly_linked_list.back<T>(list: doubly_linked_list.DoublyLinkedList<T>) -> optional<T>",
+        signature: "doubly_linked_list.back[T](list: doubly_linked_list.DoublyLinkedList[T]) -> optional[T]",
     },
     StdlibDocSignature {
         module: "ori.doubly_linked_list",
-        signature: "doubly_linked_list.len<T>(list: doubly_linked_list.DoublyLinkedList<T>) -> int",
+        signature: "doubly_linked_list.len[T](list: doubly_linked_list.DoublyLinkedList[T]) -> int",
     },
     StdlibDocSignature {
         module: "ori.doubly_linked_list",
-        signature: "doubly_linked_list.is_empty<T>(list: doubly_linked_list.DoublyLinkedList<T>) -> bool",
+        signature: "doubly_linked_list.is_empty[T](list: doubly_linked_list.DoublyLinkedList[T]) -> bool",
     },
     StdlibDocSignature {
         module: "ori.doubly_linked_list",
-        signature: "doubly_linked_list.clear<T>(list: doubly_linked_list.DoublyLinkedList<T>) -> void",
+        signature: "doubly_linked_list.clear[T](list: doubly_linked_list.DoublyLinkedList[T]) -> void",
     },
     StdlibDocSignature {
         module: "ori.doubly_linked_list",
-        signature: "doubly_linked_list.to_list<T>(list: doubly_linked_list.DoublyLinkedList<T>) -> list<T>",
+        signature: "doubly_linked_list.to_list[T](list: doubly_linked_list.DoublyLinkedList[T]) -> list[T]",
     },
     StdlibDocSignature {
         module: "ori.tree",
-        signature: "tree.new<T>(root: T) -> tree.Tree<T>",
+        signature: "tree.new[T](root: T) -> tree.Tree[T]",
     },
     StdlibDocSignature {
         module: "ori.tree",
-        signature: "tree.root<T>(t: tree.Tree<T>) -> tree.NodeId",
+        signature: "tree.root[T](t: tree.Tree[T]) -> tree.NodeId",
     },
     StdlibDocSignature {
         module: "ori.tree",
-        signature: "tree.value<T>(t: tree.Tree<T>, node: tree.NodeId) -> T",
+        signature: "tree.value[T](t: tree.Tree[T], node: tree.NodeId) -> T",
     },
     StdlibDocSignature {
         module: "ori.tree",
-        signature: "tree.add_child<T>(t: tree.Tree<T>, parent: tree.NodeId, value: T) -> tree.NodeId",
+        signature: "tree.add_child[T](t: tree.Tree[T], parent: tree.NodeId, value: T) -> tree.NodeId",
     },
     StdlibDocSignature {
         module: "ori.tree",
-        signature: "tree.children<T>(t: tree.Tree<T>, node: tree.NodeId) -> list<tree.NodeId>",
+        signature: "tree.children[T](t: tree.Tree[T], node: tree.NodeId) -> list[tree.NodeId]",
     },
     StdlibDocSignature {
         module: "ori.tree",
-        signature: "tree.parent<T>(t: tree.Tree<T>, node: tree.NodeId) -> optional<tree.NodeId>",
+        signature: "tree.parent[T](t: tree.Tree[T], node: tree.NodeId) -> optional[tree.NodeId]",
     },
     StdlibDocSignature {
         module: "ori.tree",
-        signature: "tree.remove_subtree<T>(t: tree.Tree<T>, node: tree.NodeId) -> void",
+        signature: "tree.remove_subtree[T](t: tree.Tree[T], node: tree.NodeId) -> void",
     },
     StdlibDocSignature {
         module: "ori.tree",
-        signature: "tree.len<T>(t: tree.Tree<T>) -> int",
+        signature: "tree.len[T](t: tree.Tree[T]) -> int",
     },
     StdlibDocSignature {
         module: "ori.tree",
-        signature: "tree.depth<T>(t: tree.Tree<T>, node: tree.NodeId) -> int",
+        signature: "tree.depth[T](t: tree.Tree[T], node: tree.NodeId) -> int",
     },
     StdlibDocSignature {
         module: "ori.tree",
-        signature: "tree.pre_order<T>(t: tree.Tree<T>) -> list<tree.NodeId>",
+        signature: "tree.pre_order[T](t: tree.Tree[T]) -> list[tree.NodeId]",
     },
     StdlibDocSignature {
         module: "ori.tree",
-        signature: "tree.post_order<T>(t: tree.Tree<T>) -> list<tree.NodeId>",
+        signature: "tree.post_order[T](t: tree.Tree[T]) -> list[tree.NodeId]",
     },
     StdlibDocSignature {
         module: "ori.tree",
-        signature: "tree.breadth_first<T>(t: tree.Tree<T>) -> list<tree.NodeId>",
+        signature: "tree.breadth_first[T](t: tree.Tree[T]) -> list[tree.NodeId]",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.new<K, V>() -> hash_table.HashTable<K, V> where K is Hashable and K is Equatable",
+        signature: "hash_table.new[K, V]() -> hash_table.HashTable[K, V] for K: Hashable, K: Equatable",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.with_capacity<K, V>(capacity: int) -> hash_table.HashTable<K, V> where K is Hashable and K is Equatable",
+        signature: "hash_table.with_capacity[K, V](capacity: int) -> hash_table.HashTable[K, V] for K: Hashable, K: Equatable",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.set<K, V>(table: hash_table.HashTable<K, V>, key: K, value: V) -> void where K is Hashable and K is Equatable",
+        signature: "hash_table.set[K, V](table: hash_table.HashTable[K, V], key: K, value: V) -> void for K: Hashable, K: Equatable",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.get<K, V>(table: hash_table.HashTable<K, V>, key: K) -> optional<V> where K is Hashable and K is Equatable",
+        signature: "hash_table.get[K, V](table: hash_table.HashTable[K, V], key: K) -> optional[V] for K: Hashable, K: Equatable",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.remove<K, V>(table: hash_table.HashTable<K, V>, key: K) -> optional<V> where K is Hashable and K is Equatable",
+        signature: "hash_table.remove[K, V](table: hash_table.HashTable[K, V], key: K) -> optional[V] for K: Hashable, K: Equatable",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.contains<K, V>(table: hash_table.HashTable<K, V>, key: K) -> bool where K is Hashable and K is Equatable",
+        signature: "hash_table.contains[K, V](table: hash_table.HashTable[K, V], key: K) -> bool for K: Hashable, K: Equatable",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.len<K, V>(table: hash_table.HashTable<K, V>) -> int",
+        signature: "hash_table.len[K, V](table: hash_table.HashTable[K, V]) -> int",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.capacity<K, V>(table: hash_table.HashTable<K, V>) -> int",
+        signature: "hash_table.capacity[K, V](table: hash_table.HashTable[K, V]) -> int",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.reserve<K, V>(table: hash_table.HashTable<K, V>, capacity: int) -> void",
+        signature: "hash_table.reserve[K, V](table: hash_table.HashTable[K, V], capacity: int) -> void",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.clear<K, V>(table: hash_table.HashTable<K, V>) -> void",
+        signature: "hash_table.clear[K, V](table: hash_table.HashTable[K, V]) -> void",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.keys<K, V>(table: hash_table.HashTable<K, V>) -> list<K>",
+        signature: "hash_table.keys[K, V](table: hash_table.HashTable[K, V]) -> list[K]",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.values<K, V>(table: hash_table.HashTable<K, V>) -> list<V>",
+        signature: "hash_table.values[K, V](table: hash_table.HashTable[K, V]) -> list[V]",
     },
     StdlibDocSignature {
         module: "ori.hash_table",
-        signature: "hash_table.entries<K, V>(table: hash_table.HashTable<K, V>) -> list<tuple<K, V>>",
+        signature: "hash_table.entries[K, V](table: hash_table.HashTable[K, V]) -> list[tuple[K, V]]",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.new<N>(directed: bool) -> graph.Graph<N> where N is Hashable and N is Equatable",
+        signature: "graph.new[N](directed: bool) -> graph.Graph[N] for N: Hashable, N: Equatable",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.add_node<N>(g: graph.Graph<N>, node: N) -> void where N is Hashable and N is Equatable",
+        signature: "graph.add_node[N](g: graph.Graph[N], node: N) -> void for N: Hashable, N: Equatable",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.remove_node<N>(g: graph.Graph<N>, node: N) -> void where N is Hashable and N is Equatable",
+        signature: "graph.remove_node[N](g: graph.Graph[N], node: N) -> void for N: Hashable, N: Equatable",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.add_edge<N>(g: graph.Graph<N>, from: N, to: N) -> void where N is Hashable and N is Equatable",
+        signature: "graph.add_edge[N](g: graph.Graph[N], from: N, to: N) -> void for N: Hashable, N: Equatable",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.remove_edge<N>(g: graph.Graph<N>, from: N, to: N) -> void where N is Hashable and N is Equatable",
+        signature: "graph.remove_edge[N](g: graph.Graph[N], from: N, to: N) -> void for N: Hashable, N: Equatable",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.has_node<N>(g: graph.Graph<N>, node: N) -> bool where N is Hashable and N is Equatable",
+        signature: "graph.has_node[N](g: graph.Graph[N], node: N) -> bool for N: Hashable, N: Equatable",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.has_edge<N>(g: graph.Graph<N>, from: N, to: N) -> bool where N is Hashable and N is Equatable",
+        signature: "graph.has_edge[N](g: graph.Graph[N], from: N, to: N) -> bool for N: Hashable, N: Equatable",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.neighbors<N>(g: graph.Graph<N>, node: N) -> list<N> where N is Hashable and N is Equatable",
+        signature: "graph.neighbors[N](g: graph.Graph[N], node: N) -> list[N] for N: Hashable, N: Equatable",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.nodes<N>(g: graph.Graph<N>) -> list<N>",
+        signature: "graph.nodes[N](g: graph.Graph[N]) -> list[N]",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.edges<N>(g: graph.Graph<N>) -> list<tuple<N, N>>",
+        signature: "graph.edges[N](g: graph.Graph[N]) -> list[tuple[N, N]]",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.bfs<N>(g: graph.Graph<N>, start: N) -> list<N> where N is Hashable and N is Equatable",
+        signature: "graph.bfs[N](g: graph.Graph[N], start: N) -> list[N] for N: Hashable, N: Equatable",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.dfs<N>(g: graph.Graph<N>, start: N) -> list<N> where N is Hashable and N is Equatable",
+        signature: "graph.dfs[N](g: graph.Graph[N], start: N) -> list[N] for N: Hashable, N: Equatable",
     },
     StdlibDocSignature {
         module: "ori.graph",
-        signature: "graph.topological_sort<N>(g: graph.Graph<N>) -> list<N>",
+        signature: "graph.topological_sort[N](g: graph.Graph[N]) -> list[N]",
     },
     StdlibDocSignature {
         module: "ori.heap",
-        signature: "heap.new<T>() -> heap.Heap<T> where T is Comparable",
+        signature: "heap.new[T]() -> heap.Heap[T] for T: Comparable",
     },
     StdlibDocSignature {
         module: "ori.heap",
-        signature: "heap.push<T>(h: heap.Heap<T>, value: T) -> void where T is Comparable",
+        signature: "heap.push[T](h: heap.Heap[T], value: T) -> void for T: Comparable",
     },
     StdlibDocSignature {
         module: "ori.heap",
-        signature: "heap.pop<T>(h: heap.Heap<T>) -> optional<T> where T is Comparable",
+        signature: "heap.pop[T](h: heap.Heap[T]) -> optional[T] for T: Comparable",
     },
     StdlibDocSignature {
         module: "ori.heap",
-        signature: "heap.peek<T>(h: heap.Heap<T>) -> optional<T> where T is Comparable",
+        signature: "heap.peek[T](h: heap.Heap[T]) -> optional[T] for T: Comparable",
     },
     StdlibDocSignature {
         module: "ori.heap",
-        signature: "heap.len<T>(h: heap.Heap<T>) -> int",
+        signature: "heap.len[T](h: heap.Heap[T]) -> int",
     },
     StdlibDocSignature {
         module: "ori.heap",
-        signature: "heap.is_empty<T>(h: heap.Heap<T>) -> bool",
+        signature: "heap.is_empty[T](h: heap.Heap[T]) -> bool",
     },
     StdlibDocSignature {
         module: "ori.map",
-        signature: "maps.new<K, V>() -> map<K, V> where K is Hashable and K is Equatable",
+        signature: "maps.new[K, V]() -> map[K, V] for K: Hashable, K: Equatable",
     },
     StdlibDocSignature {
         module: "ori.map",
-        signature: "maps.set<K, V>(m: map<K, V>, key: K, value: V) -> void where K is Hashable and K is Equatable",
+        signature: "maps.set[K, V](m: map[K, V], key: K, value: V) -> void for K: Hashable, K: Equatable",
     },
     StdlibDocSignature {
         module: "ori.map",
-        signature: "maps.get<K, V>(m: map<K, V>, key: K) -> V where K is Hashable and K is Equatable",
+        signature: "maps.get[K, V](m: map[K, V], key: K) -> V for K: Hashable, K: Equatable",
     },
     StdlibDocSignature {
         module: "ori.map",
-        signature: "maps.contains<K, V>(m: map<K, V>, key: K) -> bool where K is Hashable and K is Equatable",
+        signature: "maps.contains[K, V](m: map[K, V], key: K) -> bool for K: Hashable, K: Equatable",
     },
     StdlibDocSignature {
         module: "ori.map",
-        signature: "maps.remove<K, V>(m: map<K, V>, key: K) -> void where K is Hashable and K is Equatable",
+        signature: "maps.remove[K, V](m: map[K, V], key: K) -> void for K: Hashable, K: Equatable",
     },
     StdlibDocSignature {
         module: "ori.map",
-        signature: "maps.len<K, V>(m: map<K, V>) -> int",
+        signature: "maps.len[K, V](m: map[K, V]) -> int",
     },
     StdlibDocSignature {
         module: "ori.map",
-        signature: "maps.capacity<K, V>(m: map<K, V>) -> int",
+        signature: "maps.capacity[K, V](m: map[K, V]) -> int",
     },
     StdlibDocSignature {
         module: "ori.map",
-        signature: "maps.reserve<K, V>(m: map<K, V>, capacity: int) -> void",
+        signature: "maps.reserve[K, V](m: map[K, V], capacity: int) -> void",
     },
     StdlibDocSignature {
         module: "ori.map",
-        signature: "maps.clear<K, V>(m: map<K, V>) -> void",
+        signature: "maps.clear[K, V](m: map[K, V]) -> void",
     },
     StdlibDocSignature {
         module: "ori.map",
-        signature: "maps.keys<K, V>(m: map<K, V>) -> list<K>",
+        signature: "maps.keys[K, V](m: map[K, V]) -> list[K]",
     },
     StdlibDocSignature {
         module: "ori.map",
-        signature: "maps.values<K, V>(m: map<K, V>) -> list<V>",
+        signature: "maps.values[K, V](m: map[K, V]) -> list[V]",
     },
     StdlibDocSignature {
         module: "ori.map",
-        signature: "maps.entries<K, V>(m: map<K, V>) -> list<tuple<K, V>>",
+        signature: "maps.entries[K, V](m: map[K, V]) -> list[tuple[K, V]]",
     },
     StdlibDocSignature {
         module: "ori.set",
-        signature: "sets.new<T>() -> set<T> where T is Hashable and T is Equatable",
+        signature: "sets.new[T]() -> set[T] for T: Hashable, T: Equatable",
     },
     StdlibDocSignature {
         module: "ori.set",
-        signature: "sets.add<T>(s: set<T>, value: T) -> void where T is Hashable and T is Equatable",
+        signature: "sets.add[T](s: set[T], value: T) -> void for T: Hashable, T: Equatable",
     },
     StdlibDocSignature {
         module: "ori.set",
-        signature: "sets.contains<T>(s: set<T>, value: T) -> bool where T is Hashable and T is Equatable",
+        signature: "sets.contains[T](s: set[T], value: T) -> bool for T: Hashable, T: Equatable",
     },
     StdlibDocSignature {
         module: "ori.set",
-        signature: "sets.remove<T>(s: set<T>, value: T) -> void where T is Hashable and T is Equatable",
+        signature: "sets.remove[T](s: set[T], value: T) -> void for T: Hashable, T: Equatable",
     },
     StdlibDocSignature {
         module: "ori.set",
-        signature: "sets.len<T>(s: set<T>) -> int",
+        signature: "sets.len[T](s: set[T]) -> int",
     },
     StdlibDocSignature {
         module: "ori.set",
-        signature: "sets.capacity<T>(s: set<T>) -> int",
+        signature: "sets.capacity[T](s: set[T]) -> int",
     },
     StdlibDocSignature {
         module: "ori.set",
-        signature: "sets.reserve<T>(s: set<T>, capacity: int) -> void",
+        signature: "sets.reserve[T](s: set[T], capacity: int) -> void",
     },
     StdlibDocSignature {
         module: "ori.set",
-        signature: "sets.clear<T>(s: set<T>) -> void",
+        signature: "sets.clear[T](s: set[T]) -> void",
     },
     StdlibDocSignature {
         module: "ori.set",
-        signature: "sets.union<T>(a: set<T>, b: set<T>) -> set<T> where T is Hashable and T is Equatable",
+        signature: "sets.union[T](a: set[T], b: set[T]) -> set[T] for T: Hashable, T: Equatable",
     },
     StdlibDocSignature {
         module: "ori.set",
-        signature: "sets.intersection<T>(a: set<T>, b: set<T>) -> set<T> where T is Hashable and T is Equatable",
+        signature: "sets.intersection[T](a: set[T], b: set[T]) -> set[T] for T: Hashable, T: Equatable",
     },
     StdlibDocSignature {
         module: "ori.set",
-        signature: "sets.difference<T>(a: set<T>, b: set<T>) -> set<T> where T is Hashable and T is Equatable",
+        signature: "sets.difference[T](a: set[T], b: set[T]) -> set[T] for T: Hashable, T: Equatable",
     },
 ];
 
@@ -4898,7 +4898,7 @@ fn type_params_text(params: &TypeParams) -> String {
         String::new()
     } else {
         format!(
-            "<{}>",
+            "[{}]",
             params
                 .iter()
                 .map(|param| param.name.to_string())

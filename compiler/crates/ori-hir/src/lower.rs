@@ -1656,7 +1656,7 @@ fn builtin_stdlib_structs(def_map: &DefMap) -> Vec<HirStruct> {
             },
             // Error chaining: message describing the original cause.
             // Empty string means there is no cause.
-            // Future: migrate to `optional<any<Error>>` once the C backend supports
+            // Future: migrate to `optional[any[Error]]` once the C backend supports
             // recursive struct field types.
             HirField {
                 name: SmolStr::new("cause"),
@@ -4681,7 +4681,7 @@ fn lower_is_target_ty(
     l.lower_ast_ty(&ty_node, tp)
 }
 
-/// Desugar `.or(fallback)` on `optional<T>` or `result<T,E>`.
+/// Desugar `.or(fallback)` on `optional[T]` or `result[T,E]`.
 /// Emits an internal intrinsic call handled directly by native and C codegen.
 fn lower_optional_or_result_or(obj: HirExpr, fallback: HirExpr, span: Span) -> HirExpr {
     let inner_ty = match &obj.ty {
@@ -4717,7 +4717,7 @@ fn lower_optional_or_result_or(obj: HirExpr, fallback: HirExpr, span: Span) -> H
     }
 }
 
-/// Desugar `.or_wrap(context)` on `result<T, string>`.
+/// Desugar `.or_wrap(context)` on `result[T, string]`.
 /// Emits an internal intrinsic call handled directly by native and C codegen.
 fn lower_result_or_wrap(obj: HirExpr, context: HirExpr, span: Span) -> HirExpr {
     let result_ty = obj.ty.clone();

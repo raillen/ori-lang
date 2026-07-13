@@ -73,18 +73,18 @@ demo_splitting()
     section("Splitting and Lines")
 
     const csv: string = "alpha,beta,gamma"
-    const parts: list<string> = ori.string.split(csv, ",")
+    const parts: list[string] = ori.string.split(csv, ",")
     io.println(f"  split count: {lists.len(parts)}")
     io.println(f"  parts[1]: {parts[1]}")
 
     const multiline: string = "line1\nline2\nline3"
-    const line_list: list<string> = su.lines(multiline)
+    const line_list: list[string] = su.lines(multiline)
     io.println(f"  lines count: {lists.len(line_list)}")
 
     const messy: string = "  too   many   spaces  "
     io.println(f"  trim_all: {su.trim_all(messy)}")
 
-    const words_list: list<string> = su.words(messy)
+    const words_list: list[string] = su.words(messy)
     io.println(f"  words count: {lists.len(words_list)}")
 end
 
@@ -113,14 +113,14 @@ demo_replacement()
     const lower: string = "ori"
     io.println(f"  equals_ignore_case: {su.equals_ignore_case(upper, lower)}")
 
-    const options: list<string> = ["dev", "staging", "prod"]
+    const options: list[string] = ["dev", "staging", "prod"]
     const staging: string = "staging"
     const local: string = "local"
     io.println(f"  equals_any staging: {su.equals_any(staging, options)}")
     io.println(f"  equals_any local: {su.equals_any(local, options)}")
 
     const sep: string = "/"
-    const jne_parts: list<string> = ["", "a", "", "b", "c"]
+    const jne_parts: list[string] = ["", "a", "", "b", "c"]
     const jne_result: string = su.join_non_empty(jne_parts, sep)
     io.println(f"  join_non_empty: {jne_result}")
 end

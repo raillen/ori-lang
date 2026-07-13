@@ -107,13 +107,13 @@ fn build_runtime_symbols() -> (Vec<ExportSymbol>, BTreeSet<String>) {
 fn type_to_string(ty: &Type) -> String {
     match ty {
         Type::Named(q) => q.to_string(),
-        Type::Optional(t, _) => format!("optional<{}>", type_to_string(t)),
+        Type::Optional(t, _) => format!("optional[{}]", type_to_string(t)),
         Type::Result(ok, err, _) => {
-            format!("result<{}, {}>", type_to_string(ok), type_to_string(err))
+            format!("result[{}, {}]", type_to_string(ok), type_to_string(err))
         }
-        Type::List(t, _) => format!("list<{}>", type_to_string(t)),
-        Type::Map(k, v, _) => format!("map<{}, {}>", type_to_string(k), type_to_string(v)),
-        Type::Set(t, _) => format!("set<{}>", type_to_string(t)),
+        Type::List(t, _) => format!("list[{}]", type_to_string(t)),
+        Type::Map(k, v, _) => format!("map[{}, {}]", type_to_string(k), type_to_string(v)),
+        Type::Set(t, _) => format!("set[{}]", type_to_string(t)),
         Type::Bool(_) => "bool".into(),
         Type::Int(_) => "int".into(),
         Type::Float(_) => "float".into(),

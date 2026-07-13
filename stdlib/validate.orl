@@ -27,7 +27,7 @@ public non_zero(value: int) -> bool
     return value != 0
 end
 
-public one_of(value: int, candidates: list<int>) -> bool
+public one_of(value: int, candidates: list[int]) -> bool
     var i: int = 0
     const n: int = lists.len(candidates)
     while i < n
@@ -41,7 +41,7 @@ public one_of(value: int, candidates: list<int>) -> bool
     return false
 end
 
-public one_of_string(value: string, candidates: list<string>) -> bool
+public one_of_string(value: string, candidates: list[string]) -> bool
     var i: int = 0
     const n: int = lists.len(candidates)
     while i < n

@@ -199,7 +199,7 @@ pub enum TraitMember {
 
 // ── Implement ─────────────────────────────────────────────────────────────────
 
-/// `implement<T> Trait for Type where T is Bound … end`
+/// `implement [T] Trait for Type … end` (legacy); bounds use `for T: Trait` on methods
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImplementDecl {
     pub type_params: TypeParams,

@@ -4,8 +4,8 @@ import ori.bytes.utils as bu
 import ori.list as lists
 
 public compare_lex(a: bytes, b: bytes) -> int
-    const av: list<int> = bu.to_list(a)
-    const bv: list<int> = bu.to_list(b)
+    const av: list[int] = bu.to_list(a)
+    const bv: list[int] = bu.to_list(b)
     const a_len: int = lists.len(av)
     const b_len: int = lists.len(bv)
     var min_len: int = a_len

@@ -1102,7 +1102,7 @@ fn builtin_stdlib_error_struct_sig(def_id: DefId) -> StructSig {
             (SmolStr::new("message"), Ty::String),
             // Error chaining: message describing the original cause.
             // Empty string means there is no cause.
-            // Future: migrate to `optional<any<Error>>` once the C backend supports
+            // Future: migrate to `optional[any[Error]]` once the C backend supports
             // recursive struct field types.
             (SmolStr::new("cause"), Ty::String),
         ],

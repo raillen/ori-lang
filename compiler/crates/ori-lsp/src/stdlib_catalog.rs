@@ -299,15 +299,15 @@ fn stdlib_documentation(path: &str) -> Option<String> {
         "ori.io.read_line" => "Lê uma linha de texto a partir da entrada padrão (stdin).\n\nRetorna `some(string)` se for bem-sucedido ou `none` se atingir o fim do arquivo (EOF).",
 
         // fs
-        "ori.fs.exists" => "Verifica se o caminho especificado existe no sistema de arquivos.\n\nRetorna `result<bool, string>`.",
-        "ori.fs.is_file" => "Verifica se o caminho especificado aponta para um arquivo.\n\nRetorna `result<bool, string>`.",
-        "ori.fs.is_dir" => "Verifica se o caminho especificado aponta para um diretório.\n\nRetorna `result<bool, string>`.",
-        "ori.fs.read_text" => "Lê todo o conteúdo de um arquivo de texto e o retorna como string.\n\nRetorna `result<string, string>`.",
-        "ori.fs.write_text" => "Escreve o texto fornecido em um arquivo no caminho especificado.\n\nRetorna `result<void, string>`.",
-        "ori.fs.append_text" => "Adiciona o texto fornecido ao final do arquivo especificado.\n\nRetorna `result<void, string>`.",
-        "ori.fs.delete" => "Remove um arquivo do sistema de arquivos.\n\nRetorna `result<void, string>`.",
-        "ori.fs.create_dir" => "Cria um novo diretório no caminho especificado.\n\nRetorna `result<void, string>`.",
-        "ori.fs.create_dir_all" => "Cria um diretório e todos os diretórios pais necessários no caminho especificado.\n\nRetorna `result<void, string>`.",
+        "ori.fs.exists" => "Verifica se o caminho especificado existe no sistema de arquivos.\n\nRetorna `result[bool, string]`.",
+        "ori.fs.is_file" => "Verifica se o caminho especificado aponta para um arquivo.\n\nRetorna `result[bool, string]`.",
+        "ori.fs.is_dir" => "Verifica se o caminho especificado aponta para um diretório.\n\nRetorna `result[bool, string]`.",
+        "ori.fs.read_text" => "Lê todo o conteúdo de um arquivo de texto e o retorna como string.\n\nRetorna `result[string, string]`.",
+        "ori.fs.write_text" => "Escreve o texto fornecido em um arquivo no caminho especificado.\n\nRetorna `result[void, string]`.",
+        "ori.fs.append_text" => "Adiciona o texto fornecido ao final do arquivo especificado.\n\nRetorna `result[void, string]`.",
+        "ori.fs.delete" => "Remove um arquivo do sistema de arquivos.\n\nRetorna `result[void, string]`.",
+        "ori.fs.create_dir" => "Cria um novo diretório no caminho especificado.\n\nRetorna `result[void, string]`.",
+        "ori.fs.create_dir_all" => "Cria um diretório e todos os diretórios pais necessários no caminho especificado.\n\nRetorna `result[void, string]`.",
 
         // process
         "ori.process.exit" => "Encerra a execução do programa atual imediatamente com o código de saída especificado.",
@@ -480,15 +480,15 @@ fn func_signature(func: &FuncDecl) -> String {
 fn type_to_string(ty: &ori_ast::ty::Type) -> String {
     match ty {
         ori_ast::ty::Type::Named(q) => q.to_string(),
-        ori_ast::ty::Type::Optional(t, _) => format!("optional<{}>", type_to_string(t)),
+        ori_ast::ty::Type::Optional(t, _) => format!("optional[{}]", type_to_string(t)),
         ori_ast::ty::Type::Result(ok, err, _) => {
-            format!("result<{}, {}>", type_to_string(ok), type_to_string(err))
+            format!("result[{}, {}]", type_to_string(ok), type_to_string(err))
         }
-        ori_ast::ty::Type::List(t, _) => format!("list<{}>", type_to_string(t)),
+        ori_ast::ty::Type::List(t, _) => format!("list[{}]", type_to_string(t)),
         ori_ast::ty::Type::Map(k, v, _) => {
-            format!("map<{}, {}>", type_to_string(k), type_to_string(v))
+            format!("map[{}, {}]", type_to_string(k), type_to_string(v))
         }
-        ori_ast::ty::Type::Set(t, _) => format!("set<{}>", type_to_string(t)),
+        ori_ast::ty::Type::Set(t, _) => format!("set[{}]", type_to_string(t)),
         ori_ast::ty::Type::Bool(_) => "bool".into(),
         ori_ast::ty::Type::Int(_) => "int".into(),
         ori_ast::ty::Type::Float(_) => "float".into(),

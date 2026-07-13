@@ -12,7 +12,7 @@ check_status(score: int)
     end
 end
 
-describe_optional(opt: optional<string>)
+describe_optional(opt: optional[string])
     match opt
         case some(s):
             io.print(f"Found value: {s}")
@@ -29,8 +29,8 @@ main()
     check_status(85)
 
     io.print("\nTesting Optionals:")
-    const present: optional<string> = some("Ori Language")
-    const missing: optional<string> = none
+    const present: optional[string] = some("Ori Language")
+    const missing: optional[string] = none
     
     describe_optional(present)
     describe_optional(missing)

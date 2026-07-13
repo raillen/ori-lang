@@ -7214,13 +7214,13 @@ pub unsafe extern "C" fn ori_string_to_float(s: *const u8) -> *mut OriOptionalFl
 
 // ── ori.files ─────────────────────────────────────────────────────────────────
 //
-// result<T, string> layout (matches native_backend result_layout):
+// result[T, string] layout (matches native_backend result_layout):
 //   offset 0              : is_ok (u8)
 //   offset 1..ptr_size-1  : padding
 //   offset ptr_size       : payload (*mut u8 — string or list pointer)
 //
 // Both ok and err payloads are pointer-sized, so the same helper covers
-// result<string, string> AND result<list<string>, string>.
+// result[string, string] AND result[list[string], string].
 
 unsafe fn new_result(is_ok: bool, payload: *mut u8) -> *mut u8 {
     let ptr_size = std::mem::size_of::<*mut u8>();

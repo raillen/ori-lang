@@ -96,7 +96,7 @@ shell_program() -> string
     return "sh"
 end
 
-shell_args(command_label: string, log_path: string) -> list<string>
+shell_args(command_label: string, log_path: string) -> list[string]
     const redirected: string = command_label + " > " + log_path + " 2>&1"
     if os_utils.is_windows()
         return ["/C", redirected]

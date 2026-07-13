@@ -4,7 +4,7 @@ import ori.graph as graph
 import ori.queue as queue
 import ori.set as sets
 
-public has_path(g: graph.Graph<string>, start: string, goal: string) -> bool
+public has_path(g: graph.Graph[string], start: string, goal: string) -> bool
     if start == goal
         return true
     end
@@ -14,8 +14,8 @@ public has_path(g: graph.Graph<string>, start: string, goal: string) -> bool
     if not graph.has_node(g, goal)
         return false
     end
-    var visited: set<string> = sets.new()
-    var frontier: queue.Queue<string> = queue.new()
+    var visited: set[string] = sets.new()
+    var frontier: queue.Queue[string] = queue.new()
     queue.enqueue(frontier, start)
     sets.add(visited, start)
     while not queue.is_empty(frontier)
@@ -23,7 +23,7 @@ public has_path(g: graph.Graph<string>, start: string, goal: string) -> bool
             if cur == goal
                 return true
             end
-            const neighbors: list<string> = graph.neighbors(g, cur)
+            const neighbors: list[string] = graph.neighbors(g, cur)
             for next in neighbors
                 if not sets.contains(visited, next)
                     sets.add(visited, next)
@@ -35,17 +35,17 @@ public has_path(g: graph.Graph<string>, start: string, goal: string) -> bool
     return false
 end
 
-public reachable_count(g: graph.Graph<string>, start: string) -> int
+public reachable_count(g: graph.Graph[string], start: string) -> int
     if not graph.has_node(g, start)
         return 0
     end
-    var visited: set<string> = sets.new()
-    var frontier: queue.Queue<string> = queue.new()
+    var visited: set[string] = sets.new()
+    var frontier: queue.Queue[string] = queue.new()
     queue.enqueue(frontier, start)
     sets.add(visited, start)
     while not queue.is_empty(frontier)
         if some(cur) = queue.dequeue(frontier)
-            const neighbors: list<string> = graph.neighbors(g, cur)
+            const neighbors: list[string] = graph.neighbors(g, cur)
             for next in neighbors
                 if not sets.contains(visited, next)
                     sets.add(visited, next)
@@ -57,11 +57,11 @@ public reachable_count(g: graph.Graph<string>, start: string) -> int
     return sets.len(visited)
 end
 
-public is_reachable(g: graph.Graph<string>, start: string, goal: string) -> bool
+public is_reachable(g: graph.Graph[string], start: string, goal: string) -> bool
     return has_path(g, start, goal)
 end
 
-public has_path_int(g: graph.Graph<int>, start: int, goal: int) -> bool
+public has_path_int(g: graph.Graph[int], start: int, goal: int) -> bool
     if start == goal
         return true
     end
@@ -71,8 +71,8 @@ public has_path_int(g: graph.Graph<int>, start: int, goal: int) -> bool
     if not graph.has_node(g, goal)
         return false
     end
-    var visited: set<int> = sets.new()
-    var frontier: queue.Queue<int> = queue.new()
+    var visited: set[int] = sets.new()
+    var frontier: queue.Queue[int] = queue.new()
     queue.enqueue(frontier, start)
     sets.add(visited, start)
     while not queue.is_empty(frontier)
@@ -80,7 +80,7 @@ public has_path_int(g: graph.Graph<int>, start: int, goal: int) -> bool
             if cur == goal
                 return true
             end
-            const neighbors: list<int> = graph.neighbors(g, cur)
+            const neighbors: list[int] = graph.neighbors(g, cur)
             for next in neighbors
                 if not sets.contains(visited, next)
                     sets.add(visited, next)

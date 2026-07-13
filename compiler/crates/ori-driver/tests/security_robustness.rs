@@ -176,7 +176,7 @@ end
 import ori.task as task
 main()
     const callback: func() -> int = do() => 1
-    const job: task.Job<int> = task.spawn(do() => callback())
+    const job: task.Job[int] = task.spawn(do() => callback())
 end
 "#,
             )],
@@ -198,7 +198,7 @@ end
 trait Named
     name(self) -> string
 end
-read_name<T>(value: T) -> string where T is Named
+read_name for T: Named (value: T) -> string
     return value.name()
 end
 main()
@@ -347,11 +347,11 @@ import ori.list as lists
 import ori.test as test
 
 struct Buffer
-    items: list<int>
+    items: list[int]
 end
 
 exercise() -> int
-    const values: list<int> = lists.new()
+    const values: list[int] = lists.new()
     lists.push(values, 10)
     lists.push(values, 20)
     const buffer: Buffer = Buffer(items: values)

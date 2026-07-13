@@ -5,7 +5,7 @@ import ori.list as lists
 import ori.tree as tree
 
 main()
-    const outline: tree.Tree<string> = tree.new("book")
+    const outline: tree.Tree[string] = tree.new("book")
     const root: tree.NodeId = tree.root(outline)
     const chapter: tree.NodeId = tree.add_child(outline, root, "chapter")
     const appendix: tree.NodeId = tree.add_child(outline, root, "appendix")
@@ -14,14 +14,14 @@ main()
     io.print(tree.value(outline, root))
     io.print(string(tree.depth(outline, section)))
 
-    const order: list<tree.NodeId> = tree.breadth_first(outline)
+    const order: list[tree.NodeId] = tree.breadth_first(outline)
     io.print(tree.value(outline, order[0]))
     io.print(tree.value(outline, order[1]))
     io.print(tree.value(outline, order[2]))
     io.print(tree.value(outline, order[3]))
 
     tree.remove_subtree(outline, chapter)
-    const remaining: list<tree.NodeId> = tree.children(outline, root)
+    const remaining: list[tree.NodeId] = tree.children(outline, root)
     io.print(string(lists.len(remaining)))
     io.print(tree.value(outline, appendix))
 end

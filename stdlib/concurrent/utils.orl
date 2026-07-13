@@ -24,19 +24,19 @@ public copy_bytes(value: bytes) -> bytes
     return value
 end
 
-public copy_list_int(value: list<int>) -> list<int>
+public copy_list_int(value: list[int]) -> list[int]
     return lists.clone(value)
 end
 
-public copy_list_string(value: list<string>) -> list<string>
+public copy_list_string(value: list[string]) -> list[string]
     return lists.clone(value)
 end
 
-public copy_map_string_string(value: map<string, string>) -> map<string, string>
+public copy_map_string_string(value: map[string, string]) -> map[string, string]
     return maps.clone(value)
 end
 
-public copy_set_string(value: set<string>) -> set<string>
+public copy_set_string(value: set[string]) -> set[string]
     return sets.clone(value)
 end
 
@@ -48,6 +48,6 @@ public transfer_string(value: string) -> string
     return copy_string(value)
 end
 
-public transfer_list_string(value: list<string>) -> list<string>
+public transfer_list_string(value: list[string]) -> list[string]
     return copy_list_string(value)
 end

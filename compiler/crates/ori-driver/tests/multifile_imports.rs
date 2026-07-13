@@ -199,25 +199,25 @@ end
     assert!(out.markdown.contains("- `ori.heap`"));
     assert!(out.markdown.contains("### Collection Signatures"));
     assert!(
-        out.markdown.contains("queue.new<T>() -> queue.Queue<T>"),
+        out.markdown.contains("queue.new[T]() -> queue.Queue[T]"),
         "{}",
         out.markdown
     );
     assert!(
         out.markdown
-            .contains("graph.topological_sort<N>(g: graph.Graph<N>) -> list<N>"),
+            .contains("graph.topological_sort[N](g: graph.Graph[N]) -> list[N]"),
         "{}",
         out.markdown
     );
     assert!(
         out.markdown
-            .contains("maps.new<K, V>() -> map<K, V> where K is Hashable and K is Equatable"),
+            .contains("maps.new[K, V]() -> map[K, V] for K: Hashable, K: Equatable"),
         "{}",
         out.markdown
     );
     assert!(
         out.markdown
-            .contains("heap.new<T>() -> heap.Heap<T> where T is Comparable"),
+            .contains("heap.new[T]() -> heap.Heap[T] for T: Comparable"),
         "{}",
         out.markdown
     );
@@ -271,7 +271,7 @@ main()
         acc = str.concat(acc, ch)
     end
     io.print(acc)
-    var tags: list<string> = []
+    var tags: list[string] = []
     for piece in ["a", "bb", "c"]
         lists.push(tags, str.concat("-", piece))
     end
@@ -834,8 +834,8 @@ import ori.map as maps
 
 const PREFIX: string = "start"
 var current: string = "one"
-var values: list<string> = ["a", "b"]
-var labels: map<string, string> = { "x": "old" }
+var values: list[string] = ["a", "b"]
+var labels: map[string, string] = { "x": "old" }
 
 update()
     current = current + "-two"
@@ -1137,7 +1137,7 @@ import ori.io as io
 import ori.string as str
 
 main()
-    const parts: list<string> = str.split("a,b,c", ",")
+    const parts: list[string] = str.split("a,b,c", ",")
     io.print(str.join(parts, "|"))
     io.print(str.repeat("ha", 3))
     io.print(str.pad_left("7", 3, "0"))
@@ -1221,7 +1221,7 @@ import ori.io as io
 import ori.list as lists
 
 main()
-    var values: list<int> = [10, 20, 30]
+    var values: list[int] = [10, 20, 30]
     values[1] = values[0] + values[2]
     io.print(string(values[1]))
     io.print(string(lists.len(values)))
@@ -1488,8 +1488,8 @@ import ori.list as lists
 import ori.string as str
 
 main()
-    const parts: list<string> = str.split("red,blue", ",")
-    const chars: list<string> = str.chars("abc")
+    const parts: list[string] = str.split("red,blue", ",")
+    const chars: list[string] = str.chars("abc")
     io.print(parts[0])
     io.print(parts[1])
     io.print(chars[2])
@@ -1522,11 +1522,11 @@ implement core.Hashable for Token
 end
 
 main()
-    const seen: set<int> = sets.new()
+    const seen: set[int] = sets.new()
     sets.add(seen, 4)
     sets.add(seen, 4)
     sets.add(seen, 9)
-    const scores: map<int, int> = maps.new()
+    const scores: map[int, int] = maps.new()
     maps.set(scores, 4, 40)
     maps.set(scores, 9, 90)
     maps.set(scores, 4, 44)
@@ -1565,24 +1565,24 @@ import ori.map as maps
 import ori.set as sets
 
 main()
-    const ok_map: map<string, int> = maps.new()
+    const ok_map: map[string, int] = maps.new()
     maps.set(ok_map, "a", 1)
-    const ok_lit: map<string, int> = { "b": 2 }
+    const ok_lit: map[string, int] = { "b": 2 }
 
-    const ok_set: set<string> = sets.new()
+    const ok_set: set[string] = sets.new()
     sets.add(ok_set, "a")
-    const ok_set_lit: set<string> = set { "b" }
+    const ok_set_lit: set[string] = set { "b" }
 
-    const bad_map: map<list<int>, int> = maps.new()
+    const bad_map: map[list[int], int] = maps.new()
     maps.set(bad_map, [1], 1)
 
-    const bad_map_lit: map<list<int>, int> = { [2]: 2 }
-    const bad_set: set<list<int>> = sets.new()
+    const bad_map_lit: map[list[int], int] = { [2]: 2 }
+    const bad_set: set[list[int]] = sets.new()
     sets.add(bad_set, [1])
-    const bad_set_lit: set<list<int>> = set { [2] }
+    const bad_set_lit: set[list[int]] = set { [2] }
 
-    const bad_named_map: map<Token, int> = maps.new()
-    const bad_named_set: set<Token> = sets.new()
+    const bad_named_map: map[Token, int] = maps.new()
+    const bad_named_set: set[Token] = sets.new()
 end
 "#,
     );
@@ -1606,14 +1606,14 @@ fn check_list_stdlib_preserves_element_types() {
 import ori.list as lists
 
 main()
-    var values: list<int> = [1, 2]
+    var values: list[int] = [1, 2]
     lists.push(values, "bad")
     lists.set(values, 0, "bad")
     lists.insert(values, 0, "bad")
     const has_bad: bool = lists.contains(values, "bad")
     const bad_index: int = lists.index_of(values, "bad")
     const first: string = lists.get(values, 0)
-    const slice: list<string> = lists.slice(values, 0, 1)
+    const slice: list[string] = lists.slice(values, 0, 1)
 end
 "#,
     );
@@ -1643,21 +1643,21 @@ import ori.map as maps
 import ori.set as sets
 
 main()
-    const labels: map<int, string> = maps.new()
+    const labels: map[int, string] = maps.new()
     maps.set(labels, "bad", "one")
     maps.set(labels, 2, 20)
     const got_int: int = maps.get(labels, 1)
-    const bad_keys: list<string> = maps.keys(labels)
-    const bad_values: list<int> = maps.values(labels)
-    const bad_entries: list<tuple<string, int>> = maps.entries(labels)
+    const bad_keys: list[string] = maps.keys(labels)
+    const bad_values: list[int] = maps.values(labels)
+    const bad_entries: list[tuple[string, int]] = maps.entries(labels)
 
-    const seen: set<int> = sets.new()
+    const seen: set[int] = sets.new()
     sets.add(seen, "bad")
     const has_bad: bool = sets.contains(seen, "bad")
     sets.remove(seen, "bad")
-    const other: set<int> = sets.new()
-    const wrong_union: set<string> = sets.union(seen, other)
-    const bad_union_arg: set<int> = sets.union(seen, "bad")
+    const other: set[int] = sets.new()
+    const wrong_union: set[string] = sets.union(seen, other)
+    const bad_union_arg: set[int] = sets.union(seen, "bad")
 end
 "#,
     );
@@ -1683,18 +1683,18 @@ fn check_reports_unsupported_optional_result_helper_forms() {
         "main.orl",
         r#"module app.main
 
-maybe() -> optional<int>
+maybe() -> optional[int]
     return some(1)
 end
 
-parse() -> result<int, string>
+parse() -> result[int, string]
     return success(1)
 end
 
 main()
     const early: int = maybe().or_return(none)
-    const wrong_context: result<int, string> = parse().or_wrap(123)
-    const wrong_receiver: optional<int> = maybe().or_wrap("context")
+    const wrong_context: result[int, string] = parse().or_wrap(123)
+    const wrong_receiver: optional[int] = maybe().or_wrap("context")
 end
 "#,
     );
@@ -1724,15 +1724,15 @@ fn compile_runs_optional_result_or_helper_native() {
 
 import ori.io as io
 
-maybe() -> optional<int>
+maybe() -> optional[int]
     return some(7)
 end
 
-empty() -> optional<int>
+empty() -> optional[int]
     return none
 end
 
-parse(flag: bool) -> result<int, string>
+parse(flag: bool) -> result[int, string]
     if flag
         return success(9)
     end
@@ -1764,14 +1764,14 @@ fn build_c_backend_optional_result_or_helper() {
         "main.orl",
         r#"module app.main
 
-maybe(flag: bool) -> optional<int>
+maybe(flag: bool) -> optional[int]
     if flag
         return some(1)
     end
     return none
 end
 
-parse(flag: bool) -> result<int, string>
+parse(flag: bool) -> result[int, string]
     if flag
         return success(2)
     end
@@ -1801,14 +1801,14 @@ fn compile_runs_result_or_wrap_helper_native() {
 
 import ori.io as io
 
-parse(flag: bool) -> result<int, string>
+parse(flag: bool) -> result[int, string]
     if flag
         return success(7)
     end
     return error("bad")
 end
 
-wrapped(flag: bool) -> result<int, string>
+wrapped(flag: bool) -> result[int, string]
     return parse(flag).or_wrap("loading")
 end
 
@@ -1841,7 +1841,7 @@ fn build_c_backend_result_or_wrap_helper() {
         "main.orl",
         r#"module app.main
 
-parse(flag: bool) -> result<int, string>
+parse(flag: bool) -> result[int, string]
     if flag
         return success(1)
     end
@@ -1849,8 +1849,8 @@ parse(flag: bool) -> result<int, string>
 end
 
 main()
-    const first: result<int, string> = parse(true).or_wrap("load")
-    const second: result<int, string> = parse(false).or_wrap("load")
+    const first: result[int, string] = parse(true).or_wrap("load")
+    const second: result[int, string] = parse(false).or_wrap("load")
 end
 "#,
     );
@@ -1873,8 +1873,8 @@ fn check_reports_map_set_literal_element_mismatches() {
         r#"module app.main
 
 main()
-    const bad_map: map<int, int> = { 1: 10, 2: "two" }
-    const bad_set: set<int> = set { 1, "two" }
+    const bad_map: map[int, int] = { 1: 10, 2: "two" }
+    const bad_set: set[int] = set { 1, "two" }
 end
 "#,
     );
@@ -1989,7 +1989,7 @@ bounded(value: int = 4 if it > 0) -> int
 end
 
 main()
-    const pair: tuple<int, string> = tuple(7, "seven")
+    const pair: tuple[int, string] = tuple(7, "seven")
     io.print(string(pair.0))
     io.print(pair.1)
 
@@ -2057,7 +2057,7 @@ sum(seed: int, values: int...) -> int
 end
 
 main()
-    const parts: list<int> = [2, 3]
+    const parts: list[int] = [2, 3]
     const value: int = sum(1, ..parts, 4)
 end
 "#,
@@ -2085,7 +2085,7 @@ take(value: int)
 end
 
 main()
-    const parts: list<int> = [1]
+    const parts: list[int] = [1]
     take(..parts)
 end
 "#,
@@ -2291,7 +2291,7 @@ count(values: int...) -> int
 end
 
 main()
-    const parts: list<int> = [6, 7]
+    const parts: list[int] = [6, 7]
     io.print(string(sum(10, 1, 2, 3)))
     io.print(string(sum(1, ..parts, 8)))
     io.print(string(count()))
@@ -2324,15 +2324,15 @@ fn compile_runs_generic_function_monomorphization_native() {
 
 import ori.io as io
 
-identity<T>(value: T) -> T
+identity[T](value: T) -> T
     return value
 end
 
-pick_second<T>(first: T, second: T) -> T
+pick_second[T](first: T, second: T) -> T
     return second
 end
 
-wrap<T>(value: T) -> T
+wrap[T](value: T) -> T
     return identity(value)
 end
 
@@ -2384,25 +2384,25 @@ implement Labelled for Tag
     end
 end
 
-choose<T>(first: T, second: T) -> T
+choose[T](first: T, second: T) -> T
     return second
 end
 
-generic_label<T>(value: T) -> string where T is Labelled
+generic_label for T: Labelled (value: T) -> string
     return value.label()
 end
 
-any_label(value: any<Labelled>) -> string
+any_label(value: any[Labelled]) -> string
     return value.label()
 end
 
-same_any(value: any<Labelled>) -> any<Labelled>
+same_any(value: any[Labelled]) -> any[Labelled]
     return value
 end
 
 main()
     const picked: Tag = choose(Tag(label: "old"), Tag(label: "new"))
-    const boxed: any<Labelled> = picked
+    const boxed: any[Labelled] = picked
     io.print(generic_label(picked))
     io.print(any_label(picked))
     io.print(same_any(boxed).label())
@@ -2435,7 +2435,7 @@ public trait Named
     name(self) -> string
 end
 
-public read_name<T>(value: T) -> string where T is Named
+public read_name for T: Named (value: T) -> string
     return value.name()
 end
 "#,
@@ -2530,19 +2530,19 @@ implement Scored for Booster
     end
 end
 
-add_bonus(item: any<Scored>) -> int
+add_bonus(item: any[Scored]) -> int
     return item.score() + 5
 end
 
-identity(item: any<Scored>) -> any<Scored>
+identity(item: any[Scored]) -> any[Scored]
     return item
 end
 
 main()
     const player: Player = Player(score: 37)
     const booster: Booster = Booster(score: 20)
-    const item: any<Scored> = player
-    const boosted: any<Scored> = booster
+    const item: any[Scored] = player
+    const boosted: any[Scored] = booster
     io.print(string(item.score()))
     io.print(string(add_bonus(player)))
     io.print(string(identity(player).score()))
@@ -2608,19 +2608,19 @@ implement Scored for Booster
     end
 end
 
-add_bonus(item: any<Scored>) -> int
+add_bonus(item: any[Scored]) -> int
     return item.score() + 5
 end
 
-identity(item: any<Scored>) -> any<Scored>
+identity(item: any[Scored]) -> any[Scored]
     return item
 end
 
 main()
     const player: Player = Player(score: 37)
     const booster: Booster = Booster(score: 20)
-    const item: any<Scored> = player
-    const boosted: any<Scored> = booster
+    const item: any[Scored] = player
+    const boosted: any[Scored] = booster
     io.print(string(item.score()))
     io.print(string(add_bonus(player)))
     io.print(string(identity(player).score()))
@@ -2659,8 +2659,8 @@ implement Scored for Player
 end
 
 main()
-    const a: any<Scored> = Player(score: 1)
-    const b: any<Scored> = Player(score: 1)
+    const a: any[Scored] = Player(score: 1)
+    const b: any[Scored] = Player(score: 1)
     const same: bool = a == b
 end
 "#,
@@ -2738,7 +2738,7 @@ end
 struct User
     id: int
     name: string
-    scores: list<int>
+    scores: list[int]
     address: Address
 end
 
@@ -2796,19 +2796,19 @@ fn compile_runs_list_structural_equality_native() {
 import ori.io as io
 
 main()
-    const left: list<int> = [1, 2, 3]
-    const same: list<int> = [1, 2, 3]
-    const different_value: list<int> = [1, 2, 4]
-    const different_len: list<int> = [1, 2]
+    const left: list[int] = [1, 2, 3]
+    const same: list[int] = [1, 2, 3]
+    const different_value: list[int] = [1, 2, 4]
+    const different_len: list[int] = [1, 2]
 
     io.print(string(left == same))
     io.print(string(left == different_value))
     io.print(string(left != different_value))
     io.print(string(left != different_len))
 
-    const words: list<string> = ["ori", "lang"]
-    const same_words: list<string> = ["ori", "lang"]
-    const other_words: list<string> = ["ori", "runtime"]
+    const words: list[string] = ["ori", "lang"]
+    const same_words: list[string] = ["ori", "lang"]
+    const other_words: list[string] = ["ori", "runtime"]
 
     io.print(string(words == same_words))
     io.print(string(words != other_words))
@@ -2832,68 +2832,68 @@ import ori.map as maps
 import ori.set as sets
 
 main()
-    const left_set: set<int> = sets.new()
+    const left_set: set[int] = sets.new()
     sets.add(left_set, 1)
     sets.add(left_set, 2)
 
-    const same_set: set<int> = sets.new()
+    const same_set: set[int] = sets.new()
     sets.add(same_set, 2)
     sets.add(same_set, 1)
 
-    const different_set: set<int> = sets.new()
+    const different_set: set[int] = sets.new()
     sets.add(different_set, 1)
     sets.add(different_set, 3)
 
     io.print(string(left_set == same_set))
     io.print(string(left_set != different_set))
 
-    const words: set<string> = sets.new()
+    const words: set[string] = sets.new()
     sets.add(words, "red")
     sets.add(words, "blue")
 
-    const same_words: set<string> = sets.new()
+    const same_words: set[string] = sets.new()
     sets.add(same_words, "blue")
     sets.add(same_words, "red")
 
-    const other_words: set<string> = sets.new()
+    const other_words: set[string] = sets.new()
     sets.add(other_words, "red")
     sets.add(other_words, "green")
 
     io.print(string(words == same_words))
     io.print(string(words == other_words))
 
-    const scores: map<int, int> = maps.new()
+    const scores: map[int, int] = maps.new()
     maps.set(scores, 1, 10)
     maps.set(scores, 2, 20)
 
-    const same_scores: map<int, int> = maps.new()
+    const same_scores: map[int, int] = maps.new()
     maps.set(same_scores, 2, 20)
     maps.set(same_scores, 1, 10)
 
-    const changed_scores: map<int, int> = maps.new()
+    const changed_scores: map[int, int] = maps.new()
     maps.set(changed_scores, 1, 10)
     maps.set(changed_scores, 2, 99)
 
     io.print(string(scores == same_scores))
     io.print(string(scores != changed_scores))
 
-    const labels: map<string, int> = maps.new()
+    const labels: map[string, int] = maps.new()
     maps.set(labels, "a", 1)
     maps.set(labels, "b", 2)
 
-    const same_labels: map<string, int> = maps.new()
+    const same_labels: map[string, int] = maps.new()
     maps.set(same_labels, "b", 2)
     maps.set(same_labels, "a", 1)
 
     io.print(string(labels == same_labels))
 
-    const buckets: map<int, list<int>> = maps.new()
+    const buckets: map[int, list[int]] = maps.new()
     maps.set(buckets, 1, [1, 2])
 
-    const same_buckets: map<int, list<int>> = maps.new()
+    const same_buckets: map[int, list[int]] = maps.new()
     maps.set(same_buckets, 1, [1, 2])
 
-    const changed_buckets: map<int, list<int>> = maps.new()
+    const changed_buckets: map[int, list[int]] = maps.new()
     maps.set(changed_buckets, 1, [1, 3])
 
     io.print(string(buckets == same_buckets))
@@ -2917,11 +2917,11 @@ fn build_c_backend_list_structural_equality() {
         r#"module app.main
 
 main()
-    const left: list<int> = [1, 2, 3]
-    const same: list<int> = [1, 2, 3]
-    const different: list<int> = [1, 2, 4]
-    const words: list<string> = ["ori", "lang"]
-    const same_words: list<string> = ["ori", "lang"]
+    const left: list[int] = [1, 2, 3]
+    const same: list[int] = [1, 2, 3]
+    const different: list[int] = [1, 2, 4]
+    const words: list[string] = ["ori", "lang"]
+    const same_words: list[string] = ["ori", "lang"]
 
     const ints_equal: bool = left == same
     const ints_different: bool = left != different
@@ -2992,28 +2992,28 @@ import ori.map as maps
 import ori.set as sets
 
 main()
-    const left_set: set<int> = set { 1, 2 }
-    const same_set: set<int> = set { 2, 1 }
-    const different_set: set<int> = set { 1, 3 }
+    const left_set: set[int] = set { 1, 2 }
+    const same_set: set[int] = set { 2, 1 }
+    const different_set: set[int] = set { 1, 3 }
     const set_same: bool = left_set == same_set
     const set_different: bool = left_set != different_set
 
-    const words: set<string> = set { "red", "blue" }
-    const same_words: set<string> = set { "blue", "red" }
+    const words: set[string] = set { "red", "blue" }
+    const same_words: set[string] = set { "blue", "red" }
     sets.add(same_words, "red")
     const words_same: bool = words == same_words
 
-    const labels: map<string, int> = { "a": 1, "b": 2 }
-    const same_labels: map<string, int> = { "b": 2, "a": 1 }
+    const labels: map[string, int] = { "a": 1, "b": 2 }
+    const same_labels: map[string, int] = { "b": 2, "a": 1 }
     const labels_same: bool = labels == same_labels
 
-    const buckets: map<int, list<int>> = maps.new()
+    const buckets: map[int, list[int]] = maps.new()
     maps.set(buckets, 1, [1, 2])
 
-    const same_buckets: map<int, list<int>> = maps.new()
+    const same_buckets: map[int, list[int]] = maps.new()
     maps.set(same_buckets, 1, [1, 2])
 
-    const changed_buckets: map<int, list<int>> = maps.new()
+    const changed_buckets: map[int, list[int]] = maps.new()
     maps.set(changed_buckets, 1, [1, 3])
 
     const nested_same: bool = buckets == same_buckets
@@ -3043,27 +3043,27 @@ fn compile_runs_optional_result_inequality_native() {
 
 import ori.io as io
 
-fail_a() -> result<int, string>
+fail_a() -> result[int, string]
     return error("a")
 end
 
-fail_b() -> result<int, string>
+fail_b() -> result[int, string]
     return error("b")
 end
 
 main()
-    const maybe_one: optional<int> = some(1)
-    const maybe_two: optional<int> = some(2)
-    const missing: optional<int> = none
+    const maybe_one: optional[int] = some(1)
+    const maybe_two: optional[int] = some(2)
+    const missing: optional[int] = none
 
     io.print(string(maybe_one != maybe_two))
     io.print(string(maybe_one != missing))
     io.print(string(missing != none))
 
-    const ok_one: result<int, string> = success(1)
-    const ok_two: result<int, string> = success(2)
-    const err_a: result<int, string> = fail_a()
-    const err_b: result<int, string> = fail_b()
+    const ok_one: result[int, string] = success(1)
+    const ok_two: result[int, string] = success(2)
+    const err_a: result[int, string] = fail_a()
+    const err_b: result[int, string] = fail_b()
 
     io.print(string(ok_one != ok_two))
     io.print(string(ok_one != err_a))
@@ -3430,7 +3430,7 @@ fn check_accepts_lazy_type_and_stdlib_once_force() {
 import ori.lazy as lz
 
 main()
-    const delayed: lazy<int> = lz.once(do() => 41)
+    const delayed: lazy[int] = lz.once(do() => 41)
     const value: int = lz.force(delayed)
 end
 "#,
@@ -3451,7 +3451,7 @@ fn build_c_backend_compiles_lazy_once_force() {
 import ori.lazy as lz
 
 main()
-    const delayed: lazy<int> = lz.once(do() => 41)
+    const delayed: lazy[int] = lz.once(do() => 41)
     const first: int = lz.force(delayed)
     const second: int = lz.force(delayed)
 end
@@ -3475,7 +3475,7 @@ fn build_c_backend_emits_json_parse_extern_without_c_lowering() {
 import ori.json as json
 
 main()
-    const parsed: result<json.Value, string> = json.parse("{}")
+    const parsed: result[json.Value, string] = json.parse("{}")
 end
 "#,
     );
@@ -3503,7 +3503,7 @@ import ori.io as io
 import ori.lazy as lz
 
 main()
-    const delayed: lazy<void> = lz.once(do() => io.print("x"))
+    const delayed: lazy[void] = lz.once(do() => io.print("x"))
     lz.force(delayed)
 end
 "#,
@@ -3539,7 +3539,7 @@ compute() -> int
 end
 
 main()
-    const delayed: lazy<int> = lz.once(do() => compute())
+    const delayed: lazy[int] = lz.once(do() => compute())
     const first: int = lz.force(delayed)
     const second: int = lz.force(delayed)
     io.print(string(first + second + calls))
@@ -3595,11 +3595,11 @@ use_return() -> int
     return 7
 end
 
-fail() -> result<int, string>
+fail() -> result[int, string]
     return error("fail")
 end
 
-use_propagate() -> result<int, string>
+use_propagate() -> result[int, string]
     using fourth: Resource = Resource(id: 4)
     const value: int = fail()?
     return success(value)
@@ -3765,14 +3765,14 @@ fn compile_runs_result_match_and_propagation() {
 
 import ori.io as io
 
-parse(flag: bool) -> result<int, string>
+parse(flag: bool) -> result[int, string]
     if flag
         return success(7)
     end
     return error("no value")
 end
 
-add_one(flag: bool) -> result<int, string>
+add_one(flag: bool) -> result[int, string]
     const value: int = parse(flag)?
     return success(value + 1)
 end
@@ -3832,7 +3832,7 @@ make_user() -> User
     return User(id: 10, name: "Ada")
 end
 
-pair() -> tuple<int, string>
+pair() -> tuple[int, string]
     return (4, "ok")
 end
 
@@ -3850,7 +3850,7 @@ main()
         io.print("bad")
     end
 
-    const item: tuple<int, string> = pair()
+    const item: tuple[int, string] = pair()
     io.print(string(item.0))
     io.print(item.1)
     match item
@@ -3906,7 +3906,7 @@ enum Event
     Empty
     Text(value: string)
     Record(user: User)
-    Pair(data: tuple<int, string>)
+    Pair(data: tuple[int, string])
 end
 
 event(kind: int) -> Event
@@ -4036,7 +4036,7 @@ implement Shape for Circle
     end
 end
 
-describe(s: any<Shape>) -> bool
+describe(s: any[Shape]) -> bool
     return s is Circle
 end
 
@@ -4045,7 +4045,7 @@ main()
     const is_user: bool = user is User
     const is_circle: bool = user is Circle
     const is_int: bool = 1 is int
-    const shape: any<Shape> = Circle(radius: 3)
+    const shape: any[Shape] = Circle(radius: 3)
     const is_shape_circle: bool = describe(shape)
 end
 "#,
@@ -4064,33 +4064,33 @@ fn build_c_backend_compiles_propagation() {
         "main.orl",
         r#"module app.main
 
-parse(flag: bool) -> result<int, string>
+parse(flag: bool) -> result[int, string]
     if flag
         return success(7)
     end
     return error("no value")
 end
 
-maybe(flag: bool) -> optional<int>
+maybe(flag: bool) -> optional[int]
     if flag
         return some(3)
     end
     return none
 end
 
-add_one(flag: bool) -> result<int, string>
+add_one(flag: bool) -> result[int, string]
     const value: int = parse(flag)?
     return success(value + 1)
 end
 
-unwrap_optional(flag: bool) -> optional<int>
+unwrap_optional(flag: bool) -> optional[int]
     const value: int = maybe(flag)?
     return some(value + 1)
 end
 
 main()
-    const a: result<int, string> = add_one(true)
-    const b: optional<int> = unwrap_optional(true)
+    const a: result[int, string] = add_one(true)
+    const b: optional[int] = unwrap_optional(true)
 end
 "#,
     );
@@ -4135,7 +4135,7 @@ implement Marker for Good
     end
 end
 
-require_marker<T>(value: T) -> int where T is Marker
+require_marker for T: Marker (value: T) -> int
     return 1
 end
 
@@ -4178,7 +4178,7 @@ implement Marker for Marked
     end
 end
 
-reject_marker<T>(value: T) -> int where T is not Marker
+reject_marker for T: not Marker (value: T) -> int
     return 1
 end
 
@@ -4203,7 +4203,7 @@ fn check_reports_circular_generic_instantiation() {
         "main.orl",
         r#"module app.main
 
-recurse<T>(value: T) -> T
+recurse[T](value: T) -> T
     return recurse(value)
 end
 
@@ -4253,11 +4253,7 @@ implement MarkerB for Good
     end
 end
 
-require_both<T>(value: T) -> int
-    where (
-        T is MarkerA
-        and T is MarkerB
-    )
+require_both for T: MarkerA, T: MarkerB (value: T) -> int
     return 1
 end
 
@@ -4470,13 +4466,13 @@ fn check_warns_when_result_expression_is_discarded() {
         "main.orl",
         r#"module app.main
 
-fail() -> result<int, string>
+fail() -> result[int, string]
     return error("fail")
 end
 
 main()
     fail()
-    const handled: result<int, string> = fail()
+    const handled: result[int, string] = fail()
 end
 "#,
     );
@@ -4731,7 +4727,7 @@ sum(values: int...) -> int
 end
 
 main()
-    const words: list<string> = ["no"]
+    const words: list[string] = ["no"]
     const bad: int = sum(..words)
 end
 "#,
@@ -4845,6 +4841,137 @@ end
     let out = run_check(&dir.path("main.orl")).unwrap();
     assert!(out.has_errors);
     assert!(diagnostic_codes(&out).contains(&"parse.func_removed"));
+}
+
+#[test]
+fn check_reports_removed_angle_type() {
+    let dir = TestDir::new("removed_angle_type");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+main()
+    const xs: list<int> = [1, 2, 3]
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.removed_angle_type"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_reports_removed_of_type() {
+    let dir = TestDir::new("removed_of_type");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+main()
+    const xs: list of int = [1]
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.removed_of_type"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_reports_removed_where_bound() {
+    let dir = TestDir::new("removed_where_bound");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+trait Marker
+    id(self) -> int
+end
+
+show[T](value: T) -> int where T is Marker
+    return 1
+end
+
+main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.removed_where_bound"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_accepts_bracket_types_and_for_bounds() {
+    let dir = TestDir::new("bracket_types_for_bounds");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io as io
+
+trait Labelled
+    label(self) -> string
+end
+
+struct User
+    name: string
+end
+
+implement Labelled for User
+    label(self) -> string
+        return self.name
+    end
+end
+
+struct Pair[A, B]
+    left: A
+    right: B
+end
+
+show for T: Labelled (value: T) -> string
+    return value.label()
+end
+
+identity[T](value: T) -> T
+    return value
+end
+
+main()
+    const xs: list[int] = [1, 2]
+    const m: map[string, int] = {"a": 1}
+    const o: optional[int] = some(1)
+    const r: result[int, string] = success(1)
+    const u: User = User(name: "Ada")
+    const s: string = show(u)
+    const id: int = identity(42)
+    io.print(s)
+    io.print(string(id))
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(
+        !out.has_errors,
+        "bracket types and for-bounds must parse: {:?}",
+        out.diagnostics
+    );
 }
 
 #[test]
@@ -5033,7 +5160,7 @@ end
 implement core.Hashable for Resource
 end
 
-require_hashable<T>(value: T) -> int where T is core.Hashable
+require_hashable for T: core.Hashable (value: T) -> int
     return 1
 end
 
@@ -5058,7 +5185,7 @@ fn check_accepts_json_stdlib_import() {
 import ori.json as json
 
 main()
-    const parsed: result<json.Value, string> = json.parse("{}")
+    const parsed: result[json.Value, string] = json.parse("{}")
 end
 "#,
     );
@@ -5302,32 +5429,32 @@ import ori.list as lists
 import ori.map as maps
 
 main()
-    const values: list<int> = [1, 2, 3, 4]
-    const doubled: list<int> = iter.map(values, do(x: int) => x * 2)
-    const filtered: list<int> = iter.filter(doubled, do(x: int) => x > 4)
+    const values: list[int] = [1, 2, 3, 4]
+    const doubled: list[int] = iter.map(values, do(x: int) => x * 2)
+    const filtered: list[int] = iter.filter(doubled, do(x: int) => x > 4)
     const has_large: bool = iter.any(values, do(x: int) => x > 3)
     const all_positive: bool = iter.all(values, do(x: int) => x > 0)
     const even_count: int = iter.count_where(values, do(x: int) => x % 2 == 0)
-    const first_two: list<int> = iter.take(values, 2)
-    const after_two: list<int> = iter.skip(values, 2)
-    const reversed: list<int> = iter.reverse(values)
+    const first_two: list[int] = iter.take(values, 2)
+    const after_two: list[int] = iter.skip(values, 2)
+    const reversed: list[int] = iter.reverse(values)
     const sum: int = iter.reduce(values, 0, do(acc: int, x: int) => acc + x)
-    const first_even: optional<int> = iter.find(values, do(x: int) => x % 2 == 0)
-    const sorted: list<int> = iter.sort([4, 1, 3, 2])
-    const sorted_desc: list<int> = iter.sort_by([4, 1, 3, 2], do(a: int, b: int) => b - a)
-    const unique: list<int> = iter.unique([1, 2, 1, 3, 2])
-    const expanded: list<int> = iter.flat_map([1, 2, 3], do(x: int) => [x, x * 10])
-    const zipped: list<tuple<int, int>> = iter.zip([1, 2, 3], [10, 20])
-    const first_pair: tuple<int, int> = lists.get(zipped, 0)
-    const second_pair: tuple<int, int> = lists.get(zipped, 1)
-    const parts: tuple<list<int>, list<int>> = iter.partition(values, do(x: int) => x % 2 == 0)
-    const evens: list<int> = parts.0
-    const odds: list<int> = parts.1
-    const grouped: map<int, list<int>> = iter.group_by(values, do(x: int) => x % 2)
-    const grouped_even: list<int> = maps.get(grouped, 0)
-    const grouped_odd: list<int> = maps.get(grouped, 1)
-    const nested: list<list<int>> = [[1, 2], [3], [], [4, 5]]
-    const flat: list<int> = iter.flatten(nested)
+    const first_even: optional[int] = iter.find(values, do(x: int) => x % 2 == 0)
+    const sorted: list[int] = iter.sort([4, 1, 3, 2])
+    const sorted_desc: list[int] = iter.sort_by([4, 1, 3, 2], do(a: int, b: int) => b - a)
+    const unique: list[int] = iter.unique([1, 2, 1, 3, 2])
+    const expanded: list[int] = iter.flat_map([1, 2, 3], do(x: int) => [x, x * 10])
+    const zipped: list[tuple[int, int]] = iter.zip([1, 2, 3], [10, 20])
+    const first_pair: tuple[int, int] = lists.get(zipped, 0)
+    const second_pair: tuple[int, int] = lists.get(zipped, 1)
+    const parts: tuple[list[int], list[int]] = iter.partition(values, do(x: int) => x % 2 == 0)
+    const evens: list[int] = parts.0
+    const odds: list[int] = parts.1
+    const grouped: map[int, list[int]] = iter.group_by(values, do(x: int) => x % 2)
+    const grouped_even: list[int] = maps.get(grouped, 0)
+    const grouped_odd: list[int] = maps.get(grouped, 1)
+    const nested: list[list[int]] = [[1, 2], [3], [], [4, 5]]
+    const flat: list[int] = iter.flatten(nested)
     io.print(string(lists.len(filtered)))
     io.print(string(lists.get(filtered, 0)))
     io.print(string(lists.get(filtered, 1)))
@@ -5405,30 +5532,30 @@ import ori.map as maps
 import ori.string as strings
 
 main()
-    const words: list<string> = ["pear", "fig", "apple", "fig"]
-    const lengths: list<int> = iter.map(words, do(word: string) => strings.len(word))
-    const short: list<string> = iter.filter(words, do(word: string) => strings.len(word) < 5)
+    const words: list[string] = ["pear", "fig", "apple", "fig"]
+    const lengths: list[int] = iter.map(words, do(word: string) => strings.len(word))
+    const short: list[string] = iter.filter(words, do(word: string) => strings.len(word) < 5)
     const has_apple: bool = iter.any(words, do(word: string) => word == "apple")
     const all_named: bool = iter.all(words, do(word: string) => strings.len(word) > 0)
     const fig_count: int = iter.count_where(words, do(word: string) => word == "fig")
-    const first_two: list<string> = iter.take(words, 2)
-    const after_two: list<string> = iter.skip(words, 2)
-    const reversed: list<string> = iter.reverse(words)
+    const first_two: list[string] = iter.take(words, 2)
+    const after_two: list[string] = iter.skip(words, 2)
+    const reversed: list[string] = iter.reverse(words)
     const total_len: int = iter.reduce(words, 0, do(acc: int, word: string) => acc + strings.len(word))
-    const found: optional<string> = iter.find(words, do(word: string) => word == "apple")
-    const expanded: list<string> = iter.flat_map(["x", "y"], do(word: string) => [word, word])
-    const sorted: list<string> = iter.sort(["pear", "apple", "fig"])
-    const sorted_by_len: list<string> = iter.sort_by(["pear", "apple", "fig"], do(a: string, b: string) => strings.len(a) - strings.len(b))
-    const unique: list<string> = iter.unique(["fig", "fig", "pear"])
-    const zipped: list<tuple<string, int>> = iter.zip(["a", "b"], [1, 2])
-    const first_pair: tuple<string, int> = lists.get(zipped, 0)
-    const parts: tuple<list<string>, list<string>> = iter.partition(words, do(word: string) => word == "fig")
-    const figs: list<string> = parts.0
-    const other: list<string> = parts.1
-    const grouped: map<string, list<string>> = iter.group_by(words, do(word: string) => word)
-    const grouped_figs: list<string> = maps.get(grouped, "fig")
-    const nested: list<list<string>> = [["a"], ["b", "c"]]
-    const flat: list<string> = iter.flatten(nested)
+    const found: optional[string] = iter.find(words, do(word: string) => word == "apple")
+    const expanded: list[string] = iter.flat_map(["x", "y"], do(word: string) => [word, word])
+    const sorted: list[string] = iter.sort(["pear", "apple", "fig"])
+    const sorted_by_len: list[string] = iter.sort_by(["pear", "apple", "fig"], do(a: string, b: string) => strings.len(a) - strings.len(b))
+    const unique: list[string] = iter.unique(["fig", "fig", "pear"])
+    const zipped: list[tuple[string, int]] = iter.zip(["a", "b"], [1, 2])
+    const first_pair: tuple[string, int] = lists.get(zipped, 0)
+    const parts: tuple[list[string], list[string]] = iter.partition(words, do(word: string) => word == "fig")
+    const figs: list[string] = parts.0
+    const other: list[string] = parts.1
+    const grouped: map[string, list[string]] = iter.group_by(words, do(word: string) => word)
+    const grouped_figs: list[string] = maps.get(grouped, "fig")
+    const nested: list[list[string]] = [["a"], ["b", "c"]]
+    const flat: list[string] = iter.flatten(nested)
     io.print(string(lists.get(lengths, 0)))
     io.print(string(lists.len(short)))
     io.print(string(has_apple))
@@ -5482,34 +5609,34 @@ fn build_c_backend_compiles_iter_stdlib() {
 import ori.iter as iter
 
 main()
-    const values: list<int> = [1, 2, 3, 4]
-    const doubled: list<int> = iter.map(values, do(x: int) => x * 2)
-    const filtered: list<int> = iter.filter(doubled, do(x: int) => x > 4)
+    const values: list[int] = [1, 2, 3, 4]
+    const doubled: list[int] = iter.map(values, do(x: int) => x * 2)
+    const filtered: list[int] = iter.filter(doubled, do(x: int) => x > 4)
     const has_large: bool = iter.any(values, do(x: int) => x > 3)
     const all_positive: bool = iter.all(values, do(x: int) => x > 0)
     const even_count: int = iter.count_where(values, do(x: int) => x % 2 == 0)
-    const first_two: list<int> = iter.take(values, 2)
-    const after_two: list<int> = iter.skip(values, 2)
-    const reversed: list<int> = iter.reverse(values)
+    const first_two: list[int] = iter.take(values, 2)
+    const after_two: list[int] = iter.skip(values, 2)
+    const reversed: list[int] = iter.reverse(values)
     const sum: int = iter.reduce(values, 0, do(acc: int, x: int) => acc + x)
-    const first_even: optional<int> = iter.find(values, do(x: int) => x % 2 == 0)
-    const sorted: list<int> = iter.sort([4, 1, 3, 2])
-    const sorted_desc: list<int> = iter.sort_by([4, 1, 3, 2], do(a: int, b: int) => b - a)
-    const unique: list<int> = iter.unique([1, 2, 1, 3, 2])
-    const expanded: list<int> = iter.flat_map([1, 2, 3], do(x: int) => [x, x * 10])
-    const zipped: list<tuple<int, int>> = iter.zip([1, 2, 3], [10, 20])
-    const first_pair: tuple<int, int> = zipped[0]
-    const second_pair: tuple<int, int> = zipped[1]
+    const first_even: optional[int] = iter.find(values, do(x: int) => x % 2 == 0)
+    const sorted: list[int] = iter.sort([4, 1, 3, 2])
+    const sorted_desc: list[int] = iter.sort_by([4, 1, 3, 2], do(a: int, b: int) => b - a)
+    const unique: list[int] = iter.unique([1, 2, 1, 3, 2])
+    const expanded: list[int] = iter.flat_map([1, 2, 3], do(x: int) => [x, x * 10])
+    const zipped: list[tuple[int, int]] = iter.zip([1, 2, 3], [10, 20])
+    const first_pair: tuple[int, int] = zipped[0]
+    const second_pair: tuple[int, int] = zipped[1]
     const first_sum: int = first_pair.0 + first_pair.1
     const second_sum: int = second_pair.0 + second_pair.1
-    const parts: tuple<list<int>, list<int>> = iter.partition(values, do(x: int) => x % 2 == 0)
-    const evens: list<int> = parts.0
-    const odds: list<int> = parts.1
+    const parts: tuple[list[int], list[int]] = iter.partition(values, do(x: int) => x % 2 == 0)
+    const evens: list[int] = parts.0
+    const odds: list[int] = parts.1
     const partition_first_even: int = evens[0]
     const partition_first_odd: int = odds[0]
-    const grouped: map<int, list<int>> = iter.group_by(values, do(x: int) => x % 2)
-    const nested: list<list<int>> = [[1, 2], [3], [], [4, 5]]
-    const flat: list<int> = iter.flatten(nested)
+    const grouped: map[int, list[int]] = iter.group_by(values, do(x: int) => x % 2)
+    const nested: list[list[int]] = [[1, 2], [3], [], [4, 5]]
+    const flat: list[int] = iter.flatten(nested)
 end
 "#,
     );
@@ -5651,14 +5778,14 @@ import ori.list as lst
 import ori.os as os
 
 main()
-    const env_value: optional<string> = os.env("ORI_TEST_OS_VALUE")
+    const env_value: optional[string] = os.env("ORI_TEST_OS_VALUE")
     if some(value) = env_value
         io.print(value)
     else
         io.print("missing")
     end
 
-    const args: list<string> = os.args()
+    const args: list[string] = os.args()
     io.print(string(lst.len(args)))
     io.print(os.platform())
     io.print(os.arch())
@@ -5708,8 +5835,8 @@ stop()
 end
 
 main()
-    const args: list<string> = os.args()
-    const env_value: optional<string> = os.env("PATH")
+    const args: list[string] = os.args()
+    const env_value: optional[string] = os.env("PATH")
     const pid: int = os.pid()
     const platform: string = os.platform()
     const arch: string = os.arch()
@@ -5744,9 +5871,9 @@ main()
     const number: int = rng.int(1, 3)
     const ratio: float = rng.float(0.0, 1.0)
     const flag: bool = rng.bool()
-    const items: list<int> = [10, 20, 30]
-    const picked: optional<int> = rng.choice(items)
-    const shuffled: list<int> = rng.shuffle(items)
+    const items: list[int] = [10, 20, 30]
+    const picked: optional[int] = rng.choice(items)
+    const shuffled: list[int] = rng.shuffle(items)
     io.print(string(number))
     io.print(string(ratio >= 0.0 and ratio <= 1.0))
     io.print(string(flag or not flag))
@@ -5796,12 +5923,12 @@ import ori.list as lists
 import ori.random as rng
 
 main()
-    const words: list<string> = ["alpha", "beta", "gamma"]
-    const picked: optional<string> = rng.choice(words)
+    const words: list[string] = ["alpha", "beta", "gamma"]
+    const picked: optional[string] = rng.choice(words)
     if some(value) = picked
         io.print(string(value == "alpha" or value == "beta" or value == "gamma"))
     end
-    const shuffled: list<string> = rng.shuffle(words)
+    const shuffled: list[string] = rng.shuffle(words)
     io.print(string(lists.len(shuffled)))
 end
 "#,
@@ -5832,7 +5959,7 @@ import ori.io as io
 import ori.json as json
 
 main()
-    const parsed: result<json.Value, string> = json.parse("{\"name\":\"ori\",\"ok\":true}")
+    const parsed: result[json.Value, string] = json.parse("{\"name\":\"ori\",\"ok\":true}")
     match parsed
     case success(value):
         io.print(json.stringify(value))
@@ -5841,7 +5968,7 @@ main()
         io.print(message)
     end
 
-    const invalid: result<json.Value, string> = json.parse("{")
+    const invalid: result[json.Value, string] = json.parse("{")
     match invalid
     case success(value):
         io.print(json.stringify(value))
@@ -5882,9 +6009,9 @@ main()
     const number: int = rng.int(1, 3)
     const ratio: float = rng.float(0.0, 1.0)
     const flag: bool = rng.bool()
-    const items: list<int> = [10, 20, 30]
-    const picked: optional<int> = rng.choice(items)
-    const shuffled: list<int> = rng.shuffle(items)
+    const items: list[int] = [10, 20, 30]
+    const picked: optional[int] = rng.choice(items)
+    const shuffled: list[int] = rng.shuffle(items)
 end
 "#,
     );
@@ -6432,7 +6559,7 @@ fn check_if_some_type_checks() {
         "main.orl",
         r#"module app.main
 
-get_name(flag: bool) -> optional<int>
+get_name(flag: bool) -> optional[int]
     if flag
         return some(42)
     end
@@ -6440,7 +6567,7 @@ get_name(flag: bool) -> optional<int>
 end
 
 main()
-    const maybe: optional<int> = get_name(true)
+    const maybe: optional[int] = get_name(true)
     if some(n) = maybe
         const doubled: int = n + n
     end
@@ -6487,7 +6614,7 @@ fn check_while_some_type_checks() {
         r#"module app.main
 
 main()
-    var source: optional<int> = some(3)
+    var source: optional[int] = some(3)
     while some(n) = source
         source = none
     end
@@ -6900,7 +7027,7 @@ fn build_if_some_generates_c() {
 
 import ori.io as io
 
-get_value(flag: bool) -> optional<int>
+get_value(flag: bool) -> optional[int]
     if flag
         return some(7)
     end
@@ -6908,7 +7035,7 @@ get_value(flag: bool) -> optional<int>
 end
 
 main()
-    const maybe: optional<int> = get_value(true)
+    const maybe: optional[int] = get_value(true)
     if some(n) = maybe
         io.print(string(n))
     end
@@ -6933,14 +7060,14 @@ fn build_c_backend_compiles_runtime_abi_values() {
 
 import ori.string as str
 
-maybe(flag: bool) -> optional<int>
+maybe(flag: bool) -> optional[int]
     if flag
         return some(7)
     end
     return none
 end
 
-parse(flag: bool) -> result<int, string>
+parse(flag: bool) -> result[int, string]
     if flag
         return success(11)
     end
@@ -6950,11 +7077,11 @@ end
 main()
     const bool_text: string = string(true)
     const float_text: string = string(2.5)
-    const numbers: list<int> = [1, 2, 3]
+    const numbers: list[int] = [1, 2, 3]
     const first: int = numbers[0]
-    const parsed_int: result<int, string> = str.parse_int("12")
-    const parsed_float: result<float, string> = str.parse_float("1.5")
-    const maybe_value: optional<int> = maybe(true)
+    const parsed_int: result[int, string] = str.parse_int("12")
+    const parsed_float: result[float, string] = str.parse_float("1.5")
+    const maybe_value: optional[int] = maybe(true)
     if some(value) = maybe_value
         const copied: int = value
     end
@@ -7523,8 +7650,8 @@ import ori.map as maps
 import ori.set as sets
 
 main()
-    const my_map: map<int, int> = { 10: 100, 20: 200 }
-    const my_set: set<int> = set { 10, 20, 30 }
+    const my_map: map[int, int] = { 10: 100, 20: 200 }
+    const my_set: set[int] = set { 10, 20, 30 }
     io.print(string(maps.get(my_map, 20)))
     io.print(if sets.contains(my_set, 30) then "1" else "0")
 end
@@ -7559,8 +7686,8 @@ main()
     const part: string = text[1..5]
     io.print(part)
 
-    const arr: list<int> = [10, 20, 30, 40, 50]
-    const sub: list<int> = arr[2..4]
+    const arr: list[int] = [10, 20, 30, 40, 50]
+    const sub: list[int] = arr[2..4]
     io.print(string(sub[0]))
     io.print(string(sub[1]))
 end
@@ -7754,7 +7881,7 @@ fn check_reports_float_range_as_type_error() {
         r#"module app.main
 
 main()
-    const r: range<int> = 0.0..1.0
+    const r: range[int] = 0.0..1.0
 end
 "#,
     );
@@ -7776,7 +7903,7 @@ fn check_reports_success_void_mismatch() {
         "main.orl",
         r#"module app.main
 
-make() -> result<int, string>
+make() -> result[int, string]
     return success()
 end
 "#,
@@ -7914,7 +8041,7 @@ implement Shape for Square
     end
 end
 
-describe(s: any<Shape>)
+describe(s: any[Shape])
     if s is Circle
         io.print("circle")
     else
@@ -7923,8 +8050,8 @@ describe(s: any<Shape>)
 end
 
 main()
-    const c: any<Shape> = Circle(radius: 3)
-    const sq: any<Shape> = Square(side: 4)
+    const c: any[Shape] = Circle(radius: 3)
+    const sq: any[Shape] = Square(side: 4)
     describe(c)
     describe(sq)
 end
@@ -8363,19 +8490,19 @@ implement Named for Resource
     end
 end
 
-make_resource(id: int) -> result<Resource, AppError>
+make_resource(id: int) -> result[Resource, AppError]
     if id > 0
         return success(Resource(id: id, name: "item-" + string(id)))
     end
     return error(AppError.Validation(message: "bad id"))
 end
 
-load() -> result<Resource, AppError>
+load() -> result[Resource, AppError]
     const resource: Resource = make_resource(util.seed())?
     return success(resource)
 end
 
-describe<T>(item: T) -> string where T is Named
+describe for T: Named (item: T) -> string
     return item.name()
 end
 
@@ -8385,12 +8512,12 @@ main()
         using cleanup: Resource = resource
         io.print(describe(resource))
         io.print(resource.kind())
-        const maybe_name: optional<string> = some(resource.name)
+        const maybe_name: optional[string] = some(resource.name)
         if some(name) = maybe_name
             io.print(name)
         end
 
-        const doubled: list<int> = iter.map([1, 2, 3], do(x: int) => x * util.seed())
+        const doubled: list[int] = iter.map([1, 2, 3], do(x: int) => x * util.seed())
         var total: int = 0
         for value, index in doubled
             total = total + value + index
@@ -8780,7 +8907,7 @@ fn compile_runtime_panics_on_list_index_out_of_bounds() {
         r#"module app.main
 
 main()
-    const values: list<int> = [1]
+    const values: list[int] = [1]
     values[1]
 end
 "#,
@@ -8896,7 +9023,7 @@ fn compile_runtime_panics_on_invalid_list_slice_bounds() {
 import ori.list as lists
 
 main()
-    const values: list<int> = [1]
+    const values: list[int] = [1]
     lists.slice(values, 0, 2)
 end
 "#,
@@ -9155,9 +9282,9 @@ import ori.queue as queue
 import ori.set as sets
 
 main()
-const values: map<int, int> = {1: 10, 2: 20}
-const seen: set<int> = set {1, 2}
-const todo: queue.Queue<string> = queue.new()
+const values: map[int, int] = {1: 10, 2: 20}
+const seen: set[int] = set {1, 2}
+const todo: queue.Queue[string] = queue.new()
 queue.enqueue(todo, "ready")
 if sets.contains(seen, 2)
 io.print(string(maps.get(values, 1)))
@@ -9176,10 +9303,10 @@ end
     assert!(!out.has_errors, "{:?}", out.diagnostics);
     assert!(out
         .formatted
-        .contains("    const values: map<int, int> = {1: 10, 2: 20}"));
+        .contains("    const values: map[int, int] = {1: 10, 2: 20}"));
     assert!(out
         .formatted
-        .contains("    const seen: set<int> = set {1, 2}"));
+        .contains("    const seen: set[int] = set {1, 2}"));
     assert!(out.formatted.contains("    match queue.dequeue(todo)"));
     assert!(out.formatted.contains("    case some(item):"));
     assert!(out.formatted.contains("        io.print(item)"));
@@ -9448,12 +9575,12 @@ import ori.io as io
 import ori.list as lu
 
 main()
-    const items: list<string> = ["a", "b", "c"]
+    const items: list[string] = ["a", "b", "c"]
     io.print(lu.first_or(items, "missing"))
     io.print(lu.last_or(items, "missing"))
     io.print(lu.get_or(items, 1, "missing"))
     io.print(lu.get_or(items, 9, "missing"))
-    const empty: list<string> = []
+    const empty: list[string] = []
     io.print(lu.first_or(empty, "empty"))
 end
 "#,
@@ -9498,7 +9625,7 @@ import ori.io as io
 import ori.map as mu
 
 main()
-    const scores: map<string, int> = { "a": 1, "b": 2 }
+    const scores: map[string, int] = { "a": 1, "b": 2 }
     io.print(string(mu.get_or(scores, "a", 0)))
     io.print(string(mu.get_or(scores, "z", 9)))
     io.print(string(mu.contains_key(scores, "b")))
@@ -9522,10 +9649,10 @@ import ori.io as io
 import ori.set.utils as su
 
 main()
-    const tags: set<string> = su.from_list(["a", "b", "a"])
+    const tags: set[string] = su.from_list(["a", "b", "a"])
     io.print(string(su.contains_all(tags, ["a", "b"])))
     io.print(string(su.contains_all(tags, ["a", "c"])))
-    const subset: set<string> = su.from_list(["a"])
+    const subset: set[string] = su.from_list(["a"])
     io.print(string(su.is_subset(subset, tags)))
 end
 "#,
@@ -9604,9 +9731,9 @@ main()
     io.print(su.left("hello", 2))
     io.print(su.right("hello", 3))
     io.print(su.trim_all("  a   b  c  "))
-    const parts: list<string> = su.words("one two  three")
+    const parts: list[string] = su.words("one two  three")
     io.print(string(lists.len(parts)))
-    const rows: list<string> = su.lines("a\nb")
+    const rows: list[string] = su.lines("a\nb")
     io.print(string(lists.len(rows)))
 end
 "#,
@@ -9627,7 +9754,7 @@ import ori.io as io
 import ori.list as lu
 
 main()
-    const one: list<int> = lu.singleton(42)
+    const one: list[int] = lu.singleton(42)
     io.print(string(lu.first_or(one, 0)))
 end
 "#,
@@ -9669,9 +9796,9 @@ import ori.io as io
 import ori.list as la
 
 main()
-    const nums: list<int> = [1, 2, 3, 4]
+    const nums: list[int] = [1, 2, 3, 4]
     io.print(string(la.sum_int(nums)))
-    const sorted: list<int> = [1, 3, 5, 7, 9]
+    const sorted: list[int] = [1, 3, 5, 7, 9]
     io.print(string(la.binary_search_int(sorted, 5)))
     io.print(string(la.binary_search_int(sorted, 4)))
     io.print(string(la.all_equal_int([2, 2, 2], 2)))
@@ -9704,7 +9831,7 @@ main()
     io.print(string(ta.leaf_count(outline)))
     io.print(string(ta.is_leaf(outline, left)))
     io.print(string(ta.is_leaf(outline, root)))
-    const values: list<string> = ta.values_preorder(outline)
+    const values: list[string] = ta.values_preorder(outline)
     io.print(string(lists.len(values)))
     io.print(string(ta.max_depth_from(outline, root)))
 end
@@ -9727,7 +9854,7 @@ import ori.graph.algorithms as ga
 import ori.io as io
 
 main()
-    const g: graph.Graph<string> = graph.new(false)
+    const g: graph.Graph[string] = graph.new(false)
     graph.add_edge(g, "a", "b")
     graph.add_edge(g, "b", "c")
     io.print(string(ga.has_path(g, "a", "c")))
@@ -9974,7 +10101,7 @@ main()
     io.print(string(bu.starts_with(payload, prefix)))
     io.print(string(bu.ends_with(payload, suffix)))
     io.print(string(bu.contains(payload, part)))
-    const values: list<int> = bu.to_list(payload)
+    const values: list[int] = bu.to_list(payload)
     io.print(string(lists.len(values)))
     const packed: bytes = bu.from_list([65, 66])
     io.print(string(bytes_mod.len(packed)))
@@ -10021,9 +10148,9 @@ import ori.io as io
 import ori.map as mu
 
 main()
-    const empty: map<string, int> = {}
+    const empty: map[string, int] = {}
     io.print(string(mu.is_empty_int(empty)))
-    const data: map<string, int> = { "x": 1 }
+    const data: map[string, int] = { "x": 1 }
     io.print(string(mu.has_key(data, "x")))
     io.print(string(mu.has_key(data, "y")))
 end
@@ -10053,7 +10180,7 @@ main()
         case error(_):
             io.print("false")
     end
-    const delayed: lazy<int> = lz.once(do() => 7)
+    const delayed: lazy[int] = lz.once(do() => 7)
     io.print(string(lz.is_consumed(delayed)))
     const value: int = lz.force(delayed)
     io.print(string(value))
@@ -10239,17 +10366,17 @@ main()
     io.print(string(iter_utils.contains_int([1, 2, 3], 2)))
     io.print(string(os_utils.pid() > 0))
     io.print(string(random_utils.seeded_int(7, 1, 3) >= 1))
-    const q: queue.Queue<int> = queue_utils.from_list([10, 20])
+    const q: queue.Queue[int] = queue_utils.from_list([10, 20])
     io.print(string(queue_utils.peek_or(q, -1)))
-    const s: stack.Stack<int> = stack_utils.from_list([5, 6])
+    const s: stack.Stack[int] = stack_utils.from_list([5, 6])
     io.print(string(stack_utils.peek_or(s, -1)))
-    const d: deque.Deque<int> = deque_utils.from_list([1, 2, 3])
+    const d: deque.Deque[int] = deque_utils.from_list([1, 2, 3])
     io.print(string(deque_utils.front_or(d, -1)))
-    const h: heap.Heap<int> = heap_utils.from_list_int([30, 10, 20])
+    const h: heap.Heap[int] = heap_utils.from_list_int([30, 10, 20])
     io.print(string(heap_utils.peek_or_int(h, -1)))
-    const ll: linked_list.LinkedList<int> = linked_list_utils.from_list([9, 8])
+    const ll: linked_list.LinkedList[int] = linked_list_utils.from_list([9, 8])
     io.print(string(linked_list_utils.front_or(ll, -1)))
-    var table: hash_table.HashTable<string, int> = hash_table.new()
+    var table: hash_table.HashTable[string, int] = hash_table.new()
     hash_table.set(table, "a", 1)
     io.print(string(hash_table_utils.get_or_string_int(table, "a", 0)))
     io.print(path.relative("a/b/c", "a/b"))
@@ -10284,11 +10411,11 @@ import ori.string as str
 import ori.string as string_algorithms
 
 main()
-    var base: map<string, int> = maps.new()
+    var base: map[string, int] = maps.new()
     maps.set(base, "a", 1)
-    var overlay: map<string, int> = maps.new()
+    var overlay: map[string, int] = maps.new()
     maps.set(overlay, "b", 2)
-    const merged: map<string, int> = map_algorithms.merge_string_int(base, overlay)
+    const merged: map[string, int] = map_algorithms.merge_string_int(base, overlay)
     io.print(string(map_algorithms.key_count_string_int(merged)))
     io.print(string(set_algorithms.intersection_size_string(sets.from_list(["x", "y"]), sets.from_list(["y", "z"]))))
     io.print(string(string_algorithms.equals_any("ok", ["no", "ok"])))
@@ -10434,7 +10561,7 @@ import ori.string only (is_empty, truncate as cut)
 main()
     const empty: bool = is_empty("")
     const text: string = cut("abcdef", 3)
-    const one: list<int> = singleton(3)
+    const one: list[int] = singleton(3)
     const total: int = sum_int(one)
     const fallback: string = read_text_or("missing.txt", "fallback")
 end
@@ -10459,7 +10586,7 @@ import ori.string as su
 main()
     const empty: bool = su.is_empty("")
     const text: string = su.truncate("abcdef", 3)
-    const one: list<int> = lu.singleton(3)
+    const one: list[int] = lu.singleton(3)
     const total: int = lu.sum_int(one)
     const fallback: string = fu.read_text_or("missing.txt", "fallback")
 end
@@ -10484,11 +10611,11 @@ import ori.bytes.algorithms only (compare_lex)
 import ori.bytes.utils only (is_empty)
 
 main()
-    const m: map<string, int> = maps.new()
+    const m: map[string, int] = maps.new()
     maps.set(m, "k", 1)
-    const overlay: map<string, int> = maps.new()
+    const overlay: map[string, int] = maps.new()
     maps.set(overlay, "k", 2)
-    const merged: map<string, int> = merge_string_int(m, overlay)
+    const merged: map[string, int] = merge_string_int(m, overlay)
     const value: int = get_or(merged, "k", 0)
     const left: bytes = bytes_mod.from_list([1, 2])
     const right: bytes = bytes_mod.from_list([1, 3])
@@ -10576,7 +10703,7 @@ main()
     match net.listen("127.0.0.1", 0)
         case success(listener):
             const port: int = net.listener_port(listener)
-            const server_job: task.Job<void> = task.run_blocking(do() -> void
+            const server_job: task.Job[void] = task.run_blocking(do() -> void
                 serve_once(listener)
             end)
             match net.connect("127.0.0.1", port, 5000)
@@ -10822,11 +10949,11 @@ fn build_accepts_handle_type() {
         "main.orl",
         r#"module app.main
 
-return_handle() -> handle<int>
+return_handle() -> handle[int]
     return return_handle()
 end
 
-use_handle(h: handle<int>) -> handle<int>
+use_handle(h: handle[int]) -> handle[int]
     return h
 end
 "#,

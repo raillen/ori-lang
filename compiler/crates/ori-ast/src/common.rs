@@ -79,7 +79,7 @@ impl Visibility {
     }
 }
 
-/// A list of generic type parameters: `<T, U>`.
+/// A list of generic type parameters: `[T, U]` (S3 surface).
 pub type TypeParams = Vec<TypeParam>;
 
 /// A single generic type parameter name.

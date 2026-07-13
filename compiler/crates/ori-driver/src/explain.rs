@@ -49,7 +49,7 @@ const ENTRIES: &[ExplainEntry] = &[
         code: "type.unused_result",
         severity: "warning",
         summary: "A `result` value is computed but discarded.",
-        cause: "Calling a function returning `result<T, E>` without `?`, `match`, or explicit handling.",
+        cause: "Calling a function returning `result[T, E]` without `?`, `match`, or explicit handling.",
         fix: "Use `const _ = expr`, propagate with `?`, or handle `success`/`error` explicitly.",
     },
     ExplainEntry {
@@ -119,7 +119,7 @@ const ENTRIES: &[ExplainEntry] = &[
         code: "generic.constraint_not_satisfied",
         severity: "error",
         summary: "Generic constraint is not satisfied.",
-        cause: "A type argument does not implement a required trait (`where T is Trait`).",
+        cause: "A type argument does not implement a required trait (`for T: Trait`).",
         fix: "Implement the trait for your type or use a type that already satisfies the constraint.",
     },
 ];

@@ -9,12 +9,13 @@ macro_rules! primitive_type {
     }};
 }
 
-macro_rules! single_generic_type {
+macro_rules! single_bracket_type {
     ($self:expr, $span:expr, $variant:ident) => {{
         $self.advance();
-        $self.expect(&TokenKind::Lt)?;
-        let inner = $self.parse_type()?;
-        let end = $self.expect(&TokenKind::Gt)?;
+        if $self.reject_removed_of_type() {
+            return None;
+        }
+        let (inner, end) = $self.parse_single_type_arg()?;
         Some(Type::$variant(Box::new(inner), $span.cover(end)))
     }};
 }
@@ -42,44 +43,88 @@ impl<'src> Parser<'src> {
             TokenKind::Void => primitive_type!(self, span, Void),
 
             // ── Single-arg generic built-in types ─────────────────────────────
-            TokenKind::Optional => single_generic_type!(self, span, Optional),
-            TokenKind::List => single_generic_type!(self, span, List),
-            TokenKind::Set => single_generic_type!(self, span, Set),
-            TokenKind::Range => single_generic_type!(self, span, Range),
-            TokenKind::Lazy => single_generic_type!(self, span, Lazy),
-            TokenKind::Handle => single_generic_type!(self, span, Handle),
+            TokenKind::Optional => single_bracket_type!(self, span, Optional),
+            TokenKind::List => single_bracket_type!(self, span, List),
+            TokenKind::Set => single_bracket_type!(self, span, Set),
+            TokenKind::Range => single_bracket_type!(self, span, Range),
+            TokenKind::Lazy => single_bracket_type!(self, span, Lazy),
+            TokenKind::Handle => single_bracket_type!(self, span, Handle),
 
             // ── Multi-arg generic built-in types ──────────────────────────────
             TokenKind::ResultKw => {
                 self.advance();
-                self.expect(&TokenKind::Lt)?;
-                let ok = self.parse_type()?;
-                self.expect(&TokenKind::Comma)?;
-                let err = self.parse_type()?;
-                let end = self.expect(&TokenKind::Gt)?;
-                Some(Type::Result(Box::new(ok), Box::new(err), span.cover(end)))
+                if self.reject_removed_of_type() {
+                    return None;
+                }
+                let (args, end) = self.parse_type_arg_list(2)?;
+                Some(Type::Result(
+                    Box::new(args[0].clone()),
+                    Box::new(args[1].clone()),
+                    span.cover(end),
+                ))
             }
             TokenKind::Map => {
                 self.advance();
-                self.expect(&TokenKind::Lt)?;
-                let key = self.parse_type()?;
-                self.expect(&TokenKind::Comma)?;
-                let val = self.parse_type()?;
-                let end = self.expect(&TokenKind::Gt)?;
-                Some(Type::Map(Box::new(key), Box::new(val), span.cover(end)))
+                // Removed: `map of K to V`
+                if self.at_contextual("of") {
+                    let of_span = self.current_span();
+                    self.error(
+                        "parse.removed_of_type",
+                        "`of` type forms are removed; write `map[K, V]`",
+                        of_span,
+                    );
+                    self.advance(); // of
+                    let key = self.parse_type()?;
+                    if self.at_contextual("to") {
+                        self.advance();
+                    }
+                    let val = self.parse_type()?;
+                    let end = val.span();
+                    return Some(Type::Map(Box::new(key), Box::new(val), span.cover(end)));
+                }
+                let (args, end) = self.parse_type_arg_list(2)?;
+                Some(Type::Map(
+                    Box::new(args[0].clone()),
+                    Box::new(args[1].clone()),
+                    span.cover(end),
+                ))
             }
             TokenKind::Any => {
                 self.advance();
-                self.expect(&TokenKind::Lt)?;
+                if self.reject_removed_of_type() {
+                    return None;
+                }
+                let open = match self.peek_kind() {
+                    Some(TokenKind::LBracket) => TokenKind::LBracket,
+                    Some(TokenKind::Lt) => {
+                        self.error_removed_angle_type(self.current_span());
+                        TokenKind::Lt
+                    }
+                    _ => {
+                        let span = self.current_span();
+                        self.error(
+                            "parse.expected_type",
+                            "expected type arguments in `[...]`",
+                            span,
+                        );
+                        return None;
+                    }
+                };
+                self.advance(); // [ or <
                 let trait_name = self.parse_qualified_name()?;
-                let end = self.expect(&TokenKind::Gt)?;
+                let end = if open == TokenKind::LBracket {
+                    self.expect(&TokenKind::RBracket)?
+                } else {
+                    self.expect(&TokenKind::Gt)?
+                };
                 Some(Type::Any(trait_name, span.cover(end)))
             }
             TokenKind::Tuple => {
                 self.advance();
-                self.expect(&TokenKind::Lt)?;
-                let args = self.parse_type_list(&TokenKind::Gt)?;
-                let end = self.expect(&TokenKind::Gt)?;
+                if self.reject_removed_of_type() {
+                    return None;
+                }
+                let (args, end) = self.parse_type_arg_list_free()?;
                 Some(Type::Tuple(args, span.cover(end)))
             }
 
@@ -107,10 +152,21 @@ impl<'src> Parser<'src> {
                 })
             }
 
-            // ── User-defined type: `Name` or `Name<T, U>` ────────────────────
+            // ── User-defined type: `Name` or `Name[T, U]` ────────────────────
             TokenKind::Ident => {
                 let name = self.parse_qualified_name()?;
-                if self.at(&TokenKind::Lt) && self.peek_nth_kind(1) != Some(&TokenKind::Eq) {
+                if self.at(&TokenKind::LBracket) {
+                    self.advance(); // [
+                    let args = self.parse_type_list(&TokenKind::RBracket)?;
+                    let end = self.expect(&TokenKind::RBracket)?;
+                    Some(Type::Generic {
+                        name,
+                        args,
+                        span: span.cover(end),
+                    })
+                } else if self.at(&TokenKind::Lt) && self.peek_nth_kind(1) != Some(&TokenKind::Eq) {
+                    // Removed angle-bracket type args: `Name<T>`
+                    self.error_removed_angle_type(self.current_span());
                     self.advance(); // <
                     let args = self.parse_type_list(&TokenKind::Gt)?;
                     let end = self.expect(&TokenKind::Gt)?;
@@ -152,5 +208,105 @@ impl<'src> Parser<'src> {
             }
         }
         Some(types)
+    }
+
+    /// Emit `parse.removed_of_type` when the next token is contextual `of`.
+    /// Returns true when the of-form was rejected (caller should stop).
+    fn reject_removed_of_type(&mut self) -> bool {
+        if !self.at_contextual("of") {
+            return false;
+        }
+        let of_span = self.current_span();
+        self.error(
+            "parse.removed_of_type",
+            "`of` type forms are removed; write `list[T]`, `optional[T]`, `result[T, E]`, …",
+            of_span,
+        );
+        // Recovery: consume `of` and attempt to parse a single trailing type so the
+        // surrounding declaration can keep going.
+        self.advance();
+        let _ = self.parse_type();
+        true
+    }
+
+    fn error_removed_angle_type(&mut self, span: ori_diagnostics::Span) {
+        self.error(
+            "parse.removed_angle_type",
+            "angle-bracket type arguments are removed; write `Type[...]` (e.g. `list[T]`)",
+            span,
+        );
+    }
+
+    /// Parse exactly one type argument in `[T]` (or recover from `<T>`).
+    fn parse_single_type_arg(&mut self) -> Option<(Type, ori_diagnostics::Span)> {
+        let open = match self.peek_kind() {
+            Some(TokenKind::LBracket) => TokenKind::LBracket,
+            Some(TokenKind::Lt) => {
+                self.error_removed_angle_type(self.current_span());
+                TokenKind::Lt
+            }
+            _ => {
+                let span = self.current_span();
+                self.error(
+                    "parse.expected_type",
+                    "expected type arguments in `[...]`",
+                    span,
+                );
+                return None;
+            }
+        };
+        self.advance();
+        let inner = self.parse_type()?;
+        let close = if open == TokenKind::LBracket {
+            TokenKind::RBracket
+        } else {
+            TokenKind::Gt
+        };
+        let end = self.expect(&close)?;
+        Some((inner, end))
+    }
+
+    /// Parse exactly `expected` type arguments in brackets (or recover from angles).
+    fn parse_type_arg_list(
+        &mut self,
+        expected: usize,
+    ) -> Option<(Vec<Type>, ori_diagnostics::Span)> {
+        let (args, end) = self.parse_type_arg_list_free()?;
+        if args.len() != expected {
+            self.error(
+                "parse.expected_type",
+                format!("expected {expected} type argument(s)"),
+                end,
+            );
+        }
+        Some((args, end))
+    }
+
+    fn parse_type_arg_list_free(&mut self) -> Option<(Vec<Type>, ori_diagnostics::Span)> {
+        let open = match self.peek_kind() {
+            Some(TokenKind::LBracket) => TokenKind::LBracket,
+            Some(TokenKind::Lt) => {
+                self.error_removed_angle_type(self.current_span());
+                TokenKind::Lt
+            }
+            _ => {
+                let span = self.current_span();
+                self.error(
+                    "parse.expected_type",
+                    "expected type arguments in `[...]`",
+                    span,
+                );
+                return None;
+            }
+        };
+        self.advance();
+        let close = if open == TokenKind::LBracket {
+            TokenKind::RBracket
+        } else {
+            TokenKind::Gt
+        };
+        let args = self.parse_type_list(&close)?;
+        let end = self.expect(&close)?;
+        Some((args, end))
     }
 }

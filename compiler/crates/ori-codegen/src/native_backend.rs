@@ -2340,7 +2340,7 @@ fn collect_general_async_plan(f: &HirFunc) -> Option<SimpleAsyncStateMachinePlan
     })
 }
 
-/// Layout of an `optional<T>`: `{ has_value: i8, [padding], value: T }`.
+/// Layout of an `optional[T]`: `{ has_value: i8, [padding], value: T }`.
 fn optional_layout(inner: &Ty, ptr_ty: types::Type) -> (u32, u32) {
     // Returns (value_offset, total_size)
     let (val_size, val_align) = field_size_align(inner, ptr_ty);
@@ -2349,7 +2349,7 @@ fn optional_layout(inner: &Ty, ptr_ty: types::Type) -> (u32, u32) {
     (val_offset, total)
 }
 
-/// Layout of `result<T,E>`: `{ is_ok: i8, [padding], union { ok: T | err: E } }`.
+/// Layout of `result[T,E]`: `{ is_ok: i8, [padding], union { ok: T | err: E } }`.
 fn result_layout(ok: &Ty, err: &Ty, ptr_ty: types::Type) -> (u32, u32, u32) {
     // Returns (payload_offset, ok_size, total_size)
     let (ok_size, ok_align) = field_size_align(ok, ptr_ty);
@@ -2361,7 +2361,7 @@ fn result_layout(ok: &Ty, err: &Ty, ptr_ty: types::Type) -> (u32, u32, u32) {
     (pay_offset, ok_size, total)
 }
 
-/// Layout of `lazy<T>`: `{ thunk: ptr, forced: i8, [padding], value: T }`.
+/// Layout of `lazy[T]`: `{ thunk: ptr, forced: i8, [padding], value: T }`.
 fn lazy_layout(inner: &Ty, ptr_ty: types::Type) -> (u32, u32) {
     let ptr_size = ptr_ty.bytes() as u32;
     let (val_size, val_align) = field_size_align(inner, ptr_ty);
@@ -3624,7 +3624,7 @@ impl<M: Module> NativeBackend<M> {
         let id = decl("ori_string_parse_float", &[pt], vec![], Some(pt))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_string_parse_float"), id);
-        // list<T> runtime
+        // list[T] runtime
         let id = decl("ori_list_new", &[], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_new"), id);
         let id = decl("ori_list_push", &[pt, types::I64], vec![], None)?;
@@ -5748,7 +5748,7 @@ impl<'a> FuncCodegen<'a> {
     ) -> Result<ir::Value, String> {
         let Ty::Any(trait_def_id) = &receiver.ty else {
             return Err(format!(
-                "dynamic method call requires `any<Trait>`, got `{}`",
+                "dynamic method call requires `any[Trait]`, got `{}`",
                 receiver.ty.display()
             ));
         };
@@ -10147,7 +10147,7 @@ impl<'a> FuncCodegen<'a> {
         };
         if !matches!(**err_ty, Ty::String) {
             return Err(format!(
-                "`.or_wrap()` currently requires `result<T, string>`, got `{}`",
+                "`.or_wrap()` currently requires `result[T, string]`, got `{}`",
                 value.ty.display()
             ));
         }
@@ -12428,7 +12428,7 @@ impl<'a> FuncCodegen<'a> {
         })
     }
 
-    /// Compare two `optional<T>` values for equality (eq=true) or inequality (eq=false).
+    /// Compare two `optional[T]` values for equality (eq=true) or inequality (eq=false).
     fn emit_optional_equality(
         &mut self,
         lv: ir::Value,
@@ -12504,7 +12504,7 @@ impl<'a> FuncCodegen<'a> {
         Ok(self.maybe_invert_equality(result, eq))
     }
 
-    /// Compare two `result<T,E>` values.
+    /// Compare two `result[T,E]` values.
     fn emit_result_equality(
         &mut self,
         lv: ir::Value,
@@ -12589,7 +12589,7 @@ impl<'a> FuncCodegen<'a> {
         Ok(self.maybe_invert_equality(result, eq))
     }
 
-    /// Compare two `tuple<...>` values element-by-element.
+    /// Compare two `tuple[...]` values element-by-element.
     fn emit_tuple_equality(
         &mut self,
         lv: ir::Value,
@@ -12794,7 +12794,7 @@ impl<'a> FuncCodegen<'a> {
         Ok(result)
     }
 
-    /// Compare two `list<T>` values by length and ordered elements.
+    /// Compare two `list[T]` values by length and ordered elements.
     fn emit_list_equality(
         &mut self,
         lv: ir::Value,
@@ -12888,7 +12888,7 @@ impl<'a> FuncCodegen<'a> {
         Ok(self.maybe_invert_equality(result, eq))
     }
 
-    /// Compare two `set<T>` values by length and unordered membership.
+    /// Compare two `set[T]` values by length and unordered membership.
     fn emit_set_equality(
         &mut self,
         lv: ir::Value,
@@ -12988,7 +12988,7 @@ impl<'a> FuncCodegen<'a> {
         Ok(self.maybe_invert_equality(result, eq))
     }
 
-    /// Compare two `map<K,V>` values by length, key membership, and value equality.
+    /// Compare two `map[K,V]` values by length, key membership, and value equality.
     fn emit_map_equality(
         &mut self,
         lv: ir::Value,

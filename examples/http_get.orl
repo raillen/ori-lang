@@ -5,7 +5,7 @@ import ori.net as net
 import ori.string as str
 import ori.bytes as bytes_mod
 
-read_http_headers(conn: net.Connection) -> result<string, string>
+read_http_headers(conn: net.Connection) -> result[string, string]
     var acc: string = ""
     loop
         match net.read_some(conn, 1024)

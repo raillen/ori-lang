@@ -2159,7 +2159,7 @@ mod tests {
     /// guards against the spec drifting from the implementation.
     #[test]
     fn spec_fs_and_json_contracts_match_stdlib_sig() {
-        // fs.open_read / fs.open_write: (string) -> result<File, string>
+        // fs.open_read / fs.open_write: (string) -> result[File, string]
         for path in ["ori.fs.open_read", "ori.fs.open_write"] {
             let (params, ret) = stdlib_func_sig(path).expect("fs file open sig");
             assert_eq!(params, vec![Ty::String], "{path} params");
@@ -2170,7 +2170,7 @@ mod tests {
             );
         }
 
-        // fs.read: (File, int) -> result<bytes, string>
+        // fs.read: (File, int) -> result[bytes, string]
         let (params, ret) = stdlib_func_sig("ori.fs.read").expect("fs.read sig");
         assert_eq!(params, vec![file_ty(), Ty::Int], "fs.read params");
         assert_eq!(
@@ -2179,7 +2179,7 @@ mod tests {
             "fs.read return"
         );
 
-        // fs.write: (File, bytes) -> result<int, string>
+        // fs.write: (File, bytes) -> result[int, string]
         let (params, ret) = stdlib_func_sig("ori.fs.write").expect("fs.write sig");
         assert_eq!(params, vec![file_ty(), Ty::Bytes], "fs.write params");
         assert_eq!(
@@ -2209,7 +2209,7 @@ mod tests {
             "fs.delete return"
         );
 
-        // io.read_line: () -> optional<string>
+        // io.read_line: () -> optional[string]
         let (params, ret) = stdlib_func_sig("ori.io.read_line").expect("io.read_line sig");
         assert_eq!(params, Vec::<Ty>::new(), "io.read_line params");
         assert_eq!(
@@ -2218,7 +2218,7 @@ mod tests {
             "io.read_line return"
         );
 
-        // json.parse: (string) -> result<Value, string>
+        // json.parse: (string) -> result[Value, string]
         let json_value = Ty::Named(JSON_VALUE_PLACEHOLDER, Vec::new());
         let (params, ret) = stdlib_func_sig("ori.json.parse").expect("json.parse sig");
         assert_eq!(params, vec![Ty::String], "json.parse params");

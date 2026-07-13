@@ -511,23 +511,23 @@ fn ty_to_str(ty: &Ty, resolved: &ResolvedModule) -> String {
         Ty::Optional(inner) => format!("{}?", ty_to_str(inner, resolved)),
         Ty::Result(ok, err) => {
             format!(
-                "result<{}, {}>",
+                "result[{}, {}]",
                 ty_to_str(ok, resolved),
                 ty_to_str(err, resolved)
             )
         }
-        Ty::List(inner) => format!("list<{}>", ty_to_str(inner, resolved)),
+        Ty::List(inner) => format!("list[{}]", ty_to_str(inner, resolved)),
         Ty::Map(k, v) => format!(
-            "map<{}, {}>",
+            "map[{}, {}]",
             ty_to_str(k, resolved),
             ty_to_str(v, resolved)
         ),
-        Ty::Set(inner) => format!("set<{}>", ty_to_str(inner, resolved)),
-        Ty::Range(inner) => format!("range<{}>", ty_to_str(inner, resolved)),
-        Ty::Lazy(inner) => format!("lazy<{}>", ty_to_str(inner, resolved)),
-        Ty::Handle(inner) => format!("handle<{}>", ty_to_str(inner, resolved)),
-        Ty::Future(inner) => format!("future<{}>", ty_to_str(inner, resolved)),
-        Ty::TaskJob(inner) => format!("task.Job<{}>", ty_to_str(inner, resolved)),
+        Ty::Set(inner) => format!("set[{}]", ty_to_str(inner, resolved)),
+        Ty::Range(inner) => format!("range[{}]", ty_to_str(inner, resolved)),
+        Ty::Lazy(inner) => format!("lazy[{}]", ty_to_str(inner, resolved)),
+        Ty::Handle(inner) => format!("handle[{}]", ty_to_str(inner, resolved)),
+        Ty::Future(inner) => format!("future[{}]", ty_to_str(inner, resolved)),
+        Ty::TaskJob(inner) => format!("task.Job[{}]", ty_to_str(inner, resolved)),
         Ty::Channel(inner) => format!("channel<{}>", ty_to_str(inner, resolved)),
         Ty::AtomicInt => "atomic_int".into(),
         Ty::TaskJoinError => "task.JoinError".into(),
@@ -536,7 +536,7 @@ fn ty_to_str(ty: &Ty, resolved: &ResolvedModule) -> String {
         Ty::Opaque { kind, .. } => kind.display_name().into(),
         Ty::Any(def_id) => {
             let name = resolved.def_map.get(*def_id).name.to_string();
-            format!("any<{name}>")
+            format!("any[{name}]")
         }
         Ty::Tuple(parts) => {
             let inner = parts
@@ -544,7 +544,7 @@ fn ty_to_str(ty: &Ty, resolved: &ResolvedModule) -> String {
                 .map(|t| ty_to_str(t, resolved))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("tuple<{inner}>")
+            format!("tuple[{inner}]")
         }
         Ty::Func { params, ret } => {
             let ps = params

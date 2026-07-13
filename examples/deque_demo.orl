@@ -4,7 +4,7 @@ import ori.deque as deque
 import ori.io as io
 
 main()
-    const window: deque.Deque<int> = deque.new()
+    const window: deque.Deque[int] = deque.new()
     deque.push_back(window, 20)
     deque.push_front(window, 10)
     deque.push_back(window, 30)

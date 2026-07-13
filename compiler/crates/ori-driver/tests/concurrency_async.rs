@@ -64,11 +64,11 @@ import ori.channel as channel
 import ori.atomic as atomic
 
 main()
-    const job: task.Job<int> = task.spawn(do() => 41)
-    const joined: result<int, task.JoinError> = task.join(job)
-    const ch: channel.Channel<int> = channel.create()
-    const sent: result<void, channel.SendError> = channel.send(ch, 7)
-    const received: result<int, channel.ReceiveError> = channel.receive(ch)
+    const job: task.Job[int] = task.spawn(do() => 41)
+    const joined: result[int, task.JoinError] = task.join(job)
+    const ch: channel.Channel[int] = channel.create()
+    const sent: result[void, channel.SendError] = channel.send(ch, 7)
+    const received: result[int, channel.ReceiveError] = channel.receive(ch)
     channel.close(ch)
     const counter: atomic.AtomicInt = atomic.new(1)
     atomic.store(counter, atomic.add(counter, 2))
@@ -95,7 +95,7 @@ async compute() -> int
 end
 
 async main()
-    const future: future<int> = compute()
+    const future: future[int] = compute()
     const value: int = await future
     await task.sleep(1)
 end
@@ -195,7 +195,7 @@ import ori.task as task
 
 main()
     const callback: func() -> int = do() => 1
-    const job: task.Job<int> = task.spawn(do() => callback())
+    const job: task.Job[int] = task.spawn(do() => callback())
 end
 "#,
     );
@@ -219,8 +219,8 @@ fn check_rejects_non_transferable_channel_value() {
 import ori.channel as channel
 
 main()
-    const ch: channel.Channel<func() -> int> = channel.create()
-    const sent: result<void, channel.SendError> = channel.send(ch, do() => 1)
+    const ch: channel.Channel[func() -] int> = channel.create()
+    const sent: result[void, channel.SendError] = channel.send(ch, do() => 1)
 end
 "#,
     );
@@ -275,8 +275,8 @@ import ori.map as map
 import ori.set as set
 
 main()
-    const lookup: map<int, int> = { 1: 40, 2: 41 }
-    const seen: set<int> = set { 3, 4 }
+    const lookup: map[int, int] = { 1: 40, 2: 41 }
+    const seen: set[int] = set { 3, 4 }
     const value: int = map.get(lookup, 2)
     const ok: bool = set.contains(seen, 4)
 end
@@ -300,7 +300,7 @@ import ori.io as io
 import ori.task as task
 
 main()
-    const job: task.Job<int> = task.spawn(do() => 41)
+    const job: task.Job[int] = task.spawn(do() => 41)
     match task.join(job)
         case success(value):
             io.print(string(value))
@@ -369,7 +369,7 @@ end
 
 main()
     const start: int = time.now()
-    const future: future<int> = delayed()
+    const future: future[int] = delayed()
     const elapsed: int = time.duration_ms(start, time.now())
     if elapsed > 120
         io.print("blocked")
@@ -769,17 +769,17 @@ fn compile_runs_async_result_question_mark_native() {
 
 import ori.io as io
 
-async compute() -> result<int, string>
+async compute() -> result[int, string]
     return success(41)
 end
 
-async use_value() -> result<int, string>
+async use_value() -> result[int, string]
     const value: int = (await compute())?
     return success(value)
 end
 
 async main()
-    const outcome: result<int, string> = await use_value()
+    const outcome: result[int, string] = await use_value()
     match outcome
         case success(value):
             io.print(string(value))
@@ -809,17 +809,17 @@ fn compile_runs_async_result_question_mark_error_state_machine_native() {
 
 import ori.io as io
 
-async fail() -> result<int, string>
+async fail() -> result[int, string]
     return error("bad")
 end
 
-async use_value() -> result<int, string>
+async use_value() -> result[int, string]
     const value: int = (await fail())?
     return success(value)
 end
 
 async main()
-    const outcome: result<int, string> = await use_value()
+    const outcome: result[int, string] = await use_value()
     match outcome
         case success(value):
             io.print(string(value))
@@ -851,7 +851,7 @@ import ori.io as io
 import ori.task as task
 
 async main()
-    const values: list<int> = [1, 2, 3]
+    const values: list[int] = [1, 2, 3]
     var total: int = 0
 
     await task.sleep(1)
@@ -901,9 +901,9 @@ import ori.task as task
 
 async main()
     const label: string = "answer"
-    const values: list<string> = ["first", "second"]
-    const lookup: map<int, int> = { 1: 40, 2: 41 }
-    const seen: set<int> = set { 3, 4 }
+    const values: list[string] = ["first", "second"]
+    const lookup: map[int, int] = { 1: 40, 2: 41 }
+    const seen: set[int] = set { 3, 4 }
 
     await task.sleep(1)
 
@@ -1089,8 +1089,8 @@ import ori.fs as fs
 import ori.io as io
 
 async main()
-    const read_result: result<string, string> = await fs.read_text_async("{input}")
-    const write_result: result<string, string> = await fs.write_text_async("{output}", "written async")
+    const read_result: result[string, string] = await fs.read_text_async("{input}")
+    const write_result: result[string, string] = await fs.write_text_async("{output}", "written async")
     match read_result
         case success(text):
             io.print(text)
@@ -1185,7 +1185,7 @@ import ori.io as io
 import ori.task as task
 
 main()
-    const ch: channel.Channel<int> = channel.create()
+    const ch: channel.Channel[int] = channel.create()
     channel.send(ch, 29)
     match channel.receive(ch)
         case success(value):
@@ -1223,9 +1223,9 @@ import ori.io as io
 import ori.queue as queue
 
 main()
-    const q: queue.Queue<int> = queue.new()
+    const q: queue.Queue[int] = queue.new()
     queue.enqueue(q, 5)
-    const qch: channel.Channel<queue.Queue<int>> = channel.create()
+    const qch: channel.Channel[queue.Queue[int]] = channel.create()
     channel.send(qch, q)
     match channel.receive(qch)
         case success(received):
@@ -1239,9 +1239,9 @@ main()
             io.print("queue-error")
     end
 
-    const d: deque.Deque<string> = deque.new()
+    const d: deque.Deque[string] = deque.new()
     deque.push_back(d, "ok")
-    const dch: channel.Channel<deque.Deque<string>> = channel.create()
+    const dch: channel.Channel[deque.Deque[string]] = channel.create()
     channel.send(dch, d)
     match channel.receive(dch)
         case success(received):
@@ -1569,14 +1569,14 @@ end
 
 async worker(token: task.CancelToken)
     using r: Resource = await get_resource(77)
-    const fut: future<void> = task.sleep(5000)
+    const fut: future[void] = task.sleep(5000)
     task.associate(token, fut)
     await fut
 end
 
 main()
     const token: task.CancelToken = task.create_token()
-    const job: task.Job<void> = task.spawn(do() -> void
+    const job: task.Job[void] = task.spawn(do() -> void
         task.block_on(worker(token))
     end)
     task.block_on(task.sleep(50))
@@ -1674,10 +1674,10 @@ import ori.io as io
 import ori.bytes as bytes_mod
 import ori.task as task
 
-async worker(token: task.CancelToken, path: string) -> result<int, string>
+async worker(token: task.CancelToken, path: string) -> result[int, string]
     using file: fs.File = fs.open_write(path)?
     fs.write(file, b"ok")?
-    const fut: future<void> = task.sleep(5000)
+    const fut: future[void] = task.sleep(5000)
     task.associate(token, fut)
     await fut
     return success(0)
@@ -1686,7 +1686,7 @@ end
 main()
     const path: string = "{test_file}"
     const token: task.CancelToken = task.create_token()
-    const job: task.Job<void> = task.spawn(do() -> void
+    const job: task.Job[void] = task.spawn(do() -> void
         task.block_on(worker(token, path))
     end)
     task.block_on(task.sleep(50))
@@ -1784,7 +1784,7 @@ async compute(x: int) -> int
     return x * x
 end
 
-async sum_squares(values: list<int>) -> int
+async sum_squares(values: list[int]) -> int
     var total: int = 0
     for value in values
         const sq: int = await compute(value)
@@ -1794,7 +1794,7 @@ async sum_squares(values: list<int>) -> int
 end
 
 main()
-    const xs: list<int> = [1, 2, 3, 4]
+    const xs: list[int] = [1, 2, 3, 4]
     const outcome: int = task.block_on(sum_squares(xs))
     io.print(string(outcome))
 end
@@ -1834,7 +1834,7 @@ end
 
 async deeply_nested(limit: int) -> int
     var total: int = 0
-    const xs: list<int> = [1, 2, 3]
+    const xs: list[int] = [1, 2, 3]
     for value in xs
         var guard: int = 0
         while guard < limit
@@ -1894,7 +1894,7 @@ await task.sleep(1)
 return n * 2
 end
 
-handle(path: string) -> result<int, string>
+handle(path: string) -> result[int, string]
 using file: fs.File = fs.open_read(path)?
 match fs.read(file, 100)
 case success(data):
@@ -1916,7 +1916,7 @@ end
 end
 
 main()
-const job: task.Job<int> = task.spawn(do() => 41)
+const job: task.Job[int] = task.spawn(do() => 41)
 const r: int = task.block_on(work(task.join(job)))
 io.print(string(r))
 end
@@ -1940,7 +1940,7 @@ end
     );
     // task.spawn with closure at 4-space indent inside main.
     assert!(
-        once.contains("    const job: task.Job<int> = task.spawn(do() => 41)\n"),
+        once.contains("    const job: task.Job[int] = task.spawn(do() => 41)\n"),
         "task.spawn formatting: {once}"
     );
     // Nested using: `using file` at 4, match at 4, case arm at 4, `using copy`

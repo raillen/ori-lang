@@ -572,7 +572,7 @@ fn type_accepts_tuple() {
         r#"module app.main
 import ori.io as io
 main()
-    const pair: tuple<int, string> = tuple(1, "one")
+    const pair: tuple[int, string] = tuple(1, "one")
     io.print(string(pair.0))
     io.print(pair.1)
 end
@@ -589,7 +589,7 @@ fn type_rejects_out_of_bounds_tuple_index() {
         "main.orl",
         r#"module app.main
 main()
-    const pair: tuple<int, string> = tuple(1, "one")
+    const pair: tuple[int, string] = tuple(1, "one")
     const x: int = pair.2
 end
 "#,
@@ -611,8 +611,8 @@ fn type_accepts_optional_some_and_none() {
         r#"module app.main
 import ori.io as io
 main()
-    const x: optional<int> = some(5)
-    const y: optional<int> = none
+    const x: optional[int] = some(5)
+    const y: optional[int] = none
     if some(v) = x
         io.print(string(v))
     end
@@ -636,7 +636,7 @@ fn type_accepts_result_success_and_error() {
         "main.orl",
         r#"module app.main
 import ori.io as io
-divide(a: int, b: int) -> result<int, string>
+divide(a: int, b: int) -> result[int, string]
     if b == 0
         return error("zero")
     end
@@ -662,7 +662,7 @@ fn type_rejects_success_without_payload_for_non_void_result() {
     dir.write(
         "main.orl",
         r#"module app.main
-bad() -> result<int, string>
+bad() -> result[int, string]
     return success()
 end
 main()
@@ -885,7 +885,7 @@ fn expr_rejects_propagate_on_non_result_in_void_function() {
     dir.write(
         "main.orl",
         r#"module app.main
-produce() -> result<int, string>
+produce() -> result[int, string]
     return success(1)
 end
 main()
@@ -908,10 +908,10 @@ fn expr_rejects_propagate_err_type_mismatch() {
     dir.write(
         "main.orl",
         r#"module app.main
-a() -> result<int, string>
+a() -> result[int, string]
     return success(1)
 end
-b() -> result<int, int>
+b() -> result[int, int]
     const x: int = a()?
     return success(x)
 end
@@ -934,10 +934,10 @@ fn expr_accepts_try_prefix_for_result_propagation() {
     dir.write(
         "main.orl",
         r#"module app.main
-produce() -> result<int, string>
+produce() -> result[int, string]
     return success(1)
 end
-wrapped() -> result<int, string>
+wrapped() -> result[int, string]
     const x: int = try produce()
     return success(x + 1)
 end
@@ -955,10 +955,10 @@ fn expr_accepts_try_prefix_for_optional_propagation() {
     dir.write(
         "main.orl",
         r#"module app.main
-maybe() -> optional<int>
+maybe() -> optional[int]
     return some(1)
 end
-wrapped() -> optional<int>
+wrapped() -> optional[int]
     const x: int = try maybe()
     return some(x + 1)
 end
@@ -976,7 +976,7 @@ fn expr_rejects_try_prefix_on_non_result_or_optional() {
     dir.write(
         "main.orl",
         r#"module app.main
-wrapped() -> result<int, string>
+wrapped() -> result[int, string]
     const x: int = try 1
     return success(x)
 end
@@ -1003,8 +1003,8 @@ import ori.io as io
 import ori.list as lists
 import ori.iter as iter
 main()
-    const items: list<int> = [1, 2, 3]
-    const doubled: list<int> = iter.map(items, do(x: int) => x * 2)
+    const items: list[int] = [1, 2, 3]
+    const doubled: list[int] = iter.map(items, do(x: int) => x * 2)
     io.print(string(lists.len(doubled)))
 end
 "#,
@@ -1164,9 +1164,9 @@ fn expr_accepts_collection_literals() {
         r#"module app.main
 import ori.io as io
 main()
-    const items: list<string> = ["a", "b", "c"]
-    const scores: map<int, string> = {1: "one", 2: "two"}
-    const empty: list<int> = []
+    const items: list[string] = ["a", "b", "c"]
+    const scores: map[int, string] = {1: "one", 2: "two"}
+    const empty: list[int] = []
     io.print(string(1))
 end
 "#,
@@ -1184,9 +1184,9 @@ fn expr_accepts_index_and_slice() {
 import ori.io as io
 import ori.list as lists
 main()
-    const items: list<int> = [10, 20, 30]
+    const items: list[int] = [10, 20, 30]
     io.print(string(items[0]))
-    const sub: list<int> = items[1..3]
+    const sub: list[int] = items[1..3]
     io.print(string(lists.len(sub)))
 end
 "#,
@@ -1264,7 +1264,7 @@ fn stmt_accepts_if_some_binding() {
         "main.orl",
         r#"module app.main
 import ori.io as io
-maybe_user() -> optional<string>
+maybe_user() -> optional[string]
     return some("Ada")
 end
 main()
@@ -1288,7 +1288,7 @@ fn stmt_accepts_while_some_loop() {
         r#"module app.main
 import ori.io as io
 main()
-    var source: optional<int> = some(3)
+    var source: optional[int] = some(3)
     while some(n) = source
         io.print(string(n))
         source = none
@@ -1670,7 +1670,7 @@ fn func_rejects_closure_capturing_var() {
 import ori.iter as iter
 main()
     var total: int = 0
-    const mapped: list<int> = iter.map([1, 2], do(x: int) => x + total)
+    const mapped: list[int] = iter.map([1, 2], do(x: int) => x + total)
 end
 "#,
     );
@@ -1870,8 +1870,8 @@ implement Drawable for Rect
     end
 end
 main()
-    const c: any<Drawable> = Circle(radius: 1.0)
-    const r: any<Drawable> = Rect(w: 2.0, h: 3.0)
+    const c: any[Drawable] = Circle(radius: 1.0)
+    const r: any[Drawable] = Rect(w: 2.0, h: 3.0)
     io.print(c.draw())
     io.print(r.draw())
 end
@@ -1900,9 +1900,9 @@ implement Drawable for Circle
     end
 end
 main()
-    const a: any<Drawable> = Circle(radius: 1.0)
-    const b: any<Drawable> = Circle(radius: 1.0)
-    const c: any<Drawable> = Circle(radius: 2.0)
+    const a: any[Drawable] = Circle(radius: 1.0)
+    const b: any[Drawable] = Circle(radius: 1.0)
+    const c: any[Drawable] = Circle(radius: 2.0)
     io.println(string(a == b))
     io.println(string(a != c))
 end
@@ -1966,13 +1966,13 @@ fn error_accepts_result_with_propagation_chain() {
         "main.orl",
         r#"module app.main
 import ori.io as io
-step1() -> result<int, string>
+step1() -> result[int, string]
     return success(1)
 end
-step2(x: int) -> result<int, string>
+step2(x: int) -> result[int, string]
     return success(x + 1)
 end
-pipeline() -> result<int, string>
+pipeline() -> result[int, string]
     const a: int = step1()?
     const b: int = step2(a)?
     return success(b)
@@ -2023,7 +2023,7 @@ fn error_compile_runs_index_out_of_bounds_causes_panic() {
 import ori.io as io
 import ori.list as lists
 main()
-    const items: list<int> = [1, 2, 3]
+    const items: list[int] = [1, 2, 3]
     const x: int = items[99]
     io.print(string(x))
 end
@@ -2252,13 +2252,13 @@ fn generic_accepts_type_inference() {
         "main.orl",
         r#"module app.main
 import ori.io as io
-wrap<T>(value: T) -> optional<T>
+wrap[T](value: T) -> optional[T]
     return some(value)
 end
 main()
     const a: int = 42
-    const b: optional<int> = wrap(a)
-    const c: optional<string> = wrap("hello")
+    const b: optional[int] = wrap(a)
+    const c: optional[string] = wrap("hello")
     io.print("ok")
 end
 "#,
@@ -2285,7 +2285,7 @@ implement Labelled for User
         return self.name
     end
 end
-show<T>(value: T) -> string where T is Labelled
+show for T: Labelled (value: T) -> string
     return value.label()
 end
 main()
@@ -2307,7 +2307,7 @@ fn generic_rejects_constraint_not_satisfied() {
 trait Comparable
     compare(self, other: Self) -> int
 end
-max<T>(a: T, b: T) -> T where T is Comparable
+max for T: Comparable (a: T, b: T) -> T
     return a
 end
 struct Point
@@ -2338,7 +2338,7 @@ import ori.io as io
 trait Disposable
     mut dispose(self)
 end
-raw_copy<T>(src: T) -> T where T is not Disposable
+raw_copy for T: not Disposable (src: T) -> T
     return src
 end
 main()
@@ -2365,7 +2365,7 @@ implement Disposable for Res
     mut dispose(self)
     end
 end
-raw_copy<T>(src: T) -> T where T is not Disposable
+raw_copy for T: not Disposable (src: T) -> T
     return src
 end
 main()
@@ -2389,7 +2389,7 @@ fn generic_accepts_generic_struct() {
         "main.orl",
         r#"module app.main
 import ori.io as io
-struct Pair<A, B>
+struct Pair[A, B]
     first: A
     second: B
 end
@@ -2408,14 +2408,14 @@ fn generic_generic_struct_types_are_distinct() {
     dir.write(
         "main.orl",
         r#"module app.main
-struct Pair<A, B>
+struct Pair[A, B]
     first: A
     second: B
 end
-takes_int_string(p: Pair<int, string>)
+takes_int_string(p: Pair[int, string])
 end
 main()
-    const p: Pair<string, int> = Pair(first: "one", second: 1)
+    const p: Pair[string, int] = Pair(first: "one", second: 1)
     takes_int_string(p)
 end
 "#,
@@ -2436,8 +2436,8 @@ fn generic_accepts_hkt() {
     dir.write(
         "main.orl",
         r#"module app.main
-trait Functor<F<_>>
-    fmap<A, B>(fa: F<A>, f: func(A) -> B) -> F<B>
+trait Functor[F[_]]
+    fmap[A, B](fa: F[A], f: func(A) -> B) -> F[B]
 end
 main()
 end
@@ -2471,7 +2471,7 @@ fn generic_accepts_const_generic_param() {
     dir.write(
         "main.orl",
         r#"module app.main
-struct Matrix<const N: int>
+struct Matrix[const N: int]
     value: int
 end
 main()
@@ -2521,7 +2521,7 @@ implement Loggable for User
     end
 end
 
-validate_age(age: int) -> result<int, string>
+validate_age(age: int) -> result[int, string]
     if age < 0
         return error("age below zero")
     end
@@ -2694,7 +2694,7 @@ implement Displayable for string
         return self
     end
 end
-log(values: any<Displayable>..., prefix: string)
+log(values: any[Displayable]..., prefix: string)
 end
 main()
 end
@@ -3149,14 +3149,14 @@ import ori.fs as fs
 import ori.io as io
 import ori.bytes as bytes_mod
 
-write_helper(path: string) -> result<void, string>
+write_helper(path: string) -> result[void, string]
     using file: fs.File = fs.open_write(path)?
     const n: int = fs.write(file, b"hello using file")?
     io.println(f"written: {{n}}")
     return success()
 end
 
-read_helper(path: string) -> result<string, string>
+read_helper(path: string) -> result[string, string]
     using file: fs.File = fs.open_read(path)?
     const data: bytes = fs.read(file, 20)?
     const s: string = bytes_mod.decode_utf8(data)?
@@ -3204,7 +3204,7 @@ import ori.io as io
 
 async worker(token: task.CancelToken)
     io.println("worker started")
-    const fut: future<void> = task.sleep(5000)
+    const fut: future[void] = task.sleep(5000)
     task.associate(token, fut)
     await fut
     io.println("worker finished")
@@ -3212,7 +3212,7 @@ end
 
 main()
     const token: task.CancelToken = task.create_token()
-    const job: task.Job<void> = task.spawn(do() -> void
+    const job: task.Job[void] = task.spawn(do() -> void
         task.block_on(worker(token))
     end)
 
@@ -3259,37 +3259,37 @@ import ori.io as io
 import ori.map as maps
 import ori.core as core
 
-struct Pair<A, B>
+struct Pair[A, B]
     first: A
     second: B
 end
 
-check_generic_eq<T>(left: T, right: T) -> bool where T is core.Equatable
+check_generic_eq for T: core.Equatable (left: T, right: T) -> bool
     return left == right
 end
 
 main()
-    const p1: Pair<string, int> = .{ first: "hello", second: 42 }
-    const p2: Pair<string, int> = .{ first: "hello", second: 42 }
-    const p3: Pair<string, int> = .{ first: "world", second: 42 }
-    const p4: Pair<string, int> = .{ first: "hello", second: 43 }
+    const p1: Pair[string, int] = .{ first: "hello", second: 42 }
+    const p2: Pair[string, int] = .{ first: "hello", second: 42 }
+    const p3: Pair[string, int] = .{ first: "world", second: 42 }
+    const p4: Pair[string, int] = .{ first: "hello", second: 43 }
 
     io.println(string(p1 == p2))
     io.println(string(p1 != p3))
     io.println(string(p1 != p4))
 
-    const map1: map<string, Pair<string, int>> = maps.new()
-    const item1: Pair<string, int> = .{ first: "hello", second: 1 }
-    const item2: Pair<string, int> = .{ first: "world", second: 2 }
+    const map1: map[string, Pair[string, int]] = maps.new()
+    const item1: Pair[string, int] = .{ first: "hello", second: 1 }
+    const item2: Pair[string, int] = .{ first: "world", second: 2 }
     maps.set(map1, "key1", item1)
     maps.set(map1, "key2", item2)
 
-    const map2: map<string, Pair<string, int>> = maps.new()
+    const map2: map[string, Pair[string, int]] = maps.new()
     maps.set(map2, "key2", item2)
     maps.set(map2, "key1", item1)
 
-    const map3: map<string, Pair<string, int>> = maps.new()
-    const item3: Pair<string, int> = .{ first: "world", second: 3 }
+    const map3: map[string, Pair[string, int]] = maps.new()
+    const item3: Pair[string, int] = .{ first: "world", second: 3 }
     maps.set(map3, "key1", item1)
     maps.set(map3, "key2", item3)
 
@@ -3325,14 +3325,14 @@ fn build_c_backend_structural_equality_advanced() {
 
 import ori.core as core
 
-struct Pair<A, B>
+struct Pair[A, B]
     first: A
     second: B
 end
 
 main()
-    const p1: Pair<string, int> = .{ first: "hello", second: 42 }
-    const p2: Pair<string, int> = .{ first: "hello", second: 42 }
+    const p1: Pair[string, int] = .{ first: "hello", second: 42 }
+    const p2: Pair[string, int] = .{ first: "hello", second: 42 }
     const is_equal: bool = p1 == p2
 end
 "#,

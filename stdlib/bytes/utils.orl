@@ -91,10 +91,10 @@ public contains(value: bytes, part: bytes) -> bool
     return false
 end
 
-public from_list(values: list<int>) -> bytes
+public from_list(values: list[int]) -> bytes
     return bytes_mod.from_list(values)
 end
 
-public to_list(value: bytes) -> list<int>
+public to_list(value: bytes) -> list[int]
     return bytes_mod.to_list(value)
 end

@@ -282,7 +282,8 @@ impl<'src> Parser<'src> {
 
     /// Whether the next tokens start a function declaration (S3: no `func` keyword).
     ///
-    /// Forms: `[async] [mut] name(…)` / `[async] [mut] name<T>(…)` / legacy `func …`.
+    /// Forms: `[async] [mut] name(…)` / `name[T](…)` / `name for T: Trait (…)` /
+    /// legacy `name<T>(…)` (errors) / legacy `func …`.
     fn at_func_decl_start(&self) -> bool {
         if self.at(&TokenKind::Func) || self.at(&TokenKind::Mut) || self.at_contextual("async") {
             return true;
@@ -290,14 +291,17 @@ impl<'src> Parser<'src> {
         self.at_named_func_head()
     }
 
-    /// `name(` or `name<` — function/method head without modifiers.
+    /// `name(` / `name[` / `name for` / legacy `name<` — function/method head without modifiers.
     fn at_named_func_head(&self) -> bool {
         if !self.at(&TokenKind::Ident) {
             return false;
         }
         matches!(
             self.peek_nth_kind(1),
-            Some(TokenKind::LParen) | Some(TokenKind::Lt)
+            Some(TokenKind::LParen)
+                | Some(TokenKind::LBracket)
+                | Some(TokenKind::For)
+                | Some(TokenKind::Lt)
         )
     }
 
@@ -308,14 +312,15 @@ impl<'src> Parser<'src> {
         let (is_async, is_mut) = self.parse_func_modifiers();
         self.reject_func_keyword_on_decl();
         let name = self.parse_name()?;
-        let type_params = self.parse_type_params_opt();
+        let (type_params, where_clause) = self.parse_generic_header();
         let params = self.parse_param_list()?;
         let return_ty = if self.eat(&TokenKind::Arrow) {
             Some(self.parse_type()?)
         } else {
             None
         };
-        let where_clause = self.parse_where_clause_opt();
+        // Legacy trailing `where` (after return type) is rejected but recovered.
+        let where_clause = where_clause.or_else(|| self.parse_where_clause_opt());
         let body = self.parse_block()?;
         let end = self.expect_block_end(start, "function")?;
         Some(FuncDecl {
@@ -337,14 +342,14 @@ impl<'src> Parser<'src> {
         let (is_async, is_mut) = self.parse_func_modifiers();
         self.reject_func_keyword_on_decl();
         let name = self.parse_name()?;
-        let type_params = self.parse_type_params_opt();
+        let (type_params, where_clause) = self.parse_generic_header();
         let params = self.parse_param_list()?;
         let return_ty = if self.eat(&TokenKind::Arrow) {
             Some(self.parse_type()?)
         } else {
             None
         };
-        let where_clause = self.parse_where_clause_opt();
+        let where_clause = where_clause.or_else(|| self.parse_where_clause_opt());
         let end = return_ty.as_ref().map(|t| t.span()).unwrap_or(name.span);
         Some(FuncSignature {
             visibility: vis,
@@ -357,6 +362,18 @@ impl<'src> Parser<'src> {
             where_clause,
             span: start.cover(end),
         })
+    }
+
+    /// `[T]` type params + optional `for T: Trait` bounds (S3 / Auk9-style).
+    fn parse_generic_header(
+        &mut self,
+    ) -> (
+        Vec<ori_ast::common::TypeParam>,
+        Option<ori_ast::common::WhereClause>,
+    ) {
+        let mut type_params = self.parse_type_params_opt();
+        let where_clause = self.parse_for_bounds_opt(&mut type_params);
+        (type_params, where_clause)
     }
 
     /// S3: declaration form is `name(...)` — `func` on a declaration is a hard error.
@@ -500,12 +517,13 @@ impl<'src> Parser<'src> {
     fn parse_struct_decl(&mut self, vis: Visibility) -> Option<StructDecl> {
         let start = self.advance().unwrap().span; // struct
         let name = self.parse_name()?;
-        let type_params = self.parse_type_params_opt();
-        let where_clause = self.parse_where_clause_opt();
+        let (type_params, where_clause) = self.parse_generic_header();
+        // Legacy trailing `where` still recovered (with error).
+        let where_clause = where_clause.or_else(|| self.parse_where_clause_opt());
         let mut fields = Vec::new();
         let mut field_names = HashSet::new();
         let mut methods = Vec::new();
-        // Fields: ident : type [if expr]  (not `ident(` / `ident<` methods)
+        // Fields: ident : type [if expr]  (not `ident(` / `ident[` methods)
         while self.at_struct_field_start() {
             let field = self.parse_struct_field()?;
             if !field_names.insert(field.name.text.clone()) {
@@ -625,8 +643,8 @@ impl<'src> Parser<'src> {
     fn parse_trait_decl(&mut self, vis: Visibility) -> Option<TraitDecl> {
         let start = self.advance().unwrap().span; // trait
         let name = self.parse_name()?;
-        let type_params = self.parse_type_params_opt();
-        let where_clause = self.parse_where_clause_opt();
+        let (type_params, where_clause) = self.parse_generic_header();
+        let where_clause = where_clause.or_else(|| self.parse_where_clause_opt());
         let mut members = Vec::new();
         while !self.at(&TokenKind::End) && !self.at_eof() {
             let associated_type = self
@@ -718,8 +736,21 @@ impl<'src> Parser<'src> {
             return false;
         }
         i = self.skip_trivia_after(i + 1);
-        if self.kind_at(i) == Some(&TokenKind::Lt) {
+        // Optional type params: `[T]` (S3) or legacy `<T>` (error path still present).
+        if self.kind_at(i) == Some(&TokenKind::LBracket) {
+            match self.skip_balanced(i, TokenKind::LBracket, TokenKind::RBracket) {
+                Some(after) => i = after,
+                None => return false,
+            }
+        } else if self.kind_at(i) == Some(&TokenKind::Lt) {
             match self.skip_balanced(i, TokenKind::Lt, TokenKind::Gt) {
+                Some(after) => i = after,
+                None => return false,
+            }
+        }
+        // Optional `for T: Trait, …` bounds.
+        if self.kind_at(i) == Some(&TokenKind::For) {
+            match self.skip_for_bounds_at(i) {
                 Some(after) => i = after,
                 None => return false,
             }
@@ -728,6 +759,45 @@ impl<'src> Parser<'src> {
             return false;
         }
         self.scan_trait_param_list_shape(i).is_some()
+    }
+
+    /// Skip `for T: Trait, U: Other` starting at `for`. Returns index after the bounds.
+    fn skip_for_bounds_at(&self, start: usize) -> Option<usize> {
+        let mut i = self.skip_trivia_after(start);
+        if self.kind_at(i) != Some(&TokenKind::For) {
+            return None;
+        }
+        i = self.skip_trivia_after(i + 1);
+        loop {
+            if self.kind_at(i) != Some(&TokenKind::Ident) {
+                return None;
+            }
+            i = self.skip_trivia_after(i + 1);
+            if self.kind_at(i) != Some(&TokenKind::Colon) {
+                return None;
+            }
+            i = self.skip_trivia_after(i + 1);
+            if self.kind_at(i) == Some(&TokenKind::Not) {
+                i = self.skip_trivia_after(i + 1);
+            }
+            // Trait name (possibly qualified).
+            if self.kind_at(i) != Some(&TokenKind::Ident) {
+                return None;
+            }
+            i = self.skip_trivia_after(i + 1);
+            while self.kind_at(i) == Some(&TokenKind::Dot) {
+                i = self.skip_trivia_after(i + 1);
+                if self.kind_at(i) != Some(&TokenKind::Ident) {
+                    return None;
+                }
+                i = self.skip_trivia_after(i + 1);
+            }
+            if self.kind_at(i) == Some(&TokenKind::Comma) {
+                i = self.skip_trivia_after(i + 1);
+                continue;
+            }
+            return Some(i);
+        }
     }
 
     fn kind_at(&self, index: usize) -> Option<&TokenKind> {
@@ -862,7 +932,11 @@ impl<'src> Parser<'src> {
             }
             break;
         }
-        if self.kind_at(i) == Some(&TokenKind::Lt) {
+        if self.kind_at(i) == Some(&TokenKind::LBracket) {
+            if let Some(after) = self.skip_balanced(i, TokenKind::LBracket, TokenKind::RBracket) {
+                i = after;
+            }
+        } else if self.kind_at(i) == Some(&TokenKind::Lt) {
             if let Some(after) = self.skip_balanced(i, TokenKind::Lt, TokenKind::Gt) {
                 i = after;
             }

@@ -28,7 +28,7 @@ normalize_separators(value: string) -> string
     return out
 end
 
-public join(parts: list<string>) -> string
+public join(parts: list[string]) -> string
     var out: string = ""
     var i: int = 0
     const n: int = lists.len(parts)
@@ -155,9 +155,9 @@ public absolute(value: string, base: string) -> string
     return join([base, value])
 end
 
-split_segments(value: string) -> list<string>
-    const raw: list<string> = str.split(value, "/")
-    var out: list<string> = []
+split_segments(value: string) -> list[string]
+    const raw: list[string] = str.split(value, "/")
+    var out: list[string] = []
     var i: int = 0
     const n: int = lists.len(raw)
     while i < n
@@ -174,8 +174,8 @@ end
 public relative(value: string, from: string) -> string
     const target: string = normalize(value)
     const base: string = normalize(from)
-    const target_parts: list<string> = split_segments(target)
-    const base_parts: list<string> = split_segments(base)
+    const target_parts: list[string] = split_segments(target)
+    const base_parts: list[string] = split_segments(base)
     const target_count: int = lists.len(target_parts)
     const base_count: int = lists.len(base_parts)
     var common: int = 0
@@ -196,7 +196,7 @@ public relative(value: string, from: string) -> string
         end
         common = common + 1
     end
-    var parts: list<string> = []
+    var parts: list[string] = []
     var up_i: int = common
     while up_i < base_count
         lists.push(parts, "..")

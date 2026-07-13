@@ -134,7 +134,7 @@ import ori.list as lists
 import ori.test as test
 
 exercise_list() -> int
-    const xs: list<int> = lists.new()
+    const xs: list[int] = lists.new()
     lists.push(xs, 1)
     lists.push(xs, 2)
     const n: int = lists.len(xs)
@@ -168,7 +168,7 @@ end
     );
 }
 
-/// A struct holding a managed `list<int>` field must release the list when the
+/// A struct holding a managed `list[int]` field must release the list when the
 /// struct goes out of scope. The struct is created and consumed inside
 /// `measure_holder`, which returns only an `int`, so the struct and its list
 /// are released by scope cleanup before `main` checks for leaks.
@@ -184,11 +184,11 @@ import ori.list as lists
 import ori.test as test
 
 struct Holder
-    items: list<int>
+    items: list[int]
 end
 
 make_holder(n: int) -> Holder
-    const xs: list<int> = lists.new()
+    const xs: list[int] = lists.new()
     var i: int = 0
     while i < n
         lists.push(xs, i)
@@ -230,7 +230,7 @@ import ori.list as lists
 import ori.test as test
 
 struct Leaf
-    data: list<int>
+    data: list[int]
 end
 
 struct Branch
@@ -238,7 +238,7 @@ struct Branch
 end
 
 make_branch(n: int) -> Branch
-    const xs: list<int> = lists.new()
+    const xs: list[int] = lists.new()
     var i: int = 0
     while i < n
         lists.push(xs, i * i)
@@ -281,11 +281,11 @@ import ori.test as test
 
 enum Shape
     Empty
-    Polygon(points: list<int>)
+    Polygon(points: list[int])
 end
 
 make_polygon(n: int) -> Shape
-    const xs: list<int> = lists.new()
+    const xs: list[int] = lists.new()
     var i: int = 0
     while i < n
         lists.push(xs, i)
@@ -333,14 +333,14 @@ import ori.list as lists
 import ori.test as test
 
 struct Box
-    items: list<int>
+    items: list[int]
 end
 
-maybe_box(n: int) -> optional<Box>
+maybe_box(n: int) -> optional[Box]
     if n <= 0
         return none
     end
-    const xs: list<int> = lists.new()
+    const xs: list[int] = lists.new()
     var i: int = 0
     while i < n
         lists.push(xs, i)
@@ -350,7 +350,7 @@ maybe_box(n: int) -> optional<Box>
 end
 
 measure_box(n: int) -> int
-    const opt: optional<Box> = maybe_box(n)
+    const opt: optional[Box] = maybe_box(n)
     match opt
         case some(box):
             return lists.len(box.items)
@@ -395,7 +395,7 @@ import ori.list as lists
 import ori.test as test
 
 main()
-    const xs: list<int> = lists.new()
+    const xs: list[int] = lists.new()
     lists.push(xs, 1)
     lists.push(xs, 2)
     io.print("size:" + string(lists.len(xs)))
@@ -431,12 +431,12 @@ import ori.test as test
 
 struct Peer
     id: int
-    link: list<int>
+    link: list[int]
 end
 
 build_and_measure() -> int
-    const a_link: list<int> = lists.new()
-    const b_link: list<int> = lists.new()
+    const a_link: list[int] = lists.new()
+    const b_link: list[int] = lists.new()
     lists.push(a_link, 10)
     lists.push(b_link, 20)
     const a: Peer = Peer(id: 1, link: b_link)
@@ -491,7 +491,7 @@ main()
     var i: int = 0
     var total: int = 0
     while i < 100
-        const xs: list<int> = lists.new()
+        const xs: list[int] = lists.new()
         lists.push(xs, i)
         lists.push(xs, i * 2)
         total = total + lists.len(xs)
@@ -525,7 +525,7 @@ import ori.io as io
 import ori.list as lists
 import ori.test as test
 
-var kept: list<int> = lists.new()
+var kept: list[int] = lists.new()
 
 main()
     lists.push(kept, 1)
@@ -617,12 +617,12 @@ import ori.test as test
 
 struct Peer
     id: int
-    link: list<int>
+    link: list[int]
 end
 
 build_one_cycle(seed: int) -> int
-    const a_link: list<int> = lists.new()
-    const b_link: list<int> = lists.new()
+    const a_link: list[int] = lists.new()
+    const b_link: list[int] = lists.new()
     const a: Peer = Peer(id: seed, link: b_link)
     const b: Peer = Peer(id: seed + 1, link: a_link)
     return a.id + b.id
@@ -681,17 +681,17 @@ import ori.list as lists
 import ori.test as test
 
 exercise_collections(seed: int) -> int
-    const xs: llist.LinkedList<int> = llist.new()
+    const xs: llist.LinkedList[int] = llist.new()
     llist.push_back(xs, seed)
     llist.push_back(xs, seed + 1)
     llist.push_back(xs, seed + 2)
 
-    const g: graph.Graph<int> = graph.new(true)
+    const g: graph.Graph[int] = graph.new(true)
     graph.add_edge(g, seed, seed + 1)
     graph.add_edge(g, seed + 1, seed + 2)
     graph.add_edge(g, seed + 2, seed)
 
-    const ns: list<int> = graph.neighbors(g, seed)
+    const ns: list[int] = graph.neighbors(g, seed)
     return llist.len(xs) + lists.len(ns)
 end
 

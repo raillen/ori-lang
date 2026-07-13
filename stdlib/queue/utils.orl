@@ -3,8 +3,8 @@ module ori.queue.utils
 import ori.list as lists
 import ori.queue as queue
 
-public from_list<T>(items: list<T>) -> queue.Queue<T>
-    var q: queue.Queue<T> = queue.new()
+public from_list[T](items: list[T]) -> queue.Queue[T]
+    var q: queue.Queue[T] = queue.new()
     var i: int = 0
     const n: int = lists.len(items)
     while i < n
@@ -16,17 +16,17 @@ public from_list<T>(items: list<T>) -> queue.Queue<T>
     return q
 end
 
-public to_list<T>(q: queue.Queue<T>) -> list<T>
+public to_list[T](q: queue.Queue[T]) -> list[T]
     return queue.to_list(q)
 end
 
-public peek_or<T>(q: queue.Queue<T>, fallback: T) -> T
+public peek_or[T](q: queue.Queue[T], fallback: T) -> T
     if some(value) = queue.peek(q)
         return value
     end
     return fallback
 end
 
-public drain_count<T>(q: queue.Queue<T>) -> int
+public drain_count[T](q: queue.Queue[T]) -> int
     return queue.len(q)
 end

@@ -17,12 +17,12 @@ pub fn builtin_type_hover(symbol: &str) -> Option<String> {
         "string" => "`string`\n\nUTF-8 text value managed by the Ori runtime.",
         "bytes" => "`bytes`\n\nByte buffer used for binary data.",
         "void" => "`void`\n\nFunction return type for functions that do not return a value.",
-        "list" => "`list<T>`\n\nOrdered runtime collection of values with the same element type.",
-        "map" => "`map<K, V>`\n\nHash map. Keys must be `int`, `string`, or implement `Hashable` and `Equatable`.",
-        "set" => "`set<T>`\n\nHash set. Elements must be `int`, `string`, or implement `Hashable` and `Equatable`.",
-        "optional" => "`optional<T>`\n\nRepresents either a value of type `T` or `none`.",
-        "result" => "`result<T, E>`\n\nRepresents either success `ok(T)` or failure `err(E)`.",
-        "future" => "`future<T>`\n\nAsynchronous result that will produce a value of type `T`.",
+        "list" => "`list[T]`\n\nOrdered runtime collection of values with the same element type.",
+        "map" => "`map[K, V]`\n\nHash map. Keys must be `int`, `string`, or implement `Hashable` and `Equatable`.",
+        "set" => "`set[T]`\n\nHash set. Elements must be `int`, `string`, or implement `Hashable` and `Equatable`.",
+        "optional" => "`optional[T]`\n\nRepresents either a value of type `T` or `none`.",
+        "result" => "`result[T, E]`\n\nRepresents either success `ok(T)` or failure `err(E)`.",
+        "future" => "`future[T]`\n\nAsynchronous result that will produce a value of type `T`.",
         _ => return None,
     };
     Some(text.to_string())

@@ -13,7 +13,7 @@ import ori.map as maps
 import ori.set as sets
 
 main()
-    var values: list<int> = [3, 1, 2]
+    var values: list[int] = [3, 1, 2]
     lists.insert(values, 1, 7)
     lists.remove(values, 2)
     io.print(string(lists.index_of(values, 7)))
@@ -22,23 +22,23 @@ main()
     end
     lists.sort(values)
     lists.reverse(values)
-    const chunk: list<int> = lists.slice(values, 1, 3)
+    const chunk: list[int] = lists.slice(values, 1, 3)
     io.print(string(lists.pop(chunk)))
     io.print(string(chunk[0] + lists.len(values)))
 
-    const seen: set<int> = sets.new()
+    const seen: set[int] = sets.new()
     sets.add(seen, 1)
     sets.add(seen, 2)
     sets.remove(seen, 1)
     io.print(string(sets.len(seen)))
 
-    const scores: map<int, int> = maps.new()
+    const scores: map[int, int] = maps.new()
     maps.set(scores, 1, 10)
     maps.set(scores, 2, 20)
     maps.set(scores, 3, 30)
     maps.remove(scores, 2)
-    const keys: list<int> = maps.keys(scores)
-    const vals: list<int> = maps.values(scores)
+    const keys: list[int] = maps.keys(scores)
+    const vals: list[int] = maps.values(scores)
     io.print(string(lists.len(keys) + lists.len(vals)))
     io.print(string(keys[0] + keys[1] + vals[0] + vals[1]))
 end
@@ -61,7 +61,7 @@ import ori.map as maps
 import ori.set as sets
 
 main()
-    const seen: set<int> = sets.new()
+    const seen: set[int] = sets.new()
     sets.reserve(seen, 32)
     if sets.capacity(seen) >= 32
         io.print("set-reserved")
@@ -75,7 +75,7 @@ main()
         io.print("set-reused")
     end
 
-    const labels: set<string> = sets.new()
+    const labels: set[string] = sets.new()
     sets.add(labels, "old")
     sets.clear(labels)
     sets.add(labels, "new")
@@ -83,7 +83,7 @@ main()
         io.print("string-set-reused")
     end
 
-    const scores: map<int, int> = maps.new()
+    const scores: map[int, int] = maps.new()
     maps.reserve(scores, 32)
     if maps.capacity(scores) >= 32
         io.print("map-reserved")
@@ -95,7 +95,7 @@ main()
     maps.set(scores, 3, 30)
     io.print(string(maps.get(scores, 3)))
 
-    const counts: map<string, int> = maps.new()
+    const counts: map[string, int] = maps.new()
     maps.set(counts, "old", 1)
     maps.clear(counts)
     maps.set(counts, "new", 2)
@@ -134,7 +134,7 @@ import ori.queue as queue
 import ori.stack as stack
 
 main()
-    const d: deque.Deque<int> = deque.new()
+    const d: deque.Deque[int] = deque.new()
     deque.push_back(d, 2)
     deque.push_front(d, 1)
     deque.push_back(d, 3)
@@ -150,7 +150,7 @@ main()
         case none:
             io.print("empty")
     end
-    const d_items: list<int> = deque.to_list(d)
+    const d_items: list[int] = deque.to_list(d)
     io.print(string(d_items[0] + d_items[1]))
     deque.clear(d)
     if deque.is_empty(d)
@@ -163,7 +163,7 @@ main()
             io.print("deque-none")
     end
 
-    const q: queue.Queue<string> = queue.new()
+    const q: queue.Queue[string] = queue.new()
     queue.enqueue(q, "first")
     queue.enqueue(q, "second")
     match queue.dequeue(q)
@@ -191,7 +191,7 @@ main()
             io.print("queue-none")
     end
 
-    const s: stack.Stack<int> = stack.new()
+    const s: stack.Stack[int] = stack.new()
     stack.push(s, 10)
     stack.push(s, 20)
     match stack.peek(s)
@@ -208,7 +208,7 @@ main()
     end
     io.print(string(stack.len(s)))
 
-    const words: stack.Stack<string> = stack.new()
+    const words: stack.Stack[string] = stack.new()
     stack.push(words, "managed")
     match stack.pop(words)
         case some(value):
@@ -254,7 +254,7 @@ import ori.list as lists
 import ori.queue as queue
 
 main()
-    const values: queue.Queue<int> = queue.new()
+    const values: queue.Queue[int] = queue.new()
     lists.push(values, 1)
 end
 "#,
@@ -269,11 +269,11 @@ end
         .collect::<Vec<_>>()
         .join("\n");
     assert!(
-        rendered.contains("queue.Queue<int>"),
+        rendered.contains("queue.Queue[int]"),
         "expected opaque display in diagnostics, got: {rendered}"
     );
     assert!(
-        rendered.contains("list<_#") || rendered.contains("list<int>"),
+        rendered.contains("list[_#") || rendered.contains("list[int]"),
         "expected list expectation in diagnostics, got: {rendered}"
     );
 }
@@ -290,7 +290,7 @@ import ori.io as io
 import ori.linked_list as ll
 
 main()
-    const names: ll.LinkedList<string> = ll.new()
+    const names: ll.LinkedList[string] = ll.new()
     ll.push_back(names, "beta")
     ll.push_front(names, "alpha")
     match ll.front(names)
@@ -305,7 +305,7 @@ main()
         case none:
             io.print("empty")
     end
-    const names_snapshot: list<string> = ll.to_list(names)
+    const names_snapshot: list[string] = ll.to_list(names)
     io.print(names_snapshot[0])
     ll.push_back(names, "gamma")
     match ll.find(names, "gamma")
@@ -344,7 +344,7 @@ main()
             io.print("linked-none")
     end
 
-    const ints: dll.DoublyLinkedList<int> = dll.new()
+    const ints: dll.DoublyLinkedList[int] = dll.new()
     dll.push_front(ints, 2)
     dll.push_front(ints, 1)
     dll.push_back(ints, 3)
@@ -373,7 +373,7 @@ main()
             io.print("empty")
     end
     io.print(string(dll.len(ints)))
-    const ints_snapshot: list<int> = dll.to_list(ints)
+    const ints_snapshot: list[int] = dll.to_list(ints)
     io.print(string(ints_snapshot[0]))
     match dll.cursor_back(ints)
         case some(cursor):
@@ -411,7 +411,7 @@ main()
         io.print("doubly-empty")
     end
 
-    const words: dll.DoublyLinkedList<string> = dll.new()
+    const words: dll.DoublyLinkedList[string] = dll.new()
     dll.push_back(words, "managed")
     match dll.pop_back(words)
         case some(value):
@@ -457,7 +457,7 @@ import ori.doubly_linked_list as dll
 import ori.io as io
 
 main()
-    const values: dll.DoublyLinkedList<int> = dll.new()
+    const values: dll.DoublyLinkedList[int] = dll.new()
 
     var i: int = 0
     while i < 200
@@ -543,7 +543,7 @@ main()
     const leaf: tree.NodeId = tree.add_child(t, left, "leaf")
 
     io.print(tree.value(t, root))
-    const kids: list<tree.NodeId> = tree.children(t, root)
+    const kids: list[tree.NodeId] = tree.children(t, root)
     io.print(string(lists.len(kids)))
     match tree.parent(t, root)
         case some(parent):
@@ -559,19 +559,19 @@ main()
     end
     io.print(string(tree.depth(t, leaf)))
 
-    const pre: list<tree.NodeId> = tree.pre_order(t)
+    const pre: list[tree.NodeId] = tree.pre_order(t)
     io.print(tree.value(t, pre[0]))
     io.print(tree.value(t, pre[1]))
     io.print(tree.value(t, pre[2]))
     io.print(tree.value(t, pre[3]))
 
-    const post: list<tree.NodeId> = tree.post_order(t)
+    const post: list[tree.NodeId] = tree.post_order(t)
     io.print(tree.value(t, post[0]))
     io.print(tree.value(t, post[1]))
     io.print(tree.value(t, post[2]))
     io.print(tree.value(t, post[3]))
 
-    const breadth: list<tree.NodeId> = tree.breadth_first(t)
+    const breadth: list[tree.NodeId] = tree.breadth_first(t)
     io.print(tree.value(t, breadth[0]))
     io.print(tree.value(t, breadth[1]))
     io.print(tree.value(t, breadth[2]))
@@ -579,7 +579,7 @@ main()
 
     tree.remove_subtree(t, left)
     io.print(string(tree.len(t)))
-    const remaining: list<tree.NodeId> = tree.children(t, root)
+    const remaining: list[tree.NodeId] = tree.children(t, root)
     io.print(string(lists.len(remaining)))
     io.print(tree.value(t, remaining[0]))
 end
@@ -649,7 +649,7 @@ import ori.io as io
 import ori.list as lists
 
 main()
-    const table: hash_table.HashTable<int, string> = hash_table.with_capacity(2)
+    const table: hash_table.HashTable[int, string] = hash_table.with_capacity(2)
     hash_table.set(table, 1, "one")
     hash_table.set(table, 17, "seventeen")
     hash_table.set(table, 33, "thirty-three")
@@ -665,9 +665,9 @@ main()
     io.print(string(hash_table.len(table)))
     io.print(string(hash_table.capacity(table)))
 
-    const keys: list<int> = hash_table.keys(table)
-    const values: list<string> = hash_table.values(table)
-    const entries: list<tuple<int, string>> = hash_table.entries(table)
+    const keys: list[int] = hash_table.keys(table)
+    const values: list[string] = hash_table.values(table)
+    const entries: list[tuple[int, string]] = hash_table.entries(table)
     io.print(string(lists.len(keys)))
     io.print(values[0])
     io.print(string(lists.len(entries)))
@@ -685,7 +685,7 @@ main()
             io.print("gone")
     end
 
-    const labels: hash_table.HashTable<string, int> = hash_table.new()
+    const labels: hash_table.HashTable[string, int] = hash_table.new()
     hash_table.set(labels, "alpha", 10)
     hash_table.set(labels, "beta", 20)
     match hash_table.get(labels, "beta")
@@ -756,7 +756,7 @@ implement core.Equatable for Resource
 end
 
 main()
-    const cache: hash_table.HashTable<Resource, int> = hash_table.new()
+    const cache: hash_table.HashTable[Resource, int] = hash_table.new()
 end
 "#,
     );
@@ -777,7 +777,7 @@ import ori.io as io
 import ori.list as lists
 
 main()
-    const dag: graph.Graph<int> = graph.new(true)
+    const dag: graph.Graph[int] = graph.new(true)
     graph.add_edge(dag, 1, 2)
     graph.add_edge(dag, 1, 3)
     graph.add_edge(dag, 2, 4)
@@ -786,41 +786,41 @@ main()
     io.print(string(graph.has_edge(dag, 1, 2)))
     io.print(string(graph.has_edge(dag, 2, 1)))
 
-    const neighbors: list<int> = graph.neighbors(dag, 1)
+    const neighbors: list[int] = graph.neighbors(dag, 1)
     io.print(string(lists.len(neighbors)))
     io.print(string(neighbors[0]))
     io.print(string(neighbors[1]))
 
-    const bfs_order: list<int> = graph.bfs(dag, 1)
+    const bfs_order: list[int] = graph.bfs(dag, 1)
     io.print(string(bfs_order[0]))
     io.print(string(bfs_order[1]))
     io.print(string(bfs_order[2]))
     io.print(string(bfs_order[3]))
 
-    const dfs_order: list<int> = graph.dfs(dag, 1)
+    const dfs_order: list[int] = graph.dfs(dag, 1)
     io.print(string(dfs_order[0]))
     io.print(string(dfs_order[1]))
     io.print(string(dfs_order[2]))
     io.print(string(dfs_order[3]))
 
-    const topo: list<int> = graph.topological_sort(dag)
+    const topo: list[int] = graph.topological_sort(dag)
     io.print(string(topo[0]))
     io.print(string(topo[1]))
     io.print(string(topo[2]))
     io.print(string(topo[3]))
 
-    const edges: list<tuple<int, int>> = graph.edges(dag)
+    const edges: list[tuple[int, int]] = graph.edges(dag)
     io.print(string(lists.len(edges)))
     graph.remove_edge(dag, 1, 3)
     io.print(string(graph.has_edge(dag, 1, 3)))
     graph.remove_node(dag, 2)
     io.print(string(graph.has_node(dag, 2)))
 
-    const network: graph.Graph<string> = graph.new(false)
+    const network: graph.Graph[string] = graph.new(false)
     graph.add_edge(network, "a", "b")
     graph.add_edge(network, "b", "c")
     io.print(string(graph.has_edge(network, "b", "a")))
-    const network_bfs: list<string> = graph.bfs(network, "a")
+    const network_bfs: list[string] = graph.bfs(network, "a")
     io.print(network_bfs[0])
     io.print(network_bfs[1])
     io.print(network_bfs[2])
@@ -859,7 +859,7 @@ import ori.io as io
 import ori.list as lists
 
 main()
-    const cyclic: graph.Graph<int> = graph.new(true)
+    const cyclic: graph.Graph[int] = graph.new(true)
 
     var node: int = 1
     while node < 60
@@ -868,18 +868,18 @@ main()
     end
     graph.add_edge(cyclic, 60, 1)
 
-    const cyclic_topo: list<int> = graph.topological_sort(cyclic)
+    const cyclic_topo: list[int] = graph.topological_sort(cyclic)
     io.print(string(lists.len(cyclic_topo)))
 
-    const bfs_order: list<int> = graph.bfs(cyclic, 1)
-    const dfs_order: list<int> = graph.dfs(cyclic, 1)
+    const bfs_order: list[int] = graph.bfs(cyclic, 1)
+    const dfs_order: list[int] = graph.dfs(cyclic, 1)
     io.print(string(lists.len(bfs_order)))
     io.print(string(lists.len(dfs_order)))
     io.print(string(bfs_order[0]))
     io.print(string(dfs_order[0]))
 
     graph.remove_edge(cyclic, 60, 1)
-    const acyclic_topo: list<int> = graph.topological_sort(cyclic)
+    const acyclic_topo: list[int] = graph.topological_sort(cyclic)
     io.print(string(lists.len(acyclic_topo)))
     io.print(string(acyclic_topo[0]))
     io.print(string(acyclic_topo[59]))
@@ -925,7 +925,7 @@ implement core.Equatable for Resource
 end
 
 main()
-    const links: graph.Graph<Resource> = graph.new(false)
+    const links: graph.Graph[Resource] = graph.new(false)
 end
 "#,
     );
@@ -956,7 +956,7 @@ implement core.Comparable for Score
 end
 
 main()
-    const numbers: heap.Heap<int> = heap.new()
+    const numbers: heap.Heap[int] = heap.new()
     heap.push(numbers, 4)
     heap.push(numbers, 1)
     heap.push(numbers, 3)
@@ -995,7 +995,7 @@ main()
             io.print("empty")
     end
 
-    const words: heap.Heap<string> = heap.new()
+    const words: heap.Heap[string] = heap.new()
     heap.push(words, "pear")
     heap.push(words, "apple")
     heap.push(words, "orange")
@@ -1006,7 +1006,7 @@ main()
             io.print("missing")
     end
 
-    const scores: heap.Heap<Score> = heap.new()
+    const scores: heap.Heap[Score] = heap.new()
     heap.push(scores, Score(value: 5))
     heap.push(scores, Score(value: 2))
     heap.push(scores, Score(value: 7))
@@ -1065,13 +1065,13 @@ struct Score
 end
 
 implement core.Comparable for Score
-    compare(self, other: Score) -> int
+    compare(self, other: Score) -] int
         return self.value - other.value
     end
 end
 
 main()
-    const pop_scores: heap.Heap<Score> = heap.new()
+    const pop_scores: heap.Heap[Score] = heap.new()
     heap.push(pop_scores, Score(value: 5))
     heap.push(pop_scores, Score(value: 2))
     match heap.pop(pop_scores)
@@ -1082,7 +1082,7 @@ main()
             io.print("missing")
     end
 
-    const peek_scores: heap.Heap<Score> = heap.new()
+    const peek_scores: heap.Heap[Score] = heap.new()
     heap.push(peek_scores, Score(value: 8))
     heap.push(peek_scores, Score(value: 3))
     match heap.peek(peek_scores)
@@ -1116,8 +1116,8 @@ import ori.set as sets
 import ori.tree as tree
 
 main()
-    const values: list<int> = lists.from_list([10, 20, 30])
-    const copied: list<int> = lists.clone(values)
+    const values: list[int] = lists.from_list([10, 20, 30])
+    const copied: list[int] = lists.clone(values)
     match lists.try_get(copied, 1)
         case some(value):
             io.print(string(value))
@@ -1134,15 +1134,15 @@ main()
     lists.clear(copied)
     io.print(string(lists.is_empty(copied)))
 
-    const labels: set<string> = sets.from_list(["a", "b", "a"])
-    const labels_copy: set<string> = sets.clone(labels)
+    const labels: set[string] = sets.from_list(["a", "b", "a"])
+    const labels_copy: set[string] = sets.clone(labels)
     io.print(string(sets.len(labels_copy)))
     io.print(string(sets.try_remove(labels_copy, "a")))
-    const label_items: list<string> = sets.to_list(labels_copy)
+    const label_items: list[string] = sets.to_list(labels_copy)
     io.print(label_items[0])
 
-    const entries: list<tuple<string, int>> = [tuple("a", 1), tuple("b", 2)]
-    const table: map<string, int> = maps.from_entries(entries)
+    const entries: list[tuple[string, int]] = [tuple("a", 1), tuple("b", 2)]
+    const table: map[string, int] = maps.from_entries(entries)
     match maps.try_get(table, "b")
         case some(value):
             io.print(string(value))
@@ -1156,7 +1156,7 @@ main()
             io.print("missing")
     end
     io.print(string(maps.is_empty(table)))
-    const table_copy: map<string, int> = maps.clone(table)
+    const table_copy: map[string, int] = maps.clone(table)
     io.print(string(maps.len(table_copy)))
 
     const outline: tree.Tree<string> = tree.new("root")
@@ -1184,7 +1184,7 @@ main()
     const outline_copy: tree.Tree<string> = tree.clone(outline)
     io.print(string(tree.len(outline_copy)))
 
-    const dag: graph.Graph<int> = graph.new(true)
+    const dag: graph.Graph[int] = graph.new(true)
     graph.add_edge(dag, 1, 2)
     graph.add_edge(dag, 2, 4)
     graph.add_edge(dag, 1, 3)
@@ -1218,9 +1218,9 @@ main()
         case none:
             io.print("no-weighted-path")
     end
-    const closure: graph.Graph<int> = graph.transitive_closure(dag)
+    const closure: graph.Graph[int] = graph.transitive_closure(dag)
     io.print(string(graph.has_edge(closure, 1, 4)))
-    const dag_copy: graph.Graph<int> = graph.clone(dag)
+    const dag_copy: graph.Graph[int] = graph.clone(dag)
     io.print(string(graph.edge_len(dag_copy)))
     var dag_sum: int = 0
     for node in dag_copy
@@ -1228,7 +1228,7 @@ main()
     end
     io.print(string(dag_sum))
 
-    const routes: graph.Graph<string> = graph.new(true)
+    const routes: graph.Graph[string] = graph.new(true)
     graph.add_weighted_edge(routes, "start", "slow", 9)
     graph.add_weighted_edge(routes, "start", "fast", 1)
     graph.add_weighted_edge(routes, "fast", "end", 1)
@@ -1246,7 +1246,7 @@ main()
             io.print("no-route")
     end
 
-    const cyclic: graph.Graph<int> = graph.new(true)
+    const cyclic: graph.Graph[int] = graph.new(true)
     graph.add_edge(cyclic, 1, 2)
     graph.add_edge(cyclic, 2, 1)
     io.print(string(graph.has_cycle(cyclic)))
@@ -1256,26 +1256,26 @@ main()
         case none:
             io.print("cycle")
     end
-    const scc: list<list<int>> = graph.strongly_connected_components(cyclic)
+    const scc: list[list[int]] = graph.strongly_connected_components(cyclic)
     io.print(string(lists.len(scc)))
 
-    const network: graph.Graph<int> = graph.new(false)
+    const network: graph.Graph[int] = graph.new(false)
     graph.add_edge(network, 10, 11)
     graph.add_edge(network, 20, 21)
-    const components: list<list<int>> = graph.components(network)
+    const components: list[list[int]] = graph.components(network)
     io.print(string(lists.len(components)))
 
-    const source: list<int> = [9, 2, 5]
-    const from_list: heap.Heap<int> = heap.from_list(source)
+    const source: list[int] = [9, 2, 5]
+    const from_list: heap.Heap[int] = heap.from_list(source)
     io.print(string(heap.remove(from_list, 5)))
-    const sorted: list<int> = heap.into_sorted_list(from_list)
+    const sorted: list[int] = heap.into_sorted_list(from_list)
     io.print(string(sorted[0]))
     io.print(string(sorted[1]))
-    const extra: heap.Heap<int> = heap.from_list([1, 7])
-    const merged: heap.Heap<int> = heap.merge(from_list, extra)
+    const extra: heap.Heap[int] = heap.from_list([1, 7])
+    const merged: heap.Heap[int] = heap.merge(from_list, extra)
     io.print(string(heap.len(merged)))
-    const heap_copy: heap.Heap<int> = heap.clone(merged)
-    const heap_items: list<int> = heap.to_list(heap_copy)
+    const heap_copy: heap.Heap[int] = heap.clone(merged)
+    const heap_items: list[int] = heap.to_list(heap_copy)
     io.print(string(lists.len(heap_items)))
     var heap_sum: int = 0
     for item in heap_copy
@@ -1332,19 +1332,19 @@ import ori.stack as stack
 import ori.tree as tree
 
 main()
-    var list_values: list<string> = ["list-a"]
+    var list_values: list[string] = ["list-a"]
     lists.push(list_values, "list-b")
     io.print(list_values[1])
 
-    const map_values: map<string, string> = maps.new()
+    const map_values: map[string, string] = maps.new()
     maps.set(map_values, "map-key", "map-value")
     io.print(maps.get(map_values, "map-key"))
 
-    const set_values: set<string> = sets.new()
+    const set_values: set[string] = sets.new()
     sets.add(set_values, "set-value")
     io.print(if sets.contains(set_values, "set-value") then "set-ok" else "set-missing")
 
-    const deque_values: deque.Deque<string> = deque.new()
+    const deque_values: deque.Deque[string] = deque.new()
     deque.push_back(deque_values, "deque-value")
     match deque.pop_front(deque_values)
         case some(value):
@@ -1353,7 +1353,7 @@ main()
             io.print("deque-missing")
     end
 
-    const queue_values: queue.Queue<string> = queue.new()
+    const queue_values: queue.Queue[string] = queue.new()
     queue.enqueue(queue_values, "queue-value")
     match queue.dequeue(queue_values)
         case some(value):
@@ -1362,7 +1362,7 @@ main()
             io.print("queue-missing")
     end
 
-    const stack_values: stack.Stack<string> = stack.new()
+    const stack_values: stack.Stack[string] = stack.new()
     stack.push(stack_values, "stack-value")
     match stack.pop(stack_values)
         case some(value):
@@ -1371,7 +1371,7 @@ main()
             io.print("stack-missing")
     end
 
-    const linked_values: ll.LinkedList<string> = ll.new()
+    const linked_values: ll.LinkedList[string] = ll.new()
     ll.push_back(linked_values, "linked-value")
     match ll.pop_front(linked_values)
         case some(value):
@@ -1380,7 +1380,7 @@ main()
             io.print("linked-missing")
     end
 
-    const doubly_values: dll.DoublyLinkedList<string> = dll.new()
+    const doubly_values: dll.DoublyLinkedList[string] = dll.new()
     dll.push_back(doubly_values, "doubly-value")
     match dll.pop_back(doubly_values)
         case some(value):
@@ -1394,7 +1394,7 @@ main()
     const leaf: tree.NodeId = tree.add_child(tree_values, root, "tree-leaf")
     io.print(tree.value(tree_values, leaf))
 
-    const hash_values: hash_table.HashTable<string, string> = hash_table.new()
+    const hash_values: hash_table.HashTable[string, string] = hash_table.new()
     hash_table.set(hash_values, "hash-key", "hash-value")
     match hash_table.get(hash_values, "hash-key")
         case some(value):
@@ -1403,12 +1403,12 @@ main()
             io.print("hash-missing")
     end
 
-    const graph_values: graph.Graph<string> = graph.new(false)
+    const graph_values: graph.Graph[string] = graph.new(false)
     graph.add_edge(graph_values, "graph-a", "graph-b")
-    const graph_walk: list<string> = graph.bfs(graph_values, "graph-a")
+    const graph_walk: list[string] = graph.bfs(graph_values, "graph-a")
     io.print(graph_walk[1])
 
-    const heap_values: heap.Heap<string> = heap.new()
+    const heap_values: heap.Heap[string] = heap.new()
     heap.push(heap_values, "heap-value")
     match heap.pop(heap_values)
         case some(value):
@@ -1451,7 +1451,7 @@ struct Score
 end
 
 main()
-    const scores: heap.Heap<Score> = heap.new()
+    const scores: heap.Heap[Score] = heap.new()
 end
 "#,
     );
@@ -1476,7 +1476,7 @@ import ori.io as io
 import ori.map as maps
 
 main()
-    const labels: map<int, string> = maps.new()
+    const labels: map[int, string] = maps.new()
     maps.set(labels, 1, "alpha")
     maps.set(labels, 2, "beta")
 
@@ -1524,7 +1524,7 @@ struct Countdown
 end
 
 implement core.Iterable for Countdown
-    mut next() -> optional<int>
+    mut next() -> optional[int]
         if self.current < self.min
             return none
         end
@@ -1588,7 +1588,7 @@ import ori.io as io
 import ori.map as maps
 
 main()
-    const labels: map<string, int> = { "alpha": 1, "beta": 2 }
+    const labels: map[string, int] = { "alpha": 1, "beta": 2 }
     maps.set(labels, "alpha", 10)
     io.print(string(maps.get(labels, "alpha")))
     io.print(if maps.contains(labels, "beta") then "yes" else "no")
@@ -1596,8 +1596,8 @@ main()
     maps.set(labels, "gamma", 30)
     io.print(string(maps.len(labels)))
 
-    const keys: list<string> = maps.keys(labels)
-    const values: list<int> = maps.values(labels)
+    const keys: list[string] = maps.keys(labels)
+    const values: list[int] = maps.values(labels)
     io.print(keys[0])
     io.print(string(values[0] + values[1]))
 
@@ -1609,8 +1609,8 @@ main()
     end
     io.print(string(total))
 
-    const entries: list<tuple<string, int>> = maps.entries(labels)
-    const first: tuple<string, int> = entries[0]
+    const entries: list[tuple[string, int]] = maps.entries(labels)
+    const first: tuple[string, int] = entries[0]
     io.print(first.0)
     io.print(string(first.1))
 end
@@ -1645,21 +1645,21 @@ import ori.io as io
 import ori.set as sets
 
 main()
-    const primary: set<string> = set { "red", "blue", "red" }
+    const primary: set[string] = set { "red", "blue", "red" }
     io.print(string(sets.len(primary)))
     io.print(if sets.contains(primary, "red") then "yes" else "no")
     sets.remove(primary, "red")
     io.print(if sets.contains(primary, "red") then "yes" else "no")
     sets.add(primary, "green")
 
-    const other: set<string> = set { "green", "yellow" }
-    const merged: set<string> = sets.union(primary, other)
+    const other: set[string] = set { "green", "yellow" }
+    const merged: set[string] = sets.union(primary, other)
     io.print(string(sets.len(merged)))
 
-    const both: set<string> = sets.intersection(primary, other)
+    const both: set[string] = sets.intersection(primary, other)
     io.print(string(sets.len(both)))
 
-    const only_other: set<string> = sets.difference(merged, primary)
+    const only_other: set[string] = sets.difference(merged, primary)
     io.print(string(sets.len(only_other)))
 
     var found_green: string = "no"
@@ -1714,11 +1714,11 @@ end
 
 main()
     const resource: Resource = Resource(id: 7)
-    const labels: map<Resource, int> = maps.new()
+    const labels: map[Resource, int] = maps.new()
     maps.set(labels, resource, 42)
     io.print(string(maps.get(labels, resource)))
 
-    const seen: set<Resource> = sets.new()
+    const seen: set[Resource] = sets.new()
     sets.add(seen, resource)
     io.print(if sets.contains(seen, resource) then "yes" else "no")
     sets.remove(seen, resource)
@@ -1752,7 +1752,7 @@ import ori.io as io
 import ori.list as lists
 
 main()
-    const values: list<int> = [1, 2, 3]
+    const values: list[int] = [1, 2, 3]
     for x in values
         lists.push(values, 4)
     end
@@ -1788,7 +1788,7 @@ import ori.io as io
 import ori.map as maps
 
 main()
-    const scores: map<int, int> = maps.new()
+    const scores: map[int, int] = maps.new()
     maps.set(scores, 1, 10)
     maps.set(scores, 2, 20)
     for k, v in scores
@@ -1826,7 +1826,7 @@ import ori.deque as deque
 import ori.io as io
 
 main()
-    const d: deque.Deque<int> = deque.new()
+    const d: deque.Deque[int] = deque.new()
     deque.push_back(d, 1)
     deque.push_back(d, 2)
     for x in d

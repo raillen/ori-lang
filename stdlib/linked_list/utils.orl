@@ -3,8 +3,8 @@ module ori.linked_list.utils
 import ori.linked_list as linked_list
 import ori.list as lists
 
-public from_list<T>(items: list<T>) -> linked_list.LinkedList<T>
-    var node: linked_list.LinkedList<T> = linked_list.new()
+public from_list[T](items: list[T]) -> linked_list.LinkedList[T]
+    var node: linked_list.LinkedList[T] = linked_list.new()
     var i: int = 0
     const n: int = lists.len(items)
     while i < n
@@ -16,21 +16,21 @@ public from_list<T>(items: list<T>) -> linked_list.LinkedList<T>
     return node
 end
 
-public to_list<T>(node: linked_list.LinkedList<T>) -> list<T>
+public to_list[T](node: linked_list.LinkedList[T]) -> list[T]
     return linked_list.to_list(node)
 end
 
-public front_or<T>(node: linked_list.LinkedList<T>, fallback: T) -> T
+public front_or[T](node: linked_list.LinkedList[T], fallback: T) -> T
     if some(value) = linked_list.front(node)
         return value
     end
     return fallback
 end
 
-public len<T>(node: linked_list.LinkedList<T>) -> int
+public len[T](node: linked_list.LinkedList[T]) -> int
     return linked_list.len(node)
 end
 
-public is_empty<T>(node: linked_list.LinkedList<T>) -> bool
+public is_empty[T](node: linked_list.LinkedList[T]) -> bool
     return linked_list.is_empty(node)
 end

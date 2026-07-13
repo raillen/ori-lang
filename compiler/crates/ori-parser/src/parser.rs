@@ -226,13 +226,77 @@ impl<'src> Parser<'src> {
         Some(QualifiedName { parts, span })
     }
 
-    /// Parse optional `<T, U, …>` type parameters.
+    /// Parse optional `[T, U, …]` type parameters (S3).
+    ///
+    /// Legacy `<T, U>` still parses for recovery and emits `parse.removed_angle_type`.
     pub fn parse_type_params_opt(&mut self) -> Vec<TypeParam> {
-        if !self.at(&TokenKind::Lt) {
-            return Vec::new();
+        if self.at(&TokenKind::LBracket) {
+            return self.parse_bracket_type_params();
         }
-        // Is this `<ident` (type param) or `<expr` (comparison)?
-        // In declaration context, always parse as type params.
+        if self.at(&TokenKind::Lt) {
+            let span = self.current_span();
+            self.error(
+                "parse.removed_angle_type",
+                "angle-bracket type parameters are removed; write `Name[T]` (e.g. `Pair[A, B]`)",
+                span,
+            );
+            return self.parse_angle_type_params_recovery();
+        }
+        Vec::new()
+    }
+
+    fn parse_bracket_type_params(&mut self) -> Vec<TypeParam> {
+        self.advance(); // [
+        let mut params = Vec::new();
+        loop {
+            if self.at_eof() || self.at(&TokenKind::RBracket) {
+                break;
+            }
+            let is_const = self.eat(&TokenKind::Const);
+            if let Some(name) = self.parse_name() {
+                if is_const && self.eat(&TokenKind::Colon) {
+                    let _ = self.parse_type();
+                }
+                // Higher-kinded placeholder: `F[_]` after the param name.
+                if self.at(&TokenKind::LBracket) {
+                    self.skip_bracket_group();
+                }
+                params.push(TypeParam { name });
+            } else {
+                break;
+            }
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        self.expect(&TokenKind::RBracket);
+        params
+    }
+
+    fn skip_bracket_group(&mut self) {
+        if !self.at(&TokenKind::LBracket) {
+            return;
+        }
+        let mut depth = 0usize;
+        while !self.at_eof() {
+            if self.at(&TokenKind::LBracket) {
+                depth += 1;
+                self.advance();
+                continue;
+            }
+            if self.at(&TokenKind::RBracket) {
+                self.advance();
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    break;
+                }
+                continue;
+            }
+            self.advance();
+        }
+    }
+
+    fn parse_angle_type_params_recovery(&mut self) -> Vec<TypeParam> {
         self.advance(); // <
         let mut params = Vec::new();
         loop {
@@ -282,11 +346,107 @@ impl<'src> Parser<'src> {
         }
     }
 
-    /// Parse optional `where T is Trait, U is not Trait` clause.
+    /// Parse Auk9-style bounds: `for T: Trait, U: not Disposable`.
+    ///
+    /// Type parameters introduced only via bounds are appended to `type_params`.
+    /// Returns a `WhereClause` so the checker/HIR keep using the existing AST.
+    pub fn parse_for_bounds_opt(
+        &mut self,
+        type_params: &mut Vec<TypeParam>,
+    ) -> Option<WhereClause> {
+        if !self.at(&TokenKind::For) {
+            return None;
+        }
+        // Disambiguate `for T:` bounds from `implement Trait for Type` / for-loops.
+        // Bounds require `for Ident :`.
+        if self.peek_nth_kind(1) != Some(&TokenKind::Ident) {
+            return None;
+        }
+        // Look ahead past the name for `:`.
+        if !self.peek_for_bound_colon() {
+            return None;
+        }
+
+        let start = self.advance().unwrap().span; // `for`
+        let mut constraints = Vec::new();
+        loop {
+            let param = self.parse_name()?;
+            self.expect(&TokenKind::Colon)?;
+            let negated = self.eat(&TokenKind::Not);
+            let bound = self.parse_qualified_name()?;
+            let span = param.span.cover(bound.span);
+            if !type_params.iter().any(|p| p.name.text == param.text) {
+                type_params.push(TypeParam {
+                    name: param.clone(),
+                });
+            }
+            if negated {
+                constraints.push(WhereConstraint::IsNot { param, bound, span });
+            } else {
+                constraints.push(WhereConstraint::Is { param, bound, span });
+            }
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        let end = constraints
+            .last()
+            .map(|c| match c {
+                WhereConstraint::Is { span, .. } => *span,
+                WhereConstraint::IsNot { span, .. } => *span,
+            })
+            .unwrap_or(start);
+        Some(WhereClause {
+            constraints,
+            span: start.cover(end),
+        })
+    }
+
+    /// True when tokens look like `for Ident :` starting at the current position.
+    fn peek_for_bound_colon(&self) -> bool {
+        let mut count = 0usize;
+        let mut i = self.pos;
+        while i < self.tokens.len() {
+            if self.tokens[i].is_trivia() {
+                i += 1;
+                continue;
+            }
+            let kind = &self.tokens[i].kind;
+            match count {
+                0 => {
+                    if *kind != TokenKind::For {
+                        return false;
+                    }
+                }
+                1 => {
+                    if *kind != TokenKind::Ident {
+                        return false;
+                    }
+                }
+                2 => return *kind == TokenKind::Colon,
+                _ => return false,
+            }
+            count += 1;
+            i += 1;
+        }
+        false
+    }
+
+    /// Reject legacy `for T: Trait` (S3). Still parses for recovery when present.
     pub fn parse_where_clause_opt(&mut self) -> Option<WhereClause> {
         if !self.at(&TokenKind::Where) {
             return None;
         }
+        let start = self.current_span();
+        self.error(
+            "parse.removed_where_bound",
+            "`for T: Trait` bounds are removed; write `for T: Trait` after the name (Auk9-style)",
+            start,
+        );
+        self.parse_legacy_where_clause_recovery()
+    }
+
+    fn parse_legacy_where_clause_recovery(&mut self) -> Option<WhereClause> {
         let start = self.advance().unwrap().span; // `where`
         let mut constraints = Vec::new();
         let grouped = self.eat(&TokenKind::LParen);
@@ -296,8 +456,7 @@ impl<'src> Parser<'src> {
             }
             let param = self.parse_name()?;
             let negated = if self.eat(&TokenKind::Is) {
-                let neg = self.eat(&TokenKind::Not);
-                neg
+                self.eat(&TokenKind::Not)
             } else {
                 self.expect(&TokenKind::Is)?;
                 false

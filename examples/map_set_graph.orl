@@ -21,7 +21,7 @@ end
 demo_map()
     section("Map K V")
 
-    const scores: map<string, int> = maps.new()
+    const scores: map[string, int] = maps.new()
     maps.set(scores, "alice", 95)
     maps.set(scores, "bob", 88)
     maps.set(scores, "carol", 92)
@@ -48,26 +48,26 @@ demo_map()
     io.println(f"  has_all_keys: {has_all}")
 
     -- Merge
-    const extra: map<string, int> = maps.new()
+    const extra: map[string, int] = maps.new()
     maps.set(extra, "alice", 100)
     maps.set(extra, "eve", 77)
-    const merged: map<string, int> = maps.merge_string_int(scores, extra)
+    const merged: map[string, int] = maps.merge_string_int(scores, extra)
     io.println(f"  merged alice (100): {maps.get(merged, alice_key)}")
     io.println(f"  merged len: {maps.len(merged)}")
 
     -- Invert
-    const inverted: map<int, string> = maps.invert_string_int(scores)
+    const inverted: map[int, string] = maps.invert_string_int(scores)
     io.println(f"  inverted 95: {maps.get(inverted, 95)}")
 
     -- Keys
-    const keys: list<string> = maps.keys(scores)
+    const keys: list[string] = maps.keys(scores)
     io.println(f"  keys count: {lists.len(keys)}")
 
     -- Int-keyed map
-    const id_map: map<int, string> = {1: "one", 2: "two", 3: "three"}
+    const id_map: map[int, string] = {1: "one", 2: "two", 3: "three"}
     io.println(f"  int-key map[2]: {maps.get(id_map, 2)}")
 
-    const bob_removed: optional<int> = maps.try_remove(scores, bob_key)
+    const bob_removed: optional[int] = maps.try_remove(scores, bob_key)
     match bob_removed
     case some(removed):
         io.println(f"  removed bob: {removed}")
@@ -81,7 +81,7 @@ end
 demo_set()
     section("Set T")
 
-    const tags: set<string> = sets.new()
+    const tags: set[string] = sets.new()
     sets.add(tags, "urgent")
     sets.add(tags, "review")
     sets.add(tags, "urgent")
@@ -92,18 +92,18 @@ demo_set()
     io.println(f"  contains draft: {sets.contains(tags, draft)}")
 
     -- from_list + clone
-    const colors: set<string> = sets.from_list(["red", "green", "blue", "red"])
+    const colors: set[string] = sets.from_list(["red", "green", "blue", "red"])
     io.println(f"  from_list deduped len: {sets.len(colors)}")
 
     const green: string = "green"
     sets.remove(colors, green)
     io.println(f"  after remove green len: {sets.len(colors)}")
 
-    const copy: set<string> = sets.clone(colors)
+    const copy: set[string] = sets.clone(colors)
     io.println(f"  clone len: {sets.len(copy)}")
 
     -- Int set
-    const nums: set<int> = sets.new()
+    const nums: set[int] = sets.new()
     sets.add(nums, 10)
     sets.add(nums, 20)
     sets.add(nums, 30)
@@ -115,7 +115,7 @@ end
 demo_hash_table()
     section("HashTable K V")
 
-    const cache: hash_table.HashTable<string, int> = hash_table.with_capacity(8)
+    const cache: hash_table.HashTable[string, int] = hash_table.with_capacity(8)
     const p1: string = "page_1"
     const p2: string = "page_2"
     const p3: string = "page_3"
@@ -144,7 +144,7 @@ demo_hash_table()
     io.println(f"  after remove len: {hash_table.len(cache)}")
 
     -- Int-keyed hash table
-    const ht: hash_table.HashTable<int, string> = hash_table.new()
+    const ht: hash_table.HashTable[int, string] = hash_table.new()
     hash_table.set(ht, 42, "answer")
     match hash_table.get(ht, 42)
     case some(answer):
@@ -158,7 +158,7 @@ end
 demo_heap()
     section("Heap T — Min-Heap")
 
-    const priorities: heap.Heap<int> = heap.new()
+    const priorities: heap.Heap[int] = heap.new()
     heap.push(priorities, 30)
     heap.push(priorities, 10)
     heap.push(priorities, 50)
@@ -188,7 +188,7 @@ demo_heap()
     io.println(sorted_output)
 
     -- String heap
-    const words: heap.Heap<string> = heap.new()
+    const words: heap.Heap[string] = heap.new()
     heap.push(words, "cherry")
     heap.push(words, "apple")
     heap.push(words, "banana")
@@ -201,8 +201,8 @@ demo_heap()
     end
 
     -- from_list + into_sorted_list
-    const batch: heap.Heap<int> = heap.from_list([9, 3, 7, 1, 5])
-    const sorted: list<int> = heap.into_sorted_list(batch)
+    const batch: heap.Heap[int] = heap.from_list([9, 3, 7, 1, 5])
+    const sorted: list[int] = heap.into_sorted_list(batch)
     io.println(f"  sorted list: [{sorted[0]}, {sorted[1]}, {sorted[2]}, {sorted[3]}, {sorted[4]}]")
 end
 
@@ -220,7 +220,7 @@ end
 demo_custom_comparable_heap()
     section("Heap Priority — Custom Comparable")
 
-    const pq: heap.Heap<Priority> = heap.new()
+    const pq: heap.Heap[Priority] = heap.new()
     heap.push(pq, Priority(level: 5))
     heap.push(pq, Priority(level: 1))
     heap.push(pq, Priority(level: 3))
@@ -243,7 +243,7 @@ end
 demo_graph()
     section("Graph T")
 
-    const routes: graph.Graph<string> = graph.new(true)
+    const routes: graph.Graph[string] = graph.new(true)
     graph.add_edge(routes, "NY", "London")
     graph.add_edge(routes, "London", "Paris")
     graph.add_edge(routes, "Paris", "Berlin")
@@ -258,10 +258,10 @@ demo_graph()
     io.println(f"  has_edge NY->London: {graph.has_edge(routes, ny, london)}")
     io.println(f"  has_edge London->NY: {graph.has_edge(routes, london, ny)}")
 
-    const bfs_order: list<string> = graph.bfs(routes, ny)
+    const bfs_order: list[string] = graph.bfs(routes, ny)
     io.println(f"  BFS from NY[0]: {bfs_order[0]}")
 
-    const topo: list<string> = graph.topological_sort(routes)
+    const topo: list[string] = graph.topological_sort(routes)
     io.println(f"  topo sort count: {lists.len(topo)}")
 
     const berlin: string = "Berlin"
@@ -273,7 +273,7 @@ demo_graph()
     end
 
     -- Int-node graph
-    const dag: graph.Graph<int> = graph.new(true)
+    const dag: graph.Graph[int] = graph.new(true)
     graph.add_edge(dag, 1, 2)
     graph.add_edge(dag, 1, 3)
     graph.add_edge(dag, 2, 4)
@@ -306,14 +306,14 @@ end
 demo_custom_hashable()
     section("User-defined Hashable/Equatable")
 
-    const player_scores: map<Player, int> = maps.new()
+    const player_scores: map[Player, int] = maps.new()
     const p1: Player = Player(id: 1)
     const p2: Player = Player(id: 2)
     maps.set(player_scores, p1, 1500)
     maps.set(player_scores, p2, 2200)
     io.println(f"  player 1 score: {maps.get(player_scores, p1)}")
 
-    const roster: set<Player> = sets.new()
+    const roster: set[Player] = sets.new()
     sets.add(roster, p1)
     sets.add(roster, p2)
     sets.add(roster, p1)

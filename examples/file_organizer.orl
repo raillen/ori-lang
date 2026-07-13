@@ -28,8 +28,8 @@ destination_for(file_path: string, output_root: string) -> string
     return path.join([output_root, folder_for(file_path), path.base_name(file_path)])
 end
 
-plan_moves(files: list<string>, output_root: string) -> list<PlannedMove>
-    var moves: list<PlannedMove> = []
+plan_moves(files: list[string], output_root: string) -> list[PlannedMove]
+    var moves: list[PlannedMove] = []
     for file_path in files
         lists.push(moves, PlannedMove(
             from: file_path,
@@ -40,13 +40,13 @@ plan_moves(files: list<string>, output_root: string) -> list<PlannedMove>
 end
 
 main()
-    const files: list<string> = [
+    const files: list[string] = [
         "downloads/photo.jpg",
         "downloads/readme.md",
         "downloads/settings.json",
         "downloads/archive.zip",
     ]
-    const moves: list<PlannedMove> = plan_moves(files, "organized")
+    const moves: list[PlannedMove] = plan_moves(files, "organized")
 
     log.info("planned file moves")
     for planned in moves

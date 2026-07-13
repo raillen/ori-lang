@@ -222,7 +222,7 @@ impl<'a> Checker<'a> {
                     ),
                 )
                 .with_label(Label::primary(self.file_id, span, "iterated here"))
-                .with_action("add `mut func next() -> optional<T>` to the Iterable implementation"),
+                .with_action("add `mut func next() -> optional[T]` to the Iterable implementation"),
             );
             return None;
         };
@@ -240,7 +240,7 @@ impl<'a> Checker<'a> {
             self.sink.emit(
                 Diagnostic::error(
                     "type.iterable_next_signature",
-                    "`Iterable.next` must be `mut func next() -> optional<T>`",
+                    "`Iterable.next` must be `mut func next() -> optional[T]`",
                 )
                 .with_label(Label::primary(self.file_id, span, "iterated here"))
                 .with_action("make `next` mutable and leave only the implicit `self` parameter"),
@@ -254,12 +254,12 @@ impl<'a> Checker<'a> {
                     Diagnostic::error(
                         "type.iterable_next_signature",
                         format!(
-                            "`Iterable.next` must return `optional<T>`, found `{}`",
+                            "`Iterable.next` must return `optional[T]`, found `{}`",
                             other.display()
                         ),
                     )
                     .with_label(Label::primary(self.file_id, span, "iterated here"))
-                    .with_action("return `optional<T>` from `next`, using `some(value)` or `none`"),
+                    .with_action("return `optional[T]` from `next`, using `some(value)` or `none`"),
                 );
                 None
             }
@@ -1222,7 +1222,7 @@ impl<'a> Checker<'a> {
                             Diagnostic::error(
                                 "type.ifsome_not_optional",
                                 format!(
-                                    "`if some` requires an `optional<T>`, found `{}`",
+                                    "`if some` requires an `optional[T]`, found `{}`",
                                     val_ty.display()
                                 ),
                             )
@@ -1231,7 +1231,7 @@ impl<'a> Checker<'a> {
                                 s.value.span(),
                                 "expected optional here",
                             ))
-                            .with_action("change the expression to return `optional<T>`"),
+                            .with_action("change the expression to return `optional[T]`"),
                         );
                         Ty::Error
                     }
@@ -1254,7 +1254,7 @@ impl<'a> Checker<'a> {
                             Diagnostic::error(
                                 "type.whilesome_not_optional",
                                 format!(
-                                    "`while some` requires an `optional<T>`, found `{}`",
+                                    "`while some` requires an `optional[T]`, found `{}`",
                                     val_ty.display()
                                 ),
                             )
@@ -1263,7 +1263,7 @@ impl<'a> Checker<'a> {
                                 s.value.span(),
                                 "expected optional here",
                             ))
-                            .with_action("change the expression to return `optional<T>`"),
+                            .with_action("change the expression to return `optional[T]`"),
                         );
                         Ty::Error
                     }
@@ -1847,7 +1847,7 @@ impl<'a> Checker<'a> {
                             _ => {
                                 self.sink.emit(
                                     Diagnostic::error("type.type_mismatch",
-                                        format!("`.or()` can only be called on `optional<T>` or `result<T,E>`, got `{}`",
+                                        format!("`.or()` can only be called on `optional[T]` or `result[T,E]`, got `{}`",
                                             obj_ty.display()))
                                     .with_label(Label::primary(self.file_id, *span, "invalid `.or()` receiver")),
                                 );
@@ -1885,7 +1885,7 @@ impl<'a> Checker<'a> {
                                     Diagnostic::error(
                                         "type.type_mismatch",
                                         format!(
-                                            "`.or_wrap()` currently requires `result<T, string>`, got error type `{}`",
+                                            "`.or_wrap()` currently requires `result[T, string]`, got error type `{}`",
                                             err.display()
                                         ),
                                     )
@@ -1902,7 +1902,7 @@ impl<'a> Checker<'a> {
                                     Diagnostic::error(
                                         "type.type_mismatch",
                                         format!(
-                                            "`.or_wrap()` can only be called on `result<T, string>`, got `{}`",
+                                            "`.or_wrap()` can only be called on `result[T, string]`, got `{}`",
                                             obj_ty.display()
                                         ),
                                     )
@@ -1922,7 +1922,7 @@ impl<'a> Checker<'a> {
                         return match &obj_ty {
                             Ty::Optional(inner) => {
                                 // .or_return() desugars to `obj?` — propagates none
-                                // In a function returning T (not optional<T>), this is an error
+                                // In a function returning T (not optional[T]), this is an error
                                 if let Ty::Optional(ret_inner) = &cur_ret {
                                     if !inner.is_assignable_to(ret_inner) {
                                         self.sink.emit(
@@ -1962,7 +1962,7 @@ impl<'a> Checker<'a> {
                             _ => {
                                 self.sink.emit(
                                     Diagnostic::error("type.type_mismatch",
-                                        format!("`.or_return()` can only be called on `optional<T>` or `result<T,E>`, got `{}`",
+                                        format!("`.or_return()` can only be called on `optional[T]` or `result[T,E]`, got `{}`",
                                             obj_ty.display()))
                                     .with_label(Label::primary(self.file_id, *span, "invalid `.or_return()` receiver")),
                                 );
@@ -2146,10 +2146,10 @@ impl<'a> Checker<'a> {
                         self.sink.emit(
                             Diagnostic::error(
                                 "async.await_non_future",
-                                format!("`await` expects `future<T>`, found `{}`", other.display()),
+                                format!("`await` expects `future[T]`, found `{}`", other.display()),
                             )
                             .with_label(Label::primary(self.file_id, expr.span(), "not a future"))
-                            .with_action("await only expressions that return `future<T>`"),
+                            .with_action("await only expressions that return `future[T]`"),
                         );
                         Ty::Error
                     }
@@ -4176,7 +4176,7 @@ impl<'a> Checker<'a> {
                         Diagnostic::error(
                             "contract.success_void_mismatch",
                             format!(
-                                "`success()` is only valid for `result<void, E>`, found success type `{}`",
+                                "`success()` is only valid for `result[void, E]`, found success type `{}`",
                                 ok_ty.display()
                             ),
                         )
@@ -4884,7 +4884,7 @@ impl<'a> Checker<'a> {
                     field.span,
                     "unknown trait method",
                 ))
-                .with_action("call only methods declared by the trait in `any<Trait>`"),
+                .with_action("call only methods declared by the trait in `any[Trait]`"),
             );
             return Ty::Error;
         }
@@ -5149,7 +5149,7 @@ impl<'a> Checker<'a> {
                         .with_why(
                             "the current set runtime hashes built-in elements directly and accepts user-defined elements behind the `Hashable`/`Equatable` trait gate",
                         )
-                        .with_action("use `set<int>`, `set<string>`, or implement both `ori.core.Hashable` and `ori.core.Equatable` for the element type"),
+                        .with_action("use `set[int]`, `set[string]`, or implement both `ori.core.Hashable` and `ori.core.Equatable` for the element type"),
                     );
                 }
                 self.check_collection_runtime_limits(elem, span);
@@ -6647,7 +6647,7 @@ fn unsupported_comparison_reason(ty: &Ty) -> &'static str {
 fn comparison_action(ty: &Ty) -> &'static str {
     match ty {
         Ty::Func { .. } => "remove the comparison or compare a separate stable value",
-        Ty::Any(_) => "compare concrete values before boxing them as `any<Trait>`",
+        Ty::Any(_) => "compare concrete values before boxing them as `any[Trait]`",
         Ty::Named(_, _)
         | Ty::Tuple(_)
         | Ty::Optional(_)
@@ -6710,7 +6710,7 @@ fn display_tys(types: &[Ty]) -> String {
         .join(", ")
 }
 
-/// Extract the element type from a `list<T>`, `set<T>`, `range<T>`, or string.
+/// Extract the element type from a `list[T]`, `set[T]`, `range[T]`, or string.
 fn elem_of(ty: &Ty) -> Option<Ty> {
     match ty {
         Ty::List(t) | Ty::Set(t) | Ty::Range(t) => Some(*t.clone()),

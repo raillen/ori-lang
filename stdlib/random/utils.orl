@@ -15,11 +15,11 @@ public coin() -> bool
     return rnd.bool()
 end
 
-public pick<T>(items: list<T>) -> optional<T>
+public pick[T](items: list[T]) -> optional[T]
     return rnd.choice(items)
 end
 
-public shuffle<T>(items: list<T>) -> list<T>
+public shuffle[T](items: list[T]) -> list[T]
     return rnd.shuffle(items)
 end
 
@@ -28,11 +28,11 @@ public seeded_int(seed: int, min_val: int, max_val: int) -> int
     return rnd.int(min_val, max_val)
 end
 
-public seeded_pick<T>(seed: int, items: list<T>) -> optional<T>
+public seeded_pick[T](seed: int, items: list[T]) -> optional[T]
     rnd.seed(seed)
     return rnd.choice(items)
 end
 
-public is_empty_choice<T>(items: list<T>) -> bool
+public is_empty_choice[T](items: list[T]) -> bool
     return lists.len(items) == 0
 end

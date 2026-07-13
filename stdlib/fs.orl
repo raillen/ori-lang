@@ -10,18 +10,18 @@ public read_text_or(path: string, fallback: string) -> string
     return fallback
 end
 
-public write_text_result(path: string, content: string) -> result<string, string>
+public write_text_result(path: string, content: string) -> result[string, string]
     return ori.fs.write_text(path, content)
 end
 
-public exists_result(path: string) -> result<bool, string>
+public exists_result(path: string) -> result[bool, string]
     return ori.fs.exists(path)
 end
 
-public remove_file(path: string) -> result<void, string>
+public remove_file(path: string) -> result[void, string]
     return ori.fs.delete(path)
 end
 
-public move_path(from: string, to: string) -> result<void, string>
+public move_path(from: string, to: string) -> result[void, string]
     return ori.fs.rename(from, to)
 end

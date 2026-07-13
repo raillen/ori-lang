@@ -462,16 +462,16 @@ fn type_to_string(ty: &ori_ast::ty::Type) -> String {
         ori_ast::ty::Type::Bytes(_) => "bytes".to_string(),
         ori_ast::ty::Type::Void(_) => "void".to_string(),
         ori_ast::ty::Type::Named(q) => q.to_string(),
-        ori_ast::ty::Type::Optional(t, _) => format!("optional<{}>", type_to_string(t)),
+        ori_ast::ty::Type::Optional(t, _) => format!("optional[{}]", type_to_string(t)),
         ori_ast::ty::Type::Result(ok, err, _) => {
-            format!("result<{}, {}>", type_to_string(ok), type_to_string(err))
+            format!("result[{}, {}]", type_to_string(ok), type_to_string(err))
         }
-        ori_ast::ty::Type::List(t, _) => format!("list<{}>", type_to_string(t)),
+        ori_ast::ty::Type::List(t, _) => format!("list[{}]", type_to_string(t)),
         ori_ast::ty::Type::Map(k, v, _) => {
-            format!("map<{}, {}>", type_to_string(k), type_to_string(v))
+            format!("map[{}, {}]", type_to_string(k), type_to_string(v))
         }
-        ori_ast::ty::Type::Set(t, _) => format!("set<{}>", type_to_string(t)),
-        ori_ast::ty::Type::Range(t, _) => format!("range<{}>", type_to_string(t)),
+        ori_ast::ty::Type::Set(t, _) => format!("set[{}]", type_to_string(t)),
+        ori_ast::ty::Type::Range(t, _) => format!("range[{}]", type_to_string(t)),
         ori_ast::ty::Type::Tuple(types, _) => {
             let inner: Vec<_> = types.iter().map(type_to_string).collect();
             format!("({})", inner.join(", "))

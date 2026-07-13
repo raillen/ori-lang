@@ -13,7 +13,7 @@ echo_command() -> string
     return "echo"
 end
 
-echo_args(message: string) -> list<string>
+echo_args(message: string) -> list[string]
     if os.is_windows()
         return ["/C", "echo", message]
     end

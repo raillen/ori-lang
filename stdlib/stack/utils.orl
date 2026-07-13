@@ -3,8 +3,8 @@ module ori.stack.utils
 import ori.list as lists
 import ori.stack as stack
 
-public from_list<T>(items: list<T>) -> stack.Stack<T>
-    var s: stack.Stack<T> = stack.new()
+public from_list[T](items: list[T]) -> stack.Stack[T]
+    var s: stack.Stack[T] = stack.new()
     var i: int = 0
     const n: int = lists.len(items)
     while i < n
@@ -16,17 +16,17 @@ public from_list<T>(items: list<T>) -> stack.Stack<T>
     return s
 end
 
-public to_list<T>(s: stack.Stack<T>) -> list<T>
+public to_list[T](s: stack.Stack[T]) -> list[T]
     return stack.to_list(s)
 end
 
-public peek_or<T>(s: stack.Stack<T>, fallback: T) -> T
+public peek_or[T](s: stack.Stack[T], fallback: T) -> T
     if some(value) = stack.peek(s)
         return value
     end
     return fallback
 end
 
-public is_singleton<T>(s: stack.Stack<T>) -> bool
+public is_singleton[T](s: stack.Stack[T]) -> bool
     return stack.len(s) == 1
 end

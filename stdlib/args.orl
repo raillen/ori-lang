@@ -2,7 +2,7 @@ module ori.args
 
 import ori.os as os
 
-public all() -> list<string>
+public all() -> list[string]
     return os.args()
 end
 

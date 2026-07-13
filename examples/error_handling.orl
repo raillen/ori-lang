@@ -2,14 +2,14 @@ module app.errors
 
 import ori.io as io
 
-divide(a: int, b: int) -> result<int, string>
+divide(a: int, b: int) -> result[int, string]
     if b == 0
         return error("Division by zero")
     end
     return success(a / b)
 end
 
-calculate(numerator: int, denominator: int) -> result<int, string>
+calculate(numerator: int, denominator: int) -> result[int, string]
     io.print(f"Calculating {numerator} / {denominator}...")
     
     -- Using try for early return on error

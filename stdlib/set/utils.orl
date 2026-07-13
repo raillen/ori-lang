@@ -2,7 +2,7 @@ module ori.set.utils
 
 import ori.set as sets
 
-public contains_all(s: set<string>, items: list<string>) -> bool
+public contains_all(s: set[string], items: list[string]) -> bool
     for item in items
         if not sets.contains(s, item)
             return false
@@ -11,20 +11,20 @@ public contains_all(s: set<string>, items: list<string>) -> bool
     return true
 end
 
-public from_list(items: list<string>) -> set<string>
-    var out: set<string> = sets.new()
+public from_list(items: list[string]) -> set[string]
+    var out: set[string] = sets.new()
     for item in items
         sets.add(out, item)
     end
     return out
 end
 
-public is_subset(subset: set<string>, superset: set<string>) -> bool
-    const items: list<string> = sets.to_list(subset)
+public is_subset(subset: set[string], superset: set[string]) -> bool
+    const items: list[string] = sets.to_list(subset)
     return contains_all(superset, items)
 end
 
-public contains_all_int(s: set<int>, items: list<int>) -> bool
+public contains_all_int(s: set[int], items: list[int]) -> bool
     for item in items
         if not sets.contains(s, item)
             return false

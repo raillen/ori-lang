@@ -2,15 +2,15 @@ module ori.net
 
 import ori.net as net
 
-public connect_tls(host: string, port: int, timeout_ms: int) -> result<net.Connection, string>
+public connect_tls(host: string, port: int, timeout_ms: int) -> result[net.Connection, string]
     return net.connect_tls(host, port, timeout_ms)
 end
 
-public listen(host: string, port: int) -> result<net.Listener, string>
+public listen(host: string, port: int) -> result[net.Listener, string]
     return net.listen(host, port)
 end
 
-public accept(listener: net.Listener) -> result<net.Connection, string>
+public accept(listener: net.Listener) -> result[net.Connection, string]
     return net.accept(listener)
 end
 
@@ -22,15 +22,15 @@ public listener_port(listener: net.Listener) -> int
     return net.listener_port(listener)
 end
 
-public udp_bind(host: string, port: int) -> result<net.UdpSocket, string>
+public udp_bind(host: string, port: int) -> result[net.UdpSocket, string]
     return net.udp_bind(host, port)
 end
 
-public udp_send_to(sock: net.UdpSocket, host: string, port: int, data: bytes) -> result<int, string>
+public udp_send_to(sock: net.UdpSocket, host: string, port: int, data: bytes) -> result[int, string]
     return net.udp_send_to(sock, host, port, data)
 end
 
-public udp_recv_from(sock: net.UdpSocket, max_bytes: int) -> result<bytes, string>
+public udp_recv_from(sock: net.UdpSocket, max_bytes: int) -> result[bytes, string]
     return net.udp_recv_from(sock, max_bytes)
 end
 

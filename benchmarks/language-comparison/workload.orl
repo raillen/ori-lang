@@ -41,7 +41,7 @@ sum_squares(n: int) -> int
 end
 
 list_push_sum(n: int) -> int
-    const values: list<int> = lists.new()
+    const values: list[int] = lists.new()
     var i: int = 0
     while i < n
         lists.push(values, i * 3 + 7)

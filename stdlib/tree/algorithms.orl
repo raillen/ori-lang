@@ -3,18 +3,18 @@ module ori.tree.algorithms
 import ori.list as lists
 import ori.tree as tree
 
-public is_leaf<T>(t: tree.Tree<T>, node: tree.NodeId) -> bool
-    const kids: list<tree.NodeId> = tree.children(t, node)
+public is_leaf[T](t: tree.Tree[T], node: tree.NodeId) -> bool
+    const kids: list[tree.NodeId] = tree.children(t, node)
     return lists.is_empty(kids)
 end
 
-public values_preorder<T>(t: tree.Tree<T>) -> list<T>
-    var out: list<T> = []
-    var stack: list<tree.NodeId> = [tree.root(t)]
+public values_preorder[T](t: tree.Tree[T]) -> list[T]
+    var out: list[T] = []
+    var stack: list[tree.NodeId] = [tree.root(t)]
     while not lists.is_empty(stack)
         if some(node) = lists.try_pop(stack)
             lists.push(out, tree.value(t, node))
-            const kids: list<tree.NodeId> = tree.children(t, node)
+            const kids: list[tree.NodeId] = tree.children(t, node)
             var i: int = lists.len(kids) - 1
             while i >= 0
                 if some(child) = lists.try_get(kids, i)
@@ -27,15 +27,15 @@ public values_preorder<T>(t: tree.Tree<T>) -> list<T>
     return out
 end
 
-public leaf_count<T>(t: tree.Tree<T>) -> int
+public leaf_count[T](t: tree.Tree[T]) -> int
     var n: int = 0
-    var stack: list<tree.NodeId> = [tree.root(t)]
+    var stack: list[tree.NodeId] = [tree.root(t)]
     while not lists.is_empty(stack)
         if some(node) = lists.try_pop(stack)
             if is_leaf(t, node)
                 n = n + 1
             else
-                const kids: list<tree.NodeId> = tree.children(t, node)
+                const kids: list[tree.NodeId] = tree.children(t, node)
                 for child in kids
                     lists.push(stack, child)
                 end
@@ -45,17 +45,17 @@ public leaf_count<T>(t: tree.Tree<T>) -> int
     return n
 end
 
-public max_depth_from<T>(t: tree.Tree<T>, node: tree.NodeId) -> int
+public max_depth_from[T](t: tree.Tree[T], node: tree.NodeId) -> int
     var deepest: int = 0
-    var stack: list<tree.NodeId> = [node]
-    var depths: list<int> = [0]
+    var stack: list[tree.NodeId] = [node]
+    var depths: list[int] = [0]
     while not lists.is_empty(stack)
         if some(cur) = lists.try_pop(stack)
             if some(d) = lists.try_pop(depths)
                 if d > deepest
                     deepest = d
                 end
-                const kids: list<tree.NodeId> = tree.children(t, cur)
+                const kids: list[tree.NodeId] = tree.children(t, cur)
                 for child in kids
                     lists.push(stack, child)
                     lists.push(depths, d + 1)

@@ -3,7 +3,7 @@ module ori.json.utils
 import ori.fs as fs
 import ori.json as json
 
-public read(file_path: string) -> result<json.Value, string>
+public read(file_path: string) -> result[json.Value, string]
     match fs.read_text(file_path)
         case success(text):
             return json.parse(text)
@@ -13,12 +13,12 @@ public read(file_path: string) -> result<json.Value, string>
     return error("failed to read json file")
 end
 
-public write(file_path: string, value: json.Value) -> result<string, string>
+public write(file_path: string, value: json.Value) -> result[string, string]
     const text: string = json.stringify(value)
     return fs.write_text(file_path, text)
 end
 
-public write_pretty(file_path: string, value: json.Value) -> result<string, string>
+public write_pretty(file_path: string, value: json.Value) -> result[string, string]
     const text: string = json.stringify_pretty(value)
     return fs.write_text(file_path, text)
 end

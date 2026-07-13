@@ -88,8 +88,8 @@ public capitalize(s: string) -> string
 end
 
 public title(s: string) -> string
-    const parts: list<string> = ori.string.split(s, " ")
-    var titled: list<string> = []
+    const parts: list[string] = ori.string.split(s, " ")
+    var titled: list[string] = []
     var i: int = 0
     const parts_len: int = lists.len(parts)
     while i < parts_len
@@ -128,7 +128,7 @@ end
 
 public swap_case(s: string) -> string
     const s_len: int = ori.string.len(s)
-    var out: list<string> = []
+    var out: list[string] = []
     var i: int = 0
     while i < s_len
         const ch: string = ori.string.slice(s, i, i + 1)
@@ -138,7 +138,7 @@ public swap_case(s: string) -> string
     return ori.string.join(out, "")
 end
 
-public lines(s: string) -> list<string>
+public lines(s: string) -> list[string]
     return ori.string.split(s, "\n")
 end
 
@@ -154,9 +154,9 @@ public right(s: string, n: int) -> string
     return ori.string.slice(s, s_len - n, s_len)
 end
 
-public words(s: string) -> list<string>
-    const parts: list<string> = ori.string.split(ori.string.trim(s), " ")
-    var out: list<string> = []
+public words(s: string) -> list[string]
+    const parts: list[string] = ori.string.split(ori.string.trim(s), " ")
+    var out: list[string] = []
     var i: int = 0
     const parts_len: int = lists.len(parts)
     while i < parts_len
@@ -259,7 +259,7 @@ public has_suffix(s: string, suffix: string) -> bool
     return ori.string.ends_with(s, suffix)
 end
 
-public join_non_empty(parts: list<string>, separator: string) -> string
+public join_non_empty(parts: list[string], separator: string) -> string
     var out: string = ""
     var i: int = 0
     const n: int = lists.len(parts)
@@ -282,7 +282,7 @@ public repeated(s: string, times: int) -> string
     return replicate(s, times)
 end
 
-public equals_any(value: string, candidates: list<string>) -> bool
+public equals_any(value: string, candidates: list[string]) -> bool
     var i: int = 0
     const n: int = lists.len(candidates)
     while i < n

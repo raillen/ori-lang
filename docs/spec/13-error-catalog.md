@@ -59,6 +59,9 @@ when the compiler starts producing it.
 | `parse.module_not_first` | error | `module` declaration appears after another declaration |
 | `parse.namespace_removed` | error | Source used removed `namespace` keyword; use `module` |
 | `parse.func_removed` | error | Source used removed `func` on a declaration; write `name(...)` directly |
+| `parse.removed_angle_type` | error | Angle-bracket type arguments `Type<…>` are removed; use `Type[…]` |
+| `parse.removed_of_type` | error | `of` / `map of K to V` type forms are removed; use `list[T]`, `map[K, V]`, … |
+| `parse.removed_where_bound` | error | `where T is Trait` / `where T is not Trait` bounds are removed; use `for T: Trait` |
 | `parse.tuple_arity` | error | Tuple type or expression has invalid arity |
 | `parse.unterminated_block` | error | End-delimited block reaches end of file before `end` |
 | `parse.unterminated_string` | error | String literal starts but is not closed |
@@ -362,7 +365,7 @@ Example:
 error[generic.constraint_not_satisfied]: type does not satisfy constraint
   --> src/app/sort.orl:8:14
    |
-8  |    const sorted: list<User> = list.sort(users)
+8  |    const sorted: list[User] = list.sort(users)
    |                               ^^^^^^^^^
    |
    = action: implement the required trait or use a value with a supported type

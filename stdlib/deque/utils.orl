@@ -3,8 +3,8 @@ module ori.deque.utils
 import ori.list as lists
 import ori.deque as deque
 
-public from_list<T>(items: list<T>) -> deque.Deque<T>
-    var d: deque.Deque<T> = deque.new()
+public from_list[T](items: list[T]) -> deque.Deque[T]
+    var d: deque.Deque[T] = deque.new()
     var i: int = 0
     const n: int = lists.len(items)
     while i < n
@@ -16,25 +16,25 @@ public from_list<T>(items: list<T>) -> deque.Deque<T>
     return d
 end
 
-public to_list<T>(d: deque.Deque<T>) -> list<T>
+public to_list[T](d: deque.Deque[T]) -> list[T]
     return deque.to_list(d)
 end
 
-public front_or<T>(d: deque.Deque<T>, fallback: T) -> T
+public front_or[T](d: deque.Deque[T], fallback: T) -> T
     if some(value) = deque.front(d)
         return value
     end
     return fallback
 end
 
-public back_or<T>(d: deque.Deque<T>, fallback: T) -> T
+public back_or[T](d: deque.Deque[T], fallback: T) -> T
     if some(value) = deque.back(d)
         return value
     end
     return fallback
 end
 
-public push_all<T>(d: deque.Deque<T>, items: list<T>)
+public push_all[T](d: deque.Deque[T], items: list[T])
     var i: int = 0
     const n: int = lists.len(items)
     while i < n

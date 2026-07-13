@@ -4,7 +4,7 @@ import ori.io as io
 import ori.queue as queue
 
 main()
-    const jobs: queue.Queue<string> = queue.new()
+    const jobs: queue.Queue[string] = queue.new()
     queue.enqueue(jobs, "parse")
     queue.enqueue(jobs, "check")
     queue.enqueue(jobs, "compile")

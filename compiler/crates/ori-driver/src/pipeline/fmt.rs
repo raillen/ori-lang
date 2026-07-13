@@ -123,7 +123,7 @@ fn declaration_line_without_modifiers(mut line: &str) -> &str {
     }
 }
 
-/// S3 function form: `name(...)` / `name<T>(...)` (no `func` keyword).
+/// S3 function form: `name(...)` / `name[T](...)` / `name for T: Trait (...)`.
 ///
 /// TODO(S3 PR9 migrate-syntax): drop legacy `func name(...)` recognition once
 /// the migrate tooling lands and no format-only dual surface is needed.
@@ -142,7 +142,10 @@ fn is_named_function_head(line: &str) -> bool {
         return false;
     }
     let rest = &line[name_end..];
-    rest.starts_with('(') || rest.starts_with('<')
+    rest.starts_with('(')
+        || rest.starts_with('[')
+        || rest.starts_with(" for ")
+        || rest.starts_with('<') // legacy angle params (error surface)
 }
 
 fn is_comment_line(line: &str) -> bool {
@@ -216,12 +219,12 @@ mod tests {
 
     #[test]
     fn fmt_is_idempotent_for_real_use_constructs() {
-        let src = "module app.main\nimport ori.string only (trim as trim_text)\nimport ori.task as task\n\nstruct Book\nid: int\ntitle: string\nend\n\ntrait Displayable\ndisplay() -> string\ndebug()\nio.print(display())\nend\nend\n\nasync load<T>(value: T) -> T\nawait task.sleep(1)\nreturn value\nend\n\nmain()\nconst book: Book = Book(id: 1, title: trim_text(\" Ori \"))\nmatch book.id\ncase 0:\nio.print(\"zero\")\ncase 1:\nio.print(book.title)\nelse\nio.print(\"many\")\nend\nend\n";
+        let src = "module app.main\nimport ori.string only (trim as trim_text)\nimport ori.task as task\n\nstruct Book\nid: int\ntitle: string\nend\n\ntrait Displayable\ndisplay() -> string\ndebug()\nio.print(display())\nend\nend\n\nasync load[T](value: T) -> T\nawait task.sleep(1)\nreturn value\nend\n\nmain()\nconst book: Book = Book(id: 1, title: trim_text(\" Ori \"))\nmatch book.id\ncase 0:\nio.print(\"zero\")\ncase 1:\nio.print(book.title)\nelse\nio.print(\"many\")\nend\nend\n";
         let once = format_source_text(src);
         let twice = format_source_text(&once);
         assert_eq!(once, twice);
         assert!(once.contains("import ori.string only (trim as trim_text)\n"));
-        assert!(once.contains("async load<T>(value: T) -> T\n"));
+        assert!(once.contains("async load[T](value: T) -> T\n"));
         assert!(once.contains("    match book.id\n"));
         assert!(once.contains("    case 1:\n"));
         assert!(once.contains("const book: Book = Book(id: 1, title: trim_text(\" Ori \"))"));

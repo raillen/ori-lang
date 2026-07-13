@@ -82,7 +82,7 @@ end
 demo_enums()
     section("Enums and Pattern Matching")
 
-    const shapes: list<Shape> = [
+    const shapes: list[Shape] = [
         Shape.Circle(radius: 5),
         Shape.Rectangle(width: 4, height: 6),
         Shape.Triangle(base: 10, height: 3)
@@ -118,15 +118,15 @@ demo_traits()
 end
 
 -- ─────────────── Generic Functions ──────────────
-first_or_custom<T>(items: list<T>, fallback: T) -> T
+first_or_custom[T](items: list[T], fallback: T) -> T
     if some(item) = lists.try_get(items, 0)
         return item
     end
     return fallback
 end
 
-repeat_element<T>(item: T, count: int) -> list<T>
-    var out: list<T> = []
+repeat_element[T](item: T, count: int) -> list[T]
+    var out: list[T] = []
     var i: int = 0
     while i < count
         lists.push(out, item)
@@ -140,24 +140,24 @@ demo_generics()
 
     io.println(f"  first_or int: {first_or_custom([10, 20, 30], -1)}")
     const fb_str: string = "empty"
-    const str_items: list<string> = ["hello", "world"]
+    const str_items: list[string] = ["hello", "world"]
     io.println(f"  first_or string: {first_or_custom(str_items, fb_str)}")
-    const empty_list: list<int> = []
+    const empty_list: list[int] = []
     io.println(f"  first_or empty: {first_or_custom(empty_list, -1)}")
 
-    const repeated: list<string> = repeat_element("Ori", 3)
+    const repeated: list[string] = repeat_element("Ori", 3)
     io.println(f"  repeat_element: [{repeated[0]}, {repeated[1]}, {repeated[2]}]")
 end
 
 -- ──────────── Optional and Result ──────────────
-safe_divide(a: int, b: int) -> result<int, string>
+safe_divide(a: int, b: int) -> result[int, string]
     if b == 0
         return error("division by zero")
     end
     return success(a / b)
 end
 
-find_by_name(names: list<string>, target: string) -> optional<int>
+find_by_name(names: list[string], target: string) -> optional[int]
     var i: int = 0
     while i < lists.len(names)
         if some(name) = lists.try_get(names, i)
@@ -187,7 +187,7 @@ demo_optional_result()
         io.println(f"  10 / 0 error: {msg}")
     end
 
-    const people: list<string> = ["Ada", "Grace", "Margaret"]
+    const people: list[string] = ["Ada", "Grace", "Margaret"]
 
     const grace: string = "Grace"
     match find_by_name(people, grace)
@@ -215,7 +215,7 @@ end
 demo_control_flow()
     section("Control Flow")
 
-    const items: list<string> = ["alpha", "beta", "gamma"]
+    const items: list[string] = ["alpha", "beta", "gamma"]
     for item, idx in items
         io.println(f"  [{idx}] {item}")
     end
@@ -280,9 +280,9 @@ demo_structural_equality()
     io.println(f"  p1 == p3: {p1 == p3}")
     io.println(f"  p1 != p3: {p1 != p3}")
 
-    const a: list<int> = [1, 2, 3]
-    const b: list<int> = [1, 2, 3]
-    const c: list<int> = [1, 2, 4]
+    const a: list[int] = [1, 2, 3]
+    const b: list[int] = [1, 2, 3]
+    const c: list[int] = [1, 2, 4]
     io.println(f"  [1,2,3] == [1,2,3]: {a == b}")
     io.println(f"  [1,2,3] == [1,2,4]: {a == c}")
 end

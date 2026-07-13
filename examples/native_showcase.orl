@@ -24,7 +24,7 @@ end
 enum Event
     Started(label: string)
     Assigned(user: User)
-    Pair(data: tuple<int, string>)
+    Pair(data: tuple[int, string])
 end
 
 implement Labelled for User
@@ -39,11 +39,11 @@ implement Disposable for Resource
     end
 end
 
-choose<T>(first: T, second: T) -> T
+choose[T](first: T, second: T) -> T
     return second
 end
 
-label_of<T>(value: T) -> string where T is Labelled
+label_of for T: Labelled (value: T) -> string
     return value.label()
 end
 
@@ -64,12 +64,12 @@ main()
         User(name: "Ada", role: "guest"),
         User(name: "Grace", role: "admin"),
     )
-    const boxed: any<Labelled> = user
+    const boxed: any[Labelled] = user
 
-    var names: list<string> = ["seed"]
+    var names: list[string] = ["seed"]
     lists.push(names, label_of(user))
 
-    var labels: map<string, string> = {"owner": "none"}
+    var labels: map[string, string] = {"owner": "none"}
     maps.set(labels, "owner", boxed.label())
 
     io.print(lists.get(names, 1))

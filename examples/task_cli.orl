@@ -16,7 +16,7 @@ marker(task: Task) -> string
     return "[ ]"
 end
 
-done_count(tasks: list<Task>) -> int
+done_count(tasks: list[Task]) -> int
     var total: int = 0
     for task in tasks
         if task.done
@@ -26,14 +26,14 @@ done_count(tasks: list<Task>) -> int
     return total
 end
 
-print_tasks(tasks: list<Task>)
+print_tasks(tasks: list[Task])
     for task in tasks
         io.print(marker(task) + " " + task.title)
     end
 end
 
 main()
-    var tasks: list<Task> = []
+    var tasks: list[Task] = []
     lists.push(tasks, Task(title: "write example", done: true))
     lists.push(tasks, Task(title: "run tests", done: false))
     lists.push(tasks, Task(title: "update docs", done: false))
