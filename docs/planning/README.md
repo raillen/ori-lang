@@ -10,6 +10,8 @@ docs/planning/
 ├── uso-real-pequeno-medio.md           # [Ativo] Plano de maturidade para uso real em projetos pequenos e médios
 ├── PENDENTES.md                        # [Ativo] Backlog M2→M3→M1→M4
 ├── stdlib-merge-policy.md              # [Ativo] M2 — API canônica ori.X + mesclagem
+├── repo-and-project-layout.md          # [Ativo] M2.layout — monorepo + projetos raiz-first
+├── result-ctors-ok-err.md              # [Ativo] M2.result-ctors — success/error → ok/err
 ├── language-direction-decisions-2026-06-30.md # [Decisão] Decisões arquiteturais de direção da linguagem (ADR)
 ├── ori-surface-s3-auk9.md              # [Ativo] Decisões de superfície S3 (implementada no compiler; docs 0.3.0)
 ├── adr-ori-surface-s3-auk9.md          # [ADR] Aceito — superfície S3 / aposentar Auk9 como produto
