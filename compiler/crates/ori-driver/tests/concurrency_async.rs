@@ -1515,6 +1515,117 @@ end
     }
 }
 
+/// LANG-RES gate: product surface that must not hit `backend.native_unsupported`.
+/// Covers for-over (list/map/string/bytes/range), index assign, async await,
+/// using+dispose, and task spawn/join — residual risk areas in Spec 14.
+#[test]
+fn compile_runs_lang_res_product_surface_native() {
+    let dir = TestDir::new("compile_runs_lang_res_product_surface_native");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+imports
+    ori.io = io
+    ori.task = task
+end
+
+trait Disposable
+    mut dispose(self)
+end
+
+struct Box
+    id: int
+end
+
+apply Box
+    use Disposable
+        mut dispose(self)
+            io.print("d")
+        end
+    end
+end
+
+async delay_one() -> int
+    await task.sleep(1)
+    return 1
+end
+
+async main()
+    var total: int = 0
+
+    var xs: list[int] = [1, 2]
+    xs[0] = 7
+    for n in xs
+        total = total + n
+    end
+
+    var m: map[string, int] = {"a": 1}
+    m["a"] = 2
+    for k, v in m
+        total = total + v
+    end
+
+    for ch in "ab"
+        total = total + 1
+    end
+
+    const payload: bytes = "xy".to_bytes()
+    for b in payload
+        total = total + int(b)
+    end
+
+    for i in 0..2
+        total = total + i
+    end
+
+    const delayed: int = await delay_one()
+    total = total + delayed
+
+    using resource: Box = Box { id: 1 }
+    total = total + resource.id
+
+    const job: task.Job[int] = task.spawn(() => 3)
+    match task.join(job)
+    case ok(v):
+        total = total + v
+    case err(_):
+        total = total + 0
+    end
+
+    io.print(string(total))
+end
+"#,
+    );
+
+    let exe = exe_path(&dir, "lang_res_product_surface");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(
+        !out.has_errors,
+        "LANG-RES product surface must compile natively: {:?}",
+        out.diagnostics
+    );
+
+    let output = Command::new(&exe).output().unwrap();
+    assert!(
+        output.status.success(),
+        "LANG-RES product surface binary failed: status={:?} stderr={}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // Dispose prints "d" at end of main; total is a positive aggregate of residual paths.
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains('d'),
+        "expected Disposable.dispose side effect, stdout={stdout:?}"
+    );
+    let digits: String = stdout.chars().filter(|c| c.is_ascii_digit()).collect();
+    assert!(
+        !digits.is_empty() && digits != "0",
+        "expected non-zero total from residual surface, stdout={stdout:?}"
+    );
+}
+
 #[test]
 fn c_backend_rejects_concurrency_runtime_calls() {
     let dir = TestDir::new("c_backend_rejects_concurrency");

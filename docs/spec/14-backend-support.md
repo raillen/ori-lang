@@ -1,6 +1,6 @@
 # Backend support matrix
 
-Status: current as of 2026-07-01.
+Status: current as of 2026-07-13.
 
 This page separates three things:
 
@@ -32,7 +32,7 @@ Legend:
 | File I/O async | yes | yes | no | L1 `fs.read_text_async` / `write_text_async` (worker + future); L2 `read_text_in_background` Jobs. |
 | `bytes` with internal NUL | yes | yes | partial | `string` still rejects internal NUL at conversion boundary. |
 | Unicode `string.len`, `slice`, `index_of` | yes | yes | partial | Indices are Unicode scalar indices, not byte offsets. |
-| Async functions and `await` | yes | partial | no | Native supports the subset below. C/debug rejects async. |
+| Async functions and `await` | yes | yes* | no | *Promised native subset closed (LANG-1). Rare residual layout failures only — see inventory. C/debug rejects async. |
 | `using` resource cleanup | yes | yes | partial | Sync and async `using` supported; async dispose on normal return, `try`/`?`, cancel, fail, and `break`. |
 | `lazy.once` / `lazy.force` | yes | yes | partial | Native uses inline Cranelift codegen; C backend has dedicated lowering. |
 | LSP diagnostics positions | yes | yes | n/a | LSP uses UTF-16 columns and handles CRLF. |
@@ -195,3 +195,8 @@ Until a v2 decision lands, do not mark C async as partial/yes in the matrix.
 - Do not call async "complete" while any **promised** `await` shape still reaches
   `backend.native_unsupported`. LANG-1 (2026-07-13): promised native subset is
   covered; remaining codes are residual/layout or non-async gaps.
+- **LANG-RES (2026-07-13):** closed for product surface — no known
+  product-blocking native residual. Gate test:
+  `compile_runs_lang_res_product_surface_native`. Closure write-up:
+  `docs/planning/lang-res-closure.md`. Reopen only with a concrete blocker
+  program (valid language surface + `backend.native_unsupported`).

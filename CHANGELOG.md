@@ -43,6 +43,14 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `CryptoProvider` so `connect_tls` / `http.get_tls` no longer panic at
   process start. Example `examples/http_get` runs again.
 
+### Fechado (LANG-RES)
+- **Native residual gate:** Spec 14 inventory confirmed; all official
+  examples AOT-compile; regression
+  `compile_runs_lang_res_product_surface_native` (for list/map/string/bytes/
+  range, index assign, async await, using+dispose, spawn/join).
+- Closure: `docs/planning/lang-res-closure.md`. Reopen only with a concrete
+  product program that hits `backend.native_unsupported`.
+
 ### Performance (LANG-PERF)
 - **Cranelift product flags:** disable IR verifier; AOT `opt_level=speed`;
   JIT `opt_level=none` for faster `ori run` lower.

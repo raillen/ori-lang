@@ -46,6 +46,7 @@
 | DONE-FREEZE-1 / ABI-1 | Freeze window open; ABI-1 in force |
 | DONE-LANG-DOC | User docs + examples aligned to S3 / current stdlib / editors local |
 | DONE-LANG-PERF | AOT/JIT, stage release, mold/lld PATH, microbench + ARC bench; living JIT lower only |
+| DONE-LANG-RES | Native residual inventory Spec 14; product surface gate test; reopen only on concrete blocker |
 | CANC-GAME / CANC-IMGUI | **Cancelled** — never product again |
 | CANC-AUK9 | Archived |
 | WONT-HM / WONT-LANG-3 | Global HM; C async v1 |
@@ -56,14 +57,15 @@
 
 | ID | Item | P | D | Status | Notes |
 |----|------|---|---|--------|-------|
-| **LANG-RES** | Native residuals only if they block real programs | 2 | M | **partial** | Spec 14; not invent features. Reopen only with a concrete blocker program. |
+| *(none)* | Language-first implementation queue empty | — | — | — | Reopen LANG-RES / invent only with a concrete product blocker. Living maintenance only. |
 
-### Done this focus wave (DX + docs + perf)
+### Done this focus wave (DX + docs + perf + residual)
 
 | ID | Notes |
 |----|-------|
 | **LANG-DOC** | User docs EN/PT + root READMEs + examples catalog; living maintenance only after this |
 | **LANG-PERF** | Closed — waves 1–3; see `perf-baseline-2026-07-13.md` |
+| **LANG-RES** | Closed — Spec 14 inventory + `compile_runs_lang_res_product_surface_native`; see `lang-res-closure.md` |
 | **DX-VSCODE** | v0.3.2 local `.vsix` |
 | **DX-ZED** | `extensions/zed-ori` dev install |
 
