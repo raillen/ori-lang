@@ -2896,23 +2896,43 @@ fn collect_doc_symbols(loaded: &[LoadedSource]) -> BTreeMap<String, DocSymbol> {
                         }
                     }
                 }
-                Item::Implement(decl) => {
-                    for method in &decl.methods {
-                        insert_doc_symbol(
-                            &mut symbols,
-                            source,
-                            format!(
-                                "{}.implement {} for {}.{}",
-                                namespace, decl.trait_name, decl.for_type, method.name
-                            ),
-                            "implementation method",
-                            func_signature_text(source, method),
-                            method.span,
-                            &method.params,
-                            method.return_ty.as_ref(),
-                            doc_comment_for(source, method.span.start),
-                            method.visibility.is_public(),
-                        );
+                Item::Apply(decl) => {
+                    for member in &decl.free_members {
+                        if let ori_ast::item::ApplyMember::Method(method) = member {
+                            insert_doc_symbol(
+                                &mut symbols,
+                                source,
+                                format!("{}.apply {}.{}", namespace, decl.for_type, method.name),
+                                "apply free method",
+                                func_signature_text(source, method),
+                                method.span,
+                                &method.params,
+                                method.return_ty.as_ref(),
+                                doc_comment_for(source, method.span.start),
+                                method.visibility.is_public(),
+                            );
+                        }
+                    }
+                    for use_sec in &decl.uses {
+                        for member in &use_sec.members {
+                            if let ori_ast::item::ApplyMember::Method(method) = member {
+                                insert_doc_symbol(
+                                    &mut symbols,
+                                    source,
+                                    format!(
+                                        "{}.apply {} use {}.{}",
+                                        namespace, decl.for_type, use_sec.trait_name, method.name
+                                    ),
+                                    "apply method",
+                                    func_signature_text(source, method),
+                                    method.span,
+                                    &method.params,
+                                    method.return_ty.as_ref(),
+                                    doc_comment_for(source, method.span.start),
+                                    method.visibility.is_public(),
+                                );
+                            }
+                        }
                     }
                 }
                 Item::Alias(decl) => insert_doc_symbol_without_params(
@@ -3406,16 +3426,22 @@ fn validate_doc_tags(source: &LoadedSource, sink: &mut DiagnosticSink) {
                     }
                 }
             }
-            Item::Implement(decl) => {
-                for method in &decl.methods {
-                    validate_func_doc_tags(
-                        source,
-                        method.span.start,
-                        method.name.as_str(),
-                        &method.params,
-                        method.return_ty.as_ref(),
-                        sink,
-                    );
+            Item::Apply(decl) => {
+                for member in decl
+                    .free_members
+                    .iter()
+                    .chain(decl.uses.iter().flat_map(|u| u.members.iter()))
+                {
+                    if let ori_ast::item::ApplyMember::Method(method) = member {
+                        validate_func_doc_tags(
+                            source,
+                            method.span.start,
+                            method.name.as_str(),
+                            &method.params,
+                            method.return_ty.as_ref(),
+                            sink,
+                        );
+                    }
                 }
             }
             Item::Extern(decl) => {
@@ -4532,21 +4558,40 @@ fn render_source_documentation(
                     }
                 }
             }
-            Item::Implement(decl) => {
-                for method in &decl.methods {
-                    if let Some(doc) = doc_comment_for(source, method.span.start) {
-                        append_doc_entry(
-                            out,
-                            &format!(
-                                "{}.implement {} for {}.{}",
-                                namespace, decl.trait_name, decl.for_type, method.name
-                            ),
-                            "implementation method",
-                            &func_signature_text(source, method),
-                            &doc,
-                            source,
-                        );
-                        entry_count += 1;
+            Item::Apply(decl) => {
+                for member in &decl.free_members {
+                    if let ori_ast::item::ApplyMember::Method(method) = member {
+                        if let Some(doc) = doc_comment_for(source, method.span.start) {
+                            append_doc_entry(
+                                out,
+                                &format!("{}.apply {}.{}", namespace, decl.for_type, method.name),
+                                "apply free method",
+                                &func_signature_text(source, method),
+                                &doc,
+                                source,
+                            );
+                            entry_count += 1;
+                        }
+                    }
+                }
+                for use_sec in &decl.uses {
+                    for member in &use_sec.members {
+                        if let ori_ast::item::ApplyMember::Method(method) = member {
+                            if let Some(doc) = doc_comment_for(source, method.span.start) {
+                                append_doc_entry(
+                                    out,
+                                    &format!(
+                                        "{}.apply {} use {}.{}",
+                                        namespace, decl.for_type, use_sec.trait_name, method.name
+                                    ),
+                                    "apply method",
+                                    &func_signature_text(source, method),
+                                    &doc,
+                                    source,
+                                );
+                                entry_count += 1;
+                            }
+                        }
                     }
                 }
             }

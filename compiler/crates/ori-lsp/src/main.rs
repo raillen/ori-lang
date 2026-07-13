@@ -1359,6 +1359,8 @@ const ORI_KEYWORDS: &[&str] = &[
     "case",
     "struct",
     "trait",
+    "apply",
+    "use",
     "implement",
     "enum",
     "where",

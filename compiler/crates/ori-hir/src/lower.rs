@@ -1633,6 +1633,57 @@ fn lower_impl_sigs(def_map: &DefMap, impl_sigs: &[ImplSig]) -> Vec<HirTraitImpl>
         .collect()
 }
 
+/// Lower an inline method from `apply Type` (free or inside `use Trait`).
+fn lower_apply_method(
+    l: &mut Lowerer<'_>,
+    m: &ori_ast::item::FuncDecl,
+    namespace: &str,
+    type_name: &SmolStr,
+    trait_name: Option<&str>,
+    apply_tp: &[SmolStr],
+    self_ty: Ty,
+    def_map: &DefMap,
+    funcs: &mut Vec<HirFunc>,
+) {
+    let mut all_tp = apply_tp.to_vec();
+    all_tp.extend(m.type_params.iter().map(|p| p.name.text.clone()));
+    l.aliases.insert(SmolStr::new("Self"), type_name.clone());
+    let params = l.lower_method_params(&m.params, &all_tp, self_ty, m.span);
+    let body_ret_ty = m
+        .return_ty
+        .as_ref()
+        .map(|t| l.lower_ast_ty(t, &all_tp))
+        .unwrap_or(Ty::Void);
+    let return_ty = async_return_ty(m.is_async, body_ret_ty.clone());
+    l.aliases.remove("Self");
+    l.push();
+    for p in &params {
+        l.bind(p.name.clone(), p.ty.clone());
+    }
+    l.ret_ty = body_ret_ty.clone();
+    l.async_inner_ret_ty = m.is_async.then(|| body_ret_ty.clone());
+    let body = l.lower_block(&m.body, &all_tp);
+    l.async_inner_ret_ty = None;
+    l.pop();
+    let path = match trait_name {
+        Some(trait_name) => format!("{}.{}.{}.{}", namespace, type_name, trait_name, m.name.text),
+        None => format!("{}.{}.{}", namespace, type_name, m.name.text),
+    };
+    let def_id = def_map.lookup(&path).unwrap_or(ori_types::DefId(u32::MAX));
+    funcs.push(HirFunc {
+        def_id,
+        name: SmolStr::new(&path),
+        params,
+        return_ty,
+        body,
+        closure_captures: Vec::new(),
+        is_public: m.visibility == Visibility::Public,
+        is_async: m.is_async,
+        is_mut: m.is_mut,
+        span: m.span,
+    });
+}
+
 fn builtin_stdlib_structs(def_map: &DefMap) -> Vec<HirStruct> {
     let Some(error_def_id) = def_map.lookup("ori.Error") else {
         return Vec::new();
@@ -1816,62 +1867,60 @@ pub fn lower(
                     span: e.span,
                 });
             }
-            Item::Implement(i) => {
-                let type_name = i.for_type.last().text.clone();
+            Item::Apply(apply) => {
+                let type_name = apply.for_type.last().text.clone();
                 let self_ty = l
-                    .resolve_def_path(&i.for_type.to_string())
+                    .resolve_def_path(&apply.for_type.to_string())
                     .and_then(|path| def_map.lookup(&path))
                     .map(|def_id| Ty::Named(def_id, Vec::new()))
                     .unwrap_or(Ty::Infer(0));
-                let tp: Vec<SmolStr> = i.type_params.iter().map(|p| p.name.text.clone()).collect();
-                l.local_type_aliases = i
-                    .associated_types
+                let tp: Vec<SmolStr> = apply
+                    .type_params
                     .iter()
-                    .map(|(name, ty)| (name.text.clone(), ty.clone()))
+                    .map(|p| p.name.text.clone())
                     .collect();
-                for m in &i.methods {
-                    let mut all_tp = tp.clone();
-                    all_tp.extend(m.type_params.iter().map(|p| p.name.text.clone()));
-                    l.aliases.insert(SmolStr::new("Self"), type_name.clone());
-                    let params = l.lower_method_params(&m.params, &all_tp, self_ty.clone(), m.span);
-                    let body_ret_ty = m
-                        .return_ty
-                        .as_ref()
-                        .map(|t| l.lower_ast_ty(t, &all_tp))
-                        .unwrap_or(Ty::Void);
-                    let return_ty = async_return_ty(m.is_async, body_ret_ty.clone());
-                    l.aliases.remove("Self");
-                    l.push();
-                    for p in &params {
-                        l.bind(p.name.clone(), p.ty.clone());
+
+                // Free methods: inherent path `namespace.Type.method`.
+                for member in &apply.free_members {
+                    if let ori_ast::item::ApplyMember::Method(m) = member {
+                        lower_apply_method(
+                            &mut l,
+                            m,
+                            &namespace,
+                            &type_name,
+                            None,
+                            &tp,
+                            self_ty.clone(),
+                            def_map,
+                            &mut funcs,
+                        );
                     }
-                    l.ret_ty = body_ret_ty.clone();
-                    l.async_inner_ret_ty = m.is_async.then(|| body_ret_ty.clone());
-                    let body = l.lower_block(&m.body, &all_tp);
-                    l.async_inner_ret_ty = None;
-                    l.pop();
-                    let path = format!(
-                        "{}.{}.{}.{}",
-                        namespace,
-                        type_name,
-                        i.trait_name.last().text,
-                        m.name.text
-                    );
-                    let def_id = def_map.lookup(&path).unwrap_or(ori_types::DefId(u32::MAX));
-                    funcs.push(HirFunc {
-                        def_id,
-                        name: SmolStr::new(&path),
-                        params,
-                        return_ty,
-                        body,
-                        closure_captures: Vec::new(),
-                        is_public: m.visibility == Visibility::Public,
-                        is_async: m.is_async,
-                        is_mut: m.is_mut,
-                        span: m.span,
-                    });
                 }
-                l.local_type_aliases.clear();
+
+                for use_sec in &apply.uses {
+                    l.local_type_aliases = use_sec
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (name.text.clone(), ty.clone()))
+                        .collect();
+                    for member in &use_sec.members {
+                        if let ori_ast::item::ApplyMember::Method(m) = member {
+                            lower_apply_method(
+                                &mut l,
+                                m,
+                                &namespace,
+                                &type_name,
+                                Some(use_sec.trait_name.last().text.as_str()),
+                                &tp,
+                                self_ty.clone(),
+                                def_map,
+                                &mut funcs,
+                            );
+                        }
+                        // Binds reuse the free function's HirFunc; no new lowering.
+                    }
+                    l.local_type_aliases.clear();
+                }
             }
             Item::Trait(t) => {
                 let trait_path = format!("{}.{}", namespace, t.name.text);
@@ -3320,8 +3369,12 @@ impl<'a> Lowerer<'a> {
                                 let def = self.def_map.get(*def_id);
                                 let method_path =
                                     SmolStr::new(format!("{}.{}", def.path, method_name.text));
-                                let resolved = if self.def_map.lookup(&method_path).is_some() {
-                                    Some((method_path, Ty::Infer(0)))
+                                // Free binds alias `Type.slot` → free fn DefId; use the
+                                // canonical def path so codegen calls the free function.
+                                let resolved = if let Some(m_def_id) =
+                                    self.def_map.lookup(&method_path)
+                                {
+                                    Some((self.def_map.get(m_def_id).path.clone(), Ty::Infer(0)))
                                 } else {
                                     self.trait_method_func_for_type(*def_id, method_name.as_str())
                                 };
@@ -3488,8 +3541,9 @@ impl<'a> Lowerer<'a> {
                     if let Ty::Named(def_id, _) = &obj_h.ty {
                         let def = self.def_map.get(*def_id);
                         let m_path = format!("{}.{}", def.path, field.text);
-                        if self.def_map.lookup(&m_path).is_some() {
-                            resolved_method = Some(SmolStr::new(m_path));
+                        if let Some(m_def_id) = self.def_map.lookup(&m_path) {
+                            // Free binds: alias path → free fn; use canonical path.
+                            resolved_method = Some(self.def_map.get(m_def_id).path.clone());
                         } else if let Some((m_path, return_ty)) =
                             self.trait_method_func_for_type(*def_id, field.as_str())
                         {

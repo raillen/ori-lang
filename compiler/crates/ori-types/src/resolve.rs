@@ -155,6 +155,18 @@ pub fn resolve_many<S: Into<SmolStr>>(
         }
     }
 
+    // ── Phase 1b: free binds (`slot = freeFn` on apply) after all funcs exist ─
+    // Aliases `namespace.Type.slot` → free function DefId so inherent method
+    // lookup and HIR call the bound function.
+    for (file, file_id) in files {
+        let namespace = SmolStr::new(file.namespace.name.to_string());
+        for item in &file.items {
+            if let Item::Apply(apply) = &item.item {
+                register_apply_free_binds(&namespace, apply, &mut def_map, *file_id, sink);
+            }
+        }
+    }
+
     // ── Phase 2: lower function signatures ───────────────────────────────────
     let reexports = collect_reexports(files);
 
@@ -337,82 +349,43 @@ pub fn resolve_many<S: Into<SmolStr>>(
                         enum_sigs.push(EnumSig { def_id, variants });
                     }
                 }
-                Item::Implement(i) => {
-                    let trait_def_id =
-                        resolve_qualified_def_id(&i.trait_name, &namespace, &aliases, &def_map);
+                Item::Apply(apply) => {
                     let type_def_id =
-                        resolve_qualified_def_id(&i.for_type, &namespace, &aliases, &def_map);
-                    let type_name = i.for_type.last().text.clone();
-                    let tp: Vec<SmolStr> =
-                        i.type_params.iter().map(|p| p.name.text.clone()).collect();
-                    let mut impl_methods = Vec::new();
-                    for m in &i.methods {
-                        let mut all_tp = tp.clone();
-                        all_tp.extend(m.type_params.iter().map(|p| p.name.text.clone()));
-                        let mut m_aliases = aliases.clone();
-                        m_aliases.insert(SmolStr::new("Self"), type_name.clone());
-                        let mut params: Vec<Ty> = m
-                            .params
-                            .iter()
-                            .map(|p| {
-                                lower_type_with_aliases(
-                                    &p.ty, &namespace, &all_tp, &def_map, *file_id, sink,
-                                    &m_aliases,
-                                )
-                            })
-                            .collect();
-                        if !has_explicit_self_param(&m.params) {
-                            let self_ty = type_def_id
-                                .map(|def_id| Ty::Named(def_id, Vec::new()))
-                                .unwrap_or(Ty::Infer(0));
-                            params.insert(0, self_ty);
-                        }
-                        let return_ty = m
-                            .return_ty
-                            .as_ref()
-                            .map(|t| {
-                                lower_type_with_aliases(
-                                    t, &namespace, &all_tp, &def_map, *file_id, sink, &m_aliases,
-                                )
-                            })
-                            .unwrap_or(Ty::Void);
-                        let return_ty = async_return_ty(m.is_async, return_ty);
-                        let m_path = format!(
-                            "{}.{}.{}.{}",
-                            namespace,
-                            type_name,
-                            i.trait_name.last().text,
-                            m.name.text
-                        );
-                        if let Some(m_def_id) = def_map.lookup(&m_path) {
-                            impl_methods.push(ImplMethodSig {
-                                name: m.name.text.clone(),
-                                func_def_id: m_def_id,
-                            });
-                            let where_constraints = combined_where_constraints(
-                                i.where_clause.as_ref(),
-                                m.where_clause.as_ref(),
-                                &all_tp,
+                        resolve_qualified_def_id(&apply.for_type, &namespace, &aliases, &def_map);
+                    let type_name = apply.for_type.last().text.clone();
+                    let tp: Vec<SmolStr> = apply
+                        .type_params
+                        .iter()
+                        .map(|p| p.name.text.clone())
+                        .collect();
+                    let self_ty = type_def_id
+                        .map(|def_id| Ty::Named(def_id, Vec::new()))
+                        .unwrap_or(Ty::Infer(0));
+
+                    // Free methods + free binds: inherent on the type.
+                    // Binds were aliased in phase 1b (`Type.slot` → free fn DefId);
+                    // missing targets are already diagnosed there.
+                    for member in &apply.free_members {
+                        if let ori_ast::item::ApplyMember::Method(m) = member {
+                            resolve_apply_method_func_sig(
+                                m,
                                 &namespace,
+                                &type_name,
+                                None,
+                                &tp,
+                                apply.where_clause.as_ref(),
                                 &aliases,
                                 &def_map,
+                                self_ty.clone(),
                                 *file_id,
                                 sink,
+                                &mut func_sigs,
                             );
-                            func_sigs.push(FuncSig {
-                                def_id: m_def_id,
-                                param_names: method_param_names(&m.params),
-                                params,
-                                param_defaults: method_param_default_flags(&m.params),
-                                param_variadic: method_param_variadic_flags(&m.params),
-                                where_constraints,
-                                return_ty,
-                                is_mut: m.is_mut,
-                            });
                         }
                     }
+
                     let _ = where_constraints(
-                        i.where_clause.as_ref(),
+                        apply.where_clause.as_ref(),
                         &tp,
                         &namespace,
                         &aliases,
@@ -420,12 +393,85 @@ pub fn resolve_many<S: Into<SmolStr>>(
                         *file_id,
                         sink,
                     );
-                    if let (Some(trait_def_id), Some(type_def_id)) = (trait_def_id, type_def_id) {
-                        impl_sigs.push(ImplSig {
-                            trait_def_id,
-                            type_def_id,
-                            methods: impl_methods,
-                        });
+
+                    for use_sec in &apply.uses {
+                        let trait_def_id = resolve_qualified_def_id(
+                            &use_sec.trait_name,
+                            &namespace,
+                            &aliases,
+                            &def_map,
+                        );
+                        let mut impl_methods = Vec::new();
+                        for member in &use_sec.members {
+                            match member {
+                                ori_ast::item::ApplyMember::Method(m) => {
+                                    let m_path = format!(
+                                        "{}.{}.{}.{}",
+                                        namespace,
+                                        type_name,
+                                        use_sec.trait_name.last().text,
+                                        m.name.text
+                                    );
+                                    if let Some(m_def_id) = def_map.lookup(&m_path) {
+                                        impl_methods.push(ImplMethodSig {
+                                            name: m.name.text.clone(),
+                                            func_def_id: m_def_id,
+                                        });
+                                    }
+                                    resolve_apply_method_func_sig(
+                                        m,
+                                        &namespace,
+                                        &type_name,
+                                        Some(use_sec.trait_name.last().text.as_str()),
+                                        &tp,
+                                        apply.where_clause.as_ref(),
+                                        &aliases,
+                                        &def_map,
+                                        self_ty.clone(),
+                                        *file_id,
+                                        sink,
+                                        &mut func_sigs,
+                                    );
+                                }
+                                ori_ast::item::ApplyMember::Bind { slot, target, .. } => {
+                                    // Compile-time bind: slot is provided by free function `target`.
+                                    let target_path = format!("{}.{}", namespace, target.text);
+                                    if let Some(target_def_id) = def_map.lookup(&target_path) {
+                                        impl_methods.push(ImplMethodSig {
+                                            name: slot.text.clone(),
+                                            func_def_id: target_def_id,
+                                        });
+                                    } else {
+                                        sink.emit(
+                                            Diagnostic::error(
+                                                "name.undefined",
+                                                format!(
+                                                    "bind target `{}` was not found",
+                                                    target.text
+                                                ),
+                                            )
+                                            .with_label(Label::primary(
+                                                *file_id,
+                                                target.span,
+                                                "unknown function",
+                                            ))
+                                            .with_action(
+                                                "bind to a free function declared in this module",
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        if let (Some(trait_def_id), Some(type_def_id)) =
+                            (trait_def_id, type_def_id)
+                        {
+                            impl_sigs.push(ImplSig {
+                                trait_def_id,
+                                type_def_id,
+                                methods: impl_methods,
+                            });
+                        }
                     }
                 }
                 Item::Trait(t) => {
@@ -749,7 +795,6 @@ pub fn resolve_many<S: Into<SmolStr>>(
                         });
                     }
                 }
-                _ => {}
             }
         }
     }
@@ -972,6 +1017,73 @@ fn param_variadic_flags(params: &[Param]) -> Vec<bool> {
 
 fn param_names(params: &[Param]) -> Vec<SmolStr> {
     params.iter().map(|param| param.name.text.clone()).collect()
+}
+
+/// Lower a free or trait-method FuncDecl from an `apply` block into `func_sigs`.
+fn resolve_apply_method_func_sig(
+    m: &ori_ast::item::FuncDecl,
+    namespace: &str,
+    type_name: &SmolStr,
+    trait_name: Option<&str>,
+    apply_tp: &[SmolStr],
+    apply_where: Option<&WhereClause>,
+    aliases: &HashMap<SmolStr, SmolStr>,
+    def_map: &DefMap,
+    self_ty: Ty,
+    file_id: FileId,
+    sink: &mut DiagnosticSink,
+    func_sigs: &mut Vec<FuncSig>,
+) {
+    let mut all_tp = apply_tp.to_vec();
+    all_tp.extend(m.type_params.iter().map(|p| p.name.text.clone()));
+    let mut m_aliases = aliases.clone();
+    m_aliases.insert(SmolStr::new("Self"), type_name.clone());
+    let mut params: Vec<Ty> = m
+        .params
+        .iter()
+        .map(|p| {
+            lower_type_with_aliases(
+                &p.ty, namespace, &all_tp, def_map, file_id, sink, &m_aliases,
+            )
+        })
+        .collect();
+    if !has_explicit_self_param(&m.params) {
+        params.insert(0, self_ty);
+    }
+    let return_ty = m
+        .return_ty
+        .as_ref()
+        .map(|t| {
+            lower_type_with_aliases(t, namespace, &all_tp, def_map, file_id, sink, &m_aliases)
+        })
+        .unwrap_or(Ty::Void);
+    let return_ty = async_return_ty(m.is_async, return_ty);
+    let m_path = match trait_name {
+        Some(trait_name) => format!("{}.{}.{}.{}", namespace, type_name, trait_name, m.name.text),
+        None => format!("{}.{}.{}", namespace, type_name, m.name.text),
+    };
+    if let Some(m_def_id) = def_map.lookup(&m_path) {
+        let where_constraints = combined_where_constraints(
+            apply_where,
+            m.where_clause.as_ref(),
+            &all_tp,
+            namespace,
+            aliases,
+            def_map,
+            file_id,
+            sink,
+        );
+        func_sigs.push(FuncSig {
+            def_id: m_def_id,
+            param_names: method_param_names(&m.params),
+            params,
+            param_defaults: method_param_default_flags(&m.params),
+            param_variadic: method_param_variadic_flags(&m.params),
+            where_constraints,
+            return_ty,
+            is_mut: m.is_mut,
+        });
+    }
 }
 
 fn has_explicit_self_param(params: &[Param]) -> bool {
@@ -1230,6 +1342,69 @@ fn builtin_core_trait_sigs(core_traits: &[(SmolStr, DefId)]) -> Vec<TraitSig> {
         .collect()
 }
 
+/// Phase 1b: alias free bind slots to free functions for inherent method lookup.
+fn register_apply_free_binds(
+    ns: &str,
+    apply: &ori_ast::item::ApplyDecl,
+    def_map: &mut DefMap,
+    file_id: FileId,
+    sink: &mut DiagnosticSink,
+) {
+    let type_name = apply.for_type.last().text.as_str();
+    for member in &apply.free_members {
+        let ori_ast::item::ApplyMember::Bind { slot, target, span } = member else {
+            continue;
+        };
+        let target_path = format!("{}.{}", ns, target.text);
+        let Some(target_def_id) = def_map.lookup(&target_path) else {
+            sink.emit(
+                Diagnostic::error(
+                    "name.undefined",
+                    format!("bind target `{}` was not found", target.text),
+                )
+                .with_label(Label::primary(file_id, target.span, "unknown function"))
+                .with_action("bind to a free function declared in this module"),
+            );
+            continue;
+        };
+        let slot_path = SmolStr::new(format!("{}.{}.{}", ns, type_name, slot.text));
+        if def_map.lookup(&slot_path).is_some() {
+            sink.emit(
+                Diagnostic::error(
+                    "name.duplicate",
+                    format!("duplicate definition `{}.{}`", type_name, slot.text),
+                )
+                .with_label(Label::primary(file_id, *span, "defined again here"))
+                .with_action("rename or remove one of the definitions"),
+            );
+            continue;
+        }
+        def_map.alias_path(slot_path, target_def_id);
+    }
+}
+
+fn register_def(
+    def_map: &mut DefMap,
+    ns: &str,
+    kind: DefKind,
+    name: &SmolStr,
+    is_public: bool,
+    span: ori_diagnostics::Span,
+    file_id: FileId,
+    sink: &mut DiagnosticSink,
+) {
+    let path = SmolStr::new(format!("{}.{}", ns, name));
+    if def_map.lookup(&path).is_some() {
+        sink.emit(
+            Diagnostic::error("name.duplicate", format!("duplicate definition `{}`", name))
+                .with_label(Label::primary(file_id, span, "defined again here"))
+                .with_action("rename or remove one of the definitions"),
+        );
+        return;
+    }
+    def_map.register(kind, name.clone(), path, is_public, span);
+}
+
 fn register_item(
     item: &Item,
     ns: &str,
@@ -1238,108 +1413,124 @@ fn register_item(
     file_id: FileId,
     sink: &mut DiagnosticSink,
 ) {
-    let mut reg = |def_map: &mut DefMap, kind, name: &SmolStr, is_public: bool, span| {
-        let path = SmolStr::new(format!("{}.{}", ns, name));
-        // Duplicate check
-        if def_map.lookup(&path).is_some() {
-            sink.emit(
-                Diagnostic::error("name.duplicate", format!("duplicate definition `{}`", name))
-                    .with_label(Label::primary(file_id, span, "defined again here"))
-                    .with_action("rename or remove one of the definitions"),
-            );
-            return;
-        }
-        def_map.register(kind, name.clone(), path, is_public, span);
-    };
-
     match item {
         Item::Struct(s) => {
-            reg(
+            register_def(
                 def_map,
+                ns,
                 DefKind::Struct,
                 &s.name.text,
                 s.visibility.is_public(),
                 s.span,
+                file_id,
+                sink,
             );
             for m in &s.methods {
                 let m_name = SmolStr::new(format!("{}.{}", s.name.text, m.name.text));
-                reg(
+                register_def(
                     def_map,
+                    ns,
                     DefKind::Func,
                     &m_name,
                     m.visibility.is_public(),
                     m.span,
+                    file_id,
+                    sink,
                 );
             }
         }
-        Item::Enum(e) => reg(
+        Item::Enum(e) => register_def(
             def_map,
+            ns,
             DefKind::Enum,
             &e.name.text,
             e.visibility.is_public(),
             e.span,
+            file_id,
+            sink,
         ),
         Item::Trait(t) => {
-            reg(
+            register_def(
                 def_map,
+                ns,
                 DefKind::Trait,
                 &t.name.text,
                 t.visibility.is_public(),
                 t.span,
+                file_id,
+                sink,
             );
             for m in &t.members {
                 match m {
                     ori_ast::item::TraitMember::Required(sig) => {
                         let m_name = SmolStr::new(format!("{}.{}", t.name.text, sig.name.text));
-                        reg(
+                        register_def(
                             def_map,
+                            ns,
                             DefKind::Func,
                             &m_name,
                             sig.visibility.is_public(),
                             sig.span,
+                            file_id,
+                            sink,
                         );
                     }
                     ori_ast::item::TraitMember::Default(func) => {
                         let m_name = SmolStr::new(format!("{}.{}", t.name.text, func.name.text));
-                        reg(
+                        register_def(
                             def_map,
+                            ns,
                             DefKind::Func,
                             &m_name,
                             func.visibility.is_public(),
                             func.span,
+                            file_id,
+                            sink,
                         );
                     }
                     ori_ast::item::TraitMember::Type(_) => {}
                 }
             }
         }
-        Item::Func(f) => reg(
+        Item::Func(f) => register_def(
             def_map,
+            ns,
             DefKind::Func,
             &f.name.text,
             f.visibility.is_public(),
             f.span,
+            file_id,
+            sink,
         ),
-        Item::Alias(a) => reg(
+        Item::Alias(a) => register_def(
             def_map,
+            ns,
             DefKind::TypeAlias,
             &a.name.text,
             a.visibility.is_public(),
             a.span,
+            file_id,
+            sink,
         ),
-        Item::Const(c) => reg(
+        Item::Const(c) => register_def(
             def_map,
+            ns,
             DefKind::Const,
             &c.name.text,
             c.visibility.is_public(),
             c.span,
+            file_id,
+            sink,
         ),
-        Item::Var(v) => reg(
+        Item::Var(v) => register_def(
             def_map,
+            ns,
             DefKind::Var,
             &v.name.text,
             v.visibility.is_public(),
             v.span,
+            file_id,
+            sink,
         ),
         Item::Extern(ext) => {
             for member in &ext.members {
@@ -1349,58 +1540,94 @@ fn register_item(
                         name,
                         span,
                         ..
-                    } => reg(
+                    } => register_def(
                         def_map,
+                        ns,
                         DefKind::Extern,
                         &name.text,
                         visibility.is_public(),
                         *span,
+                        file_id,
+                        sink,
                     ),
                     ori_ast::item::ExternMember::Var {
                         visibility,
                         name,
                         span,
                         ..
-                    } => reg(
+                    } => register_def(
                         def_map,
+                        ns,
                         DefKind::Var,
                         &name.text,
                         visibility.is_public(),
                         *span,
+                        file_id,
+                        sink,
                     ),
                 }
             }
         }
-        Item::Implement(i) => {
-            let trait_key = qualify_name_in_namespace(&i.trait_name, ns);
-            let type_key = qualify_name_in_namespace(&i.for_type, ns);
-            let key = (trait_key.clone(), type_key.clone());
-            if implemented_pairs.insert(key, i.span).is_some() {
-                sink.emit(
-                    Diagnostic::error(
-                        "bind.duplicate_implement",
-                        format!("`{}` is already implemented for `{}`", trait_key, type_key),
-                    )
-                    .with_label(Label::primary(file_id, i.span, "duplicate implement here"))
-                    .with_action("keep only one implement block for this trait/type pair"),
-                );
-                return;
+        Item::Apply(apply) => {
+            let type_key = qualify_name_in_namespace(&apply.for_type, ns);
+            let type_name = apply.for_type.last().text.clone();
+
+            for member in &apply.free_members {
+                if let ori_ast::item::ApplyMember::Method(m) = member {
+                    let m_name = SmolStr::new(format!("{}.{}", type_name, m.name.text));
+                    register_def(
+                        def_map,
+                        ns,
+                        DefKind::Func,
+                        &m_name,
+                        m.visibility.is_public(),
+                        m.span,
+                        file_id,
+                        sink,
+                    );
+                }
             }
-            let type_name = i.for_type.last().text.clone();
-            for m in &i.methods {
-                let m_name = SmolStr::new(format!(
-                    "{}.{}.{}",
-                    type_name,
-                    i.trait_name.last().text,
-                    m.name.text
-                ));
-                reg(
-                    def_map,
-                    DefKind::Func,
-                    &m_name,
-                    m.visibility.is_public(),
-                    m.span,
-                );
+
+            for use_sec in &apply.uses {
+                let trait_key = qualify_name_in_namespace(&use_sec.trait_name, ns);
+                let key = (trait_key.clone(), type_key.clone());
+                if implemented_pairs.insert(key, use_sec.span).is_some() {
+                    sink.emit(
+                        Diagnostic::error(
+                            "bind.duplicate_implement",
+                            format!("`{}` is already applied to `{}`", trait_key, type_key),
+                        )
+                        .with_label(Label::primary(
+                            file_id,
+                            use_sec.span,
+                            "duplicate apply/use here",
+                        ))
+                        .with_action(
+                            "keep only one `use Trait` for this trait/type pair across apply blocks",
+                        ),
+                    );
+                    continue;
+                }
+                for member in &use_sec.members {
+                    if let ori_ast::item::ApplyMember::Method(m) = member {
+                        let m_name = SmolStr::new(format!(
+                            "{}.{}.{}",
+                            type_name,
+                            use_sec.trait_name.last().text,
+                            m.name.text
+                        ));
+                        register_def(
+                            def_map,
+                            ns,
+                            DefKind::Func,
+                            &m_name,
+                            m.visibility.is_public(),
+                            m.span,
+                            file_id,
+                            sink,
+                        );
+                    }
+                }
             }
         }
     }
@@ -1469,7 +1696,7 @@ fn item_def_paths(item: &Item, namespace: &str) -> Vec<String> {
                 }
             })
             .collect(),
-        Item::Implement(_) => Vec::new(),
+        Item::Apply(_) => Vec::new(),
     }
 }
 

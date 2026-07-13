@@ -746,12 +746,16 @@ struct Resource
     id: int
 end
 
-implement core.Hashable for Resource
+apply Resource
+    use core.Hashable
+    end
 end
 
-implement core.Equatable for Resource
-    equals(self, other: Resource) -> bool
-        return self.id == other.id
+apply Resource
+    use core.Equatable
+        equals(self, other: Resource) -> bool
+            return self.id == other.id
+        end
     end
 end
 
@@ -915,12 +919,16 @@ struct Resource
     id: int
 end
 
-implement core.Hashable for Resource
+apply Resource
+    use core.Hashable
+    end
 end
 
-implement core.Equatable for Resource
-    equals(self, other: Resource) -> bool
-        return self.id == other.id
+apply Resource
+    use core.Equatable
+        equals(self, other: Resource) -> bool
+            return self.id == other.id
+        end
     end
 end
 
@@ -949,9 +957,11 @@ struct Score
     value: int
 end
 
-implement core.Comparable for Score
-    compare(self, other: Score) -> int
-        return self.value - other.value
+apply Score
+    use core.Comparable
+        compare(self, other: Score) -> int
+            return self.value - other.value
+        end
     end
 end
 
@@ -1064,9 +1074,11 @@ struct Score
     value: int
 end
 
-implement core.Comparable for Score
-    compare(self, other: Score) -] int
-        return self.value - other.value
+apply Score
+    use core.Comparable
+        compare(self, other: Score) -] int
+            return self.value - other.value
+        end
     end
 end
 
@@ -1523,14 +1535,16 @@ struct Countdown
     min: int
 end
 
-implement core.Iterable for Countdown
-    mut next() -> optional[int]
-        if self.current < self.min
-            return none
+apply Countdown
+    use core.Iterable
+        mut next() -> optional[int]
+            if self.current < self.min
+                return none
+            end
+            const value: int = self.current
+            self.current = self.current - 1
+            return some(value)
         end
-        const value: int = self.current
-        self.current = self.current - 1
-        return some(value)
     end
 end
 
@@ -1703,12 +1717,16 @@ struct Resource
     id: int
 end
 
-implement core.Hashable for Resource
+apply Resource
+    use core.Hashable
+    end
 end
 
-implement core.Equatable for Resource
-    equals(self, other: Resource) -> bool
-        return self.id == other.id
+apply Resource
+    use core.Equatable
+        equals(self, other: Resource) -> bool
+            return self.id == other.id
+        end
     end
 end
 

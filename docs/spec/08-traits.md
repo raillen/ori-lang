@@ -1,4 +1,4 @@
-# Ori Language Specification — Chapter 08: Traits and Implement
+# Ori Language Specification — Chapter 08: Traits and Apply
 
 > Status: normative
 > Audience: compiler implementers, language designers
@@ -8,7 +8,8 @@
 ## Overview
 
 Traits describe behavior. They declare what a type must be able to do.
-`implement` blocks attach trait behavior to a type.
+`apply Type` blocks attach trait behavior (and free methods) to a type via
+`use Trait` sections.
 
 Traits are Ori's mechanism for polymorphism. There is no class inheritance.
 
@@ -18,29 +19,31 @@ Traits are Ori's mechanism for polymorphism. There is no class inheritance.
 
 ```ori
 trait Drawable
-    func draw(canvas: Canvas)
+    draw(canvas: Canvas)
 end
 
 trait Serializable
-    func serialize() -> bytes
-    func deserialize(raw: bytes) -> result<Self, string>
+    serialize() -> bytes
+    deserialize(raw: bytes) -> result[Self, string]
 end
 ```
 
-A trait declares one or more **required** methods. A type implementing the
-trait must provide a concrete implementation for every required method.
+A trait declares one or more **required** methods. A type applying the trait
+must provide a concrete implementation for every required method (inline body
+or bind).
 
 ---
 
 ## Default Methods
 
-Traits may provide default implementations:
+Traits may provide default implementations. **There is no `default` keyword**:
+a method with a body is a default; a signature alone is required.
 
 ```ori
 trait Displayable
-    func display(self) -> string
+    display(self) -> string
 
-    func print(self)
+    print(self)
         io.print(self.display())
     end
 end
@@ -48,305 +51,120 @@ end
 
 - Methods with a body are **default methods**.
 - Methods without a body are **required methods**.
-- An implementing type may override a default method.
+- An applying type may override a default method.
 
 ---
 
 ## `Self` in Traits
 
-`Self` inside a trait declaration refers to the concrete type that implements
+`Self` inside a trait declaration refers to the concrete type that applies
 the trait:
 
 ```ori
 trait Cloneable
-    func clone() -> Self
+    clone() -> Self
 end
 
 trait Equatable
-    func equals(other: Self) -> bool
+    equals(other: Self) -> bool
 end
 ```
 
 ---
 
-## `implement` Blocks
+## `apply Type` + `use Trait` (S3)
 
 ```ori
-implement Drawable for Circle
-    func draw(canvas: Canvas)
-        canvas.draw_circle(self.center, self.radius)
+apply Circle
+    use Drawable
+        draw(self, canvas: Canvas)
+            canvas.draw_circle(self.center, self.radius)
+        end
     end
 end
 ```
 
-Rules:
-- `implement Trait for Type` — attaches `Trait` to `Type`.
-- All required methods from the trait must be implemented.
-- Default methods may be omitted (the trait's default is used) or overridden.
-- `implement` blocks are not inside `struct` or `trait` declarations; they stand alone.
-- Multiple traits may be implemented for the same type.
-- A trait may be implemented for a type in any namespace that can see both.
+### Order (fixed)
+
+1. Free methods and binds (`slot = freeFunction`) — optional; inherent-style on the type
+2. Zero or more `use Trait` sections
+3. Inside each `use`: required slots and optional default overrides (inline or bind)
+
+### Bind
+
+Compile-time method provision via a free function (not a runtime assignment):
+
+```ori
+comparePoints(a: Point, b: Point) -> int
+    return a.x - b.x
+end
+
+apply Point
+    use Comparable
+        compare = comparePoints
+    end
+end
+```
+
+### Free methods without a trait
+
+`apply Type` may contain only free methods/binds (no `use`). Those methods are
+available as inherent methods on the type.
+
+### Rules
+
+- `apply Type` — the type receiving methods/traits.
+- `use Trait` — attaches `Trait` to that type inside the apply block.
+- All required methods from each used trait must be provided.
+- Default methods may be omitted or overridden.
+- Multiple traits may be used for the same type (one or several apply blocks).
+- `self` may omit an explicit type annotation when the context is the applied type.
+- Removed forms (hard error):
+  - `implement Trait for Type` → `parse.implement_removed`
+  - `apply Trait to Type` / `apply Trait for Type` → `parse.apply_trait_to_removed`
 
 ---
 
-## `mut func` in Traits and Implement
+## `mut` in Traits and Apply
 
 ```ori
-trait Stackable<T>
-    mut func push(item: T)
-    mut func pop() -> optional<T>
-    func peek() -> optional<T>
+trait Stackable[T]
+    mut push(self, item: T)
+    mut pop(self) -> optional[T]
+    peek(self) -> optional[T]
 end
 
-implement Stackable<int> for IntStack
-    mut func push(item: int)
-        self.items.push(item)
-    end
+apply IntStack
+    use Stackable[int]
+        mut push(self, item: int)
+            self.items.push(item)
+        end
 
-    mut func pop() -> optional<int>
-        return self.items.pop()
-    end
+        mut pop(self) -> optional[int]
+            return self.items.pop()
+        end
 
-    func peek() -> optional<int>
-        return self.items.last()
+        peek(self) -> optional[int]
+            return self.items.last()
+        end
     end
 end
 ```
 
-`mut func` in a trait declaration requires the implementing function to also
-be `mut func`.
+`mut` on a trait method requires the applied method to also be `mut`.
 
 ---
 
 ## Generic Traits
 
-Traits may be generic over a type parameter:
-
-```ori
-trait Container<Item>
-    mut func add(item: Item)
-    func get(index: int) -> optional<Item>
-    func length() -> int
-end
-```
-
-Implementing a generic trait for a concrete type:
-
-```ori
-implement Container<string> for StringBag
-    mut func add(item: string)
-        self.items.push(item)
-    end
-
-    func get(index: int) -> optional<string>
-        if index >= len(self.items)
-            return none
-        end
-        return some(self.items[index])
-    end
-
-    func length() -> int
-        return len(self.items)
-    end
-end
-```
+Traits may be generic over a type parameter (`Trait[T]`). Bounds use
+`for T: Trait` on generic methods (see chapter 11).
 
 ---
 
-## Operator Traits
+## Method resolution
 
-Current implementation status:
-
-- Primitive numeric operators are implemented directly by the checker/codegen.
-- String `+` is implemented as concatenation.
-- User-defined `+`, `-`, `==`, `!=`, `<`, `<=`, `>`, and `>=` lower to
-  trait methods when the concrete type implements the matching `ori.core`
-  trait.
-- The fixed trait set below is the supported contract.
-
-Ori allows operator overloading only for the following fixed set:
-
-| Operator | Trait | Method |
-|---|---|---|
-| `+` | `Addable` | `func add(other: Self) -> Self` |
-| `-` | `Subtractable` | `func subtract(other: Self) -> Self` |
-| `*` | `Multiplicable` | `func multiply(other: Self) -> Self` |
-| `/` | `Divisible` | `func divide(other: Self) -> Self` |
-| `<`, `<=`, `>`, `>=` | `Comparable` | `func compare(other: Self) -> int` |
-| `==`, `!=` | `Equatable` | `func equals(other: Self) -> bool` |
-
-No other operators will be overloadable. This is a deliberate design limit.
-
-`Comparable.compare` follows the same sign convention used by sort callbacks:
-return a negative integer when `self < other`, `0` when equal, and a positive
-integer when `self > other`.
-
-Behavior:
-
-- `Comparable` provides `<`, `<=`, `>`, `>=` by deriving from `compare()`.
-- `Equatable` provides `==` and `!=` by deriving from `equals()`.
-
----
-
-## Standard Library Traits
-
-Core traits defined in `ori.core`:
-
-| Trait | Purpose |
-|---|---|
-| `Displayable` | `func display(self) -> string` — converts a value to string text |
-| `Equatable` | Custom equality via `func equals(other: Self) -> bool` |
-| `Comparable` | Ordering via `func compare(other: Self) -> int` |
-| `Hashable` | Hash for map/set keys via `func hash() -> u64` |
-| `Disposable` | Cleanup via `mut func dispose()` — used by `using` |
-| `Iterable` | Iteration via `mut func next() -> optional<T>` |
-| `Default` | Zero-argument construction via `func default() -> Self` |
-| `From<Other>` | Explicit conversion from `Other` to `Self` |
-| `Error` | Error display via `func message() -> string` |
-| `Cloneable` | Explicit copy via `func clone() -> Self` |
-
----
-
-## `Iterable` and `for` Loops
-
-Any type implementing `core.Iterable` can be used in a `for` loop if its
-implementation provides `mut func next() -> optional<T>`.
-
-The item type is inferred from the `optional<T>` returned by `next`.
-
-```ori
-import ori.core as core
-
-implement core.Iterable for CountUp
-    mut func next() -> optional<int>
-        if self.current > self.limit
-            return none
-        end
-        const value: int = self.current
-        self.current = self.current + 1
-        return some(value)
-    end
-end
-
-for n in CountUp(current: 1, limit: 5)
-    io.print(string(n))  -- 1 2 3 4 5
-end
-```
-
-Current limitation: `implement Iterable<int> for Type` syntax is not part of
-the parser yet. Use `implement core.Iterable for Type` and let `next` define
-the item type.
-
----
-
-## `From<T>` — Explicit Conversion
-
-```ori
-implement From<int> for string
-    func from(value: int) -> string
-        return string(value)
-    end
-end
-
-const s: string = string.from(42)
-```
-
----
-
-## `Error` Trait — Typed Errors
-
-```ori
-struct NetworkError
-    code: int
-    message: string
-end
-
-implement Error for NetworkError
-    func message() -> string
-        return f"Network error {self.code}: {self.message}"
-    end
-end
-
-func fetch(url: string) -> result<bytes, NetworkError>
-```
-
-`Error` is required for a type to be used as the error branch of `result<T, E>`
-in standard patterns. The compiler does not enforce this structurally (any type
-may be an error), but stdlib functions expect `Error`-implementing types.
-
----
-
-## Trait Resolution
-
-When a method is called on a value, the compiler resolves the implementation:
-
-1. Check the type's **inherent methods** (defined in `struct` block).
-2. Check all `implement Trait for Type` blocks visible in scope.
-3. If the method is unambiguous, call it.
-4. If the method name matches two traits simultaneously: **compile error** (ambiguous).
-
-**Disambiguation:**
-
-```ori
--- If both Printable and Loggable define 'output()', use explicit trait call:
-Printable.output(shape)
-Loggable.output(shape)
-```
-
----
-
-## Overlapping Implementations
-
-Two `implement` blocks for the same `Trait`/`Type` pair in the same scope
-are a **compile error**.
-
----
-
-## `any<Trait>` — Dynamic Dispatch
-
-`any<Trait>` is a dynamic trait object: a value whose concrete type is not
-known at compile time, but which is guaranteed to implement `Trait`.
-
-```ori
-const shape: any<Drawable> = Circle(radius: 10.0)
-shape.draw(canvas)
-```
-
-Only methods declared in `Trait` may be called through `any<Trait>`.
-The concrete type is erased; the compiler generates a vtable.
-
-`==` on `any<Trait>` uses runtime vtable dispatch: the concrete type's
-`Equatable` implementation is invoked when both operands implement the trait
-constraint. Prefer generics for performance-sensitive paths.
-
-```ori
-const a: any<core.Equatable> = 1
-const b: any<core.Equatable> = 1
-const same: bool = a == b   -- ok: structural equality via vtable
-```
-
----
-
-## Current implementation status
-
-> Status: current as of 2026-06-27.
-
-| Feature | Status | Sanity test |
-| --- | --- | --- |
-| Trait declaration (required + default methods) | implemented | `ori_spec.rs` — `trait_accepts_required_and_default_methods` |
-| `Self` in trait signatures | implemented | `ori_spec.rs` — `generic_accepts_type_inference` |
-| `implement Trait for Type` blocks | implemented | `method_resolution.rs` — `build_lowers_implement_method_call` |
-| Missing required method rejected | implemented | `ori_spec.rs` — `trait_rejects_implement_missing_required_method` |
-| `mut func` in traits/implement (`Disposable`) | implemented | `multifile_imports.rs` — `check_accepts_core_traits_and_using_core_disposable` |
-| Generic traits (`Container<T>`) | implemented | `ori_spec.rs` — `generic_accepts_generic_struct` |
-| HKT, associated types, const generics | implemented | `ori_spec.rs` — `generic_accepts_hkt`, `generic_accepts_associated_type_in_trait`, `generic_accepts_const_generic_param` |
-| Operator traits (`Comparable`, `Equatable`, `Hashable`) | implemented | `collections.rs` — `check_accepts_hash_table_user_defined_hashable_equatable_key`, `check_rejects_heap_without_comparable_element` |
-| `any<Trait>` dynamic dispatch + vtable | implemented | `ori_spec.rs` — `trait_accepts_any_dynamic_dispatch` |
-| `==` / `!=` on `any<Trait>` via vtable | implemented | `ori_spec.rs` — `trait_object_equality_works` |
-| `core.Iterable` + `for` loops | implemented | `collections.rs` — `compile_runs_custom_iterable_native`, `check_reports_non_iterable_for_loop` |
-| Disambiguation via `Trait.method(value)` | implemented | `ori_spec.rs` — `trait_rejects_ambiguous_method_call` |
-| Overlapping `implement` blocks | rejected (compile error) | `method_resolution.rs` — `check_reports_duplicate_implement_pair` |
-
-The `any<Trait>` equality example above (lines 320–324) compiles and runs as
-the `trait_object_equality_works` test: two `Circle` values with the same
-radius compare equal through `any<Drawable>` vtable dispatch.
+- Inherent methods (struct body or free members of `apply Type`) take the path
+  `namespace.Type.method`.
+- Trait methods resolve via the impl table built from `use` sections; ambiguous
+  names from multiple traits require qualification `Trait.method(receiver)`.

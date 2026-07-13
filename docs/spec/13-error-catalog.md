@@ -68,6 +68,9 @@ when the compiler starts producing it.
 | `parse.question_propagate_removed` | error | Source used removed postfix `?` propagation; use `try expr` |
 | `parse.else_if_removed` | error | Source used removed `else if`; use `elif` for chained conditionals |
 | `parse.case_dot_variant_removed` | error | Source used removed leading `.` on a match enum variant; write `case Variant` / `case Variant(...)` |
+| `parse.implement_removed` | error | `implement Trait for Type` was removed; use `apply Type` with `use Trait` |
+| `parse.apply_trait_to_removed` | error | `apply Trait to Type` / `apply Trait for Type` was removed; use `apply Type` with `use Trait` |
+| `parse.apply_member_after_use` | error | Free methods/binds appear after a `use Trait` section (order is free members, then `use`) |
 | `parse.tuple_arity` | error | Tuple type or expression has invalid arity |
 | `parse.unterminated_block` | error | End-delimited block reaches end of file before `end` |
 | `parse.unterminated_string` | error | String literal starts but is not closed |
@@ -265,10 +268,10 @@ aliases) use the `bind.*` prefix instead — see the `bind` section below.
 
 | Code | Severity | Description |
 |---|---|---|
-| `impl.missing_method` | error | `implement` block omits a required trait method |
+| `impl.missing_method` | error | `apply Type` / `use Trait` omits a required trait method |
 | `impl.mut_mismatch` | error | Trait method mutability does not match implementation |
-| `impl.trait_not_found` | error | Trait named in an `implement` block does not exist |
-| `impl.type_not_found` | error | Type named in an `implement` block does not exist |
+| `impl.trait_not_found` | error | Trait named in a `use Trait` section does not exist |
+| `impl.type_not_found` | error | Type named in an `apply Type` block does not exist |
 | `impl.wrong_signature` | error | Implemented method signature does not match the trait |
 
 ### `using`

@@ -360,8 +360,15 @@ impl ProjectSemanticIndex {
                     }
                 }
             }
-            Item::Implement(imp) => {
-                for method in &imp.methods {
+            Item::Apply(apply) => {
+                for member in apply
+                    .free_members
+                    .iter()
+                    .chain(apply.uses.iter().flat_map(|u| u.members.iter()))
+                {
+                    let ori_ast::item::ApplyMember::Method(method) = member else {
+                        continue;
+                    };
                     for param in &method.params {
                         if let Some(tn) = named_type_simple_name(&param.ty) {
                             out.insert(param.name.text.to_string(), tn);

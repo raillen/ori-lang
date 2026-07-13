@@ -15,9 +15,10 @@ pub use expr::{
     IndexExpr, UnaryOp,
 };
 pub use item::{
-    AbiLabel, AliasDecl, EnumDecl, EnumVariant, ExternBlock, ExternMember, FuncDecl, FuncSignature,
-    ImplementDecl, ImportDecl, Item, ItemWithAttrs, NamedField, NamespaceDecl, Param, ParamKind,
-    SourceFile, StructDecl, StructField, TopConst, TopVar, TraitDecl, TraitMember,
+    AbiLabel, AliasDecl, ApplyDecl, ApplyMember, ApplyUseSection, EnumDecl, EnumVariant,
+    ExternBlock, ExternMember, FuncDecl, FuncSignature, ImportDecl, Item, ItemWithAttrs, NamedField,
+    NamespaceDecl, Param, ParamKind, SourceFile, StructDecl, StructField, TopConst, TopVar,
+    TraitDecl, TraitMember,
 };
 pub use pattern::{NamedPattern, Pattern};
 pub use stmt::{

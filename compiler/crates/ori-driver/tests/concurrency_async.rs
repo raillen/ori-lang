@@ -248,8 +248,10 @@ struct Resource
     id: int
 end
 
-implement Disposable for Resource
-    mut dispose(self)
+apply Resource
+    use Disposable
+        mut dispose(self)
+        end
     end
 end
 
@@ -1489,9 +1491,11 @@ struct Resource
     id: int
 end
 
-implement Disposable for Resource
-    mut dispose(self)
-        dispose_count = dispose_count + self.id
+apply Resource
+    use Disposable
+        mut dispose(self)
+            dispose_count = dispose_count + self.id
+        end
     end
 end
 
@@ -1556,9 +1560,11 @@ struct Resource
     id: int
 end
 
-implement Disposable for Resource
-    mut dispose(self)
-        dispose_count = dispose_count + self.id
+apply Resource
+    use Disposable
+        mut dispose(self)
+            dispose_count = dispose_count + self.id
+        end
     end
 end
 
@@ -1617,9 +1623,11 @@ struct Resource
     id: int
 end
 
-implement Disposable for Resource
-    mut dispose(self)
-        dispose_count = dispose_count + self.id
+apply Resource
+    use Disposable
+        mut dispose(self)
+            dispose_count = dispose_count + self.id
+        end
     end
 end
 

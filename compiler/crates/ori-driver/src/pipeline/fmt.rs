@@ -87,6 +87,8 @@ fn declaration_opens_block(line: &str, next_line: Option<&str>, block_stack: &[B
         || bare.starts_with("struct ")
         || bare.starts_with("enum ")
         || bare.starts_with("trait ")
+        || bare.starts_with("apply ")
+        || bare.starts_with("use ")
         || bare.starts_with("implement ")
         || bare.starts_with("extern ")
 }

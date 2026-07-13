@@ -1111,9 +1111,11 @@ struct Resource
     id: int
 end
 
-implement core.Displayable for Resource
-    display(self) -> string
-        return "Resource#" + string(self.id)
+apply Resource
+    use core.Displayable
+        display(self) -> string
+            return "Resource#" + string(self.id)
+        end
     end
 end
 
@@ -1157,9 +1159,11 @@ struct Resource
     id: int
 end
 
-implement core.Displayable for Resource
-    display(self) -> string
-        return "Resource#" + string(self.id)
+apply Resource
+    use core.Displayable
+        display(self) -> string
+            return "Resource#" + string(self.id)
+        end
     end
 end
 
@@ -1670,7 +1674,9 @@ struct Token
     id: int
 end
 
-implement core.Hashable for Token
+apply Token
+    use core.Hashable
+    end
 end
 
 main()
@@ -2530,9 +2536,11 @@ struct Tag
     label: string
 end
 
-implement Labelled for Tag
-    label(self) -> string
-        return self.label
+apply Tag
+    use Labelled
+        label(self) -> string
+            return self.label
+        end
     end
 end
 
@@ -2602,9 +2610,11 @@ public struct User
     name: string
 end
 
-implement traits.Named for User
-    name(self) -> string
-        return self.name
+apply User
+    use traits.Named
+        name(self) -> string
+            return self.name
+        end
     end
 end
 
@@ -2666,19 +2676,23 @@ trait Scored
     end
 end
 
-implement Scored for Player
-    score(self) -> int
-        return self.score
+apply Player
+    use Scored
+        score(self) -> int
+            return self.score
+        end
     end
 end
 
-implement Scored for Booster
-    score(self) -> int
-        return self.score
-    end
+apply Booster
+    use Scored
+        score(self) -> int
+            return self.score
+        end
 
-    bonus(self) -> int
-        return 9
+        bonus(self) -> int
+            return 9
+        end
     end
 end
 
@@ -2744,19 +2758,23 @@ trait Scored
     end
 end
 
-implement Scored for Player
-    score(self) -> int
-        return self.score
+apply Player
+    use Scored
+        score(self) -> int
+            return self.score
+        end
     end
 end
 
-implement Scored for Booster
-    score(self) -> int
-        return self.score
-    end
+apply Booster
+    use Scored
+        score(self) -> int
+            return self.score
+        end
 
-    bonus(self) -> int
-        return 9
+        bonus(self) -> int
+            return 9
+        end
     end
 end
 
@@ -2804,9 +2822,11 @@ struct Player
     score: int
 end
 
-implement Scored for Player
-    score(self) -> int
-        return self.score
+apply Player
+    use Scored
+        score(self) -> int
+            return self.score
+        end
     end
 end
 
@@ -3258,27 +3278,35 @@ struct Score
     value: int
 end
 
-implement core.Addable for Score
-    add(self, other: Score) -> Score
-        return Score {value: self.value + other.value}
+apply Score
+    use core.Addable
+        add(self, other: Score) -> Score
+            return Score {value: self.value + other.value}
+        end
     end
 end
 
-implement core.Subtractable for Score
-    subtract(self, other: Score) -> Score
-        return Score {value: self.value - other.value}
+apply Score
+    use core.Subtractable
+        subtract(self, other: Score) -> Score
+            return Score {value: self.value - other.value}
+        end
     end
 end
 
-implement core.Equatable for Score
-    equals(self, other: Score) -> bool
-        return self.value == other.value
+apply Score
+    use core.Equatable
+        equals(self, other: Score) -> bool
+            return self.value == other.value
+        end
     end
 end
 
-implement core.Comparable for Score
-    compare(self, other: Score) -> int
-        return self.value - other.value
+apply Score
+    use core.Comparable
+        compare(self, other: Score) -> int
+            return self.value - other.value
+        end
     end
 end
 
@@ -3327,27 +3355,35 @@ struct Score
     value: int
 end
 
-implement core.Addable for Score
-    add(self, other: Score) -> Score
-        return Score {value: self.value + other.value}
+apply Score
+    use core.Addable
+        add(self, other: Score) -> Score
+            return Score {value: self.value + other.value}
+        end
     end
 end
 
-implement core.Subtractable for Score
-    subtract(self, other: Score) -> Score
-        return Score {value: self.value - other.value}
+apply Score
+    use core.Subtractable
+        subtract(self, other: Score) -> Score
+            return Score {value: self.value - other.value}
+        end
     end
 end
 
-implement core.Equatable for Score
-    equals(self, other: Score) -> bool
-        return self.value == other.value
+apply Score
+    use core.Equatable
+        equals(self, other: Score) -> bool
+            return self.value == other.value
+        end
     end
 end
 
-implement core.Comparable for Score
-    compare(self, other: Score) -> int
-        return self.value - other.value
+apply Score
+    use core.Comparable
+        compare(self, other: Score) -> int
+            return self.value - other.value
+        end
     end
 end
 
@@ -3399,15 +3435,19 @@ struct Vec2
     y: float
 end
 
-implement core.Multiplicable for Vec2
-    multiply(self, other: Vec2) -> Vec2
-        return Vec2 { x: self.x * other.x, y: self.y * other.y }
+apply Vec2
+    use core.Multiplicable
+        multiply(self, other: Vec2) -> Vec2
+            return Vec2 {x: self.x * other.x, y: self.y * other.y}
+        end
     end
 end
 
-implement core.Divisible for Vec2
-    divide(self, other: Vec2) -> Vec2
-        return Vec2 { x: self.x / other.x, y: self.y / other.y }
+apply Vec2
+    use core.Divisible
+        divide(self, other: Vec2) -> Vec2
+            return Vec2 {x: self.x / other.x, y: self.y / other.y}
+        end
     end
 end
 
@@ -3445,15 +3485,19 @@ struct Value
     y: int
 end
 
-implement core.Multiplicable for Value
-    multiply(self, other: Value) -> Value
-        return Value {x: self.x * other.x, y: self.y * other.y}
+apply Value
+    use core.Multiplicable
+        multiply(self, other: Value) -> Value
+            return Value {x: self.x * other.x, y: self.y * other.y}
+        end
     end
 end
 
-implement core.Divisible for Value
-    divide(self, other: Value) -> Value
-        return Value {x: self.x / other.x, y: self.y / other.y}
+apply Value
+    use core.Divisible
+        divide(self, other: Value) -> Value
+            return Value {x: self.x / other.x, y: self.y / other.y}
+        end
     end
 end
 
@@ -3499,21 +3543,27 @@ struct Label
     text: string
 end
 
-implement core.Addable for Label
-    add(self, other: Label) -> Label
-        return Label {text: self.text + other.text}
+apply Label
+    use core.Addable
+        add(self, other: Label) -> Label
+            return Label {text: self.text + other.text}
+        end
     end
 end
 
-implement core.Equatable for Label
-    equals(self, other: Label) -> bool
-        return self.text == other.text
+apply Label
+    use core.Equatable
+        equals(self, other: Label) -> bool
+            return self.text == other.text
+        end
     end
 end
 
-implement core.Comparable for Label
-    compare(self, other: Label) -> int
-        return strings.len(self.text) - strings.len(other.text)
+apply Label
+    use core.Comparable
+        compare(self, other: Label) -> int
+            return strings.len(self.text) - strings.len(other.text)
+        end
     end
 end
 
@@ -3720,9 +3770,11 @@ struct Resource
     id: int
 end
 
-implement Disposable for Resource
-    mut dispose(self)
-        disposed = disposed * 10 + self.id
+apply Resource
+    use Disposable
+        mut dispose(self)
+            disposed = disposed * 10 + self.id
+        end
     end
 end
 
@@ -3825,9 +3877,11 @@ struct Resource
     id: int
 end
 
-implement Disposable for Resource
-    mut dispose(self)
-        io.print("disposed")
+apply Resource
+    use Disposable
+        mut dispose(self)
+            io.print("disposed")
+        end
     end
 end
 
@@ -3869,9 +3923,11 @@ struct Resource
     id: int
 end
 
-implement Disposable for Resource
-    mut dispose(self)
-        io.print("disposed")
+apply Resource
+    use Disposable
+        mut dispose(self)
+            io.print("disposed")
+        end
     end
 end
 
@@ -4172,9 +4228,11 @@ struct Circle
     radius: int
 end
 
-implement Shape for Circle
-    area(self) -> int
-        return self.radius * self.radius
+apply Circle
+    use Shape
+        area(self) -> int
+            return self.radius * self.radius
+        end
     end
 end
 
@@ -4271,9 +4329,11 @@ trait Marker
     mark(self) -> int
 end
 
-implement Marker for Good
-    mark(self) -> int
-        return self.id
+apply Good
+    use Marker
+        mark(self) -> int
+            return self.id
+        end
     end
 end
 
@@ -4314,9 +4374,11 @@ trait Marker
     mark(self) -> int
 end
 
-implement Marker for Marked
-    mark(self) -> int
-        return self.id
+apply Marked
+    use Marker
+        mark(self) -> int
+            return self.id
+        end
     end
 end
 
@@ -4383,15 +4445,19 @@ trait MarkerB
     b(self) -> int
 end
 
-implement MarkerA for Good
-    a(self) -> int
-        return self.id
+apply Good
+    use MarkerA
+        a(self) -> int
+            return self.id
+        end
     end
 end
 
-implement MarkerB for Good
-    b(self) -> int
-        return self.id
+apply Good
+    use MarkerB
+        b(self) -> int
+            return self.id
+        end
     end
 end
 
@@ -5140,9 +5206,11 @@ struct User
     name: string
 end
 
-implement Labelled for User
-    label(self) -> string
-        return self.name
+apply User
+    use Labelled
+        label(self) -> string
+            return self.name
+        end
     end
 end
 
@@ -5534,12 +5602,16 @@ struct Resource
     id: int
 end
 
-implement core.Disposable for Resource
-    mut dispose(self)
+apply Resource
+    use core.Disposable
+        mut dispose(self)
+        end
     end
 end
 
-implement core.Hashable for Resource
+apply Resource
+    use core.Hashable
+    end
 end
 
 require_hashable for T: core.Hashable (value: T) -> int
@@ -7353,8 +7425,10 @@ struct Resource
     id: int
 end
 
-implement Disposable for Resource
-    mut dispose(self)
+apply Resource
+    use Disposable
+        mut dispose(self)
+        end
     end
 end
 
@@ -8407,9 +8481,11 @@ struct Circle
     radius: int
 end
 
-implement Shape for Circle
-    area(self) -> int
-        return self.radius * self.radius
+apply Circle
+    use Shape
+        area(self) -> int
+            return self.radius * self.radius
+        end
     end
 end
 
@@ -8417,9 +8493,11 @@ struct Square
     side: int
 end
 
-implement Shape for Square
-    area(self) -> int
-        return self.side * self.side
+apply Square
+    use Shape
+        area(self) -> int
+            return self.side * self.side
+        end
     end
 end
 
@@ -8860,15 +8938,19 @@ trait Named
     end
 end
 
-implement Disposable for Resource
-    mut dispose(self)
-        disposed = disposed + self.id
+apply Resource
+    use Disposable
+        mut dispose(self)
+            disposed = disposed + self.id
+        end
     end
 end
 
-implement Named for Resource
-    name(self) -> string
-        return self.name
+apply Resource
+    use Named
+        name(self) -> string
+            return self.name
+        end
     end
 end
 
