@@ -211,6 +211,17 @@ if [ ! -f "$stdlib_dir/string.orl" ]; then
     exit 1
 fi
 
+# AOT compile/test smoke needs a working host linker. GitHub Actions runners
+# have repeatedly failed bare multiarch `cc`/`ld` (`cannot find -lc`) even with
+# build-essential. Use ORI_PACKAGE_SMOKE_JIT_ONLY=1 to validate layout + JIT
+# only (still enough to ship a usable package; AOT is verified on systems where
+# SystemLinker works, e.g. developer machines with a normal toolchain).
+smoke_jit_only=0
+case "${ORI_PACKAGE_SMOKE_JIT_ONLY:-}" in
+    1|true|yes|on|YES|TRUE|ON) smoke_jit_only=1 ;;
+esac
+
+if [ "$smoke_jit_only" -eq 0 ]; then
 hello_exe="$package_root/$(output_exe_name hello)"
 (
     cd "$package_root"
@@ -286,6 +297,9 @@ esac
     cd "$package_root"
     ORI_REQUIRE_PACKAGED_RUNTIME=1 "$package_ori" test "examples/package_smoke_test.orl"
 )
+else
+    echo "ORI_PACKAGE_SMOKE_JIT_ONLY=1 — skipping AOT compile/test smoke (JIT + doctor only)"
+fi
 
 runtime_triple_dir="$runtime_dir/$host"
 case "$host" in
