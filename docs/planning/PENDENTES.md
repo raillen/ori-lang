@@ -2,7 +2,7 @@
 
 > **Plano ativo:** prioridade abaixo + [`uso-real-pequeno-medio.md`](uso-real-pequeno-medio.md).
 > **Plano histórico:** ciclo até `0.2.0` em [`PLANO-MATURIDADE-COMPLETO.md`](historico/PLANO-MATURIDADE-COMPLETO.md).
-> Superfície: **S3 / 0.3.0** + inference **0.3.1**. Auk9 = arquivada.
+> Superfície: **S3 / 0.3.0** + inference **0.3.1** + **opção B** (campo/index/call/pipe). Pipe `|>` mantido. Auk9 = arquivada.
 
 Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhorias necessárias para a maturidade da linguagem Ori.
 

@@ -15,7 +15,8 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 > **Política de versionamento (2026-07-13):** workspace Cargo = **`0.3.1`** (tags `v0.3.0` / `v0.3.1`). **Package** de distribuição (zip/tar) **adiado** até fechar pendências (stdlib, ARC residual, LSP, independência Rust). `ori-game` / `ori-imgui` = **última** migração. Auk9 = produto **arquivado**.
 
 ### Adicionado
-- **Tipos / Inferência local opção B:** formaliza omissão de tipo em `const`/`var` locais para **campo**, **index**, **chamada com retorno conhecido** e **pipe `|>`** (tipado como `f(value)`). Rejeita binding de resultado `void`. Testes: `type_accepts_local_inference_option_b_field_index_call_pipe`, `type_rejects_local_inference_on_void_call`. Spec cap. 04.
+- **Tipos / Inferência local opção B:** formaliza omissão de tipo em `const`/`var` locais para **campo**, **index**, **chamada com retorno conhecido** e **pipe `|>`** (tipado como `f(value)`). Rejeita binding de resultado `void`. Testes: `type_accepts_local_inference_option_b_field_index_call_pipe`, `type_rejects_local_inference_on_void_call`.
+- **Docs (opção B + pipe):** specs `00`–`06`, `13`, `18`, `03-grammar.ebnf`; READMEs en/pt/ja; manifesto; ADR; PR plan; `AGENTS.md`; guia cookbook; extensão VS Code README.
 - **CLI/S3 (`ori migrate-syntax`):** ferramenta melhor-esforço para reescrever fonte pré-S3 → S3 (`namespace`→`module`, strip `func` em declarações, `import as`/`only`, `<>`→`[]`, `of` types, `else if`→`elif`, `case .V`→`case V`, `do(`→`(`, `?` simples→`try`, scaffold `implement`/`apply Trait to`). Opções `--dry-run` / `-v`. Ignora `packages/ori-game` e `packages/ori-imgui`. Wrapper `tools/migrate_syntax.sh`. Testes unitários em `pipeline::migrate_syntax`.
 - **Stdlib/Rede v2 (Layer 1+2):** `net.connect_tls` (rustls + webpki-roots), servidor TCP (`listen`/`accept`/`close_listener`/`listener_port`), UDP (`udp_bind`/`udp_send_to`/`udp_recv_from`/`udp_close`/`udp_local_port`); tipos opacos `ori.net.Listener` e `ori.net.UdpSocket`; `stdlib/net.orl` flatten; helpers `ori.net.utils` com `connect_*_in_background` via `task.run_blocking` (alias de `task.spawn`). Exemplo `examples/http_get.orl`. Design: `docs/planning/net-v2-design.md`. Testes: `compile_runs_net_tcp_listen_accept_loopback`, `compile_runs_net_udp_loopback`, `compile_runs_net_connect_tls_reports_error_on_refused_port`, `check_accepts_net_v2_flatten_selective_imports`.
 - **Tipos/Inferência:** decisão explícita de **não** implementar inferência global de bindings; spec cap. 04 atualizada; comentário de `Ty::is_assignable_to` clarificado.
@@ -138,8 +139,10 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **LSP:** índice semântico de bindings locais (`const`/`var` omitidos) para inlay/hover de tipos óbvios (0.3.1).
 - **VS Code:** `extensions/vscode-orl` version bump para `0.3.1`.
 
-### Não incluído
+### Não incluído (no corte 0.3.1; ver Unreleased / opção B)
 - Inferência global; omissão em `pub`/params/retornos de API.
+- Opção B (campo/index/call/pipe + reject void) — documentada e entregue em
+  **`[Unreleased]`** após 0.3.1; ver spec 04/05/06.
 - **Pipe `|>`:** **permanece** na Ori (já existia; teste `compile_runs_pipe_operator_native`). A menção “fora do 0.3” na ata S3 foi **corrigida** — não era decisão de produto.
 
 ---

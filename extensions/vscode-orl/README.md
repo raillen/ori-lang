@@ -5,6 +5,8 @@ Language support for [Ori](https://github.com/ori-lang/ori) (`.orl` files).
 ## Features
 
 - **LSP** via `ori-lsp`: diagnostics, hover, go-to-definition, completion (Layer 1 + Layer 2 stdlib), rename, format, semantic tokens, inlay hints
+- **Local inference (0.3.1 + option B):** inlay/hover for omitted local `const`/`var` types when the RHS is obvious (literals, field, index, call, pipe)
+- **Pipe `|>`:** first-class Ori operator (not removed in S3)
 - **Stdlib-aware completion**: `import ori.string` + dot-complete on aliases
 - **Go to stdlib source** for Layer 2 `.orl` functions
 - **Incremental document sync**

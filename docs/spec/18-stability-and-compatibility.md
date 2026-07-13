@@ -42,8 +42,12 @@ Estes pontos podem mudar antes de `1.0`:
 - APIs marcadas como experimentais na stdlib;
 - detalhes de otimizacao de generics e tamanho de binario;
 - superficie publica do backend C/debug;
-- inferencia local estilo Nim (**alvo `0.3.1`**, fora do big-bang S3);
-- pipe `|>` (fora do foco de produto S3).
+- detalhes finos de inferencia local alem da opcao B ja documentada
+  (literais + campo/index/call/pipe); **HM global permanece fora**);
+- formatos de package/registry ainda nao estabilizados.
+
+> **Ja estabilizado na superficie pre-1.0 (mas ainda pre-1.0):** pipe `|>`
+> (mantido na Ori), inferencia local Nim-style + opcao B (`0.3.1`+).
 
 ## Regra de documentacao
 

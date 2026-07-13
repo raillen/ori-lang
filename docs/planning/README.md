@@ -12,7 +12,7 @@ docs/planning/
 ├── language-direction-decisions-2026-06-30.md # [Decisão] Decisões arquiteturais de direção da linguagem (ADR)
 ├── ori-surface-s3-auk9.md              # [Ativo] Decisões de superfície S3 (implementada no compiler; docs 0.3.0)
 ├── adr-ori-surface-s3-auk9.md          # [ADR] Aceito — superfície S3 / aposentar Auk9 como produto
-├── pr-plan-ori-surface-s3.md           # [Ativo] PR Plan DAG para /execute-plan (0.3.0 + 0.3.1)
+├── pr-plan-ori-surface-s3.md           # [Concluído] PR Plan DAG 0.3.0 + 0.3.1 + opção B
 ├── IMPLEMENTADOS.md                    # [Histórico] Registro cronológico de recursos já implementados
 └── historico/                          # [Histórico] Planos de design e propostas concluídas/arquivadas
     ├── PLANO-MATURIDADE-COMPLETO.md    # Plano mestre de maturidade do ciclo v0.2.0 (100% concluído)
@@ -35,7 +35,7 @@ docs/planning/
 *   **[language-direction-decisions-2026-06-30.md](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/planning/language-direction-decisions-2026-06-30.md):** Documenta as decisões e princípios fundamentais do design da linguagem (tratamento de erros com `try`, ARC vs cycle collector, monomorfização de genéricos, concorrência cooperativa).
 *   **[ori-surface-s3-auk9.md](ori-surface-s3-auk9.md):** Registro vivo das decisões de **superfície S3** (sintaxe no estilo Auk9, features Ori). Diálogo de decisões **completo** (blocos 0–9).
 *   **[adr-ori-surface-s3-auk9.md](adr-ori-surface-s3-auk9.md):** ADR aceito do S3.
-*   **[pr-plan-ori-surface-s3.md](pr-plan-ori-surface-s3.md):** Plano de PRs (DAG) para **`/execute-plan`** — marco `0.3.0` (PRs 1–10) e `0.3.1` inferência (PR 11).
+*   **[pr-plan-ori-surface-s3.md](pr-plan-ori-surface-s3.md):** Plano de PRs (DAG) — marco `0.3.0` (PRs 1–10), `0.3.1` inferência (PR 11), **opção B** (PR 11b) — **concluído**.
 
 ### 3. Arquivo Histórico
 *   **[IMPLEMENTADOS.md](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/planning/IMPLEMENTADOS.md):** Contém os marcos de engenharia já completados para referência e auditorias de código.

@@ -45,8 +45,9 @@ Uso real em projetos **pequenos e médios** e maturidade de features existem com
 | **Pele / ritmo de leitura** | Superfície **S3**, o mais próximo possível da Auk9 (lab), com exceções documentadas |
 | **Arquivos / CLI** | Extensão **`.orl`**, CLI **`ori`**, stdlib **`ori.*`** |
 | **Corte** | **Seco** no artefato `0.3.0` — forma antiga deixa de ser aceita |
-| **Inferência local (Nim-style)** | **`0.3.1` entregue** — omissão em `const`/`var` locais quando o RHS é óbvio; sem HM global |
-| **Auk9** | **Lab aposentado como produto** — referência de sintaxe; superfície vivente na Ori |
+| **Inferência local (Nim-style + opção B)** | **Entregue** — omissão em `const`/`var` locais em RHS óbvio (literal, campo, index, call, pipe); **sem** HM global nem inferência “pelo uso depois” |
+| **Pipe `\|\>`** | **Mantido** na Ori (feature de primeira classe; Auk9 rejeitou, Ori não) |
+| **Auk9** | **Produto arquivado** — lab/referência de sintaxe; superfície vivente na Ori |
 
 Exceções conscientes vs Auk9 pura (ADR):
 
@@ -56,8 +57,8 @@ Exceções conscientes vs Auk9 pura (ADR):
 | If-expressão | `if cond then a else b` | if-expr só em `=>` |
 | Default em trait | corpo = default (sem keyword `default`) | keyword `default` |
 | Closure | `(u) => …` | `do(u) => …` |
-| Inferência | Nim-local **depois** (`0.3.1`) | anotações rígidas na v1 Auk9 |
-| Pipe `\|\>` | fora do 0.3 | rejeitado na Auk9 |
+| Inferência | Nim-local + **opção B** (`0.3.1`+) | anotações rígidas na v1 Auk9 |
+| Pipe `\|\>` | **mantido** | rejeitado na Auk9 |
 
 ---
 
@@ -116,7 +117,7 @@ Uma forma canônica por conceito é **norma** (superfície S3 + reforma document
 | `01-overview.md` … | Contrato de linguagem (superfície **S3** em `0.3.0`) |
 | `13-error-catalog.md` | Códigos **emitidos** (incl. rejeições de forma pré-S3) |
 | `docs/planning/ori-surface-s3-auk9.md` | Tabela completa de decisões 0–9 |
-| `docs/planning/pr-plan-ori-surface-s3.md` | DAG de implementação (PRs 1–10 = 0.3.0; PR 11 = 0.3.1) |
+| `docs/planning/pr-plan-ori-surface-s3.md` | DAG de implementação (PRs 1–10 = 0.3.0; PR 11 = 0.3.1; opção B pós-PR11) |
 
 Em conflito de **propósito / identidade**, prevalece este manifesto + o registro S3 + o ADR.
 Em conflito de **sintaxe canônica**, prevalecem os capítulos `01`–`11` alinhados ao S3 e o compilador.

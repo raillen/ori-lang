@@ -14,7 +14,7 @@ import ori.args = args
 import ori.io = io
 
 main()
-    const name: string = args.get_or(1, "Ori")
+    const name = args.get_or(1, "Ori")  -- local inference B (call)
     io.println("ola, " + name)
 end
 ```

@@ -93,9 +93,11 @@ inferência menores e mensagens de erro mais claras.
 | Testes | suíte do workspace e smoke de release nativa fazem parte do gate do projeto |
 
 S3 **foi** essa quebra visível ao usuário (documentada no
-[CHANGELOG.md](CHANGELOG.md) `[0.3.0]`). Inferência local estilo Nim é **`0.3.1`**.
-Migração mecânica: `ori migrate-syntax`. O número do pacote Cargo pode permanecer
-`0.2.0` até a tag de release.
+[CHANGELOG.md](CHANGELOG.md) `[0.3.0]`). Inferência local estilo Nim é **`0.3.1`**,
+ampliada pela **opção B** (omitir tipo em campo / index / call / pipe com tipo
+concreto). O operador pipe `|>` **permanece** suportado. Migração mecânica:
+`ori migrate-syntax`. Workspace Cargo em **`0.3.1`**; package de distribuição
+ainda adiado.
 
 ## Primeiros passos
 

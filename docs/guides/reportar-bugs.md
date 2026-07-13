@@ -1,6 +1,6 @@
 # Como reportar bugs
 
-Status: politica pratica para Ori **S3 / `0.3.0`**.
+Status: politica pratica para Ori **S3 / `0.3.0`** (+ `0.3.1`/B).
 
 Um bom bug report deve permitir reproduzir o problema com poucos comandos.
 

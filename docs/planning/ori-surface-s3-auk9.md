@@ -4,7 +4,8 @@
 > **Produto:** Ori (features e maturidade)  
 > **Superfície:** o mais próximo possível da Auk9 (S3)  
 > **Implementação:** PRs 1–9 (compiler + migrate + fontes) + PR 10 (docs) — superfície no compiler  
-> **Versão alvo:** `0.3.0` superfície+docs · `0.3.1` inferência Nim-local  
+> **Versão alvo:** `0.3.0` superfície+docs · `0.3.1` inferência Nim-local · **opção B** (campo/index/call/pipe) entregue  
+
 > **Última atualização:** 2026-07-12
 
 ## Como usar este documento
@@ -610,7 +611,7 @@ rodar e pular PR11 até a tag 0.3.0.
 | 6 | Defaults de trait / finos de apply | ✅ |
 | 7 | Extras de ritmo | ✅ |
 | 8 | Filosofia & docs ND | ✅ |
-| 8b | Inferência local Nim-local | ✅ design → impl 0.3.1 |
+| 8b | Inferência local Nim-local + opção B | ✅ 0.3.1 + B (field/index/call/pipe) |
 | 9 | Plano de migração / corte seco | ✅ |
 
 **Diálogo de decisões de superfície: completo.**

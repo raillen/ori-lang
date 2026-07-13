@@ -109,7 +109,7 @@ when the compiler starts producing it.
 | `type.iterable_next_signature` | error | `Iterable.next` does not match `mut next() -> optional[T]` |
 | `type.is_target_not_type` | error | `is` target is not a valid type |
 | `type.list_element_mismatch` | error | List literal elements have incompatible types |
-| `type.local_inference_failed` | error | Local `const`/`var` omitted its type but the RHS is not obvious enough to infer (`0.3.1` Nim-local) |
+| `type.local_inference_failed` | error | Local `const`/`var` omitted its type but the RHS is not obvious enough (`0.3.1` + option B: not literal/field/index/call/pipe with concrete type; or `try` / empty / `none` / `void`) |
 | `type.map_key_mismatch` | error | Map literal keys have incompatible types |
 | `type.map_value_mismatch` | error | Map literal values have incompatible types |
 | `type.missing_return` | error | Non-void function may finish without returning a value |

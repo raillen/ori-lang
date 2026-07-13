@@ -1,6 +1,6 @@
 # Primeiro projeto e pacotes locais
 
-Status: guia pratico para Ori **S3 / `0.3.0`**.
+Status: guia pratico para Ori **S3 / `0.3.0`** (+ inferência local `0.3.1`/B).
 
 Este guia cobre o caminho curto:
 

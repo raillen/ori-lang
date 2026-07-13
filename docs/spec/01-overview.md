@@ -206,8 +206,16 @@ end
 
 Migration aid: `ori migrate-syntax`. Full list: `CHANGELOG.md` `[0.3.0]`.
 
-**Not in 0.3.0:** local Nim-style inference (`0.3.1`), pipe `|>` as product goal,
-migration of `ori-game` / `ori-imgui`.
+**After 0.3.0 (delivered):**
+
+| Slice | Content |
+|-------|---------|
+| **`0.3.1`** | Local Nim-style inference on obvious RHS (literals, typed struct/list forms) |
+| **Option B** | Also omit on **field / index / call / pipe** with a concrete return type; reject `void` / `try` / empty `[]`/`{}` / bare `none` |
+| **Pipe `\|\>`** | **Kept** as first-class Ori syntax (typed as `f(value)`) |
+
+**Still deferred:** migration of `ori-game` / `ori-imgui` (**last**); distribution
+package until remaining pendencies close.
 
 ---
 

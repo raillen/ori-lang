@@ -2,7 +2,7 @@
 
 > Audience: maintainer, contributor  
 > Status: current  
-> Surface: **S3** (`0.3.0` cutover)
+> Surface: **S3** (`0.3.0`) + local inference **`0.3.1` / option B** + pipe `|>`
 
 This directory contains implementation-facing specifications for Ori.
 
@@ -12,7 +12,9 @@ Use:
   **AI-assisted programming**, **ND readability**). **Ori is not market
   competition.**
 - `01-overview.md` through `13-error-catalog.md` for the language contract
-  under the **S3** surface.
+  under the **S3** surface (plus inference B and pipe as living features).
+- `04-types.md` / `05-expressions.md` / `06-statements.md` for local inference
+  rules and the pipe operator.
 - `13-error-catalog.md` for **emitted** diagnostics, including pre-S3 form
   rejections (`parse.*_removed`, `parse.poetic_call_nested`, …).
 - `14-backend-support.md` for the feature × backend matrix.

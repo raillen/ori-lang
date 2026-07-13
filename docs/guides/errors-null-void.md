@@ -1,6 +1,6 @@
 # Errors, Null, Void — mapa mental Ori
 
-> Guia pedagógico (superfície **S3 / `0.3.0`**).  
+> Guia pedagógico (superfície **S3 / `0.3.0`** + inferência local `0.3.1`/B).  
 > Normativo: [09-errors](../spec/09-errors.md), [04-types](../spec/04-types.md), [01-overview](../spec/01-overview.md).
 
 ## Quatro conceitos, quatro papéis

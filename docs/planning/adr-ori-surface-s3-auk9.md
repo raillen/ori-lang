@@ -2,7 +2,7 @@
 
 **Status:** Aceito  
 **Data:** 2026-07-12  
-**Versão de quebra:** `0.3.0` (superfície + docs) · `0.3.1` (inferência local)  
+**Versão de quebra:** `0.3.0` (superfície + docs) · `0.3.1` (inferência local) · opção B (campo/index/call/pipe) pós-0.3.1  
 **Registro vivo de decisões:** [`ori-surface-s3-auk9.md`](ori-surface-s3-auk9.md)  
 **Plano de implementação /execute-plan:** [`pr-plan-ori-surface-s3.md`](pr-plan-ori-surface-s3.md)
 
@@ -40,8 +40,8 @@ Exceções conscientes vs Auk9 pura:
 | If-expressão | `if cond then a else b` (Ori) | if-expr só em `=>` |
 | Default em trait | corpo = default (sem keyword `default`) | keyword `default` |
 | Closure | `(u) => …` | `do(u) => …` |
-| Inferência | Nim-local **depois** (`0.3.1`) | anotações rígidas na v1 Auk9 |
-| Pipe `\|>` | **mantido** (feature Ori; teste nativo) | rejeitado na Auk9 |
+| Inferência | Nim-local + **opção B** (`0.3.1`+) | anotações rígidas na v1 Auk9 |
+| Pipe `\|>` | **mantido** (feature Ori; tipado como call; teste nativo) | rejeitado na Auk9 |
 
 ---
 
@@ -73,7 +73,7 @@ A Ori **não** visa competir com linguagens de mercado. Existe para:
 
 - Script `ori migrate-syntax` (melhor esforço)  
 - PR plan fatiado para `/execute-plan`  
-- Inferência local **fora** do big-bang (`0.3.1`)  
+- Inferência local **fora** do big-bang (`0.3.1`); opção B formalizada depois  
 - Checklist de pronto antes da tag  
 
 ---
@@ -81,8 +81,8 @@ A Ori **não** visa competir com linguagens de mercado. Existe para:
 ## Fora de escopo deste ADR
 
 - Self-hosting, registry remoto  
-- Inferência global HM (continua proibida)  
-- Migrar `ori-game` / `ori-imgui` no mesmo dia do 0.3.0 (plano B: **última** migração)  
+- Inferência global HM (continua proibida); opções C/D de inferência “pelo uso”  
+- Migrar `ori-game` / `ori-imgui` no mesmo dia do 0.3.0 (plano: **última** migração)  
 - Reimplementar features Ori na Auk9  
 - Package de distribuição (adiado até fechar pendências de runtime/stdlib/LSP)
 

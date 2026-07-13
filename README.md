@@ -93,8 +93,10 @@ shorter inference chains, fewer hidden rules, and clearer error messages.
 | Tests | workspace test suite and native release smoke are part of the project gate |
 
 S3 **is** that user-visible breaking change (documented in
-[CHANGELOG.md](CHANGELOG.md) `[0.3.0]`). Local Nim-style inference is **`0.3.1`**.
-Migrate sources with `ori migrate-syntax`.
+[CHANGELOG.md](CHANGELOG.md) `[0.3.0]`). Local Nim-style inference is **`0.3.1`**,
+extended by **option B** (omit types on field / index / call / pipe with a
+concrete type). The pipe operator `|>` **remains** supported. Migrate sources
+with `ori migrate-syntax`.
 
 ## Quick start
 

@@ -89,7 +89,9 @@ Ori は、書きやすさよりも読みやすさを優先します。
 | テスト | workspace test suite と native release smoke がプロジェクト gate です |
 
 S3 **が**そのユーザー可視の破壊的変更です（[CHANGELOG.md](CHANGELOG.md) `[0.3.0]`）。
-Nim 風ローカル推論は **`0.3.1`**。移行: `ori migrate-syntax`。
+Nim 風ローカル推論は **`0.3.1`**（**オプション B**: フィールド / 添字 / 呼び出し /
+パイプで型が自明なら注釈省略可）。パイプ `|>` は **サポート継続**。
+移行: `ori migrate-syntax`。
 
 ## クイックスタート
 

@@ -154,10 +154,10 @@ Source (.orl)
 ## Current Status (2026-07-13)
 
 - **Rust:** 1.95.0 (via `rust-toolchain.toml`)
-- **Language surface:** **`0.3.0` S3** + **`0.3.1`** Nim-local inference. Manifesto: `docs/spec/00-manifesto.md`. Decisões: `docs/planning/ori-surface-s3-auk9.md`.
+- **Language surface:** **`0.3.0` S3** + **`0.3.1`** Nim-local inference + **option B** (field/index/call/pipe). Manifesto: `docs/spec/00-manifesto.md`. Decisões: `docs/planning/ori-surface-s3-auk9.md`. Spec: `04-types`, `05-expressions` (pipe), `06-statements`.
 - **Cargo workspace package version:** **`0.3.1`**. Git tags `v0.3.0` / `v0.3.1`. **Package** de distribuição (zip/tar) **adiado** até fechar pendências.
-- **Etapas 0–9** do `PLANO-MATURIDADE-COMPLETO.md` (ciclo 0.2) concluídas; S3 PRs 1–10 + PR11 inference = superfície atual.
-- **Pipe `|>`:** **mantido** (feature Ori; não foi removido no S3).
+- **Etapas 0–9** do `PLANO-MATURIDADE-COMPLETO.md` (ciclo 0.2) concluídas; S3 PRs 1–10 + PR11 + 11b (B) = superfície atual.
+- **Pipe `|>`:** **mantido** e tipado no checker como `f(value)`; entra na inferência local B.
 - **Auk9:** produto **arquivado** (README no repo auk9-lang). Living surface is Ori S3.
 - **Última migração:** `packages/ori-game` / `packages/ori-imgui` (depois de tudo o resto).
 - **cargo check --workspace:** PASSES cleanly
@@ -176,7 +176,7 @@ Source (.orl)
 
 ## Versioning policy (2026-07-13)
 
-**Histórico:** S3 justifica **`0.3.0`** (breaking de superfície). Inferência Nim-local = **`0.3.1`**. Cargo workspace e tags git acompanham a superfície; **package** de distribuição fica para depois das pendências.
+**Histórico:** S3 justifica **`0.3.0`** (breaking de superfície). Inferência Nim-local = **`0.3.1`**; opção B (campo/index/call/pipe) formalizada em seguida. Cargo workspace e tags git acompanham a superfície; **package** de distribuição fica para depois das pendências.
 
 | Linguagem | Tempo em 0.x | Versão atual | Status |
 |-----------|-------------|--------------|--------|

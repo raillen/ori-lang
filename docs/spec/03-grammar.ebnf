@@ -330,12 +330,14 @@ alias_decl
     = visibility "alias" IDENT [ type_params ] "=" type
     ;
 
+(* Locals (0.3.1 + option B): ":" type optional when RHS is locally inferable
+   (literal, field, index, call, pipe). Top-level / pub still require types. *)
 const_decl
-    = visibility "const" IDENT ":" type "=" expression
+    = visibility "const" IDENT [ ":" type ] "=" expression
     ;
 
 var_decl
-    = visibility "var" IDENT ":" type "=" expression
+    = visibility "var" IDENT [ ":" type ] "=" expression
     ;
 
 
@@ -518,10 +520,16 @@ check_stmt
    ============================================================ *)
 
 expression
-    = or_expr
+    = pipe_expr
     | closure_expr
     | if_expr
     | struct_update_expr
+    ;
+
+(* Pipe is a product feature (kept through S3). `a |> f` ≡ `f(a)`.
+   Local inference option B may omit types when the call return is concrete. *)
+pipe_expr
+    = or_expr { "|>" or_expr }
     ;
 
 or_expr

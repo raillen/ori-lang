@@ -3,8 +3,8 @@
 **Origem (ADR):** `docs/planning/adr-ori-surface-s3-auk9.md`  
 **Registro de decisões:** `docs/planning/ori-surface-s3-auk9.md`  
 **Data:** 2026-07-12  
-**Status:** PRs 1–10 executados (superfície + docs 0.3.0); PR 11 = 0.3.1 fora deste corte  
-**Release alvo:** `0.3.0` (PRs 1–10) · `0.3.1` (PR 11, plano separado ou continuação)
+**Status:** PRs 1–10 ✅ (`0.3.0`) · PR 11 ✅ (`0.3.1`) · **opção B** ✅ (campo/index/call/pipe)  
+**Release alvo:** `0.3.0` · `0.3.1` · B em `[Unreleased]` / superfície viva
 
 ---
 
@@ -14,8 +14,8 @@ Implementar a superfície S3 da Ori com **corte seco** no artefato `0.3.0`:
 lexer/parser/checker/fmt/LSP grammar, migração de fontes do **repo ori-lang**
 (stdlib, tests, examples), reforma documental, script de migração.
 
-**Não** neste plano 0.3.0: `ori-game` / `ori-imgui` (depois), inferência
-Nim-local (0.3.1), pipe `|>`.
+**Pós-0.3.0 (entregue):** inferência Nim-local (`0.3.1`) + opção B; pipe `|>`
+**mantido** na Ori. **Ainda fora:** `ori-game` / `ori-imgui` (última migração).
 
 **Skills:** `compiler-dev`, `lang-compiled` (se tocar codegen só por desugar),
 `ori-testing`, `living-docs`, `clean-code`, `rust`.
@@ -178,17 +178,25 @@ release tag — ou bump workspace para `0.3.0` se o projeto já versiona junto
 
 ---
 
-### PR 11: Inferência local Nim-style (`0.3.1`)
+### PR 11: Inferência local Nim-style (`0.3.1`) — ✅
 
-**Description:** **Fora do release 0.3.0.** Implementar omissão de tipo em
-bindings locais quando o RHS fixa o tipo na mesma linha (literais; `User {…}`;
-regras estreitas do bloco 8b). API `pub`/params/retornos continuam anotados.
-Testes positivos/negativos; docs no manifesto/overview. Versionar como
-`0.3.1` ou seção Unreleased pós-0.3.0.
+**Description:** Omissão de tipo em bindings locais quando o RHS fixa o tipo na
+mesma linha (literais; `User {…}`; regras do bloco 8b). API `pub`/params/retornos
+continuam anotados. Entregue como `0.3.1`.
 
-**Files/components affected:** `compiler/crates/ori-types/`, `compiler/crates/ori-parser/` (se syntax de omissão), `compiler/crates/ori-driver/tests/`, `docs/spec/`
+**Files/components affected:** `compiler/crates/ori-types/`, `compiler/crates/ori-parser/`, `compiler/crates/ori-driver/tests/`, `docs/spec/`
 
 **Dependencies:** PR 10
+
+### PR 11b: Inferência local opção B — ✅
+
+**Description:** Estender a omissão local a **campo**, **index**, **chamada com
+retorno conhecido** e **pipe `|>`** (tipado como `f(value)`). Rejeitar `void`.
+Sem C/D (tipo pelo uso) e sem HM. Testes + spec 04/05/06 + catálogo.
+
+**Files/components affected:** `compiler/crates/ori-types/src/check.rs`, tests, docs
+
+**Dependencies:** PR 11
 
 ---
 
@@ -214,11 +222,8 @@ PR2 (module/func) ┼──▶ PR3 (types []) ──▶ PR5 (literals) ──┐
 | 2 | PR5 (após PR3); PR8 (após PR2+PR4) |
 | 3 | PR9 (após PR3–PR8) |
 | 4 | PR10 (após PR9) |
-| 5 | PR11 (após PR10) — **release 0.3.1** |
-
-**Sugestão `/execute-plan`:** rodar PRs 1–10 para o marco `0.3.0`; PR11 com
-`--instructions "This is 0.3.1 only; do not bump as 0.3.0"` ou plano
-separado após tag 0.3.0.
+| 5 | PR11 — **release 0.3.1** ✅ |
+| 6 | PR11b — **opção B** ✅ |
 
 ---
 
@@ -253,6 +258,14 @@ separado após tag 0.3.0.
 
 ## Critério de pronto `0.3.1` (após PR11)
 
-- [ ] Omissão local documentada e testada  
-- [ ] API pública ainda anotada  
-- [ ] Sem HM global  
+- [x] Omissão local documentada e testada  
+- [x] API pública ainda anotada  
+- [x] Sem HM global  
+
+## Critério de pronto opção B (após PR11b)
+
+- [x] Campo / index / call / pipe com tipo concreto  
+- [x] Rejeita `void` / `try` / empty / bare `none`  
+- [x] Spec + CHANGELOG + testes  
+- [x] Pipe tipado como call no checker  
+

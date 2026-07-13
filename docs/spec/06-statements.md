@@ -23,16 +23,24 @@ Declares an immutable binding.
 const name: string = "Ada"
 const max: int = 100
 
--- 0.3.1 + B: omit type when the RHS is obvious (literal, field, index, call, pipe)
+-- 0.3.1 + option B: omit type when the RHS is obvious on the same line
 const n = 1
 const label = "ready"
 const user = User { name: "Ada", age: 36 }
+const xs = [1, 2, 3]
+const title = user.name          -- field
+const first = xs[0]              -- index
+const upper = str.to_upper("hi") -- call with known return
+const twice = 21 |> double       -- pipe (= double(21))
 ```
 
 - Cannot be reassigned after declaration.
 - Type annotation is **required** on top-level / `pub` bindings and whenever the
-  RHS is not locally obvious; locals may omit it (`0.3.1`).
+  RHS is not locally obvious; locals may omit it (`0.3.1` + option B).
 - Failure to infer a local type → `type.local_inference_failed`.
+- **Must annotate** (not inferable): `try expr`, empty `[]`/`{}`, bare `none`,
+  `void` results, non-concrete types, and types only recoverable from *later*
+  uses in the block.
 - The initializer is evaluated once, at declaration time.
 
 ### `var`
@@ -43,11 +51,13 @@ Declares a mutable binding.
 var count: int = 0
 count = count + 1
 
-var total = 0   -- 0.3.1 local inference
+var total = 0          -- 0.3.1 + B local inference
+var name = user.name   -- option B field
 ```
 
 - Can be reassigned with `=`.
-- Type annotation rules match `const` (required unless local Nim-style inference applies).
+- Type annotation rules match `const` (required unless local Nim-style + B
+  inference applies).
 - Compound assignment operators are available: `+=`, `-=`, `*=`, `/=`.
 
 ---

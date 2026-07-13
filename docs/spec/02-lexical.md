@@ -298,9 +298,9 @@ yield a range of exactly one element. Current ranges use `int` endpoints only.
 The `..` token is the range operator and slice operator.
 The `->` token separates parameter lists from return types.
 The `=>` token separates closure parameters from expression bodies.
-The `?` token is the compact propagation operator. The readable form is the
-contextual keyword `try` before an expression.
-The `|>` token is the pipe operator.
+The `?` token is **removed** as postfix propagation on S3 (`parse.question_propagate_removed`);
+use the contextual keyword `try` before an expression.
+The `|>` token is the **pipe operator** (supported product feature; `a |> f` ≡ `f(a)`).
 The `@` token is the attribute prefix: `@test`, `@deprecated("message")`.
 The `--|` / `|--` tokens delimit block and documentation comments.
 

@@ -217,11 +217,18 @@ Rules:
 
 ## Pipe Operator (`|>`)
 
-> Note: S3 product decisions leave pipe **outside** the 0.3.0 focus (not a migration target).
-> If present in the compiler, treat as experimental; do not rely on it in new docs examples.
+**Product status (2026-07-13):** pipe **remains** a supported Ori feature
+(kept through S3; Auk9 had rejected it, Ori did not). HIR lowers
+`value |> func` to `func(value)`. The type checker types pipe the same way as
+a normal call, so local inference option B may omit annotations when the
+return type is concrete:
+
+```ori
+const doubled = 21 |> double
+```
 
 The pipe operator passes the left-hand value as the first argument to the
-right-hand function call.
+right-hand function (or function call with further args).
 
 ```ori
 const result: list[string] =
@@ -232,6 +239,8 @@ const result: list[string] =
 
 `a |> f(b)` is equivalent to `f(a, b)`.
 `a |> f` is equivalent to `f(a)`.
+
+Regression: `compile_runs_pipe_operator_native`.
 
 ---
 
