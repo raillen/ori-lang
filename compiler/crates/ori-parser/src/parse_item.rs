@@ -316,6 +316,30 @@ impl<'src> Parser<'src> {
             None
         };
         let where_clause = self.parse_where_clause_opt();
+        // S3: single-expression body `name(params) -> T => expr` (no `end`).
+        if self.eat(&TokenKind::FatArrow) {
+            let expr = self.parse_expr()?;
+            let expr_span = expr.span();
+            let body = ori_ast::stmt::Block {
+                stmts: vec![ori_ast::stmt::Stmt::Return(ori_ast::stmt::ReturnStmt {
+                    value: Some(Box::new(expr)),
+                    span: expr_span,
+                })],
+                span: expr_span,
+            };
+            return Some(FuncDecl {
+                visibility: vis,
+                is_async,
+                is_mut,
+                name,
+                type_params,
+                params,
+                return_ty,
+                where_clause,
+                body,
+                span: start.cover(expr_span),
+            });
+        }
         let body = self.parse_block()?;
         let end = self.expect_block_end(start, "function")?;
         Some(FuncDecl {

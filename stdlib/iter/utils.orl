@@ -16,15 +16,15 @@ public first<T>(items: list<T>) -> optional<T>
 end
 
 public sum_int(items: list<int>) -> int
-    return iter.reduce(items, 0, do(acc: int, x: int) => acc + x)
+    return iter.reduce(items, 0, (acc: int, x: int) => acc + x)
 end
 
 public contains_int(items: list<int>, target: int) -> bool
-    return iter.any(items, do(x: int) => x == target)
+    return iter.any(items, (x: int) => x == target)
 end
 
 public all_equal_int(items: list<int>, expected: int) -> bool
-    return iter.all(items, do(x: int) => x == expected)
+    return iter.all(items, (x: int) => x == expected)
 end
 
 public unique_count_int(items: list<int>) -> int

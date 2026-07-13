@@ -136,8 +136,9 @@ where_constraint
    CLOSURES
    ============================================================ *)
 
+(* S3: no `do`/`fn`/`given` keyword — bare paren param list. *)
 closure_expr
-    = "do" "(" [ closure_param_list ] ")" [ "->" type ] closure_body
+    = "(" [ closure_param_list ] ")" [ "->" type ] closure_body
     ;
 
 closure_param_list
@@ -145,7 +146,7 @@ closure_param_list
     ;
 
 closure_param
-    = IDENT ":" type
+    = IDENT [ ":" type ]                 (* type may be omitted when context provides it *)
     ;
 
 closure_body

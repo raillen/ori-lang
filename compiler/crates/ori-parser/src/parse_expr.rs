@@ -242,8 +242,7 @@ impl<'src> Parser<'src> {
                 }
                 // `(args)` — call
                 Some(TokenKind::LParen) => {
-                    let args = self.parse_call_args()?;
-                    let end_span = self.peek().map(|t| t.span).unwrap_or(span_start);
+                    let (args, end_span) = self.parse_call_args()?;
                     let span = span_start.cover(end_span);
                     expr = Expr::Call {
                         callee: Box::new(expr),
@@ -277,7 +276,105 @@ impl<'src> Parser<'src> {
                 _ => break,
             }
         }
+        // Poetic call: `callee arg` on the same line (one argument, no nesting).
+        // Only apply when the left-hand side looks callable — never for literals
+        // (so `repeat 3 times` keeps the contextual `times` keyword).
+        if self.allow_poetic
+            && is_poetic_callee(&expr)
+            && self.same_line_as_span_end(expr.span())
+            && self.can_start_poetic_arg()
+        {
+            expr = self.parse_poetic_call(expr)?;
+        }
         Some(expr)
+    }
+
+    /// Parse a single poetic argument and wrap as `Call`. Nested poetic is an error.
+    fn parse_poetic_call(&mut self, callee: Expr) -> Option<Expr> {
+        let span_start = callee.span();
+        let prev = self.allow_poetic;
+        self.allow_poetic = false;
+        let arg = self.parse_expr();
+        self.allow_poetic = prev;
+        let arg = arg?;
+        // Leftover same-line expression start ⇒ nested poetic (`print greet name`).
+        if self.same_line_as_span_end(arg.span()) && self.can_start_poetic_arg() {
+            let bad = self.current_span();
+            self.error(
+                "parse.poetic_call_nested",
+                "nested poetic call is not allowed; use parentheses for the inner call",
+                bad,
+            );
+            // Recovery: consume one more expression so later tokens stay aligned.
+            let _ = {
+                let prev = self.allow_poetic;
+                self.allow_poetic = false;
+                let e = self.parse_expr();
+                self.allow_poetic = prev;
+                e
+            };
+        }
+        let arg_span = arg.span();
+        Some(Expr::Call {
+            callee: Box::new(callee),
+            args: vec![Arg {
+                label: None,
+                value: ArgValue::Expr(Box::new(arg)),
+                span: arg_span,
+            }],
+            span: span_start.cover(arg_span),
+        })
+    }
+
+    fn can_start_poetic_arg(&self) -> bool {
+        // Note: deliberately exclude `Minus` — it is also binary subtraction
+        // (`width - s_len` must not become a poetic call). Use `f(-1)` / `f (-1)`
+        // when the poetic argument is a negated literal/expression.
+        matches!(
+            self.peek_kind(),
+            Some(
+                TokenKind::Ident
+                    | TokenKind::Lazy
+                    | TokenKind::IntLit
+                    | TokenKind::FloatLit
+                    | TokenKind::StrLit
+                    | TokenKind::TripleStrLit
+                    | TokenKind::FStrLit
+                    | TokenKind::TripleFStrLit
+                    | TokenKind::BytesLit
+                    | TokenKind::True
+                    | TokenKind::False
+                    | TokenKind::None
+                    | TokenKind::Some
+                    | TokenKind::Success
+                    | TokenKind::ErrorKw
+                    | TokenKind::SelfKw
+                    | TokenKind::LParen
+                    | TokenKind::LBracket
+                    | TokenKind::LBrace
+                    | TokenKind::Not
+                    | TokenKind::If
+                    | TokenKind::Do
+                    | TokenKind::Set
+                    | TokenKind::Tuple
+                    | TokenKind::Dot
+                    | TokenKind::StringTy
+                    | TokenKind::IntTy
+                    | TokenKind::Int8Ty
+                    | TokenKind::Int16Ty
+                    | TokenKind::Int32Ty
+                    | TokenKind::Int64Ty
+                    | TokenKind::U8Ty
+                    | TokenKind::U16Ty
+                    | TokenKind::U32Ty
+                    | TokenKind::U64Ty
+                    | TokenKind::FloatTy
+                    | TokenKind::Float32Ty
+                    | TokenKind::Float64Ty
+                    | TokenKind::BoolTy
+                    | TokenKind::BytesTy
+            )
+        )
     }
 
     fn numeric_literal_raw_with_adjacent_suffix(&mut self, initial_span: Span) -> (SmolStr, Span) {
@@ -409,8 +506,11 @@ impl<'src> Parser<'src> {
                 })
             }
 
-            // Grouped expression or tuple `(a, b)` or `(a)`
+            // Closure `(params) => expr` / `(params) … end`, or grouped/tuple `(a)` / `(a, b)`.
             TokenKind::LParen => {
+                if self.looks_like_closure() {
+                    return self.parse_closure_expr(span);
+                }
                 self.advance();
                 if self.at(&TokenKind::RParen) {
                     // `()` — empty tuple
@@ -495,9 +595,15 @@ impl<'src> Parser<'src> {
                 })
             }
 
-            // `do(params) -> T => expr` or `do(params) … end`
+            // S3: `do(...)` closures removed — canonical form is `(params) => …`.
             TokenKind::Do => {
-                self.advance();
+                let do_span = self.advance().unwrap().span;
+                self.error(
+                    "parse.do_removed",
+                    "`do` closures were removed; write `(params) => expr` or `(params) … end`",
+                    do_span,
+                );
+                // Recovery: still parse the parameter list/body so later code typechecks.
                 self.parse_closure_expr(span)
             }
 
@@ -598,7 +704,9 @@ impl<'src> Parser<'src> {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    fn parse_call_args(&mut self) -> Option<Vec<Arg>> {
+    /// Parse `(args)` including the closing `)`. Returns args and the `)` span
+    /// (must not use the following token — poetic call relies on accurate end spans).
+    fn parse_call_args(&mut self) -> Option<(Vec<Arg>, ori_diagnostics::Span)> {
         self.expect(&TokenKind::LParen)?;
         let mut args = Vec::new();
         while !self.at(&TokenKind::RParen) && !self.at_eof() {
@@ -625,8 +733,8 @@ impl<'src> Parser<'src> {
                 break;
             }
         }
-        self.expect(&TokenKind::RParen)?;
-        Some(args)
+        let end = self.expect(&TokenKind::RParen)?;
+        Some((args, end))
     }
 
     fn parse_call_arg_value(
@@ -1110,12 +1218,19 @@ impl<'src> Parser<'src> {
         while !self.at(&TokenKind::RParen) && !self.at_eof() {
             let pspan = self.current_span();
             let name = self.parse_name()?;
-            self.expect(&TokenKind::Colon)?;
-            let ty = self.parse_type()?;
+            let ty = if self.eat(&TokenKind::Colon) {
+                Some(self.parse_type()?)
+            } else {
+                None
+            };
+            let end = ty
+                .as_ref()
+                .map(|t| t.span())
+                .unwrap_or(name.span);
             params.push(ClosureParam {
                 name,
                 ty,
-                span: pspan.cover(self.current_span()),
+                span: pspan.cover(end),
             });
             if !self.eat(&TokenKind::Comma) {
                 break;
@@ -1127,16 +1242,15 @@ impl<'src> Parser<'src> {
         } else {
             None
         };
-        // `=> expr` for single-expression closures
+        // `=> expr` for single-expression closures; otherwise statement block + `end`.
         let (body, end) = if self.eat(&TokenKind::FatArrow) {
             let e = self.parse_expr()?;
             let s = e.span();
             (ClosureBody::Expr(Box::new(e)), s)
         } else {
             let block = self.parse_block()?;
-            let s = block.span;
-            self.expect_block_end(start, "closure")?;
-            (ClosureBody::Block(block), s)
+            let end_span = self.expect_block_end(start, "closure")?;
+            (ClosureBody::Block(block), end_span)
         };
         Some(Expr::Closure(Box::new(ClosureExpr {
             params,
@@ -1145,6 +1259,135 @@ impl<'src> Parser<'src> {
             span: start.cover(end),
         })))
     }
+
+    /// True when `(` starts a S3 closure `(params) => …` / `(params) … end`.
+    fn looks_like_closure(&self) -> bool {
+        if self.peek_kind() != Some(&TokenKind::LParen) {
+            return false;
+        }
+        let mut i = self.next_non_trivia(self.pos + 1);
+        // Empty parameter list: `() =>` / `() ->` / `() … end`
+        if self.token_kind_at(i) == Some(&TokenKind::RParen) {
+            i = self.next_non_trivia(i + 1);
+            return self.closure_suffix_at(i);
+        }
+        // Params: IDENT [":" type] { "," IDENT [":" type] }
+        loop {
+            if self.token_kind_at(i) != Some(&TokenKind::Ident) {
+                return false;
+            }
+            i = self.next_non_trivia(i + 1);
+            if self.token_kind_at(i) == Some(&TokenKind::Colon) {
+                i = self.next_non_trivia(i + 1);
+                i = self.skip_type_like_tokens(i);
+            }
+            match self.token_kind_at(i) {
+                Some(TokenKind::Comma) => {
+                    i = self.next_non_trivia(i + 1);
+                    continue;
+                }
+                Some(TokenKind::RParen) => {
+                    i = self.next_non_trivia(i + 1);
+                    return self.closure_suffix_at(i);
+                }
+                _ => return false,
+            }
+        }
+    }
+
+    fn closure_suffix_at(&self, i: usize) -> bool {
+        match self.token_kind_at(i) {
+            Some(TokenKind::FatArrow) | Some(TokenKind::Arrow) => true,
+            // Long form: only commit when the body clearly starts with a statement
+            // keyword. Bare `Ident` after `(a)` is the next statement, not a closure.
+            Some(
+                TokenKind::Const
+                | TokenKind::Var
+                | TokenKind::Return
+                | TokenKind::If
+                | TokenKind::While
+                | TokenKind::For
+                | TokenKind::Repeat
+                | TokenKind::Loop
+                | TokenKind::Match
+                | TokenKind::Using
+                | TokenKind::Check
+                | TokenKind::Break
+                | TokenKind::Continue,
+            ) => true,
+            _ => false,
+        }
+    }
+
+    fn token_kind_at(&self, index: usize) -> Option<&TokenKind> {
+        self.tokens.get(index).map(|t| &t.kind)
+    }
+
+    fn next_non_trivia(&self, mut index: usize) -> usize {
+        while index < self.tokens.len() && self.tokens[index].is_trivia() {
+            index += 1;
+        }
+        index
+    }
+
+    /// Advance index past a type-shaped token sequence (paren/bracket depth aware).
+    fn skip_type_like_tokens(&self, mut i: usize) -> usize {
+        let mut paren = 0i32;
+        let mut bracket = 0i32;
+        let mut saw_any = false;
+        while i < self.tokens.len() {
+            if self.tokens[i].is_trivia() {
+                i += 1;
+                continue;
+            }
+            match self.tokens[i].kind {
+                TokenKind::Comma | TokenKind::RParen if paren == 0 && bracket == 0 && saw_any => {
+                    return i;
+                }
+                TokenKind::LParen => {
+                    paren += 1;
+                    saw_any = true;
+                    i += 1;
+                }
+                TokenKind::RParen => {
+                    if paren == 0 {
+                        return i;
+                    }
+                    paren -= 1;
+                    i += 1;
+                }
+                TokenKind::LBracket => {
+                    bracket += 1;
+                    saw_any = true;
+                    i += 1;
+                }
+                TokenKind::RBracket => {
+                    bracket = bracket.saturating_sub(1);
+                    i += 1;
+                }
+                TokenKind::FatArrow if paren == 0 && bracket == 0 => return i,
+                _ => {
+                    saw_any = true;
+                    i += 1;
+                }
+            }
+        }
+        i
+    }
+}
+
+/// Callees eligible for poetic juxtaposition (`print name`, `io.print x`).
+fn is_poetic_callee(expr: &Expr) -> bool {
+    matches!(
+        expr,
+        Expr::Ident(_)
+            | Expr::QualifiedIdent(_)
+            | Expr::Field { .. }
+            | Expr::Call { .. }
+            | Expr::Index { .. }
+            | Expr::TupleIndex { .. }
+            | Expr::SelfExpr(_)
+    )
 }
 
 fn hex_value(ch: char) -> Option<u8> {

@@ -62,6 +62,9 @@ when the compiler starts producing it.
 | `parse.question_propagate_removed` | error | Source used removed postfix `?` propagation; use `try expr` |
 | `parse.else_if_removed` | error | Source used removed `else if`; use `elif` for chained conditionals |
 | `parse.case_dot_variant_removed` | error | Source used removed leading `.` on a match enum variant; write `case Variant` / `case Variant(...)` |
+| `parse.poetic_call_nested` | error | Nested poetic call (juxtaposition of calls without parentheses) is not allowed; at most one poetic verb per expression |
+| `parse.end_label_mismatch` | error | Optional labeled `end` (`end if`, `end match`, …) does not match the opening construct |
+| `parse.do_removed` | error | Source used removed `do` closure keyword; write `(params) => expr` or `(params) … end` |
 | `parse.tuple_arity` | error | Tuple type or expression has invalid arity |
 | `parse.unterminated_block` | error | End-delimited block reaches end of file before `end` |
 | `parse.unterminated_string` | error | String literal starts but is not closed |
