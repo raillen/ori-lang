@@ -38,22 +38,20 @@ jobs:
 
       - name: Package (Linux tar.gz + deb)
         env:
-          ORI_USE_SYSTEM_LINKER: "1"
+          # Builder has Rust — use rustc link driver for smoke reliability.
+          # End-user installs still default to SystemLinker (no Rust required).
+          ORI_USE_RUSTC_DRIVER: "1"
           CARGO_TERM_COLOR: always
         run: |
           set -eu
           set -o pipefail
           sudo apt-get update
-          # libc6-dev is required for SystemLinker / cc -lc on multiarch.
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
             build-essential dpkg-dev binutils libc6-dev gcc g++
-          # Preflight: prove the runner can link C (catches missing -lc early).
+          # Preflight: prove the runner can link C.
           printf 'int main(void){return 0;}\n' > /tmp/ori_link_preflight.c
           cc /tmp/ori_link_preflight.c -o /tmp/ori_link_preflight
           /tmp/ori_link_preflight
-          echo "cc finds libc at: $(cc -print-file-name=libc.so)"
-          ls -la "$(cc -print-file-name=libc.so)"
-          # Rustup may export LIBRARY_PATH; system link must not inherit a broken one.
           unset LIBRARY_PATH || true
           unset LIBPATH || true
           tag="${{ github.ref_name }}"
@@ -62,11 +60,9 @@ jobs:
           fi
           version=$(printf '%s' "$tag" | sed 's/^v//')
           echo "tag=$tag version=$version"
-          echo "ORI_USE_SYSTEM_LINKER=${ORI_USE_SYSTEM_LINKER:-}"
-          echo "ORI_SYSTEM_LINKER=${ORI_SYSTEM_LINKER:-}"
-          which cc gcc ld
+          echo "ORI_USE_RUSTC_DRIVER=${ORI_USE_RUSTC_DRIVER:-}"
+          which rustc cc gcc ld
           mkdir -p compiler/target/dist
-          # Stream full package log; pipefail keeps the package script exit code.
           if ! env -u LIBRARY_PATH -u LIBPATH \
             bash tools/package_native_release.sh \
             --package-root "compiler/target/dist/ori-x86_64-unknown-linux-gnu" \
