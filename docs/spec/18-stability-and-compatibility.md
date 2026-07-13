@@ -32,10 +32,12 @@ contrato publico:
 Mudancas nesses pontos devem ser documentadas no `CHANGELOG.md` e precisam de
 teste de regressao.
 
-## Contrato binario nativo (M3)
+## Contrato binario nativo (M3 + ABI-1)
 
 O backend nativo documenta o ABI em [`19-abi.md`](19-abi.md) sob a tag
-**`ori-native-abi-1`** (`ORI_ABI_VERSION` no `ori-runtime`). Isso inclui:
+**`ori-native-abi-1`** (`ORI_ABI_VERSION` no `ori-runtime`). **ABI-1 esta em
+vigor** com a janela FREEZE-1 (ver `docs/planning/freeze-and-abi-gates.md`).
+Isso inclui:
 
 - layouts de primitivos, structs, enums (tag `i32`), `optional`/`result`/tuples;
 - header ARC (`OriHeapHeader`) e simbolos `ori_alloc` / `ori_arc_*`;

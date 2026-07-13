@@ -1,17 +1,25 @@
 # Roadmap de Execução Detalhado para a v1.0 (Ori Language)
 
-Este documento contém o escopo técnico definitivo, faseado e acionável, contendo os *checklists* exatos de tarefas que devem ser executadas para atingir a maturidade 1.0 da linguagem Ori.
+> **⚠️ Superseded for open work.**  
+> Active backlog with priorities, difficulty, and dependencies:  
+> **[`BACKLOG.md`](BACKLOG.md)**.  
+> This file remains as an **aspirational 1.0 sketch**; checkboxes below may be
+> stale. Map old “Fase N” ideas to BACKLOG IDs (e.g. HTTP → `STDLIB-2`, git deps
+> → `PKG-1`/`PKG-2`, C-async → `LANG-3` wontfix-for-v1).
+
+Este documento continha o escopo técnico faseado para 1.0. **Não** use estas
+listas como prioridade tática.
 
 ## Fase 1: Portabilidade da Stdlib (`.orl`) e Achatamento de Namespaces
 A meta é reescrever **100% da biblioteca padrão** (exceto as primitivas intocáveis de *Layer 1* como ARC e Executor Async) em arquivos `.orl`.
 Além disso, para melhorar a ergonomia, **eliminaremos sub-módulos verborrágicos como `.utils` e `.algorithms`**. Funções como `sort`, `reverse`, `trim`, ou `split` serão realocadas para dentro da biblioteca pai (ex: `ori.string`, `ori.list`), permitindo imports diretos e uso natural.
 
 ### Tarefas de Execução:
-- [ ] **1.1. Refatoração de Namespaces (Fim dos sub-módulos vazados)**
-  - [ ] Mover funções de `ori.list.algorithms` e `ori.list.utils` para dentro de `ori.list`.
-  - [ ] Mover funções de `ori.string.utils` para dentro de `ori.string`.
-  - [ ] Mover funções auxiliares de Dicionários/Maps para dentro de `ori.map`.
-- [ ] **1.2. Lowering para Código Ori (Migração de C/Rust para `.orl`)**
+- [x] **1.1. Refatoração de Namespaces (Fim dos sub-módulos vazados)** — **STDLIB-1 done**
+  (canonical `ori.X`; nested utils/algorithms silent compat; see BACKLOG + merge policy)
+  - [x] Helpers em pais `ori.list` / `ori.string` / `ori.map` (e demais domínios)
+  - [x] Paths nested ainda compilam; não são API nova
+- [ ] **1.2. Lowering para Código Ori (Migração de C/Rust para `.orl`)** — maps to **STDLIB-5**
   - [ ] Escrever o módulo `ori.string` completo em Ori (chamando primitivas C no hot-path).
   - [ ] Escrever o módulo `ori.list` completo em Ori.
   - [ ] Escrever o módulo `ori.map` completo em Ori.
@@ -29,6 +37,7 @@ Além disso, para melhorar a ergonomia, **eliminaremos sub-módulos verborrágic
 A infraestrutura para consumir código de terceiros pelo GitHub de forma descentralizada.
 
 ### Tarefas de Execução:
+- [x] **Git deps (PKG-1/2)** — `{ git = ... }` + `ori get` + resolve no check/build (2026-07-13)
 - [ ] **2.1. Definição do Esquema `.oriproj`**
   - [ ] Implementar o parser de arquivos TOML (se não existir, criar um rudimentar ou usar *binding*) no compilador para ler `.oriproj`.
   - [ ] Definir a estrutura: `[project]` (nome, versão) e `[dependencies]` (alias, url do git, tag/branch).

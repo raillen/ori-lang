@@ -1,57 +1,75 @@
-# Errors, Null, Void — mapa mental Ori
+# Errors, optional, void — mental model
 
-> Guia pedagógico (superfície **S3 / `0.3.0`** + inferência local `0.3.1`/B).  
-> Normativo: [09-errors](../spec/09-errors.md), [04-types](../spec/04-types.md), [01-overview](../spec/01-overview.md).
+> Pedagogical guide (surface **S3 / 0.3.2**).  
+> **Portuguese:** [errors-null-void.pt-BR.md](errors-null-void.pt-BR.md)  
+> Normative: [09-errors](../spec/09-errors.md), [04-types](../spec/04-types.md)
 
-## Quatro conceitos, quatro papéis
+## Four concepts
 
-| Conceito | Papel | Quando usar |
-|----------|--------|-------------|
-| **`void`** | “Nada útil retornado” | Tipo de retorno de `main() -> void`, side effects only |
-| **`optional[T]`** | “Pode não haver valor” | Parsing, lookup, EOF — ausência **não** é erro |
-| **`result[T, E]`** | “Sucesso ou falha explícita” | I/O, validação, APIs que podem falhar com motivo |
-| **`check`** | Pré-condição / contrato | Invariantes em runtime (`check cond, "msg"`) |
+| Concept | Role | When |
+|---------|------|------|
+| **`void`** | No useful return | Side-effect functions |
+| **`optional[T]`** | Value may be absent | Lookup, EOF — absence is not failure |
+| **`result[T, E]`** | Success or failure with reason | I/O, validation |
+| **`check`** | Runtime precondition | Invariants |
 
-Ori **não tem null**. Use `none` dentro de `optional[T]` ou `err(...)` dentro de `result[T, E]`.
+Ori has **no null**. Use `none` or `err(...)`.
 
 ## `void`
 
 ```ori
+module app.main
+
+import ori.io = io
+
 greet() -> void
     io.println("hello")
 end
-```
 
-- Não confunda com `optional`: `void` não é um valor que você armazena.
-- Descartar `result` sem tratar emite `type.unused_result` (warning).
+main()
+    greet()
+end
+```
 
 ## `optional[T]`
 
 ```ori
+module app.main
+
 find_user(id: int) -> optional[string]
     if id == 0
         return none
     end
     return some("alice")
 end
+
+main()
+    match find_user(1)
+        case some(name):
+            -- use name
+        case none:
+    end
+end
 ```
 
-- `none` = ausência esperada.
-- `if some(x) = expr` / `match` desempacota com segurança.
-- **`try expr`** em `optional` propaga `none` (ver cap. 09). Postfix `expr?` foi
-  **removido** no S3 (`parse.question_propagate_removed`).
+- Unpack with `if some(x) = expr` or `match`.
+- `try` on optional propagates `none`.
+- Postfix `?` was **removed** in S3.
 
 ## `result[T, E]`
 
 ```ori
+module app.main
+
+import ori.fs = fs
+
 read_config(path: string) -> result[string, string]
     return fs.read_text(path)
 end
 ```
 
-- `ok(value)` ou `err(reason)`.
-- Trate com `match`, **`try expr`**, ou helpers Layer 2 (`parse_int_or`, `get_or`).
-- Preferir `result` a `bool` para operações que falham.
+- Build with **`ok(value)`** / **`err(reason)`** (not `success` / `error`).
+- Handle with `match` or **`try expr`**.
 
 ## `check`
 
@@ -62,25 +80,20 @@ divide(a: int, b: int) -> int
 end
 ```
 
-- Falha de contrato aborta com diagnóstico runtime (não é `result`).
-- Diferente de `if`: `check` documenta invariantes.
+Fails the process on broken contracts; it is not a `result`.
 
-## Comparativo rápido
+## Quick map
 
-| Situação | Tipo / construção |
-|----------|-------------------|
-| Função só imprime | `-> void` |
-| “Não achei” sem erro | `optional[T]` + `none` |
-| Falha com mensagem | `result[T, string]` |
-| Pré-condição que deve ser verdade | `check` |
-
-## Ferramentas DX
+| Situation | Use |
+|-----------|-----|
+| Print only | `-> void` |
+| “Not found”, not an error | `optional[T]` |
+| Failure with message | `result[T, string]` |
+| Must always be true | `check` |
 
 ```bash
 ori explain name.undefined
-ori explain type.type_mismatch
 ori doctor
-ori summary path/to/main.orl
 ```
 
-Ver catálogo completo: [`13-error-catalog.md`](../spec/13-error-catalog.md).
+Catalog: [13-error-catalog.md](../spec/13-error-catalog.md).

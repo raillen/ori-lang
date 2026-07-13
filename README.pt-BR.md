@@ -11,9 +11,16 @@ Ori ainda é pre-1.0. O projeto já é útil para trabalho em compilador, design
 linguagem, ferramentas e runtime, mas a linguagem ainda pode mudar antes de um
 contrato estável 1.0.
 
-**Idiomas:** [English](README.md) | Português | [日本語](README.ja.md)
+**Idiomas:** [English](README.md) (primário no GitHub) | Português | [日本語](README.ja.md)
 
-**Menu do projeto:** [Manifesto](docs/spec/00-manifesto.md) | [Especificação](docs/spec/README.md) | [Planejamento](docs/planning/README.md) | [Biblioteca padrão](stdlib/README.md) | [Runtime](runtime/README.md) | [Exemplos](examples/) | [Changelog](CHANGELOG.md) | [Contribuição](CONTRIBUTING.md)
+**Documentação:** [Índice de docs](docs/README.pt-BR.md) · [Instalação](docs/install.pt-BR.md) ·
+[Tour da linguagem](docs/language/tour.pt-BR.md) · [Guias](docs/guides/README.md) ·
+[Especificação](docs/spec/README.md) (normativa em inglês) ·
+[Planejamento](docs/planning/README.md)
+
+**Também:** [Manifesto](docs/spec/00-manifesto.md) · [Stdlib](stdlib/README.md) ·
+[Runtime](runtime/README.md) · [Exemplos](examples/) · [Changelog](CHANGELOG.md) ·
+[Contribuição](CONTRIBUTING.md)
 
 ## Conteúdo
 
@@ -81,23 +88,19 @@ inferência menores e mensagens de erro mais claras.
 
 | Área | Status |
 |---|---|
-| Versão | **Superfície de linguagem `0.3.0` (corte S3)**; pacote Cargo pode permanecer `0.2.0` até a tag de release |
-| Estabilidade | pre-1.0; S3 quebra a sintaxe 0.2; mudanças futuras ainda possíveis |
-| Compilador | workspace Rust com lexer, parser, HIR, checker, codegen, diagnósticos, LSP, driver e runtime |
-| Backend nativo | código objeto Cranelift mais runtime nativo Ori |
-| `ori run` | JIT por padrão quando a cdylib do runtime está disponível; AOT pode ser forçado |
-| `ori compile` | geração AOT de binário nativo; rota de link depende da estratégia configurada |
-| Backend C | rota de debug/transpile com paridade parcial |
-| Biblioteca padrão | primitivas de runtime Layer 1 mais wrappers e algoritmos `.orl` Layer 2/3 |
-| Ferramentas | CLI, formatter, catálogo de diagnósticos, export de docs, LSP, extensão VS Code |
-| Testes | suíte do workspace e smoke de release nativa fazem parte do gate do projeto |
+| Versão | **S3 `0.3.0`** · inferência B **`0.3.1`** · package/M1 **`0.3.2`** (Cargo) |
+| Estabilidade | pre-1.0; S3 quebra sintaxe pré-0.3 |
+| Compilador | workspace Rust em `compiler/` |
+| Backend nativo | Cranelift AOT + `ori-runtime`; ABI `ori-native-abi-1` |
+| `ori run` | JIT por padrão com cdylib |
+| `ori compile` / `ori test` | AOT; **SystemLinker** default |
+| Biblioteca padrão | Layer 1 + `.orl`; API canônica `ori.X` |
+| Docs | inglês primário + português paralelo · [examples/](examples/) |
+| Foco agora | Linguagem, docs/exemplos, performance — não marketing multi-OS |
+| Editores | VS Code + Zed **locais** (sem loja) |
 
-S3 **foi** essa quebra visível ao usuário (documentada no
-[CHANGELOG.md](CHANGELOG.md) `[0.3.0]`). Inferência local estilo Nim é **`0.3.1`**,
-ampliada pela **opção B** (omitir tipo em campo / index / call / pipe com tipo
-concreto). O operador pipe `|>` **permanece** suportado. Migração mecânica:
-`ori migrate-syntax`. Workspace Cargo em **`0.3.1`**; package de distribuição
-ainda adiado.
+S3: [CHANGELOG.md](CHANGELOG.md) `[0.3.0]`. Inferência: `[0.3.1]`. Package sem
+Rust: `[0.3.2]`. Migrar: `ori migrate-syntax`.
 
 ## Primeiros passos
 
@@ -149,7 +152,7 @@ end
 Execute pelo repositório:
 
 ```bash
-cargo run -p ori-driver -- run examples/hello_world.orl
+cargo run -p ori-driver -- run ../examples/hello
 ```
 
 Ori usa blocos delimitados por `end`, declarações separadas por linha, imports
@@ -174,8 +177,11 @@ A CLI `ori` é implementada em `compiler/crates/ori-driver`.
 | `ori build <file.orl>` | emite C pelo backend de debug |
 | `ori lex <file.orl>` | imprime tokens para debug do compilador |
 | `ori parse <file.orl>` | imprime AST para debug do compilador |
-| `ori install <name>` | placeholder de registry; ainda indisponível |
-| `ori publish <path>` | placeholder de registry; ainda indisponível |
+| `ori install <name> --path <dir>` | instala pacote local no cache |
+| `ori install name[@ver]` | instala de `ORI_REGISTRY` |
+| `ori get [path]` | busca deps git/path do manifesto |
+| `ori publish <path>` | publica em `ORI_REGISTRY` (árvore de arquivos ou HTTP) |
+| `ori migrate-syntax <paths…>` | reescreve sintaxe pré-S3 → S3 |
 
 Variáveis úteis:
 
@@ -281,32 +287,17 @@ Veja [stdlib/README.md](stdlib/README.md) para o inventário atual e
 
 ## Ferramentas de editor
 
-Ori inclui um servidor LSP e uma extensão VS Code em
-[extensions/vscode-orl](extensions/vscode-orl/).
+`ori-lsp` + extensões **locais** (sem Marketplace / loja por agora):
 
-Ferramentas implementadas:
-
-- diagnósticos do parser, resolver e type checker;
-- hover, go-to-definition, find references e rename;
-- semantic tokens, document symbols, workspace symbols e inlay hints;
-- dot completion baseada em tipo;
-- hover/completion/goto cientes da stdlib Layer 1 e Layer 2;
-- formatting, code actions, code lens e signature help;
-- sync incremental de documento;
-- comandos VS Code para check, run, test, format, doctor e summary.
-
-Build local da extensão:
+| Editor | Caminho | Instalação |
+|--------|---------|------------|
+| VS Code / Cursor | [extensions/vscode-orl](extensions/vscode-orl/) | `.vsix` local |
+| Zed | [extensions/zed-ori](extensions/zed-ori/) | dev extension |
 
 ```bash
-cd extensions/vscode-orl
-npm install
-npm run compile
-```
-
-Antes, gere o language server:
-
-```bash
-cargo build -p ori-lsp -p ori-driver
+cd compiler && cargo build -p ori-lsp -p ori-driver
+cd ../extensions/vscode-orl && npm install && npm run compile
+# coloque compiler/target/debug no PATH para ori-lsp
 ```
 
 ## Layout do repositório
@@ -318,9 +309,9 @@ ori-lang/
   docs/planning/          roadmap, backlog e planos de implementação
   stdlib/                 módulos fonte da biblioteca padrão
   runtime/                artefatos de runtime por target triple
-  examples/               programas Ori de exemplo
+  examples/               programas Ori de exemplo (S3)
   tests/                  fixtures E2E e documentação de testes
-  extensions/vscode-orl/  extensão VS Code
+  extensions/             DX local (vscode-orl, zed-ori)
   tools/                  scripts de staging, smoke, export e validação
   branding/               assets de marca
   _reversa_sdd/           auditorias históricas de engenharia reversa
@@ -392,35 +383,26 @@ macOS x86_64 e macOS aarch64. Detalhes de staging ficam em
 
 ## Limitações conhecidas
 
-Limitações atuais de pre-1.0:
-
-- Ori ainda não é self-hosting.
-- `ori compile` é uma rota AOT e ainda depende de uma estratégia de linker
-  funcional.
-- O backend C é parcial e existe para debug.
-- `ori install` e `ori publish` são stubs de registry.
-- `ori repl` ainda está no backlog.
-- Algumas formas avançadas de async ainda estão documentadas como known issues
-  no plano de maturidade.
+- Ori ainda não é self-hosting (M4 adiado).
+- `ori compile` (AOT) precisa do linker do SO; `ori run` usa JIT por padrão.
+- Compilar Ori a partir do fonte exige Rust; package **Linux** de release não.
+- Backend C é parcial (debug); sem async em C.
+- Protocolo de pacotes/registry existe; marketplace público **não** é meta agora.
+- Lojas de extensão (VS Code / Zed) **shelved** — use install local / dev.
+- `ori repl` é deliberadamente pequeno.
 - Contratos públicos ainda podem mudar antes de 1.0.
 
-Veja [docs/planning/PENDENTES.md](docs/planning/PENDENTES.md) e
-[docs/planning/historico/PLANO-MATURIDADE-COMPLETO.md](docs/planning/historico/PLANO-MATURIDADE-COMPLETO.md)
-para o backlog ativo.
+**Lista única do que falta:** [docs/planning/BACKLOG.md](docs/planning/BACKLOG.md).
 
 ## Roadmap
 
-Critérios técnicos de longo prazo para 1.0 (ordem **stdlib → ABI →
-independência do Rust → self-host por último**):
+**Agora:** linguagem + docs/exemplos honestos + performance.
 
-1. consolidar a stdlib (Layer 2/3 em `.orl`; mesclagem a discutir) — **próximo**;
-2. documentar ABI estável após integrar as features finais;
-3. fechar independência do Rust no caminho do instalador (JIT + SystemLinker
-   já cobrem a maior parte; smoke/CI sem Rust depois);
-4. self-hosting ou bootstrap documentado — **última** discussão de linguagem;
-5. estabilidade de contrato (ex. janela sem breaking) ao aproximar 1.0.
+**Já entregue nos critérios de 1.0:** stdlib pais (M2), ABI `ori-native-abi-1`
+(M3), caminho sem Rust no instalador Linux (M1).
 
-Backlog ativo: `docs/planning/PENDENTES.md` (M2 → M3 → M1 → M4).
+**Depois (shelved):** multi-OS packages, publish em lojas, demos externos,
+self-host (M4 por último).
 
 ## Licença
 

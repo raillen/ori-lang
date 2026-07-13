@@ -1,123 +1,102 @@
-# Instalação de Ori
+# Installing Ori
 
-> **Público-alvo:** usuários finais que querem instalar Ori para desenvolver programas, **sem** clonar o repositório e **sem** a toolchain Rust.  
-> **M1 (fechado):** o caminho suportado é package + linker do SO (AOT) ou package + JIT (`ori run`).
+> **Audience:** end users who want to write Ori programs **without** cloning this
+> repository and **without** a Rust toolchain.  
+> **Portuguese:** [install.pt-BR.md](install.pt-BR.md)  
+> **Surface:** S3 · package **v0.3.2** · M1 (Rust-free install path) complete
 
-## Requisitos do sistema
+## System prerequisites
 
-Ori usa o **linker nativo do sistema** para AOT (`ori compile`, `ori test`).  
-Para JIT (`ori run`), nenhum linker é necessário — apenas o runtime empacotado (`runtime/<triple>/` ao lado do `ori`).
+Ori uses the **OS native linker** for AOT (`ori compile`, `ori test`).  
+For JIT (`ori run`), no linker is required — only the packaged runtime next to
+the `ori` binary (`runtime/<triple>/`).
 
 ### Windows (10/11)
 
-**Pré-requisito:** Visual Studio Build Tools ou Visual Studio Community com a workload **"Desktop development with C++"**.
+**Requirement:** Visual Studio Build Tools or Visual Studio Community with the
+**"Desktop development with C++"** workload.
 
 ```powershell
 winget install Microsoft.VisualStudio.2022.BuildTools
 ```
 
-Ou o installer em [visualstudio.microsoft.com/downloads](https://visualstudio.microsoft.com/downloads/) com a workload **"Desktop development with C++"**.
+Or the installer at [visualstudio.microsoft.com/downloads](https://visualstudio.microsoft.com/downloads/).
 
-**Por quê:** Ori usa `link.exe` (MSVC) para binários nativos.
+**Why:** AOT uses MSVC `link.exe`.
 
-**Não é necessário:** Rust (`rustc`, `cargo`), nem `rust-lld` (o default é o linker do sistema).
+**Not required:** Rust (`rustc`, `cargo`), or `rust-lld` (SystemLinker is the default).
 
----
+### Linux
 
-### Linux (Debian, Ubuntu, Fedora, Arch, …)
-
-**Pré-requisito:** `build-essential` (ou `gcc` + `ld` + headers da libc).
-
-**Debian / Ubuntu:**
+**Requirement:** `build-essential` (or `gcc` + `ld` + libc headers).
 
 ```bash
-sudo apt update
-sudo apt install build-essential
-```
+# Debian / Ubuntu
+sudo apt update && sudo apt install build-essential
 
-**Fedora / RHEL:**
-
-```bash
+# Fedora / RHEL
 sudo dnf install gcc gcc-c++ make glibc-devel
-```
 
-**Arch:**
-
-```bash
+# Arch
 sudo pacman -S base-devel
 ```
 
-**Não é necessário:** Rust.
+**Not required:** Rust.
 
----
+### macOS
 
-### macOS (Intel e Apple Silicon)
-
-**Pré-requisito:** Xcode Command Line Tools.
+**Requirement:** Xcode Command Line Tools.
 
 ```bash
 xcode-select --install
 ```
 
-**Não é necessário:** Rust, Xcode completo, nem `rust-lld`.
+**Not required:** full Xcode, Rust, or `rust-lld`.
 
 ---
 
-## Download e instalação
+## Download and install
 
-### Via release package (recomendado)
+### Release package (recommended)
 
-1. Baixe o artefato do [GitHub Releases](https://github.com/raillen/ori-lang/releases) para o seu OS. Exemplo **v0.3.2**:
-   - Windows: `ori-v0.3.2-x86_64-pc-windows-msvc.zip`
-   - Linux: `ori-v0.3.2-x86_64-unknown-linux-gnu.tar.gz`
-   - macOS: ainda não empacotado no release pipeline (use build a partir do source ou estenda `release.yml`)
+> **Shipping policy (2026-07-13):** official **release packages are Linux-only**
+> (`x86_64-unknown-linux-gnu`). Windows/macOS packages are deferred (BACKLOG
+> DIST-1/2). On those OSes, use **build from source** below.
 
-2. Extraia em um diretório (ex.: `~/ori`, `C:\Tools\ori`).
+1. Download from [GitHub Releases](https://github.com/raillen/ori-lang/releases).
+   Example **v0.3.2**:
+   - **Linux (shipped):** `ori-v0.3.2-x86_64-unknown-linux-gnu.tar.gz`
+   - Windows / macOS: build from source (release zip/tar not published yet)
 
-3. Conteúdo esperado do package:
+2. Extract to a directory (e.g. `~/ori`, `C:\Tools\ori`).
 
-   | Caminho | Função |
-   |---------|--------|
+3. Expected layout:
+
+   | Path | Role |
+   |------|------|
    | `ori` / `ori.exe` | CLI |
-   | `ori-lsp` / `ori-lsp.exe` | servidor LSP |
-   | `stdlib/` | módulos `.orl` Layer 2/3 |
+   | `ori-lsp` / `ori-lsp.exe` | LSP server |
+   | `stdlib/` | Layer 2/3 `.orl` modules |
    | `runtime/<triple>/` | staticlib + cdylib + `runtime-link.json` |
 
-4. Adicione o diretório ao `PATH`:
+4. Put the directory on your `PATH`.
 
-   **Windows (PowerShell):**
-   ```powershell
-   [Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Tools\ori", "User")
-   ```
-
-   **Linux / macOS:**
-   ```bash
-   echo 'export PATH="$HOME/ori:$PATH"' >> ~/.bashrc
-   source ~/.bashrc
-   ```
-
-5. Verifique:
+5. Verify:
 
 ```bash
 ori --version
 ori doctor
 ```
 
-### Verificação com `ori doctor`
-
-Esperado em instalação saudável:
-
-- stdlib root encontrado  
-- runtime estática (AOT) e cdylib (JIT)  
-- triple detectado  
-- estratégia de linker: **SystemLinker** (ou fallback documentado)  
-- `ori run` em modo JIT disponível  
+Healthy install: stdlib found, AOT + JIT runtime present, target triple detected,
+linker strategy **SystemLinker** (or documented fallback), JIT available for
+`ori run`.
 
 ---
 
-## Primeiro programa
+## First program
 
-`hello.orl` (superfície **S3**):
+`hello.orl` (S3):
 
 ```ori
 module app.hello
@@ -129,20 +108,13 @@ main()
 end
 ```
 
-JIT (sem linker):
-
 ```bash
-ori run hello.orl
-```
-
-AOT (precisa do linker do SO):
-
-```bash
-ori compile hello.orl --out hello
+ori run hello.orl                 # JIT — no linker
+ori compile hello.orl --out hello # AOT — needs system linker
 ./hello
 ```
 
-Projeto mínimo (recomendado):
+Recommended project skeleton:
 
 ```bash
 ori new my_app
@@ -150,77 +122,45 @@ cd my_app
 ori run main.orl
 ```
 
----
-
-## Validação local do package (mantenedores)
-
-Com Rust (só para **gerar** o package):
-
-```bash
-# a partir da raiz do repo
-sh tools/package_native_release.sh --force
-```
-
-Sem usar Rust no smoke do package gerado (em máquina de dev com Rust no PATH):
-
-```bash
-sh tools/smoke_no_rust.sh --package-root compiler/target/dist/ori-… --allow-rust-on-path
-```
-
-Em CI, o job `smoke-no-rust` roda **sem** `rustc`/`cargo` no PATH (ver `.github/workflows/native-route.yml`).
+Next: [Language tour](language/tour.md) · [First project](guides/first-project.md) ·
+[Examples](../examples/) · Editors: [VS Code](../extensions/vscode-orl/) ·
+[Zed](../extensions/zed-ori/).
 
 ---
 
-## Variáveis de ambiente (override)
+## Environment overrides
 
-Normalmente **nenhuma** é necessária.
+Usually **none** are needed.
 
-| Variável | Propósito |
-|----------|-----------|
-| `ORI_USE_SYSTEM_LINKER=1` | Força linker do SO |
-| `ORI_SYSTEM_LINKER` | Caminho explícito do linker |
-| `ORI_USE_BUNDLED_RUST_LLD=1` | Força `rust-lld` empacotado |
-| `ORI_USE_RUSTC_DRIVER=1` | Driver `rustc` legacy (não para usuários finais) |
-| `ORI_USE_JIT=1` / `ORI_USE_AOT=1` | Força modo de `ori run` |
-| `ORI_RUNTIME_CDYLIB` / `ORI_RUNTIME_LIB` | Override de runtime |
-| `ORI_STDLIB_ROOT` | Override da stdlib |
-| `ORI_REQUIRE_PACKAGED_RUNTIME=1` | Exige só runtime empacotado (smoke/release) |
+| Variable | Purpose |
+|----------|---------|
+| `ORI_USE_SYSTEM_LINKER=1` | Force OS linker |
+| `ORI_SYSTEM_LINKER` | Explicit linker path |
+| `ORI_USE_BUNDLED_RUST_LLD=1` | Force bundled `rust-lld` |
+| `ORI_USE_RUSTC_DRIVER=1` | Legacy `rustc` driver (not for end users) |
+| `ORI_USE_JIT=1` / `ORI_USE_AOT=1` | Force `ori run` mode |
+| `ORI_RUNTIME_CDYLIB` / `ORI_RUNTIME_LIB` | Runtime path overrides |
+| `ORI_STDLIB_ROOT` | Stdlib path override |
+| `ORI_REQUIRE_PACKAGED_RUNTIME=1` | Package-only runtime (smoke/release) |
 
 ---
 
 ## Troubleshooting
 
-### `native.link_failed` / linker not found
-
-Instale o pré-requisito do SO e confira:
-
-- Windows: `where link.exe`
-- Linux: `ld --version`
-- macOS: `xcrun --find ld`
-
-### Runtime not found
-
-O diretório `runtime/` deve estar ao lado do executável `ori` (layout do package).
-
-### `ori run` ok, `ori compile` falha
-
-JIT não precisa de linker; AOT precisa. Instale o toolchain do SO.
-
-### Extensão VS Code / LSP
-
-Garanta `ori-lsp` no `PATH` ou configure `ori.lsp.path` / `ori.compiler.path` / `ori.stdlib.root`.
+| Symptom | Fix |
+|---------|-----|
+| `native.link_failed` / linker not found | Install OS linker prereqs; check `link.exe` / `ld` / `xcrun --find ld` |
+| Runtime not found | Keep `runtime/` beside `ori` |
+| `ori run` works, `ori compile` fails | Install system linker (AOT only) |
+| VS Code / LSP | Put `ori-lsp` on `PATH` or set `ori.lsp.path` / `ori.compiler.path` / `ori.stdlib.root` |
 
 ---
 
-## Desinstalação
+## Maintainer package smoke
 
-Remova o diretório do package e a entrada no `PATH`.
+```bash
+sh tools/package_native_release.sh --force
+sh tools/smoke_no_rust.sh --package-root compiler/target/dist/ori-… --allow-rust-on-path
+```
 
----
-
-## Veja também
-
-- `docs/spec/19-abi.md` — ABI nativo (`ori-native-abi-1`)
-- `AGENTS.md` — estratégia de independência do Rust (M1)
-- `docs/planning/historico/rust-independence.md` — histórico técnico
-- `tools/smoke_no_rust.sh` — smoke de usuário final
+See [AGENTS.md](../AGENTS.md) and [spec/19-abi.md](spec/19-abi.md) (`ori-native-abi-1`).

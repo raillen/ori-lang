@@ -7,7 +7,7 @@ Este documento define as convenções oficiais para o ecossistema de pacotes da 
 ### 1.1 Reposit�rio no GitHub
 Todos os pacotes criados para a linguagem Ori devem usar o prefixo `ori-` em seus reposit�rios no GitHub para facilitar o _discoverability_ e indicar claramente sua finalidade.
 - **Formato:** `ori-<nome-da-lib>`
-- **Exemplo:** `ori-raylib`, `ori-sqlite` (pacotes de comunidade; `ori-game`/`ori-imgui` **não** fazem parte do produto Ori).
+- **Exemplo (futuro, comunidade):** `ori-raylib`, `ori-sqlite` — **não** são prioridade do core enquanto a linguagem não estiver sólida.
 
 ### 1.2 Nome do Pacote (`ori.pkg.toml`)
 Internamente, o manifesto do pacote (`ori.pkg.toml`) n�o deve conter o prefixo `ori-`. O nome deve ser limpo, refletindo o namespace pelo qual a biblioteca ser� importada no c�digo fonte.

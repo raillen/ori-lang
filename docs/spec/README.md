@@ -4,7 +4,11 @@
 > Status: current  
 > Surface: **S3** (`0.3.0`) + local inference **`0.3.1` / option B** + pipe `|>`
 
-This directory contains implementation-facing specifications for Ori.
+This directory contains **normative** implementation-facing specifications for
+Ori. Language is **English only** (single source of truth). User tutorials live
+under [../guides/](../guides/) and [../language/](../language/) (EN + PT).
+
+Product docs index: [../README.md](../README.md).
 
 Use:
 

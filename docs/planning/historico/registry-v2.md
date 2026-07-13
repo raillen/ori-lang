@@ -1,6 +1,8 @@
 # Ori Package Registry (v2 backlog)
 
-> Status: local package phase implemented (2026-06-30); hosted registry remains future work.
+> Status: **superseded for implementation** by [`../registry-v1.md`](../registry-v1.md)
+> (PKG-3, 2026-07-13: file/HTTP registry + real `ori publish`). This file remains as
+> historical design notes.
 > Audience: tooling implementers, release engineers.
 
 ## Goal

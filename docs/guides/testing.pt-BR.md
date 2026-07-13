@@ -1,11 +1,36 @@
+> Manual de mantenedor (PT). **English (user + contributor summary):** [testing.md](testing.md)
+
 # Manual de testes do Ori
 
 Este manual mostra como executar os testes do projeto Ori.
 
-Use a raiz do repositorio como diretorio atual:
+## Como usuário da linguagem
+
+```ori
+module app.main
+
+import ori.test = test
+
+@test
+adds()
+    test.assert(1 + 1 == 2, "add")
+end
+
+main()
+end
+```
 
 ```bash
-cd C:\Users\raillen.DESKTOP-99RJ5M6\Documents\Projetos\ori-lang
+ori test main.orl
+ori test main.orl --filter adds
+```
+
+## Como contribuinte do compilador
+
+Use a raiz do repositorio e o workspace em `compiler/`:
+
+```bash
+cd /path/to/ori-lang/compiler
 ```
 
 ## Leitura rapida
@@ -13,7 +38,7 @@ cd C:\Users\raillen.DESKTOP-99RJ5M6\Documents\Projetos\ori-lang
 Para validar o projeto inteiro:
 
 ```bash
-cargo check --workspace
+cd compiler && cargo check --workspace
 cargo test --workspace
 ```
 
@@ -85,7 +110,7 @@ Campos do CSV:
 Use estes comandos antes de considerar uma mudanca pronta:
 
 ```bash
-cargo check --workspace
+cd compiler && cargo check --workspace
 cargo test --workspace
 cargo test -p ori-driver --test diagnostic_catalog
 cargo test -p ori-driver --test security_robustness
@@ -343,19 +368,19 @@ cd ..\..
 Checar um arquivo:
 
 ```bash
-cargo run -p ori-driver -- check examples/hello_world.orl
+cargo run -p ori-driver -- check examples/hello
 ```
 
 Rodar via `ori run`:
 
 ```bash
-cargo run -p ori-driver -- run examples/hello_world.orl
+cargo run -p ori-driver -- run examples/hello
 ```
 
 Compilar binario:
 
 ```bash
-cargo run -p ori-driver -- compile examples/hello_world.orl
+cargo run -p ori-driver -- compile examples/hello
 ```
 
 Rodar testes declarados em `.orl`:
@@ -369,7 +394,7 @@ cargo run -p ori-driver -- test caminho/do/arquivo.orl
 Mudanca pequena de parser/checker:
 
 ```bash
-cargo check --workspace
+cd compiler && cargo check --workspace
 cargo test -p ori-driver --test ori_spec
 cargo test -p ori-driver --test diagnostic_catalog
 ```
@@ -400,7 +425,7 @@ cargo test -p ori-driver --test diagnostic_catalog
 Mudanca antes de release:
 
 ```bash
-cargo check --workspace
+cd compiler && cargo check --workspace
 cargo test --workspace
 cargo run -p ori-driver -- run tools/quality_metrics.orl
 ```

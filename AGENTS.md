@@ -30,7 +30,9 @@ Precedência: **este `AGENTS.md` > skills globais > defaults**.
 ### Convenção local que sobrescreve clean-code
 
 - **Identificadores e comentários no código: inglês** (esta matriz do projeto).
-- **Documentação de usuário/spec/planning: português (Brasil)** quando o doc já estiver em PT, ou inglês se o arquivo for EN — manter o idioma do documento existente.
+- **Documentação de usuário (install, guides, language tour, root README):** inglês canônico + irmão `*.pt-BR.md` (política em `docs/README.md`).
+- **Spec normativa (`docs/spec/`):** inglês apenas.
+- **Planning:** manter o idioma do arquivo existente (PT ou EN).
 - Comentários `// SAFETY:` em `unsafe`: inglês, invariantes explícitas.
 
 ## Architecture
@@ -69,7 +71,9 @@ ori-lang/
 
 | Aspect | Convention |
 |--------|------------|
-| **Docs** | Portuguese (Brazil) |
+| **User-facing docs (GitHub)** | **English primary** + **Portuguese parallel** (`*.pt-BR.md`); index `docs/README.md` |
+| **Normative spec** (`docs/spec/`) | **English only** |
+| **Planning / backlog** | PT or EN (existing file language); not end-user tutorials |
 | **Code + comments** | English |
 | **Compiler design** | Follow best practices |
 | **Testing** | Always use `ori-testing` skill for new features |
@@ -163,14 +167,17 @@ Source (.orl)
 - **Etapas 0–9** do `PLANO-MATURIDADE-COMPLETO.md` (ciclo 0.2) concluídas; S3 PRs 1–10 + PR11 + 11b (B) = superfície atual.
 - **Pipe `|>`:** **mantido** e tipado no checker como `f(value)`; entra na inferência local B.
 - **Auk9:** produto **arquivado** (README no repo auk9-lang). Living surface is Ori S3.
-- **Pacotes game/imgui:** **fora do produto** — `packages/ori-game` e `packages/ori-imgui` removidos; não há plano de migração.
+- **Product focus:** language completeness, docs/examples, performance, local DX
+  (VS Code + Zed under `extensions/`). **No** Marketplace/store publish and **no**
+  multi-OS distribution push until that focus is done. Game/imgui packages do
+  not exist and must not reappear in docs or plans.
 - **cargo check --workspace:** PASSES cleanly
 - **cargo test --workspace:** PASSES cleanly (~690+ tests, including stdlib Layer 2/3, net v2 E2E, io streams, JIT default)
 - **Release smoke:** `tools/smoke_native_release.ps1 -SkipBuild` passes — `ori compile` + `ori test` validados em package isolado com runtime empacotada (Windows MSVC).
 - **Rust removal Phase 1 — Windows MSVC (unreleased):** `ORI_USE_BUNDLED_RUST_LLD=1` engaja estratégia `BundledRustLld` que invoca `rust-lld` diretamente (sem `rustc` driver). CRT discovery via `vswhere.exe` + Windows SDK layout. Validado end-to-end com `examples/hello_world.orl` em Windows MSVC. `tools/stage_native_runtime.ps1` agora copia `rust-lld.exe` para `runtime/bin/`.
 - **Rust removal Phase 1 — Linux GNU (unreleased):** Estratégia `BundledRustLld` estendida para `x86_64-unknown-linux-gnu`. CRT discovery via `cc -print-file-name` (crt1.o/crti.o/crtn.o) + `cc -print-search-dirs` (lib dirs) + fallback de paths comuns para dynamic linker. `tools/stage_native_runtime.sh` agora copia `rust-lld` para `runtime/bin/`.
 - **Rust removal Phase 1 — macOS (unreleased):** Estratégia `BundledRustLld` estendida para `x86_64-apple-darwin` e `aarch64-apple-darwin`. CRT/SDK discovery via `xcrun --show-sdk-path` + `xcrun --show-sdk-version` (requer Xcode Command Line Tools). Link line `rust-lld -flavor darwin` com `-arch`, `-platform_version macos <min> <sdk>`, `-syslibroot`. Deployment target default `10.12` (x86_64) / `11.0` (arm64), override via `MACOSX_DEPLOYMENT_TARGET`. **Phase 1 completa para todos os 3 desktop OSes** (Windows MSVC, Linux GNU, macOS).
-- **Rust removal Phase 2 — SystemLinker (unreleased):** Nova estratégia `SystemLinker` que invoca o linker nativo do sistema (`link.exe`/`ld`) diretamente, sem `rust-lld` nem `rustc`. Opt-in via `ORI_USE_SYSTEM_LINKER=1`, override via `ORI_SYSTEM_LINKER`. Reutiliza CRT discovery da Phase 1. Discovery: Windows — `link.exe` derivado do MSVC tools dir; Linux — `cc -print-prog-name=ld`; macOS — `xcrun --find ld`. Prioridade: `ORI_NATIVE_LINKER` (raw) → `ORI_USE_BUNDLED_RUST_LLD` → `ORI_USE_SYSTEM_LINKER` → `RustcDriver`. **Phase 2 completa para todos os 3 desktop OSes**. 4 testes de regressão em `native_backend/tests.rs`.
+- **Rust removal Phase 2 — SystemLinker (unreleased):** Estratégia `SystemLinker` (`link.exe`/`ld`) sem `rustc`. Opt-in forçado via `ORI_USE_SYSTEM_LINKER=1`. Discovery: Windows MSVC / Linux GNU / macOS. **Prioridade default (LANG-PERF 2026-07-13):** `ORI_NATIVE_LINKER` → force `ORI_USE_BUNDLED_RUST_LLD` → force `ORI_USE_SYSTEM_LINKER` → **auto BundledRustLld if found** → **auto SystemLinker** → `RustcDriver`. 4 testes de regressão em `native_backend/tests.rs`.
 - **Rust removal Phase 3 — JIT Cranelift (unreleased):** `ori run` usa JIT por default quando cdylib disponível; `ORI_USE_JIT=1` força JIT; `ORI_USE_AOT=1` força AOT. Código Cranelift executado in-process via `JITModule` com símbolos `ori_*` resolvidos on-demand da cdylib do runtime através de `libloading`. Sem `.o` temporário, sem linker, sem subprocesso. `ori-runtime` builda 3 artefatos (`staticlib` + `rlib` + `cdylib`); stage scripts copiam cdylib para `runtime/<triple>/`; smoke release valida cdylib staged + `ori run` JIT no package isolado. `ori compile` e `ori test` permanecem AOT. **Híbrido A→B→D completo** para `ori run`.
 - **Stdlib Phase 0 + Gap parity (unreleased):** Prelude loading + **Layer 2/3 `.orl` fechados** para paridade `std.*` v1 (`docs/planning/stdlib-gap-parity.md`): 28 utils + 8 algorithms + `validate`/`path`; Layer 1 hot path Rust (FS metadados, `os.current_dir`, `process.*`, `net.*`, `lazy.is_consumed`, …). Lowering `ori.net.Connection`/`Listener`/`UdpSocket` e `ori.io.Input`/`Output` para módulos `.orl`. ~36 testes stdlib E2E em `multifile_imports.rs` (incl. rede v2).
 - **Stdlib/Rede v2 (unreleased):** `connect_tls`, servidor TCP (`listen`/`accept`), UDP síncrono, `task.run_blocking`; design `docs/planning/net-v2-design.md`; exemplo `examples/http_get.orl`.
@@ -218,7 +225,9 @@ Source (.orl)
 
 ### Pré-requisitos do sistema por OS (para AOT)
 
-O `ori compile` e `ori test` precisam de um linker. O default é o **SystemLinker** (desde 2026-07-02). O usuário final precisa ter instalado:
+O `ori compile` e `ori test` precisam de um linker. Com package completo
+(`runtime/bin/rust-lld`), o default é **BundledRustLld**; senão **SystemLinker**.
+Para SystemLinker o usuário final precisa ter instalado:
 
 | OS | Pré-requisito | Como instalar | Ori precisa de Rust? |
 |----|---------------|---------------|----------------------|
@@ -232,7 +241,10 @@ Para `ori run` (JIT): **nenhum linker é necessário** — apenas o cdylib do ru
 
 1. **Self-hosting adiado** até o restante da linguagem estar funcional (M4 — última discussão). Não é pré-requisito para utilidade. Python, Ruby, Lua nunca foram self-hosted; Zig está em 0.14 após ~10 anos.
 2. **Runtime Layer 1 permanece Rust.** ARC, async executor, FFI, I/O e rede são hot paths. A ABI C é o contrato público.
-3. **SystemLinker é o default para AOT.** Elimina dependência de `rust-lld` para AOT quando o linker do OS existe.
+3. **AOT linker default (LANG-PERF):** prefer **BundledRustLld** when
+   `runtime/bin/rust-lld` (or discovery) is available — faster link, still no
+   `rustc`. Else **SystemLinker** (OS `ld`/`link.exe`). Force with
+   `ORI_USE_BUNDLED_RUST_LLD=1` / `ORI_USE_SYSTEM_LINKER=1`.
 4. **Rust continua necessário apenas para *desenvolver* o compilador.** Quem instala via release package não precisa de `cargo`/`rustc`.
 
 ### Critérios técnicos para 1.0 (ordem: M2 → M3 → M1 → M4)
@@ -251,7 +263,8 @@ Para `ori run` (JIT): **nenhum linker é necessário** — apenas o cdylib do ru
 - [x] *(M1)* CI `smoke-no-rust` (linux/windows/macos) sem Rust no PATH
 - [x] *(M1)* `docs/install.md` + `tools/smoke_no_rust.sh`
 - [x] *(opcional)* Publicar package Win/Linux em release GitHub (ver `docs/install.md`)
-- [ ] *(M4)* Self-hosting — só quando o resto estiver estável
+- [ ] *(M4)* Self-hosting — só quando o resto estiver estável  
+  **Open work (single list):** `docs/planning/BACKLOG.md`
 
 ## Known Pitfalls
 

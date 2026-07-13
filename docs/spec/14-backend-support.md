@@ -28,7 +28,8 @@ Legend:
 | Structural equality | yes | yes | partial | Native and C/debug cover primitives, `bytes`, `optional`, `result`, tuples, lists, generic structs, `set[T]`, and `map[K,V]` when keys/elements support equality. |
 | Hash tables, trees, graphs, heaps | yes | yes | partial | Native tests cover stdlib operations. |
 | JSON (`json.parse` / `json.Value`) | yes | yes | partial | C backend emits `ori_json_parse` FFI stubs without dedicated C lowering; execution requires native runtime. |
-| `ori.net` (TCP/TLS/UDP) | yes | yes | no | Native runtime only (rustls + blocking sockets). C/debug rejects or emits extern stubs without bodies. Use `task.run_blocking` for offload from async code. |
+| `ori.net` (TCP/TLS/UDP) | yes | yes | no | Native runtime only (rustls). Sync path blocking; async uses shared I/O reactor with `poll(2)` readiness (STDLIB-4k) for read/write/accept/UDP; connect/TLS still worker+future (STDLIB-4b). |
+| File I/O async | yes | yes | no | L1 `fs.read_text_async` / `write_text_async` (worker + future); L2 `read_text_in_background` Jobs. |
 | `bytes` with internal NUL | yes | yes | partial | `string` still rejects internal NUL at conversion boundary. |
 | Unicode `string.len`, `slice`, `index_of` | yes | yes | partial | Indices are Unicode scalar indices, not byte offsets. |
 | Async functions and `await` | yes | partial | no | Native supports the subset below. C/debug rejects async. |
@@ -51,24 +52,36 @@ Supported today (covered by `concurrency_async.rs`):
 - `using` inside `async func` with `dispose()` on scope exit, cancellation, failure, propagation (`try`/`?`), and `break`.
 - Multiple awaits in the same async function with preserved ARC locals across suspensions.
 
-Still blocked or limited:
+### LANG-1 status (2026-07-13)
 
-- Async functions whose `await` shapes cannot be lowered to the simple or general state machine.
-- `for` over iterable types without native iterator ABI (`int`, raw ranges, unsupported opaques).
-- Indexed assignment on unsupported managed bases.
+The **promised** native async subset above is **closed**: positive coverage lives in
+`compiler/crates/ori-driver/tests/concurrency_async.rs` (loops, branches, match,
+`using`, managed values across suspension, `try`/`?`, call/operator/condition
+awaits, nested bodies).
+
+Shapes that still emit `backend.native_unsupported` are **not** open async
+promises — they are either permanent v1 exclusions or non-async backend gaps:
+
+| Kind | What | v1 policy |
+| --- | --- | --- |
+| Residual async | Async body whose params/locals cannot be laid out for the frame (`cl_type` fails) or both state-machine planners reject the body | **Documented residual** — rare; fails with an actionable message naming the function |
+| Non-async | `for` over types without iterator ABI | **Permanent until** an iterable is given a native next-ABI |
+| Non-async | Indexed assignment on unsupported managed bases | **Permanent until** that base gains a store path |
+| Internal defense | Unknown map/set/graph/… runtime call name | Should not surface from valid stdlib use |
 
 Current failure mode:
 
 - Native codegen emits `backend.native_unsupported` with a direct message when a shape is outside the supported subset.
+- C/debug continues to reject all async (see **LANG-3** / C async section).
 
 ## `backend.native_unsupported` inventory
 
 | Message / code path | Classification | Tests |
 | --- | --- | --- |
-| Async function contains an `await` shape not covered by the state machine | partial async | Negative: shapes that fail `collect_general_async_plan` |
-| Indexed assignment base unsupported | backend gap | No positive test yet |
-| `` `for` iterable type `{ty}` `` | backend gap | `compile_runs_*` per supported opaque iterator |
-| `` `for` element type `{ty}` `` | backend gap | Same |
+| Async function contains an `await` shape not covered by the state machine | residual async (not a promised gap) | Message path in `emit_async_wrapper`; positive suite covers promised subset |
+| Indexed assignment base unsupported | backend gap (non-async) | Negative / defensive |
+| `` `for` iterable type `{ty}` `` | backend gap (non-async) | Positive: supported iterators; negative: `compile_rejects_for_iterable_without_native_abi` |
+| `` `for` element type `{ty}` `` | backend gap (non-async) | Same |
 | `` map runtime call `{name}` `` | internal defense | Stdlib paths should resolve before emission |
 | `` hash_table runtime call `{name}` `` | internal defense | Same |
 | `` graph runtime call `{name}` `` | internal defense | Same |
@@ -111,7 +124,7 @@ Legend:
 | Module | `c_backend` flag | C execution | Notes |
 | --- | --- | --- | --- |
 | `io.print`, `io.println` | yes | yes | Flagged. |
-| `io.eprint`, `io.eprintln`, `io.read_line` | no | extern only | Native runtime provides the body. |
+| `io.eprint`, `io.eprintln`, `io.read_line` | yes | yes | **LANG-2:** real C bodies (stderr + getline/fgets). |
 | `math.*` | yes | yes | All 16 functions flagged. |
 | `time.now`, `time.sleep`, `time.duration_ms` | yes | yes | All flagged. |
 | `format.*` | yes | yes | number, percent, hex, binary, date, datetime, bytes_size. |
@@ -121,10 +134,10 @@ Legend:
 | `test.assert`, `test.assert_eq`, `test.assert_ne`, `test.fail` | yes | yes | Flagged. |
 | `test.live_allocations`, `test.collect_cycles`, `test.assert_no_leaks` | no | extern only | Leak checks require native ARC runtime. |
 | `string` (global), `int`, `float` builtins | yes | yes | Conversion builtins flagged. |
-| `len` (global builtin) | no | extern only | Native runtime. |
-| `string.*` | no | dedicated lowering + extern | C backend lowers `concat` inline; remaining ops are extern stubs. |
-| `bytes.*` | no | extern only | Native runtime. |
-| `convert.*` | no | extern only | float_to_string, bool_to_string, string_to_int, string_to_float. |
+| `len` (global builtin) | yes | yes | **LANG-2:** maps to string length in C. |
+| `string.*` | yes | yes | **LANG-2:** len/concat/slice/contains/starts/ends/trim/case/replace/split/chars/join/index_of/repeat/pad. |
+| `bytes.*` | no | extern only | Native runtime (opaque payload ABI). |
+| `convert.*` | yes | yes | **LANG-2:** float/bool/string conversions in C. |
 | `list.*`, `deque.*`, `queue.*`, `stack.*` | no | extern only | Native runtime owns ARC edges. |
 | `linked_list.*`, `doubly_linked_list.*` | no | extern only | Native runtime. |
 | `tree.*` | no | extern only | Native runtime. |
@@ -179,4 +192,6 @@ Until a v2 decision lands, do not mark C async as partial/yes in the matrix.
 - Add a positive native test before changing a row from partial to yes.
 - Keep a negative test when a shape is intentionally blocked.
 - Update this matrix in the same commit as the implementation change.
-- Do not call async "complete" while any promised `await` shape still reaches `backend.native_unsupported`.
+- Do not call async "complete" while any **promised** `await` shape still reaches
+  `backend.native_unsupported`. LANG-1 (2026-07-13): promised native subset is
+  covered; remaining codes are residual/layout or non-async gaps.

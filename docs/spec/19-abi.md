@@ -1,10 +1,11 @@
 # Ori Language Specification — Chapter 19: Native ABI
 
-> Status: **normative for the native backend** (pre-1.0 freeze of documented layouts)  
+> Status: **normative for the native backend** · **ABI-1 in force** (FREEZE-1 window)  
 > Audience: compiler implementers, runtime maintainers, FFI authors  
-> Surface: **S3** (`0.3.0`) + workspace **`0.3.1`**  
+> Surface: **S3** (`0.3.0`) + inference **`0.3.1`** + package **`0.3.2`**  
 > Revision tag: **`ori-native-abi-1`** (`ORI_ABI_VERSION` in `ori-runtime`)  
 > Source of truth: `compiler/crates/ori-runtime/src/lib.rs` + `ori-codegen` native backend  
+> Process: [freeze-and-abi-gates.md](../planning/freeze-and-abi-gates.md)  
 > Related: [10-memory.md](10-memory.md), [16-runtime-ffi-safety.md](16-runtime-ffi-safety.md), [18-stability-and-compatibility.md](18-stability-and-compatibility.md)
 
 ---

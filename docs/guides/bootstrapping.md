@@ -1,4 +1,8 @@
-# Bootstrapping Ori 
+# Bootstrapping Ori
+
+> **Audience:** contributors building from source.  
+> End users should use [install.md](../install.md) (release package).  
+> Portuguese index: [../README.pt-BR.md](../README.pt-BR.md). 
 
 > Audience: Core contributors and package maintainers
 
@@ -22,23 +26,19 @@ To build Ori from source, you need:
 The runtime library (`libori_runtime`) is written in Rust but exposes a C ABI. It is statically linked into AOT Ori programs and dynamically loaded for JIT execution.
 
 ```bash
-# Build the runtime crate
+# From repository root (workspace is under compiler/)
+cd compiler
 cargo build -p ori-runtime --lib --release
-
-# The artifacts (.a, .so, .dll, .dylib) must be staged to the target triple directory
-# For example, on Windows MSVC:
-cp target/release/ori_runtime.dll runtime/x86_64-pc-windows-msvc/
-cp target/release/ori_runtime.lib runtime/x86_64-pc-windows-msvc/
+# Prefer the stage scripts from repo root:
+#   sh tools/stage_native_runtime.sh
+#   (Windows) .\tools\stage_native_runtime.ps1
 ```
-*(The packaging scripts `tools/stage_native_runtime.ps1` and `.sh` automate this).*
 
 ### Step 2.2: Building the Compiler
 
-The compiler itself (`ori-driver`) is built as a standard Cargo binary.
-
 ```bash
-cargo build -p ori-driver --release
-# The resulting binary is target/release/ori (or ori.exe)
+cd compiler && cargo build -p ori-driver --release
+# Binary: compiler/target/release/ori (or ori.exe)
 ```
 
 ## 3. The Standard Library (`.orl`)

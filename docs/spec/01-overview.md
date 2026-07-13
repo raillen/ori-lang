@@ -162,15 +162,15 @@ end
 
 load_user(id: int) -> UserResult
     if id < 0
-        return error("invalid id")
+        return err("invalid id")
     end
-    return success(User { name: "Ada", age: 36 })
+    return ok(User { name: "Ada", age: 36 })
 end
 
 main() -> result[void, string]
     const user: User = try load_user(1)
     io.print(string(user))
-    return success()
+    return ok()
 end
 ```
 
@@ -183,7 +183,7 @@ end
 | No `func` keyword | `load_user(...) -> …` / `main()` |
 | Types | `result[User, string]`, brackets not angles |
 | Struct literal | `User { name: …, age: … }` |
-| Traits | `apply User` + `use Displayable` |
+| Traits | `import ori.core = core` · `apply User` + `use core.Displayable` |
 | Propagation | `try load_user(1)` only (`?` removed) |
 
 ---
@@ -214,10 +214,9 @@ Migration aid: `ori migrate-syntax`. Full list: `CHANGELOG.md` `[0.3.0]`.
 | **Option B** | Also omit on **field / index / call / pipe** with a concrete return type; reject `void` / `try` / empty `[]`/`{}` / bare `none` |
 | **Pipe `\|\>`** | **Kept** as first-class Ori syntax (typed as `f(value)`) |
 
-**Still deferred / out of product:** distribution polish beyond packaged
-releases; self-hosting (M4). **`ori-game` / `ori-imgui` removed from the repo
-and plans** (not part of Ori product scope).
-package until remaining pendencies close.
+**Still deferred / out of product:** multi-OS distribution and marketplace
+publish (shelved until language, docs, and performance are solid); self-hosting
+(M4) last.
 
 ---
 

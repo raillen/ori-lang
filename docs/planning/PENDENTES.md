@@ -1,14 +1,30 @@
 # Recursos Pendentes e Plano de Correções — Ori Language
 
-> **Plano ativo:** prioridade abaixo + [`uso-real-pequeno-medio.md`](uso-real-pequeno-medio.md).
-> **Plano histórico:** ciclo até `0.2.0` em [`PLANO-MATURIDADE-COMPLETO.md`](historico/PLANO-MATURIDADE-COMPLETO.md).
-> Superfície: **S3 / 0.3.0** + inference **0.3.1** + **opção B** (campo/index/call/pipe). Pipe `|>` mantido. Auk9 = arquivada.
+> **⚠️ OPEN WORK (single source of truth):**  
+> **[`BACKLOG.md`](BACKLOG.md)** — one list, with priority · difficulty · dependencies · waves.  
+> **Do not** invent a new “what’s left” list in chat or in other docs. Update `BACKLOG.md`.
 
-Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhorias necessárias para a maturidade da linguagem Ori.
+> **Context / history:** this file = operational history + closed etapas.  
+> Strategy narrative: [`uso-real-pequeno-medio.md`](uso-real-pequeno-medio.md).  
+> Historical maturity plan: [`historico/PLANO-MATURIDADE-COMPLETO.md`](historico/PLANO-MATURIDADE-COMPLETO.md).  
+> Superfície: **S3 / 0.3.0** + inference **0.3.1** + package/M1 **0.3.2**. Auk9 = arquivada.
 
 ---
 
-## Prioridade 2026-07-13 (curto / médio)
+## Snapshot (closed milestones — detail in BACKLOG §1)
+
+| Marco | Status |
+|-------|--------|
+| S3 / inference B / pipe | ✅ |
+| M2 stdlib + layout + ok/err | ✅ |
+| M3 ABI docs | ✅ |
+| M1 Rust-free install path | ✅ |
+| Linux package v0.3.2 | ✅ |
+| Open work | → **[BACKLOG.md](BACKLOG.md)** |
+
+---
+
+## Prioridade 2026-07-13 (curto / médio) — *historical table*
 
 ### Curto prazo
 
@@ -33,14 +49,12 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 | **M1** | **Independência do Rust para usuário final** | **✅ fechado** | `docs/install.md`; tools smoke S3 + paths `compiler/`; `tools/smoke_no_rust.sh`; CI jobs `smoke-no-rust-*` |
 | **M4** | Self-hosting | **próxima discussão** (última) | Só depois do restante já útil |
 
-> **Ordem acordada:** **M2 → M3 → M1 → M4**.  
-> **M2 + M3 + M1 fechados.** Residual stdlib limpo. Próximo opcional: publicar package; **M4** quando for a hora.
+> **Ordem M2 → M3 → M1 fechada.** Lista aberta unificada: **[BACKLOG.md](BACKLOG.md)**  
+> (próximo: **DIST-1** Windows package, depois **STDLIB-2** HTTP, etc.)
 
-### Explicitamente fora da fila agora
+### Explicitamente fora da fila
 
-- Self-hosting (M4 — última discussão)
-- Inferência global HM / opções C–D
-- Pacotes de jogo/UI (`ori-game` / `ori-imgui`) — **fora do produto**; não migrar
+Ver BACKLOG §5 (HM, game/imgui, Layer1→Ori rewrite, C-async-v1).
 
 ---
 

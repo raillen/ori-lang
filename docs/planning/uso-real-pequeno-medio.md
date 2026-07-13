@@ -161,7 +161,7 @@ mostrem ganho claro de legibilidade. Se a forma não existir hoje, remover da sp
 
 ### Fora do alvo imediato
 
-- rede async nativa (`net.*_async` integrado ao executor);
+- ~~rede async nativa (`net.*_async` integrado ao executor)~~ — **feito (STDLIB-4b):** worker-thread `OriFuture`
 - TLS avançado (certificados customizados, pinning);
 - UDP avançado (multicast);
 - drivers de banco de dados;
@@ -346,34 +346,19 @@ A independência total do Rust é entendida em **dois níveis distintos**:
 4. **Modelo de 3 camadas da stdlib** (Layer 1 Rust / 2–3 `.orl`) é permanente.
 5. **Ordem tática pós-S3:** **M2 stdlib → M3 ABI → M1 Rust-indep → M4 self-host**.
 
-### Próximos passos táticos (pós-S3)
+### Open implementation work (single list)
 
-#### Fase A — Stdlib (M2, **agora**)
-- [ ] Corrigir residuals (ex. `path.relative` sequencial ignored)
-- [ ] Discutir e aplicar mesclagem de módulos (`utils` / `algorithms` / pais)
-- [ ] Fechar gaps Layer 2/3 restantes se ainda doer
+**All open items live in [`BACKLOG.md`](BACKLOG.md)** (IDs, priority, difficulty, deps, waves).  
+M2 / M3 / M1 are **done**. Do not maintain a second checklist here.
 
-#### Fase B — ABI (M3)
-- [ ] Documentar ABI C completa (layout, calling convention, name mangling)
-- [ ] Congelar o que for contrato após features finais
+### Timeline (milestones)
 
-#### Fase C — Independência do Rust no instalador (M1, **depois de A+B**)
-- [ ] Smoke Windows/Linux/macOS sem Rust toolchain
-- [ ] CI job package sem Rust
-- [ ] Manter `docs/install.md` alinhado
-
-#### Fase D — Self-host (M4, última)
-- [ ] Só após A–C e linguagem estável no restante
-
-### Timeline (ordem, não calendário de marketing)
-
-| Marco | Condição |
-|-------|----------|
-| M2 | Stdlib corrigida + mesclagem decidida/aplicada |
-| M3 | ABI documentada pós-features |
-| M1 | Smoke/CI sem Rust |
-| M4 | Discussão self-host / bootstrap |
-| **1.0** | Critérios técnicos acima + estabilidade de contrato |
+| Marco | Status / where |
+|-------|----------------|
+| M2 / M3 / M1 | ✅ done |
+| Open work | [BACKLOG.md](BACKLOG.md) |
+| FREEZE-1 / ABI-1 / M4 | BACKLOG Wave 5 |
+| **1.0** | FREEZE + remaining BACKLOG criteria |
 
 ---
 

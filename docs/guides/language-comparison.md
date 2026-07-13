@@ -1,3 +1,6 @@
+> Notas de medição local (PT). Benchmarks em `benchmarks/language-comparison/`.  
+> Índice de docs: [../README.md](../README.md) · [../README.pt-BR.md](../README.pt-BR.md).
+
 # Comparacao da Ori com outras linguagens
 
 Este guia compara a Ori com outras linguagens usando funcoes e entradas equivalentes.

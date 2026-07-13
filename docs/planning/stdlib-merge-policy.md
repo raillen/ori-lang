@@ -1,8 +1,8 @@
-# Política de mesclagem da stdlib (M2)
+# Política de mesclagem da stdlib (M2 + STDLIB-1)
 
-> **Status:** decisão aceita (2026-07-13)  
-> **Ordem tática:** M2 (este documento) → M3 ABI → M1 Rust-indep → M4 self-host  
-> **Código de merge em massa:** **ainda não** — esta fatia é **docs + exemplos**.
+> **Status:** M2 + **STDLIB-1 fechados** (2026-07-13)  
+> **Ordem tática:** M2 → M3 ABI → M1 → (stdlib polish) → M4 self-host  
+> Superfície pública canônica: **somente `ori.X`**. Nested `utils`/`algorithms` = compat.
 
 ---
 
@@ -12,10 +12,10 @@
 |----|------|---------|
 | **M2.D** | Modelo de API | **D** — namespace **público canônico** = `ori.X` (um módulo por domínio) |
 | **M2.A** | Layout preferido no disco | **A** — preferir `stdlib/X.orl` = `module ori.X` |
-| **M2.B** | Split em pastas | **B** só se necessário: algoritmos pesados (`graph`, `tree`, …), `math` (vec/mat), ou pai ≫ ~400 linhas |
-| **M2.compat** | `ori.X.utils` / `ori.X.algorithms` | **Alias silencioso** por enquanto (código antigo continua compilando) |
-| **M2.examples** | Exemplos e docs de uso | **Só estilo canônico** `ori.X` (sem ensinar `.utils` como API nova) |
-| **M2.code** | Merge físico de arquivos | **Depois** desta fatia de docs (lotes: fs, io, time, …) |
+| **M2.B** | Split em pastas | **B** só se necessário: multi-artefato temático (`math/vec2`, …), **não** por “utils” genérico |
+| **M2.compat** | `ori.X.utils` / `ori.X.algorithms` | **Compat silenciosa** (ainda compila; **não** ensinar) |
+| **M2.examples** | Exemplos e docs de uso | **Só estilo canônico** `ori.X` |
+| **STDLIB-1** | Deprecar paths públicos nested | **Feito** — todos os símbolos públicos de `utils`/`algorithms` também no pai |
 
 **Rejeitado:** C puro (sempre forçar `utils`/`algorithms` como API pública).  
 **Rejeitado:** inferir tipo de layout só “pelo uso” em docs; a regra acima é normativa de produto.
@@ -31,6 +31,9 @@
 | **L3** | Algoritmos puros `.orl` | Preferência: mesmo `ori.X` se couber; senão submódulo interno |
 
 Mesclar **não** significa portar L1 para `.orl`.
+
+**STDLIB-5:** mass L1→`.orl` ports are **closed as wontfix**. Layer 1 Rust
+remains the permanent hot-path design (ARC, executor, FS/net FFI).
 
 ---
 
@@ -50,30 +53,34 @@ import ori.string (is_empty, truncate = cut)
 import ori.fs (read_text_or)
 ```
 
-### Compatibilidade (não ensinar; não remover ainda)
+### Compatibilidade (deprecada como superfície pública; não remover ainda)
 
 ```ori
-import ori.fs.utils = fu          -- ainda funciona (alias silencioso)
+import ori.fs.utils = fu          -- ainda funciona (compat silenciosa)
 import ori.string.utils = su      -- ainda funciona
-import ori.queue.utils = qu       -- ainda funciona até existir pai flat completo
+import ori.queue.utils = qu       -- ainda funciona
+import ori.bytes.algorithms = ba  -- ainda funciona
 ```
 
-Quando o código de merge criar/estender `stdlib/X.orl`, helpers que hoje só
-existem em `X/utils.orl` passam a ser importáveis via `ori.X` (pai). Até lá,
-código interno/testes podem ainda tocar `.utils`; **exemplos e guias não**.
+**STDLIB-1:** helpers que existiam só em `X/utils.orl` ou `X/algorithms.orl`
+também estão em `stdlib/X.orl`. Código novo **só** importa `ori.X`. Suítes de
+regressão podem ainda importar nested paths para provar compat.
 
 ---
 
-## Regras de layout no disco (para o código futuro)
+## Regras de layout no disco
 
 1. **Preferir** `stdlib/<name>.orl` com `module ori.<name>`.
-2. **Evitar** duplicar a mesma função em `X.orl` e `X/utils.orl` (hoje: `fs` é o caso-modelo a deduplicar no lote 1 de código).
+2. Duplicação pai ↔ `utils`/`algorithms` é **aceita para compat**; não inventar
+   API nova só no nested path. **Não** reexportar L1 no pai com o **mesmo nome**
+   (`public to_list` → `ori.queue.to_list` causa sombra/recursão genérica).
 3. **Manter pasta** `X/` quando:
    - há vários artefatos irmãos (`math/vec2.orl`, `mat3.orl`);
-   - algorithms grandes e estáveis (`graph/algorithms.orl`, `tree/…`);
-   - o pai único ficaria ilegível (>~400 linhas) **e** a divisão for por tema, não por “utils” genérico.
+   - o pai único ficaria ilegível (>~400 linhas) **e** a divisão for por tema,
+     não por “utils” genérico.
 4. **README/spec** listam a API como `ori.X`, não como árvore de pastas.
 5. Submódulos legados `ori.X.utils` / `ori.X.algorithms` = **compat**, não marca.
+   Remoção física (breaking) só com janela de freeze / major.
 
 ---
 
@@ -85,6 +92,7 @@ código interno/testes podem ainda tocar `.utils`; **exemplos e guias não**.
 | **path.relative** | multi-call un-ignored | ✅ |
 | **layout** | Cargo em `compiler/`; examples mini-projetos; `_archive/` | ✅ |
 | **result-ctors** | `ok`/`err` | ✅ |
+| **STDLIB-1** | Lift only-in-utils/algorithms → pais; deprecar paths nested | ✅ |
 
 ---
 
@@ -105,6 +113,15 @@ código interno/testes podem ainda tocar `.utils`; **exemplos e guias não**.
 | “Alias silencioso” de **módulos** (import `ori.X.utils` ainda compila) | ✅ |
 | **`public alias` de tipos** nos pais (e espelho em utils) | ✅ `fs`/`io`/`net`/`json`/`config` |
 
+### STDLIB-1 — **fechado**
+
+| Item | Status |
+|------|--------|
+| Zero símbolos *only-in-utils* / *only-in-algorithms* | ✅ (audit 2026-07-13) |
+| Docs/README/spec ensinam só `ori.X` | ✅ |
+| Nested paths ainda compilam (compat tests) | ✅ |
+| Gate de regressão parent-only | ✅ `compile_runs_stdlib_parent_canonical_no_utils_import` |
+
 Aliases de domínio (ex.: `ori.fs.TextResult`, `ori.net.ConnectionResult`) —
 não renomear primitivos (`string` → `text` continua fora).
 
@@ -118,3 +135,4 @@ não renomear primitivos (`string` → `text` continua fora).
 | 2026-07-13 | **M2 fechado** — merge pais + layout monorepo + examples + path.relative |
 | 2026-07-13 | Auditoria: type/`public alias` de domínio **não** implementados (residual) |
 | 2026-07-13 | Residual fechado: `public alias` em `fs`/`io`/`net`/`json`/`config` (+ utils) |
+| 2026-07-13 | **STDLIB-1 fechado** — lift + depreciação pública de `.utils`/`.algorithms` |

@@ -103,7 +103,9 @@ Uma forma canônica por conceito é **norma** (superfície S3 + reforma document
 ## Migração 0.2 → 0.3
 
 - Script melhor-esforço: `ori migrate-syntax` (wrapper `tools/migrate_syntax.sh`)  
-- Pacotes `ori-game` / `ori-imgui`: **fora do produto** (removidos do repo; sem migração)  
+- Escopo de produto: **linguagem + stdlib + docs + performance + DX local** (editores). Distribuição multi-OS e lojas de extensão ficam **depois**.
+- Docs de produto: **inglês canônico no GitHub** + **português em paralelo**
+  (`docs/README.md`)  
 - Lista breaking completa: [`CHANGELOG.md`](../../CHANGELOG.md) seção `[0.3.0]`  
 - Catálogo de erros de forma removida: [`13-error-catalog.md`](13-error-catalog.md)  
 

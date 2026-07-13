@@ -1,8 +1,9 @@
 # Plano Estratégico: Port de Bibliotecas Nativas (Raylib, SQLite, cimgui)
 
-> **Nota (2026-07-13):** `ori-game` / `ori-imgui` **não** fazem parte do produto Ori
-> (removidos do monorepo). Este doc permanece como **ideias históricas** para ports
-> de comunidade (`ori-raylib`, `ori-sqlite`, bindings cimgui), não como backlog do core.
+> **Status: ARQUIVADO / não-core.**  
+> Ideias históricas para pacotes de **comunidade** (`ori-raylib`, `ori-sqlite`,
+> bindings cimgui). **Não** é backlog do produto Ori. Prioridade atual: linguagem,
+> docs/exemplos, performance. Não reabrir no chat como feature do monorepo.
 
 Este documento descreve a estratégia para portar três grandes pilares do ecossistema C/C++ para a linguagem Ori. O objetivo não é apenas criar um *wrapper* 1:1, mas sim elevar a ergonomia das bibliotecas originais para abraçar a filosofia de legibilidade, tipagem forte explícita e orientação segura a dados que o Ori prega.
 

@@ -11,9 +11,15 @@ competition. The Auk9 lab is **retired as a product**; the living surface is Ori
 Ori is pre-1.0. Syntax before S3 is rejected; further change is still allowed
 before a stable 1.0 contract.
 
-**Languages:** English | [Portuguese](README.pt-BR.md) | [Japanese](README.ja.md)
+**Languages:** English (primary) | [Portuguese](README.pt-BR.md) | [Japanese](README.ja.md)
 
-**Project menu:** [Manifesto](docs/spec/00-manifesto.md) | [Specification](docs/spec/README.md) | [Planning](docs/planning/README.md) | [First project](docs/guides/first-project-and-packages.md) | [Cookbook](docs/guides/cookbook-pequeno-medio.md) | [Bug reports](docs/guides/reportar-bugs.md) | [Standard library](stdlib/README.md) | [Runtime](runtime/README.md) | [Examples](examples/) | [Changelog](CHANGELOG.md) | [Contributing](CONTRIBUTING.md)
+**Documentation:** [Docs index](docs/README.md) · [Install](docs/install.md) ·
+[Language tour](docs/language/tour.md) · [Guides](docs/guides/README.md) ·
+[Specification](docs/spec/README.md) · [Planning](docs/planning/README.md)
+
+**Also:** [Manifesto](docs/spec/00-manifesto.md) · [Stdlib](stdlib/README.md) ·
+[Runtime](runtime/README.md) · [Examples](examples/) · [Changelog](CHANGELOG.md) ·
+[Contributing](CONTRIBUTING.md)
 
 ## Contents
 
@@ -55,7 +61,8 @@ The current compiler pipeline is:
 ```
 
 The repository contains the compiler, runtime, standard library sources,
-language specification, VS Code extension, examples, and release tooling.
+language specification, local editor extensions (VS Code + Zed), examples, and
+release tooling.
 
 ## Why Ori exists
 
@@ -81,22 +88,20 @@ shorter inference chains, fewer hidden rules, and clearer error messages.
 
 | Area | Status |
 |---|---|
-| Version | **Language surface `0.3.0` (S3 cutover)**; Cargo workspace package may still be `0.2.0` until the release tag |
-| Stability | pre-1.0; S3 is a hard break from 0.2 syntax; further change still possible |
-| Compiler | Rust workspace with lexer, parser, HIR, type checker, codegen, diagnostics, LSP, driver, and runtime crates |
-| Native backend | Cranelift object code plus the Ori native runtime |
-| `ori run` | JIT by default when a runtime cdylib is available; AOT can be forced |
-| `ori compile` | AOT native binary generation; default link route still depends on the configured linker strategy |
-| C backend | debug/transpile route with partial feature parity |
-| Standard library | Layer 1 runtime primitives plus Layer 2/3 `.orl` wrappers and algorithms |
-| Tooling | CLI, formatter, diagnostics catalog, docs export, LSP, VS Code extension |
-| Tests | workspace test suite and native release smoke are part of the project gate |
+| Version | **S3 surface `0.3.0`** · inference B **`0.3.1`** · package/M1 **`0.3.2`** (Cargo workspace) |
+| Stability | pre-1.0; S3 hard-breaks pre-0.3 syntax; further change still possible |
+| Compiler | Rust workspace under `compiler/` (lexer → parser → HIR → types → Cranelift + runtime) |
+| Native backend | Cranelift AOT + packaged `ori-runtime`; ABI tag `ori-native-abi-1` |
+| `ori run` | JIT by default when a runtime cdylib is available |
+| `ori compile` / `ori test` | AOT; default **SystemLinker** (OS linker) |
+| Standard library | Layer 1 Rust FFI + Layer 2/3 `.orl`; canonical API `ori.X` |
+| Tooling | CLI, formatter, docs export, LSP; **local** VS Code + Zed extensions (no store publish) |
+| Docs | English primary + Portuguese parallel (`docs/README.md`) · [examples/](examples/) |
+| Focus now | Language completeness, docs/examples accuracy, performance — not multi-OS marketing |
 
-S3 **is** that user-visible breaking change (documented in
-[CHANGELOG.md](CHANGELOG.md) `[0.3.0]`). Local Nim-style inference is **`0.3.1`**,
-extended by **option B** (omit types on field / index / call / pipe with a
-concrete type). The pipe operator `|>` **remains** supported. Migrate sources
-with `ori migrate-syntax`.
+S3 breaking list: [CHANGELOG.md](CHANGELOG.md) `[0.3.0]`. Inference: `[0.3.1]`.
+Package / install without Rust: `[0.3.2]`. Migrate old sources with
+`ori migrate-syntax`.
 
 ## Quick start
 
@@ -160,7 +165,10 @@ end
 Run it from this repository with:
 
 ```bash
-cargo run -p ori-driver -- run examples/hello_world.orl
+cd compiler
+cargo run -p ori-driver -- run ../examples/hello/main.orl
+# or, with a release package on PATH:
+ori run examples/hello/main.orl
 ```
 
 Ori uses `end`-delimited blocks, newline-separated declarations, explicit
@@ -190,7 +198,10 @@ The `ori` CLI is implemented by `compiler/crates/ori-driver`.
 | `ori lex <file.orl>` | print the token stream for compiler debugging |
 | `ori parse <file.orl>` | print the AST for compiler debugging |
 | `ori install <name> --path <dir>` | validate a local `ori.pkg.toml` package and copy it to the package cache |
-| `ori publish <path>` | validate a package manifest; remote registry upload is not available yet |
+| `ori install name[@ver]` | install from `ORI_REGISTRY` into the package cache |
+| `ori install github.com/org/repo` | shallow-clone a Git package and install into the cache |
+| `ori get [path]` | fetch `git`/`path` dependencies declared in `ori.proj` or `ori.pkg.toml` |
+| `ori publish <path>` | publish to `ORI_REGISTRY` (file tree or HTTP PUT tarball) |
 | `ori migrate-syntax <paths…>` | best-effort rewrite of pre-S3 syntax to S3 (`--dry-run`, `-v`) |
 
 Useful environment variables:
@@ -205,48 +216,37 @@ Useful environment variables:
 | `ORI_USE_BUNDLED_RUST_LLD=1` | link through bundled `rust-lld` without the `rustc` driver |
 | `ORI_USE_SYSTEM_LINKER=1` | link through the platform linker directly |
 | `ORI_REQUIRE_PACKAGED_RUNTIME=1` | reject workspace runtime fallback during package validation |
-| `ORI_PACKAGE_CACHE` | override the local package cache used by `ori install --path` |
+| `ORI_PACKAGE_CACHE` | override the local package cache used by `ori install` / `ori get` / dep resolve |
+| `ORI_REGISTRY` | package registry root (directory path or `https://…` base) for publish/fetch |
+| `ORI_REGISTRY_TOKEN` | optional Bearer token for HTTP `ori publish` |
 
 The full environment matrix lives in [AGENTS.md](AGENTS.md).
 
 ## Project docs
 
-Projects can use `ori.proj` as the entry point:
+Projects use `ori.proj` at the **project root** (no required `src/`):
 
 ```ini
 manifest = 1
 name = "demo"
+version = "0.1.0"
 kind = "app"
-entry = "src/main.orl"
+entry = "main.orl"
+
+[source]
+root_namespace = "app"
 
 [docs]
-paths = ["docs/api"]
+paths = ["docs"]
 mode = "sidecar-first"
 require_public = "off"
 ```
 
-Long symbol documentation can live outside the `.orl` file:
+Long symbol documentation can live in `.oridoc` sidecars (see
+[spec/17-project-and-docs.md](docs/spec/17-project-and-docs.md)).
 
-```text
-oridoc 1
-
-module app.math
-
-doc func add
-    summary:
-        Soma dois numeros.
-    param left:
-        Primeiro valor.
-    param right:
-        Segundo valor.
-    returns:
-        Soma dos valores.
-end
-```
-
-See [Project and docs](docs/spec/17-project-and-docs.md) for the full
-manifest and `.oridoc` contract. For a shorter workflow guide, use
-[First project and local packages](docs/guides/first-project-and-packages.md).
+Shorter workflow: [First project](docs/guides/first-project.md) ·
+[Examples](examples/).
 
 ## Language overview
 
@@ -337,32 +337,22 @@ See [stdlib/README.md](stdlib/README.md) for the current module inventory and
 
 ## Editor tooling
 
-Ori ships an LSP server and a VS Code extension under
-[extensions/vscode-orl](extensions/vscode-orl/).
+Ori ships `ori-lsp` plus **local** editor extensions (no Marketplace / store
+publish for now — language work comes first):
 
-Implemented tooling includes:
+| Editor | Path | Install |
+|--------|------|---------|
+| VS Code / Cursor | [extensions/vscode-orl](extensions/vscode-orl/) | local `.vsix` (`npm run package:vsix`) |
+| Zed | [extensions/zed-ori](extensions/zed-ori/) | **dev extension** (see extension README) |
 
-- diagnostics from parser, resolver, and type checker;
-- hover, go-to-definition, find references, and rename;
-- semantic tokens, document symbols, workspace symbols, inlay hints;
-- type-aware dot completion;
-- stdlib-aware hover/completion/goto for Layer 1 and Layer 2 modules;
-- formatting, code actions, code lens, signature help;
-- incremental document sync;
-- VS Code commands for check, run, test, format, doctor, and summary.
-
-Build the extension locally with:
+LSP features: diagnostics, hover, goto, rename, semantic tokens, symbols, inlays,
+type-aware completion, stdlib-aware help, format, incremental sync.
 
 ```bash
-cd extensions/vscode-orl
-npm install
-npm run compile
-```
-
-Build the language server first:
-
-```bash
-cargo build -p ori-lsp -p ori-driver
+cd compiler && cargo build -p ori-lsp -p ori-driver
+# VS Code:
+cd ../extensions/vscode-orl && npm install && npm run compile
+# put compiler/target/debug on PATH for ori-lsp
 ```
 
 ## Repository layout
@@ -374,9 +364,9 @@ ori-lang/
   docs/planning/          roadmap, backlog, and implementation plans
   stdlib/                 Ori standard library source modules
   runtime/                staged native runtime artifacts by target triple
-  examples/               example Ori programs
+  examples/               example Ori programs (S3 mini-projects)
   tests/                  end-to-end Ori fixtures and test documentation
-  extensions/vscode-orl/  VS Code extension
+  extensions/             local editor DX (vscode-orl, zed-ori)
   tools/                  staging, smoke, export, and validation scripts
   branding/               project logo assets
   _reversa_sdd/           historical reverse-engineering audit documents
@@ -453,37 +443,33 @@ macOS x86_64, and macOS aarch64. Runtime staging details live in
 
 Current pre-1.0 limitations:
 
-- Ori is not self-hosting.
+- Ori is not self-hosting (M4 deferred; language work comes first).
 - `ori compile` is AOT and requires the platform linker (Visual Studio Build
   Tools on Windows, `build-essential` on Linux, Xcode Command Line Tools on
   macOS). `ori run` uses JIT by default and needs no linker.
 - The compiler itself is written in Rust, so building Ori from source still
-  requires Rust. End users who install via release package do not need Rust.
-- C emission is partial and exists for debugging via `ori emit c`.
-- `ori install --path` supports local packages and path dependencies, and the
-  compiler resolves local package imports from `ori.proj` or `ori.pkg.toml`.
-  Remote registry fetch and upload are still future work.
-- `ori repl` is intentionally small: imports, simple `const`/`var` bindings,
-  calls, literals, and simple expressions are supported first.
+  requires Rust. End users who install via a **Linux** release package do not
+  need Rust (multi-OS packages are shelved).
+- C emission is partial and exists for debugging via `ori emit c` (no C async).
+- Packages support path/git/registry protocols; a public hosted marketplace is
+  **not** a current product goal.
+- Official extension **stores** (VS Code Marketplace, Zed store) are shelved;
+  use local install / dev extension.
+- `ori repl` is intentionally small.
 - Public contracts can still change before 1.0.
 
-See [docs/planning/PENDENTES.md](docs/planning/PENDENTES.md) and
-[docs/planning/historico/PLANO-MATURIDADE-COMPLETO.md](docs/planning/historico/PLANO-MATURIDADE-COMPLETO.md)
-for the active backlog.
+**Single open-work list:** [docs/planning/BACKLOG.md](docs/planning/BACKLOG.md).
 
 ## Roadmap
 
-Long-term technical criteria for 1.0 (execution order **stdlib → ABI →
-Rust-independence → self-host last**):
+**Now (language-first):** docs honesty, performance, residual language fixes that
+block real programs. See BACKLOG.
 
-1. consolidate the stdlib (Layer 2/3 in `.orl`; merge discussion open) — **next**;
-2. document a stable ABI after final feature integration — **after stdlib work**;
-3. finish Rust-independence for installers without a Rust toolchain —
-   largely implemented (JIT + SystemLinker); validation smoke/CI later;
-4. self-hosting or a documented bootstrap path — **last** language discussion;
-5. contract stability (e.g. a long no-breaking window) when approaching 1.0.
+**Already landed for 1.0 criteria:** stdlib parents (M2), ABI `ori-native-abi-1`
+(M3), installer path without Rust toolchain (M1) on the Linux package story.
 
-Active backlog order: `docs/planning/PENDENTES.md` (M2 → M3 → M1 → M4).
+**Later (shelved until language is solid):** multi-OS packages, store publish,
+external demos, self-host (M4 last).
 
 ## License
 

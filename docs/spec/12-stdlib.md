@@ -272,14 +272,16 @@ byte-oriented read/write with `result` error propagation.
 `close_input` / `close_output` mark the handle closed; subsequent operations
 return errors.
 
-### Layer 2 helpers (`ori.io.utils`)
+### Layer 2 helpers (on `ori.io`)
 
 ```ori
-import ori.io.utils = iu
+import ori.io = io
 
-iu.read_text(input: io.Input, max_chars: int)       -> result[optional[string], string]
-iu.write_text(output: io.Output, text: string)        -> result[int, string]
+io.read_text(input: io.Input, max_chars: int)       -> result[optional[string], string]
+io.write_text(output: io.Output, text: string)        -> result[int, string]
 ```
+
+Nested `ori.io.utils` remains a silent compat module; prefer `ori.io`.
 
 ---
 
@@ -1170,27 +1172,39 @@ standard-library features when generated C would not preserve Ori semantics.
 import ori.net = net
 
 net.connect(host, port, timeout_ms) -> result[net.Connection, string]
+net.connect_async(host, port, timeout_ms) -> future[result[net.Connection, string]]
 net.connect_tls(host, port, timeout_ms) -> result[net.Connection, string]
+net.connect_tls_async(host, port, timeout_ms) -> future[result[net.Connection, string]]
 net.listen(host, port) -> result[net.Listener, string]
 net.accept(listener) -> result[net.Connection, string]
+net.accept_async(listener) -> future[result[net.Connection, string]]
 net.close_listener(listener)
 net.listener_port(listener) -> int
 net.read_some(conn, max_bytes) -> result[bytes, string]
+net.read_some_async(conn, max_bytes) -> future[result[bytes, string]]
 net.write_all(conn, data) -> result[void, string]
+net.write_all_async(conn, data) -> future[result[int, string]]
 net.close(conn)
 net.is_closed(conn) -> bool
 net.udp_bind(host, port) -> result[net.UdpSocket, string]
 net.udp_send_to(sock, host, port, data) -> result[int, string]
+net.udp_send_to_async(sock, host, port, data) -> future[result[int, string]]
 net.udp_recv_from(sock, max_bytes) -> result[bytes, string]
+net.udp_recv_from_async(sock, max_bytes) -> future[result[bytes, string]]
 net.udp_close(sock)
 net.udp_local_port(sock) -> int
 ```
 
 Current implementation notes:
 
-- All network I/O is **synchronous and blocking** in the native runtime. Use
-  `task.run_blocking` (alias of `task.spawn` for worker-thread offload) or
-  helpers in `ori.net.utils` when calling from async code.
+- Sync network I/O is **blocking** in the native runtime.
+- **STDLIB-4b (shipped):** `*_async` helpers return `future[…]` so the async
+  executor is not blocked. Gate: `compile_runs_net_connect_async_loopback`.
+- **STDLIB-4k (shipped):** readiness-multiplexed I/O reactor (`poll(2)` on Unix)
+  for `accept_async` / `read_some_async` / `write_all_async` /
+  `udp_recv_from_async` / `udp_send_to_async`. Connect/TLS/FS async still use
+  worker threads (no pollable fd before the op starts). Gate:
+  `compile_runs_net_udp_async_loopback`.
 - `connect_tls` performs a TCP connect then a TLS client handshake (rustls,
   system trust roots via webpki-roots). The returned `Connection` is the same
   opaque type as plain TCP.
