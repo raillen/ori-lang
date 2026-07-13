@@ -7,16 +7,16 @@
 | Conceito | Papel | Quando usar |
 |----------|--------|-------------|
 | **`void`** | “Nada útil retornado” | Tipo de retorno de `func main() -> void`, side effects only |
-| **`optional<T>`** | “Pode não haver valor” | Parsing, lookup, EOF — ausência **não** é erro |
-| **`result<T, E>`** | “Sucesso ou falha explícita” | I/O, validação, APIs que podem falhar com motivo |
+| **`optional[T]`** | “Pode não haver valor” | Parsing, lookup, EOF — ausência **não** é erro |
+| **`result[T, E]`** | “Sucesso ou falha explícita” | I/O, validação, APIs que podem falhar com motivo |
 | **`check`** | Pré-condição / contrato | Invariantes em runtime (`check cond, "msg"`) |
 
-Ori **não tem null**. Use `none` dentro de `optional<T>` ou `error(...)` dentro de `result<T, E>`.
+Ori **não tem null**. Use `none` dentro de `optional[T]` ou `error(...)` dentro de `result[T, E]`.
 
 ## `void`
 
 ```ori
-func greet() -> void
+greet() -> void
     io.println("hello")
 end
 ```
@@ -24,10 +24,10 @@ end
 - Não confunda com `optional`: `void` não é um valor que você armazena.
 - Descartar `result` sem tratar emite `type.unused_result` (warning).
 
-## `optional<T>`
+## `optional[T]`
 
 ```ori
-func find_user(id: int) -> optional<string>
+find_user(id: int) -> optional[string]
     if id == 0
         return none
     end
@@ -40,10 +40,10 @@ end
 - `try valor` em `optional` propaga `none` (ver cap. 09).
 - `valor?` existe como forma compacta de `try valor`.
 
-## `result<T, E>`
+## `result[T, E]`
 
 ```ori
-func read_config(path: string) -> result<string, string>
+read_config(path: string) -> result[string, string]
     return fs.read_text(path)
 end
 ```
@@ -55,7 +55,7 @@ end
 ## `check`
 
 ```ori
-func divide(a: int, b: int) -> int
+divide(a: int, b: int) -> int
     check b != 0, "division by zero"
     return a / b
 end
@@ -69,8 +69,8 @@ end
 | Situação | Tipo / construção |
 |----------|-------------------|
 | Função só imprime | `-> void` |
-| “Não achei” sem erro | `optional<T>` + `none` |
-| Falha com mensagem | `result<T, string>` |
+| “Não achei” sem erro | `optional[T]` + `none` |
+| Falha com mensagem | `result[T, string]` |
 | Pré-condição que deve ser verdade | `check` |
 
 ## Ferramentas DX

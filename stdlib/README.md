@@ -1,5 +1,10 @@
 # Ori Standard Library
 
+> Surface: **S3 (`0.3.0`)** — modules use `module ori.…`, no declaration `func`,
+> types with `[]`, imports `import path = alias` / `import path (names)`.
+> Auk9 is not a product; Ori owns the living syntax.
+
+
 The stdlib has three layers: a Rust manifest + native runtime (Layer 1),
 `.orl` compositional wrappers (Layer 2), and `.orl` pure algorithms (Layer 3).
 Spec contracts in `docs/spec/12-stdlib.md`.
@@ -22,7 +27,7 @@ collections FFI) stays here permanently.
 ### Layer 2 — `.orl` safe wrappers (Stdlib Phase 0 — completo)
 
 Parent modules can expose `.orl` helpers beside native Layer 1 functions
-through selective imports, for example `import ori.string only (is_empty)`.
+through selective imports, for example `import ori.string (is_empty)`.
 Current flattened parents:
 
 | Module | File | Notes |
@@ -108,14 +113,14 @@ rede async nativa).
 ### Layer 2 or Layer 3 (`.orl`)
 
 1. Create or extend `stdlib/<module path>.orl` matching the namespace.
-2. `import ori.<layer1_module> as <alias>` for Layer 1 primitives.
-3. Declare `public func ...` for cross-namespace visibility.
+2. `import ori.<layer1_module> = <alias>` for Layer 1 primitives.
+3. Declare `public ...` for cross-namespace visibility.
 4. Avoid local variable name `len` (collides with `ori_len` runtime symbol).
 5. Avoid keywords as function names (`repeat`, `and`, …).
-6. Prefer indexed iteration over `for item in list<string>` when unsure about ARC loops.
+6. Prefer indexed iteration over `for item in list[string]` when unsure about ARC loops.
 7. Add regression test in `multifile_imports.rs`.
 8. Add a sidecar `.oridoc` (same name, `.oridoc` extension) documenting the
-   module (`doc module self`) and each `public func` with `summary`/`param`/`returns`.
+   module (`doc module self`) and each `public` with `summary`/`param`/`returns`.
    Validate with `ori doc check stdlib/<module>.orl`. Layer 1 runtime symbols
    (no `.orl`) stay documented in `docs/spec/12-stdlib.md` + `ori doc export`.
 
@@ -128,7 +133,7 @@ must be registered in `ori-types/src/lower.rs` (e.g. `ori.net.Connection`,
 
 Every Layer 2/3 `.orl` ships a sidecar `.oridoc` (40 files total) following
 the sidecar-first philosophy of `docs/spec/17-project-and-docs.md`. Each file
-documents the module (`doc module self`) and all `public func` symbols with
+documents the module (`doc module self`) and all `public` symbols with
 `summary`/`param`/`returns` in English. The sidecars are consumed by:
 
 - `ori doc check stdlib/<m>.orl` — validates syntax, symbol existence, and
@@ -146,3 +151,10 @@ lives in `docs/spec/12-stdlib.md` (normative) and `ori doc export` (JSON).
 1. `ORI_STDLIB_ROOT` env var (override for tests/packaging)
 2. `CARGO_MANIFEST_DIR/../../../stdlib` (dev mode)
 3. `<ori.exe dir>/stdlib` (release package)
+
+## Surface S3
+
+All in-repo `.orl` modules follow S3. When editing, do not reintroduce pre-S3
+forms. Prefer public domain aliases for long `result[…]` returns (style 1.3).
+
+External packages (`ori-game`, `ori-imgui`) may still be on pre-S3 until migrated.

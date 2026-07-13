@@ -2,6 +2,7 @@
 
 > Status: normative
 > Audience: compiler implementers
+> Surface: **S3** (`0.3.0`)
 
 ---
 
@@ -73,7 +74,7 @@ Calculates the area of a rectangle.
 @example
     const a: int = area(10, 5)  -- 50
 |--
-public func area(width: int, height: int) -> int
+public area(width: int, height: int) -> int
     return width * height
 end
 ```
@@ -95,22 +96,29 @@ implemented.
 The following identifiers are reserved and cannot be used as user-defined names:
 
 ```
-namespace  import     as         public
-func       return     end        const      var
-if         else       while      for        in
-repeat     break      continue
+module     import     public     return     end
+const      var        if         else       elif
+while      for        in         repeat     break     continue
 match      case       loop
-struct     trait      implement  enum
-where      is         alias      do
-and        or         not
-true       false      none       success    error    some
+struct     trait      apply      use        enum
+alias      and        or         not
+true       false      none       success    error     some
 mut        self       attr       extern
-any        optional   result     list       map      set
+any        optional   result     list       map       set
 range      void
-using      check      with       then       tuple    lazy
+using      check      with       then       tuple     lazy
+async      await
 ```
 
-Note: `times` was removed from the reserved list. See Contextual Keywords below.
+Notes (S3 / `0.3.0`):
+
+- `module`, declaration keyword `func`, `implement`, `do`, `as` (import),
+  `only` (import), and `where` (type bounds) are **not** valid surface forms.
+  Using them emits dedicated `parse.*_removed` diagnostics (see chapter 13).
+- `func` remains only as the **callable type** constructor: `func(T) -> R`.
+- `is` remains usable in type tests / bounds contexts where still implemented;
+  the removed bound form is `for T: Trait` (use `for T: Trait`).
+- `times` is contextual (see below), not reserved globally.
 
 ### Contextual Keywords
 
@@ -119,12 +127,13 @@ be used as identifiers elsewhere:
 
 | Word | Position |
 |---|---|
-| `only` | After `import module`, starts a selective import list |
 | `c` | After `extern`, names the C ABI: `extern c` |
 | `host` | After `extern`, names the host ABI |
 | `it` | Inside an `if` value contract on a field or parameter — refers to the value being checked |
 | `times` | After `repeat expression` — optional readability word: `repeat 5 times` |
-| `try` | Before an expression — readable propagation form: `try read_config(path)` |
+| `try` | Before an expression — propagation form: `try read_config(path)` |
+| `for` | Also after a name in generic bounds: `max for T: Comparable (...)` |
+| `use` | Inside `apply Type` — starts a trait section: `use Trait` |
 
 ---
 
@@ -144,7 +153,7 @@ Conventions (enforced by `ori fmt`):
 | Shape | Convention |
 |---|---|
 | Types, traits, enums | `PascalCase` |
-| Functions, variables, namespaces | `snake_case` |
+| Functions, variables, modules | `snake_case` |
 | Constants at module level | `SCREAMING_SNAKE_CASE` (optional) |
 
 Shadowing of an existing binding in the same scope is a compile error.
@@ -262,8 +271,8 @@ Prefix `b` produces a `bytes` literal. No Unicode escapes in `b"..."`.
 ### Range Literals
 
 ```ori
-0..9        -- range<int>: 0, 1, 2, ..., 9  (inclusive both ends)
-5..3        -- range<int>: 5, 4, 3          (descending, inclusive)
+0..9        -- range[int]: 0, 1, 2, ..., 9  (inclusive both ends)
+5..3        -- range[int]: 5, 4, 3          (descending, inclusive)
 ```
 
 Ranges are always inclusive on both ends. Direction is determined by whether
@@ -297,10 +306,10 @@ The `--|` / `|--` tokens delimit block and documentation comments.
 
 ### Tuple Field Access
 
-Fields of a `tuple<...>` are accessed by integer index after `.`:
+Fields of a `tuple[...]` are accessed by integer index after `.`:
 
 ```ori
-const pair: tuple<int, string> = tuple(1, "one")
+const pair: tuple[int, string] = tuple(1, "one")
 const n: int    = pair.0
 const s: string = pair.1
 ```
@@ -324,15 +333,15 @@ Attributes are reserved for declaration metadata:
 
 ```ori
 @test
-func test_addition()
+test_addition()
     check 1 + 1 == 2
 end
 
 @deprecated("use new_api() instead")
-public func old_api() -> int
+public old_api() -> int
 
 @inline
-func hot_path(n: int) -> int
+hot_path(n: int) -> int
     return n * 2
 end
 ```
@@ -377,7 +386,7 @@ Use `a < b and b < c` instead.
 
 | Category | Examples |
 |---|---|
-| Keywords | `func`, `struct`, `namespace`, `implement`, `loop`, `do` ... |
+| Keywords | `func`, `struct`, `module`, `implement`, `loop`, `do` ... |
 | Identifiers | `player`, `User`, `get_name`, `_internal` |
 | Integer literals | `0`, `42`, `0xFF`, `1_000` |
 | Float literals | `3.14`, `1.0e10` |

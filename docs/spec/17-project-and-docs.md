@@ -59,7 +59,7 @@ imports. O compilador procura primeiro os arquivos do projeto atual. Se nao
 encontrar o import, procura nas dependencias por `path`.
 
 ```ori
-import demo.math only (double)
+import demo.math (double)
 ```
 
 Para `demo.math = { path = "../math" }`, o path deve apontar para um projeto com
@@ -90,7 +90,7 @@ Campos obrigatorios:
 
 | Campo | Descricao |
 |---|---|
-| `package.name` | Nome pontilhado alinhado ao namespace Ori. |
+| `package.name` | Nome pontilhado alinhado ao module Ori. |
 | `package.version` | Versao `major.minor.patch`. |
 | `package.entry` | Arquivo `.orl` de entrada do pacote. |
 | `package.ori_version` | Versao minima esperada do compilador Ori. |
@@ -106,7 +106,7 @@ paths para carregar imports do pacote antes de emitir `bind.import_not_found`.
 
 ## `.oridoc`
 
-Um arquivo `.oridoc` documenta simbolos de um namespace. Ele pode ficar ao lado
+Um arquivo `.oridoc` documenta simbolos de um module. Ele pode ficar ao lado
 do `.orl`:
 
 ```text
@@ -125,7 +125,7 @@ Exemplo:
 ```text
 oridoc 1
 
-namespace app.math
+module app.math
 
 doc func add
     summary:
@@ -141,7 +141,7 @@ end
 
 Regras:
 
-- `namespace` deve ser o mesmo namespace do codigo documentado.
+- `module` deve ser o mesmo module do codigo documentado.
 - `doc func add` documenta `app.math.add`.
 - `doc method User.name` documenta `app.math.User.name`.
 - `doc module self` documenta o modulo `app.math`.

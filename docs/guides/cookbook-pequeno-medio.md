@@ -8,12 +8,12 @@ o codigo do compilador.
 ## CLI que le argumentos
 
 ```ori
-namespace app.main
+module app.main
 
-import ori.args as args
-import ori.io as io
+import ori.args = args
+import ori.io = io
 
-func main()
+main()
     const name: string = args.get_or(1, "Ori")
     io.println("ola, " + name)
 end
@@ -28,12 +28,12 @@ ori run src/main.orl
 ## Ler configuracao local
 
 ```ori
-namespace app.main
+module app.main
 
-import ori.config as config
-import ori.io as io
+import ori.config = config
+import ori.io = io
 
-func main()
+main()
     const text: string = config.read_text_or("app.conf", "modo=dev")
     io.println(text)
 end
@@ -44,12 +44,12 @@ Use `config.read_json(path)` quando o arquivo precisar ser JSON estruturado.
 ## Trabalhar com arquivos
 
 ```ori
-namespace app.main
+module app.main
 
-import ori.fs as fs
-import ori.io as io
+import ori.fs = fs
+import ori.io = io
 
-func main()
+main()
     const written = fs.write_text("out.txt", "feito")
     const text = fs.read_text("out.txt")
     match text
@@ -64,12 +64,12 @@ end
 ## Medir tempo
 
 ```ori
-namespace app.main
+module app.main
 
-import ori.io as io
-import ori.time as time
+import ori.io = io
+import ori.time = time
 
-func main()
+main()
     const start: time.Instant = time.instant_now()
     time.sleep_duration(time.duration_millis(10))
     const elapsed: time.Duration = time.elapsed_since(start)
@@ -89,7 +89,7 @@ demo.math = { path = "../math", version = "0.1.0" }
 No codigo:
 
 ```ori
-import demo.math only (double)
+import demo.math (double)
 ```
 
 Depois rode:

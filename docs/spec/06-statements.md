@@ -2,6 +2,7 @@
 
 > Status: normative
 > Audience: compiler implementers
+> Surface: **S3** (`0.3.0`)
 
 ---
 
@@ -92,7 +93,7 @@ else
 end
 ```
 
-Chained conditionals use `elif` (S3). The form `else if` is rejected with
+Chained conditionals use `elif` (S3). The form `elif` is rejected with
 `parse.else_if_removed`.
 
 The condition must be `bool`. There is no truthy/falsy coercion.
@@ -175,14 +176,14 @@ end
 
 Iterates over built-in iterables or a value that implements `core.Iterable`.
 
-Built-in iterables: `list<T>`, `map<K, V>`, `set<T>`, `string`, `bytes`,
-and `range<int>`.
+Built-in iterables: `list[T]`, `map[K, V]`, `set[T]`, `string`, `bytes`,
+and `range[int]`.
 
 Custom iterable contract:
 
-- import the core trait namespace, usually `import ori.core as core`;
+- import the core trait module, usually `import ori.core = core`;
 - implement `core.Iterable` for the concrete type;
-- provide `mut func next() -> optional<T>`;
+- provide `mut next() -> optional[T]`;
 - the `for` binding has type `T`;
 - the second binding is the zero-based `int` index.
 
@@ -194,9 +195,9 @@ for item, index in items
 end
 ```
 
-For `list<T>`, `set<T>`, `string`, `bytes`, ranges, and custom iterables:
+For `list[T]`, `set[T]`, `string`, `bytes`, ranges, and custom iterables:
 second binding is the `int` index.
-For `map<K, V>`: second binding is the value `V` (first is the key `K`).
+For `map[K, V]`: second binding is the value `V` (first is the key `K`).
 
 **Range iteration:**
 
@@ -297,7 +298,7 @@ case West:
 end
 ```
 
-Leading-dot patterns such as `case .North:` are rejected with
+Leading-dot patterns such as `case North:` are rejected with
 `parse.case_dot_variant_removed`. Enum *literals* outside match may still use
 other forms (see later chapters / S3 block 4).
 
@@ -326,7 +327,7 @@ The cleanup function for a type is defined by implementing `Disposable`:
 
 ```ori
 trait Disposable
-    mut func dispose()
+    mut dispose()
 end
 ```
 
@@ -345,7 +346,7 @@ logic error handling.
 
 The optional second argument is a message string for the panic message.
 
-Use `result<T, E>` for expected, recoverable failures.
+Use `result[T, E]` for expected, recoverable failures.
 
 **Difference from `if` value contracts:**
 `check` is imperative — it is a statement called explicitly at a point
@@ -384,7 +385,7 @@ counter.increment()
 list.push(item)
 ```
 
-If a function returns `result<T, E>` and the result is discarded without
+If a function returns `result[T, E]` and the result is discarded without
 propagation or handling, the compiler emits a warning: `unused result`.
 
 ---

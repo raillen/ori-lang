@@ -2,6 +2,7 @@
 
 > Status: normative
 > Audience: compiler implementers, runtime maintainers, tooling authors
+> Surface: **S3** (`0.3.0`)
 
 ---
 
@@ -55,11 +56,11 @@ The default calling convention for Ori functions and FFI interactions is the sta
 To avoid naming collisions and to support namespaces, Ori applies a deterministic name mangling scheme to all top-level functions and static variables.
 
 ### The Scheme
-The mangled name is a concatenation of the namespace, the entity name, and an optional type hash (for monomorphized generics).
+The mangled name is a concatenation of the module, the entity name, and an optional type hash (for monomorphized generics).
 
-Format: `ori_MANGLE_<namespace>_<name>[_<hash>]`
+Format: `ori_MANGLE_<module>_<name>[_<hash>]`
 
-- `namespace`: The fully qualified namespace, with dots `.` replaced by underscores `_`. (e.g., `ori.string.utils` becomes `ori_string_utils`).
+- `module`: The fully qualified module, with dots `.` replaced by underscores `_`. (e.g., `ori.string.utils` becomes `ori_string_utils`).
 - `name`: The function or variable name.
 - `hash`: A 16-character hexadecimal hash of the generic type arguments (only present if the function is a monomorphized instance of a generic function).
 

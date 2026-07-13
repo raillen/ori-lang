@@ -1,6 +1,6 @@
 # Primeiro projeto e pacotes locais
 
-Status: guia pratico para Ori `0.2.x`.
+Status: guia pratico para Ori **S3 / `0.3.0`**.
 
 Este guia cobre o caminho curto:
 
@@ -42,12 +42,12 @@ ori summary .
 Para testes, crie uma funcao com `@test`:
 
 ```ori
-namespace demo.main
+module demo.main
 
-import ori.test as test
+import ori.test = test
 
 @test
-func math_is_stable()
+math_is_stable()
     test.assert(1 + 1 == 2, "math should work")
 end
 ```
@@ -86,9 +86,9 @@ ori_version = "0.2.0"
 `math/src/lib.orl`:
 
 ```ori
-namespace demo.math
+module demo.math
 
-public func double(value: int) -> int
+public double(value: int) -> int
     return value * 2
 end
 ```
@@ -126,12 +126,12 @@ demo.math = { path = "../math", version = "0.1.0" }
 `app/src/main.orl`:
 
 ```ori
-namespace demo.app
+module demo.app
 
-import demo.math only (double)
-import ori.io as io
+import demo.math (double)
+import ori.io = io
 
-func main()
+main()
     io.println(string(double(21)))
 end
 ```

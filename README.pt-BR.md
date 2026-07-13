@@ -1,5 +1,7 @@
 # Ori
 
+**Superfície S3 (`0.3.0`):** sintaxe inspirada na Auk9 sobre o motor Ori. Propósito (estudo, IA, legibilidade ND — **não** competição de mercado): [manifesto](docs/spec/00-manifesto.md). Auk9 lab **aposentada como produto**.
+
 Ori é uma linguagem de programação compilada para código nativo, com tipagem
 explícita e foco em leitura. O compilador é escrito em Rust e foi criado com um
 objetivo direto: tornar programas mais fáceis de ler, inspecionar, diagnosticar
@@ -11,7 +13,7 @@ contrato estável 1.0.
 
 **Idiomas:** [English](README.md) | Português | [日本語](README.ja.md)
 
-**Menu do projeto:** [Especificação](docs/spec/README.md) | [Planejamento](docs/planning/README.md) | [Biblioteca padrão](stdlib/README.md) | [Runtime](runtime/README.md) | [Exemplos](examples/) | [Changelog](CHANGELOG.md) | [Contribuição](CONTRIBUTING.md)
+**Menu do projeto:** [Manifesto](docs/spec/00-manifesto.md) | [Especificação](docs/spec/README.md) | [Planejamento](docs/planning/README.md) | [Biblioteca padrão](stdlib/README.md) | [Runtime](runtime/README.md) | [Exemplos](examples/) | [Changelog](CHANGELOG.md) | [Contribuição](CONTRIBUTING.md)
 
 ## Conteúdo
 
@@ -63,12 +65,12 @@ precisa delas:
 
 | Pergunta | Ori deixa visível por meio de |
 |---|---|
-| Onde este arquivo pertence? | `namespace` no topo de cada arquivo |
+| Onde este arquivo pertence? | `module` no topo de cada arquivo |
 | Qual é o tipo deste valor? | anotações de tipo explícitas |
-| Este valor pode estar ausente? | `optional<T>` |
-| Esta operação pode falhar? | `result<T, E>` |
+| Este valor pode estar ausente? | `optional[T>` |
+| Esta operação pode falhar? | `result[T, E>` |
 | Quando um recurso é liberado? | `using` |
-| De onde vem este comportamento? | `trait` e `implement` |
+| De onde vem este comportamento? | `trait` e `apply` / `use` |
 | O que deu errado? | códigos de diagnóstico estruturados |
 
 Esse design reduz carga cognitiva: menos regras escondidas, cadeias de
@@ -78,7 +80,7 @@ inferência menores e mensagens de erro mais claras.
 
 | Área | Status |
 |---|---|
-| Versão | `0.2.0`, congelada na linha `0.2.x` até haver breaking change real |
+| Versão | **Superfície de linguagem `0.3.0` (corte S3)**; pacote Cargo pode permanecer `0.2.0` até a tag de release |
 | Estabilidade | pre-1.0; compatibilidade de código-fonte ainda pode mudar |
 | Compilador | workspace Rust com lexer, parser, HIR, checker, codegen, diagnósticos, LSP, driver e runtime |
 | Backend nativo | código objeto Cranelift mais runtime nativo Ori |
@@ -160,7 +162,7 @@ A CLI `ori` é implementada em `compiler/crates/ori-driver`.
 | `ori doc file <file.orl>` | extrai comentários de documentação como Markdown ou HTML |
 | `ori doc export` | exporta símbolos stdlib, diagnósticos e keywords como JSON |
 | `ori doctor` | reporta saúde da stdlib, runtime, linker, target e JIT |
-| `ori explain <code>` | explica um código de diagnóstico |
+| `ori explain <code]` | explica um código de diagnóstico |
 | `ori summary [path]` | imprime entry file, namespaces, imports e contagem de diagnósticos |
 | `ori build <file.orl>` | emite C pelo backend de debug |
 | `ori lex <file.orl>` | imprime tokens para debug do compilador |
@@ -187,13 +189,13 @@ A matriz completa de ambiente está em [AGENTS.md](AGENTS.md).
 
 O modelo central de Ori é pequeno:
 
-- todo arquivo começa com `namespace`;
+- todo arquivo começa com `module`;
 - imports criam aliases locais;
 - declarações top-level são privadas, exceto quando marcadas como `public`;
 - `struct` e `enum` definem dados;
-- `trait` e `implement` definem comportamento;
-- `optional<T>` modela ausência;
-- `result<T, E>` modela falha recuperável;
+- `trait` e `apply` / `use` definem comportamento;
+- `optional[T>` modela ausência;
+- `result[T, E>` modela falha recuperável;
 - `?` propaga valores `result` ou `optional`;
 - `using` deixa limpeza explícita;
 - diagnósticos usam códigos estáveis como `name.undefined` e
@@ -206,7 +208,7 @@ module app.errors
 
 import ori.io = io
 
-divide(a: int, b: int) -> result<int, string>
+divide(a: int, b: int) -> result[int, string>
     if b == 0
         return error("division by zero")
     end
@@ -214,7 +216,7 @@ divide(a: int, b: int) -> result<int, string>
     return success(a / b)
 end
 
-main() -> result<void, string>
+main() -> result[void, string]
     const value: int = divide(84, 2)?
     io.print(f"value: {value}")
     return success()
@@ -247,7 +249,7 @@ verdade para async, ARC, coleções ou runtime.
 
 ## Biblioteca padrão
 
-A stdlib vive no namespace `ori.*`.
+A stdlib vive no module `ori.*`.
 
 Forma atual:
 

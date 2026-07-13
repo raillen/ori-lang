@@ -2,6 +2,7 @@
 
 > Status: current as of 2026-06-29.
 > Audience: stdlib implementers, compiler implementers
+> Surface: **S3** (`0.3.0`)
 > See also: [`12-stdlib.md`](12-stdlib.md) — Implementation Architecture (v1.x)
 
 Goal: adding a stdlib function should not require guessing four different places.
@@ -109,7 +110,7 @@ This is no longer a future item — the infrastructure is live.
 ### Path convention
 
 `ori.X.Y.Z` -> `stdlib/X/Y/Z.orl` (dots become directory separators, file
-extension is `.orl`). The file must declare `namespace ori.X.Y.Z` (enforced
+extension is `.orl`). The file must declare `module ori.X.Y.Z` (enforced
 by `validate_import_namespace`).
 
 ### Discovery
@@ -119,12 +120,12 @@ imports. If `ori.string`, `ori.list`, or `ori.fs` is imported with an alias, the
 runtime manifest wins and no parent `.orl` helper module is loaded.
 
 When the import has selected items, for example
-`import ori.string only (is_empty)`, the driver may load the matching parent
+`import ori.string (is_empty)`, the driver may load the matching parent
 `.orl` file with `StdlibSource(PathBuf)`. Unknown `ori.*` modules still check
 `find_stdlib_source_module` before returning `Unknown`.
 
 Loaded stdlib source files use the same `load_source_recursive` path as user
-files, including cycle detection and namespace validation.
+files, including cycle detection and module validation.
 
 ### Stdlib root resolution
 
@@ -136,15 +137,15 @@ files, including cycle detection and namespace validation.
 ### Visibility
 
 Functions in `.orl` stdlib modules must be declared `public` to be callable
-from other namespaces — same rule as user code. Private functions are only
-visible within the same namespace (useful for internal helpers in a stdlib
+from other modules — same rule as user code. Private functions are only
+visible within the same module (useful for internal helpers in a stdlib
 module).
 
 ### Adding a Layer 2 function
 
-- [ ] Create or extend `stdlib/<module path>.orl` matching the namespace.
-- [ ] `import ori.<layer1_module> as <alias>` to access Layer 1 primitives.
-- [ ] Declare functions with `public func ...`.
+- [ ] Create or extend `stdlib/<module path>.orl` matching the module.
+- [ ] `import ori.<layer1_module> = <alias>` to access Layer 1 primitives (S3).
+- [ ] Declare functions with `public name(...)` (no declaration `func`).
 - [ ] Avoid Ori keywords as identifiers (`string`, `repeat`, `result`, etc.
   are reserved — use `str`, `replicate`, `acc` or similar alternatives).
 - [ ] Avoid local variable names that collide with runtime internal symbols.
@@ -153,7 +154,7 @@ module).
   and conflicts with the runtime symbol, producing `undefined variable
   'ori_len' in native codegen` at compile time. Use a qualified name like
   `s_len`, `sub_len`, `total_len` instead.
-- [ ] Prefer indexed iteration over `for item in list<string>` in Layer 2/3
+- [ ] Prefer indexed iteration over `for item in list[string]` in Layer 2/3
   stdlib (ARC loop binding still fragile for managed string elements).
 - [ ] Map/set/graph modules: use concrete key types (`string`, `int`) until
   the `Hashable` + `Equatable` trait gate supports generic keys.
@@ -176,7 +177,7 @@ The old submodules remain compatible.
 
 For usability and ergonomics, parent modules may merge Layer 2
 (compositional) and Layer 3 (algorithm) helpers directly into the parent Layer
-1 module namespace.
+1 module.
 
 Implemented parent modules:
 
@@ -186,17 +187,15 @@ Implemented parent modules:
 
 Instead of importing many helper modules:
 ```ori
-import ori.string as str
-import ori.string as su
-import ori.string as sa
+import ori.string = str
 ```
-Users can import only the helper names needed from the unified root namespace:
+Users can import only the helper names needed from the unified root module:
 
 ```ori
-import ori.string only (is_empty, truncate as cut)
+import ori.string (is_empty, truncate as cut)
 ```
 
-Normal alias imports such as `import ori.string as str` continue to expose the
+Normal alias imports such as `import ori.string = str` continue to expose the
 native runtime surface (`str.len`, `str.slice`, `str.parse_int`, etc.) without
 forcing the parent `.orl` helper module into every compile.
 

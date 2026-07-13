@@ -20,12 +20,12 @@ Legend:
 | Feature | Language promise | Native backend | C/debug backend | Notes |
 | --- | --- | --- | --- | --- |
 | Basic expressions and statements | yes | yes | partial | Native is the main execution path. C/debug is not full parity. |
-| Functions and imports | yes | yes | partial | Native tests cover local imports, transitive imports and entry namespace. |
+| Functions and imports | yes | yes | partial | Native tests cover local imports, transitive imports and entry module. |
 | Structs, enums and tuples | yes | yes | partial | Native ABI has layout tests. |
-| Traits and `any<Trait>` | yes | yes | partial | Native tests cover dynamic dispatch. |
+| Traits and `any[Trait]` | yes | yes | partial | Native tests cover dynamic dispatch. |
 | Generics and monomorphization | yes | yes | partial | Native tests cover generic functions and imported generic traits. |
 | Lists, maps, sets, deques, queues, stacks | yes | yes | partial | Native runtime owns ARC edges. |
-| Structural equality | yes | yes | partial | Native and C/debug cover primitives, `bytes`, `optional`, `result`, tuples, lists, generic structs, `set<T>`, and `map<K,V>` when keys/elements support equality. |
+| Structural equality | yes | yes | partial | Native and C/debug cover primitives, `bytes`, `optional`, `result`, tuples, lists, generic structs, `set[T]`, and `map[K,V]` when keys/elements support equality. |
 | Hash tables, trees, graphs, heaps | yes | yes | partial | Native tests cover stdlib operations. |
 | JSON (`json.parse` / `json.Value`) | yes | yes | partial | C backend emits `ori_json_parse` FFI stubs without dedicated C lowering; execution requires native runtime. |
 | `ori.net` (TCP/TLS/UDP) | yes | yes | no | Native runtime only (rustls + blocking sockets). C/debug rejects or emits extern stubs without bodies. Use `task.run_blocking` for offload from async code. |

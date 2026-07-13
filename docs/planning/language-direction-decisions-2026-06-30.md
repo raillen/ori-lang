@@ -4,11 +4,21 @@
 > Data: 2026-06-30
 > Escopo: design da linguagem Ori. Nem todos os itens estao implementados ainda.
 
+> **Superseded (parcial, 2026-07-12):** a superfície de **propagação de erros** e a
+> forma canônica da linguagem passaram pelo corte **S3 / `0.3.0`**. Em particular:
+> **só `try expr`** (postfix `expr?` é erro); ver
+> [`ori-surface-s3-auk9.md`](ori-surface-s3-auk9.md),
+> [`adr-ori-surface-s3-auk9.md`](adr-ori-surface-s3-auk9.md) e
+> [`docs/spec/00-manifesto.md`](../spec/00-manifesto.md).
+> As demais decisões deste arquivo (ARC, concorrência, monomorfização, …)
+> permanecem referência de direção.
+
+
 ## Resumo curto
 
 | Tema | Decisao |
 |---|---|
-| Erros | `try expr` e a forma canonica de propagacao; `expr?` continua como atalho compacto |
+| Erros | **S3:** só `try expr` (`expr?` removido no `0.3.0`) |
 | Backend C | redefinir `ori build`; C deve ser debug explicito ou removido em fase posterior |
 | Mutabilidade + ARC | valores previsiveis, copy-on-write onde fizer sentido, mutacao explicita para recursos |
 | Concorrencia | modelo cooperativo, explicito, sem dados compartilhados magicos |

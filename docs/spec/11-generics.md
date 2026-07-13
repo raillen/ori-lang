@@ -2,6 +2,7 @@
 
 > Status: normative
 > Audience: compiler implementers
+> Surface: **S3** (`0.3.0`)
 
 ---
 
@@ -16,11 +17,11 @@ distinct type argument (monomorphization).
 ## Generic Functions
 
 ```ori
-func identity<T>(value: T) -> T
+identity[T](value: T) -> T
     return value
 end
 
-func first<T>(items: list<T>) -> optional<T>
+first[T](items: list[T]) -> optional[T]
     if len(items) == 0
         return none
     end
@@ -28,20 +29,20 @@ func first<T>(items: list<T>) -> optional<T>
 end
 ```
 
-Type parameters are declared in `<T>` after the function name.
-Multiple parameters: `<T, U>`, `<Key, Value>`.
+Type parameters are declared in `[T]` after the name (or via `for T: Trait` bounds).
+Multiple parameters: `[T, U]`, `[Key, Value]`.
 
 ---
 
 ## Generic Structs
 
 ```ori
-struct Pair<A, B>
+struct Pair[A, B]
     first: A
     second: B
 end
 
-const p: Pair<int, string> = Pair(first: 1, second: "one")
+const p: Pair[int, string] = Pair { first: 1, second: "one" }
 ```
 
 ---
@@ -49,7 +50,7 @@ const p: Pair<int, string> = Pair(first: 1, second: "one")
 ## Generic Enums
 
 ```ori
-enum Either<Left, Right>
+enum Either[Left, Right]
     Left(value: Left)
     Right(value: Right)
 end
@@ -60,22 +61,21 @@ end
 ## Generic Traits
 
 ```ori
-trait Container<Item>
-    mut func add(item: Item)
-    func get(index: int) -> optional<Item>
-    func length() -> int
+trait Container[Item]
+    mut add(item: Item)
+    get(index: int) -> optional[Item]
+    length() -> int
 end
 ```
 
 ---
 
-## Type Constraints (`where`)
+## Type Constraints (`for T: Trait`)
 
 Type parameters may be constrained to require specific trait implementations:
 
 ```ori
-func max<T>(a: T, b: T) -> T
-    where T is Comparable
+max for T: Comparable (a: T, b: T) -> T
     if a.compare(b) > 0
         return a
     end
@@ -86,11 +86,7 @@ end
 ### Multiple Constraints
 
 ```ori
-func sorted_keys<K, V>(m: map<K, V>) -> list<K>
-    where (
-        K is Hashable
-        and K is Comparable
-    )
+sorted_keys for K: Hashable, K: Comparable [K, V](m: map[K, V]) -> list[K]
     -- ...
 end
 ```
@@ -101,7 +97,7 @@ Value contracts on individual parameters use `if` after the type or after a
 default value:
 
 ```ori
-func sqrt(value: float if it >= 0.0) -> float
+sqrt(value: float if it >= 0.0) -> float
 ```
 
 This is a value contract (checked at runtime), not a type constraint.
@@ -109,7 +105,7 @@ This is a value contract (checked at runtime), not a type constraint.
 ### Negative Constraints
 
 ```ori
-func raw_copy<T>(src: T, dst: T) where T is not Disposable
+raw_copy for T: not Disposable [T](src: T, dst: T)
 ```
 
 Prevents the function from being called with managed/resource types.
@@ -126,13 +122,13 @@ argument types:
 const result: int = identity(42)
 
 -- Type argument T inferred as string from the list contents:
-const name: optional<string> = first(["Ada", "Bo"])
+const name: optional[string] = first(["Ada", "Bo"])
 ```
 
 When inference is ambiguous or impossible, the type argument must be explicit:
 
 ```ori
-const empty: optional<int> = first<int>([])
+const empty: optional[int] = first[int]([])
 ```
 
 ---
@@ -162,19 +158,19 @@ This means:
 Example:
 
 ```ori
-func wrap<T>(value: T) -> optional<T>
+wrap[T](value: T) -> optional[T]
     return some(value)
 end
 
-const a: optional<int> = wrap(1)
-const b: optional<string> = wrap("ori")
+const a: optional[int] = wrap(1)
+const b: optional[string] = wrap("ori")
 ```
 
 The compiler can lower this as if the program had two concrete functions:
 
 ```text
-wrap_int(value: int) -> optional<int>
-wrap_string(value: string) -> optional<string>
+wrap_int(value: int) -> optional[int]
+wrap_string(value: string) -> optional[string]
 ```
 
 ### Future direction
@@ -188,7 +184,7 @@ complex:
 - report generic instantiation counts in `ori summary`;
 - add compiler warnings for very large instantiation sets;
 - deduplicate identical generated code when it is safe;
-- study optional type erasure through `any<Trait>` for cold APIs, plugin
+- study optional type erasure through `any[Trait]` for cold APIs, plugin
   boundaries, and package boundaries;
 - keep monomorphization for hot paths and small programs.
 
@@ -197,37 +193,39 @@ complex:
 ## Supported Generic Combinations
 
 Not all combinations of types and generic functions are supported. The compiler
-reports a clear error when a type argument fails to satisfy a `where` constraint:
+reports a clear error when a type argument fails to satisfy a `for T: Trait` bound:
 
 ```
 error[generic.constraint_not_satisfied]: T does not satisfy constraint
   --> src/app/main.orl:12:5
    |
-12 |    const keys: list<K> = sorted_keys(my_map)
+12 |    const keys: list[K] = sorted_keys(my_map)
    |                          ^^^^^^^^^^^^^^^^
    |
-   = why: K = User, but User does not implement Comparable
-   = action: add 'implement Comparable for User' with func compare(other: User) -> int
+   = why: K = User, but User does not satisfy Comparable
+   = action: add `apply User` / `use Comparable` with `compare(other: User) -> int`
 ```
 
 ---
 
 ## `Self` in Generic Contexts
 
-`Self` inside a `trait` or `implement` block refers to the implementing type.
+`Self` inside a `trait` or `apply` block refers to the implementing type.
 It may be used as a type argument:
 
 ```ori
 trait Cloneable
-    func clone() -> Self
+    clone() -> Self
 end
 
-implement Cloneable for Config
-    func clone() -> Config
-        return Config(
-            timeout: self.timeout,
-            retries: self.retries,
-        )
+apply Config
+    use Cloneable
+        clone() -> Config
+            return Config {
+                timeout: self.timeout,
+                retries: self.retries
+            }
+        end
     end
 end
 ```
@@ -237,8 +235,8 @@ end
 ## Generic Type Aliases
 
 ```ori
-alias IntMap<V>   = map<int, V>
-alias Callback<T> = func(T) -> bool
+alias IntMap[V]   = map[int, V]
+alias Callback[T] = func(T) -> bool
 ```
 
 ---
@@ -255,7 +253,7 @@ monomorphization time:
 ```ori
 trait Container
     type Item
-    func get(self) -> Item
+    get(self) -> Item
 end
 ```
 
@@ -274,15 +272,15 @@ end
 Type constructors may appear as type parameters in constrained forms:
 
 ```ori
-trait Functor<F<_>>
-    func fmap<A, B>(fa: F<A>, f: func(A) -> B) -> F<B>
+trait Functor<F[_]>
+    fmap<A, B>(fa: F[A], f: func(A) -> B) -> F[B]
 end
 ```
 
 ### Not supported in v1
 
-- **Variadic type parameters**: `tuple<T...>` — not supported; use
-  `tuple<A, B, ...>` with fixed arity.
+- **Variadic type parameters**: `tuple[T...]` — not supported; use
+  `tuple[A, B, ...]` with fixed arity.
 
 These may be extended in future versions via explicit design decisions.
 
@@ -292,8 +290,8 @@ The syntax above is verified by `ori check` in `ori_spec.rs`:
 
 - `generic_accepts_associated_type_in_trait` — `type Item` in a trait.
 - `generic_accepts_const_generic_param` — `struct Matrix<const N: int>`.
-- `generic_accepts_hkt` — `trait Functor<F<_>>`.
-- `generic_accepts_where_constraint` — `where T is Comparable`.
-- `generic_accepts_negative_constraint` — `where T is not Disposable`.
-- `generic_accepts_generic_struct` — `struct Pair<A, B>`.
+- `generic_accepts_hkt` — `trait Functor<F[_]>`.
+- `generic_accepts_where_constraint` — `for T: Comparable`.
+- `generic_accepts_negative_constraint` — `for T: not Disposable`.
+- `generic_accepts_generic_struct` — `struct Pair[A, B]`.
 - `generic_accepts_type_inference` — type argument inferred from call site.

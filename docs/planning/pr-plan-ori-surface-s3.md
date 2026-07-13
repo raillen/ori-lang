@@ -3,7 +3,7 @@
 **Origem (ADR):** `docs/planning/adr-ori-surface-s3-auk9.md`  
 **Registro de decisões:** `docs/planning/ori-surface-s3-auk9.md`  
 **Data:** 2026-07-12  
-**Status:** Pronto para `/execute-plan`  
+**Status:** PRs 1–10 executados (superfície + docs 0.3.0); PR 11 = 0.3.1 fora deste corte  
 **Release alvo:** `0.3.0` (PRs 1–10) · `0.3.1` (PR 11, plano separado ou continuação)
 
 ---

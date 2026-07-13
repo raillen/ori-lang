@@ -2,6 +2,7 @@
 
 > Status: normative for emitted diagnostics; informative for planned diagnostics
 > Audience: compiler implementers, tool authors
+> Surface: **S3** (`0.3.0`)
 
 ---
 
@@ -51,8 +52,8 @@ when the compiler starts producing it.
 | `parse.fstring_unclosed_expr` | error | Interpolated string expression is not closed |
 | `parse.fstring_unmatched_brace` | error | Interpolated string contains an unmatched brace |
 | `parse.import_after_declaration` | error | Import appears after a top-level declaration |
-| `parse.import_as_removed` | error | Source used removed `import path as alias`; use `import path = alias` |
-| `parse.import_only_removed` | error | Source used removed `import path only (…)`; use `import path (…)` |
+| `parse.import_as_removed` | error | Source used removed `import path = alias`; use `import path = alias` |
+| `parse.import_only_removed` | error | Source used removed `import path (…)`; use `import path (…)` |
 | `parse.invalid_escape` | error | String or byte literal contains an invalid escape |
 | `parse.invalid_lvalue` | error | Assignment target is not assignable |
 | `parse.invalid_range` | error | Range expression has a non-integer boundary |
@@ -63,7 +64,7 @@ when the compiler starts producing it.
 | `parse.func_removed` | error | Source used removed `func` on a declaration; write `name(...)` directly |
 | `parse.removed_angle_type` | error | Angle-bracket type arguments `Type<…>` are removed; use `Type[…]` |
 | `parse.removed_of_type` | error | `of` / `map of K to V` type forms are removed; use `list[T]`, `map[K, V]`, … |
-| `parse.removed_struct_call_literal` | error | Struct construction via `Type(…)`, `.{…}`, or guided `(…)` is removed; use `Type { … }` or `{ … }` |
+| `parse.removed_struct_call_literal` | error | Struct construction via `Type(...)`, `.{…}`, or guided `(…)` is removed; use `Type { … }` or `{ … }` |
 | `parse.removed_where_bound` | error | `where T is Trait` / `where T is not Trait` bounds are removed; use `for T: Trait` |
 | `parse.question_propagate_removed` | error | Source used removed postfix `?` propagation; use `try expr` |
 | `parse.else_if_removed` | error | Source used removed `else if`; use `elif` for chained conditionals |
@@ -105,7 +106,7 @@ when the compiler starts producing it.
 | `type.ifsome_not_optional` | error | `if some` was used on a non-optional value |
 | `type.index_not_int` | error | Index expression must have type `int` |
 | `type.iterable_next_missing` | error | A type implements `Iterable` but does not provide `next` |
-| `type.iterable_next_signature` | error | `Iterable.next` does not match `mut func next() -> optional<T>` |
+| `type.iterable_next_signature` | error | `Iterable.next` does not match `mut next() -> optional[T]` |
 | `type.is_target_not_type` | error | `is` target is not a valid type |
 | `type.list_element_mismatch` | error | List literal elements have incompatible types |
 | `type.map_key_mismatch` | error | Map literal keys have incompatible types |
@@ -133,7 +134,7 @@ when the compiler starts producing it.
 | `type.tuple_index_on_non_tuple` | error | Tuple index access was used on a non-tuple value |
 | `type.tuple_index_out_of_bounds` | error | Tuple index is outside the tuple arity |
 | `type.type_mismatch` | error | Value type does not match the expected type |
-| `type.unused_result` | warning | `result<T, E>` expression value is discarded |
+| `type.unused_result` | warning | `result[T, E]` expression value is discarded |
 | `type.unary_neg_non_numeric` | error | Unary `-` was used on a non-numeric value |
 | `type.undefined_name` | error | Type name is not defined |
 | `type.unknown_arg_label` | error | Named argument does not match any parameter |
@@ -158,7 +159,7 @@ when the compiler starts producing it.
 |---|---|---|
 | `async.capture_not_transferable` | error | Closure passed to `task.spawn` captures a value that is not `Transferable` |
 | `async.await_outside_async` | error | `await` was used outside an `async func` |
-| `async.await_non_future` | error | `await` was used on a value that is not `future<T>` |
+| `async.await_non_future` | error | `await` was used on a value that is not `future[T]` |
 
 ### `backend`
 
@@ -193,7 +194,7 @@ when the compiler starts producing it.
 | `bind.duplicate_variant` | error | Enum variant is declared more than once |
 | `bind.import_ambiguous` | error | Import path matches more than one file |
 | `bind.import_member_unknown` | error | Selective import names a member that the source module does not export |
-| `bind.import_not_found` | error | Imported namespace could not be resolved to a file |
+| `bind.import_not_found` | error | Imported module could not be resolved to a file |
 | `bind.self_outside_method` | error | `self` is used outside method scope |
 | `bind.shadowing` | error | Binding shadows another binding in the same scope |
 | `bind.stdlib_module_unknown` | error | Standard library module name is unknown |
@@ -229,7 +230,7 @@ aliases) use the `bind.*` prefix instead — see the `bind` section below.
 
 | Code | Severity | Description |
 |---|---|---|
-| `name.duplicate` | error | Name is already defined in this namespace |
+| `name.duplicate` | error | Name is already defined in this module |
 | `name.private` | error | Code tries to access a non-public imported item |
 | `name.undefined` | error | Value name is not defined |
 
@@ -293,13 +294,13 @@ aliases) use the `bind.*` prefix instead — see the `bind` section below.
 ### `project`
 
 Project-level diagnostics emitted while loading the entry file and its
-transitive imports. The `project.*` namespace consolidates configuration and
+transitive imports. The `project.*` module consolidates configuration and
 import-graph failures that span more than one source file.
 
 | Code | Severity | Description |
 |---|---|---|
 | `project.circular_import` | error | Local imports form a cycle |
-| `project.namespace_file_mismatch` | error | Imported file declares a different namespace |
+| `project.namespace_file_mismatch` | error | Imported file declares a different module |
 | `project.entry_not_found` | error | Project entrypoint declared in `ori.proj` does not exist, or the manifest is missing an `entry` key |
 | `project.no_proj_file` | error | Project manifest (`ori.proj`) was not found at the workspace root |
 
@@ -329,7 +330,7 @@ compiler will not produce it.
 | `type.propagation_context` | error | `type.propagate_*` (more specific) |
 | `type.undefined` | error | `type.undefined_name` |
 
-The code `async.using_unsupported` is **obsolete** — `using` inside `async func`
+The code `async.using_unsupported` is **obsolete** — `using` inside an `async` function
 is now allowed. Do not emit this diagnostic.
 
 ---

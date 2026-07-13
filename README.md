@@ -1,16 +1,19 @@
 # Ori
 
 Ori is a reading-first, explicitly typed programming language compiled to native
-code. Its compiler is written in Rust and is built around a direct goal: make
-programs easier to read, inspect, diagnose, and maintain.
+code (**AOT**), with optional JIT for `ori run`. Its compiler is written in Rust.
 
-Ori is pre-1.0. It is useful for compiler, language-design, tooling, and
-runtime work, but the language is still allowed to change before a stable 1.0
-contract.
+**Surface S3 (`0.3.0`):** Auk9-inspired readable syntax on the Ori feature engine.
+See [manifesto](docs/spec/00-manifesto.md) — Ori exists for **compiler study**,
+**AI-assisted programming**, and **ND-friendly readability**, **not** market
+competition. The Auk9 lab is **retired as a product**; the living surface is Ori.
+
+Ori is pre-1.0. Syntax before S3 is rejected; further change is still allowed
+before a stable 1.0 contract.
 
 **Languages:** English | [Portuguese](README.pt-BR.md) | [Japanese](README.ja.md)
 
-**Project menu:** [Specification](docs/spec/README.md) | [Planning](docs/planning/README.md) | [First project](docs/guides/first-project-and-packages.md) | [Cookbook](docs/guides/cookbook-pequeno-medio.md) | [Bug reports](docs/guides/reportar-bugs.md) | [Standard library](stdlib/README.md) | [Runtime](runtime/README.md) | [Examples](examples/) | [Changelog](CHANGELOG.md) | [Contributing](CONTRIBUTING.md)
+**Project menu:** [Manifesto](docs/spec/00-manifesto.md) | [Specification](docs/spec/README.md) | [Planning](docs/planning/README.md) | [First project](docs/guides/first-project-and-packages.md) | [Cookbook](docs/guides/cookbook-pequeno-medio.md) | [Bug reports](docs/guides/reportar-bugs.md) | [Standard library](stdlib/README.md) | [Runtime](runtime/README.md) | [Examples](examples/) | [Changelog](CHANGELOG.md) | [Contributing](CONTRIBUTING.md)
 
 ## Contents
 
@@ -34,9 +37,9 @@ contract.
 
 ## What Ori is
 
-Ori is a statically typed language with explicit module namespaces (namespace),
-explicit types, absence/failure types (optional, result), structured errors,
-deterministic cleanup, and native code generation.
+Ori is a statically typed language with explicit modules (`module`), explicit
+types (`optional[T]`, `result[T, E]`), structured errors (`try`), traits via
+`apply`/`use`, deterministic cleanup (`using`), and native code generation.
 
 The current compiler pipeline is:
 
@@ -63,12 +66,12 @@ needs it:
 
 | Question | Ori makes it visible through |
 |---|---|
-| Where does this file belong? | `namespace` at the top of every file |
+| Where does this file belong? | `module path` at the top of every file |
 | What type does this value have? | explicit type annotations |
-| Can this value be absent? | `optional<T>` |
-| Can this operation fail? | `result<T, E>` |
+| Can this value be absent? | `optional[T]` |
+| Can this operation fail? | `result[T, E]` |
 | When is a resource released? | `using` |
-| Where does behavior come from? | `trait` and `implement` |
+| Where does behavior come from? | `trait` + `apply Type` / `use Trait` |
 | What went wrong? | structured diagnostic codes |
 
 This design is especially important for readers who need lower cognitive load:
@@ -78,8 +81,8 @@ shorter inference chains, fewer hidden rules, and clearer error messages.
 
 | Area | Status |
 |---|---|
-| Version | `0.2.0`, frozen on the `0.2.x` line until there is a real breaking change |
-| Stability | pre-1.0; source compatibility may still change |
+| Version | **Language surface `0.3.0` (S3 cutover)**; Cargo workspace package may still be `0.2.0` until the release tag |
+| Stability | pre-1.0; S3 is a hard break from 0.2 syntax; further change still possible |
 | Compiler | Rust workspace with lexer, parser, HIR, type checker, codegen, diagnostics, LSP, driver, and runtime crates |
 | Native backend | Cranelift object code plus the Ori native runtime |
 | `ori run` | JIT by default when a runtime cdylib is available; AOT can be forced |
@@ -89,8 +92,9 @@ shorter inference chains, fewer hidden rules, and clearer error messages.
 | Tooling | CLI, formatter, diagnostics catalog, docs export, LSP, VS Code extension |
 | Tests | workspace test suite and native release smoke are part of the project gate |
 
-The project is intentionally conservative about versioning. `0.3.0` is reserved
-for a real user-visible breaking change, not for every internal milestone.
+S3 **is** that user-visible breaking change (documented in
+[CHANGELOG.md](CHANGELOG.md) `[0.3.0]`). Local Nim-style inference is **`0.3.1`**.
+Migrate sources with `ori migrate-syntax`.
 
 ## Quick start
 
@@ -183,6 +187,7 @@ The `ori` CLI is implemented by `compiler/crates/ori-driver`.
 | `ori parse <file.orl>` | print the AST for compiler debugging |
 | `ori install <name> --path <dir>` | validate a local `ori.pkg.toml` package and copy it to the package cache |
 | `ori publish <path>` | validate a package manifest; remote registry upload is not available yet |
+| `ori migrate-syntax <paths…>` | best-effort rewrite of pre-S3 syntax to S3 (`--dry-run`, `-v`) |
 
 Useful environment variables:
 
@@ -243,17 +248,17 @@ manifest and `.oridoc` contract. For a shorter workflow guide, use
 
 Ori's core model is small:
 
-- every file starts with `namespace`;
-- imports create local aliases or explicit selective names with `(...)`;
+- every file starts with `module path`;
+- imports: `import path (A)`, `import path = alias`, or bare `import path`;
 - top-level declarations are private unless marked `public`;
-- `struct` and `enum` define data;
-- `trait` and `implement` define behavior;
-- `optional<T>` models absence;
-- `result<T, E>` models recoverable failure;
-- `try` propagates `result` or `optional` values (`?` is the compact form);
+- `struct` and `enum` define data; literals use `Type { field: v }`;
+- `trait` + `apply Type` / `use Trait` define behavior;
+- `optional[T]` models absence; `result[T, E]` models recoverable failure;
+- only `try expr` propagates (postfix `?` removed);
+- closures use `(u) => expr` (no `do`);
 - `using` makes cleanup explicit;
 - diagnostics use stable codes such as `name.undefined` and
-  `project.circular_import`.
+  `parse.namespace_removed`.
 
 Example with `result`:
 

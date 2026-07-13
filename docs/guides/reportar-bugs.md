@@ -56,9 +56,9 @@ Esperado:
 Obtido:
 
 Arquivo minimo:
-namespace app.main
+module app.main
 
-func main()
+main()
 end
 ```
 

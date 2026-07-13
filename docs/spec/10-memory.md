@@ -2,6 +2,7 @@
 
 > Status: normative
 > Audience: compiler implementers
+> Surface: **S3** (`0.3.0`)
 
 ---
 
@@ -22,7 +23,7 @@ The memory model has two layers:
 All types in Ori have value semantics by default.
 
 ```ori
-const a: Point = Point(x: 1, y: 2)
+const a: Point = Point { x: 1, y: 2 }
 const b: Point = a          -- b is a copy of a
 ```
 
@@ -39,14 +40,14 @@ This applies to:
 
 ## Managed Types
 
-`string`, `bytes`, and all collection types (`list<T>`, `map<K, V>`, `set<T>`)
+`string`, `bytes`, and all collection types (`list[T]`, `map[K, V]`, `set[T]`)
 are **managed types**. They are heap-allocated and reference-counted.
 
 Assigning a managed type copies the **reference**, not the heap data:
 
 ```ori
-const a: list<int> = [1, 2, 3]
-const b: list<int> = a          -- b holds the same reference as a
+const a: list[int] = [1, 2, 3]
+const b: list[int] = a          -- b holds the same reference as a
 ```
 
 The heap data is freed when the last reference to it goes out of scope.
@@ -147,9 +148,9 @@ async continuation can use them again.
 Current native status:
 
 - `await` is accepted only inside `async func`.
-- The runtime has pollable `future<T>` values, continuation registration, a FIFO
+- The runtime has pollable `future[T]` values, continuation registration, a FIFO
   executor queue, failed/cancelled internal states, and non-blocking timers.
-- The current backend creates a `future<T>` immediately when an `async func` is
+- The current backend creates a `future[T]` immediately when an `async func` is
   called, allocates a native async frame, and schedules the generated `step`
   function on the native executor.
 - Supported source-level `await` shapes suspend through `ori_future_poll` and
@@ -176,7 +177,7 @@ For resources that need explicit cleanup (file handles, network connections,
 database connections), use `using`:
 
 ```ori
-func read_file(path: string) -> result<string, string>
+read_file(path: string) -> result[string, string]
     using file: ori.fs.File = try ori.fs.open_read(path)
     const content: string = try ori.fs.read_all(file)
     return success(content)
@@ -212,7 +213,7 @@ A type participates in `using` by implementing `Disposable`:
 
 ```ori
 trait Disposable
-    mut func dispose()
+    mut dispose()
 end
 ```
 
@@ -238,7 +239,7 @@ The compiler decides allocation strategy. The programmer does not control this.
 General rules (subject to optimization):
 - Primitive types and small structs: stack-allocated.
 - Managed types (`string`, `bytes`, collections): heap-allocated.
-- `any<Trait>` values: heap-allocated (boxed).
+- `any[Trait]` values: heap-allocated (boxed).
 - Closures that capture values: heap-allocated if they escape the current scope.
 
 ---
@@ -274,7 +275,7 @@ See the FFI documentation for detailed ABI shapes.
 `ori.mem` provides explicit memory inspection utilities:
 
 ```ori
-import ori.mem as mem
+import ori.mem = mem
 
 mem.size_of(value)         -- size in bytes of value's static type
 mem.align_of(value)        -- alignment in bytes of value's static type

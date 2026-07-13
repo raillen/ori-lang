@@ -2,6 +2,7 @@
 
 > Status: normative
 > Audience: compiler implementers
+> Surface: **S3** (`0.3.0`)
 
 ---
 
@@ -30,7 +31,7 @@ All literal forms are expressions. Their types are:
 | `f"hello {name}"` | `string` |
 | `"""..."""` | `string` |
 | `b"data"` | `bytes` |
-| `0..9` | `range<int>` |
+| `0..9` | `range[int]` |
 
 ---
 
@@ -114,7 +115,7 @@ Field access on an enum variant's payload uses the variant's field names.
 
 ```ori
 items[0]          -- index: returns element type T
-items[2..5]       -- slice: returns list<T>, elements at 2, 3, 4
+items[2..5]       -- slice: returns list[T], elements at 2, 3, 4
 items[2..]        -- slice from index 2 to end
 items[..5]        -- slice from start to index 5
 items[..]         -- full copy
@@ -148,7 +149,7 @@ be named.
 **Spread into variadic:**
 
 ```ori
-const parts: list<string> = ["a", "b", "c"]
+const parts: list[string] = ["a", "b", "c"]
 concat(..parts)
 ```
 
@@ -161,16 +162,16 @@ const value: int = await compute()
 await task.sleep(1)
 ```
 
-`await expr` waits for a `future<T>` and produces `T`.
+`await expr` waits for a `future[T]` and produces `T`.
 
 Rules:
 - `await` is a contextual prefix operator.
 - It is valid only inside an `async func`.
-- Awaiting a non-`future<T>` value is a compile-time error.
-- Awaiting `future<void>` is normally used as an expression statement.
+- Awaiting a non-`future[T]` value is a compile-time error.
+- Awaiting `future[void]` is normally used as an expression statement.
 
 The current native backend implements supported `async func` bodies with a
-native state machine. Calling an `async func` creates and returns a `future<T>`
+native state machine. Calling an `async func` creates and returns a `future[T]`
 before the function body finishes. The generated frame is scheduled on the
 native executor.
 
@@ -191,7 +192,7 @@ surface.
 `try expr` is the only surface form for error/absence propagation (S3). It is a
 prefix form. Postfix `expr?` is rejected with `parse.question_propagate_removed`.
 
-On `result<T, E>`:
+On `result[T, E]`:
 
 ```ori
 const value: T = try fallible_operation()
@@ -199,7 +200,7 @@ const value: T = try fallible_operation()
 -- If success(v): unwraps to v
 ```
 
-On `optional<T>`:
+On `optional[T]`:
 
 ```ori
 const value: T = try maybe_value
@@ -209,21 +210,24 @@ const value: T = try maybe_value
 
 Rules:
 - The enclosing function's return type must be compatible with the propagated type.
-- `try` on `result<T, E>` requires the enclosing function to return `result<_, E>`.
-- `try` on `optional<T>` requires the enclosing function to return `optional<_>`.
+- `try` on `result[T, E]` requires the enclosing function to return `result[_, E]`.
+- `try` on `optional[T]` requires the enclosing function to return `optional[_]`.
 
 ---
 
 ## Pipe Operator (`|>`)
 
+> Note: S3 product decisions leave pipe **outside** the 0.3.0 focus (not a migration target).
+> If present in the compiler, treat as experimental; do not rely on it in new docs examples.
+
 The pipe operator passes the left-hand value as the first argument to the
 right-hand function call.
 
 ```ori
-const result: list<string> =
+const result: list[string] =
     users
-    |> iter.filter(do(u: User) => u.active)
-    |> iter.map(do(u: User) => u.name)
+    |> iter.filter((u: User) => u.active)
+    |> iter.map((u: User) => u.name)
 ```
 
 `a |> f(b)` is equivalent to `f(a, b)`.
@@ -244,55 +248,58 @@ Rules:
 
 ---
 
-## Closure Expressions (`do`)
+## Closure Expressions
 
 See Chapter 07 — Functions and Closures for full specification.
 
 ```ori
-do(x: int) => x * 2                     -- inline: produces func(int) -> int
-do(x: int) -> int ... end               -- block closure
+(x: int) => x * 2                     -- inline: produces func(int) -> int
+(x: int) -> int ... end               -- block closure
 ```
 
 ---
 
-## Struct Literal
+## Struct Literal (S3)
+
+Canonical forms: `Type { field: v }` and context-typed `{ field: v }`.
+Removed: `Type(...)`, `.{…}`, guided `(field: v)` (`parse.removed_struct_call_literal`).
 
 **Full form** — always valid, type is explicit:
 
 ```ori
-const p: Point = Point(x: 0, y: 0)
-const u: User  = User(name: "Ada", age: 36)
+const p: Point = Point { x: 0, y: 0 }
+const u: User  = User { name: "Ada", age: 36 }
 ```
 
-**Anonymous form** — `.{field: value}` when the type is known from context:
+**Anonymous form** — `{ field: value}` when the type is known from context:
 
 ```ori
 -- From type annotation
-const p: Point = .{x: 0, y: 0}
+const p: Point = { x: 0, y: 0}
 
 -- From function return type
-func origin() -> Point
-    return .{x: 0, y: 0}
+origin() -> Point
+    return { x: 0, y: 0}
 end
 
 -- From parameter type
-func draw(point: Point)
-draw(.{x: 10, y: 20})
+draw(point: Point)
+draw({ x: 10, y: 20})
 
 -- Nested
-const l: Line = .{start: .{x: 0, y: 0}, end: .{x: 5, y: 5}}
+const l: Line = { start: { x: 0, y: 0}, end: { x: 5, y: 5}}
 
 -- With Default: all fields use their default values
-const p: Point = .{}
+const p: Point = { }
 ```
 
-The `.{` prefix is unambiguous — it cannot be confused with a map literal
+The `{ ` prefix is unambiguous — it cannot be confused with a map literal
 (`{"key": value}`) or a block.
 
 Rules:
 - All fields must be provided unless the type implements `Default`.
 - Field names are required (positional construction is not allowed).
-- If the expected type cannot be inferred, `.{...}` is a compile error:
+- If the expected type cannot be inferred, `{ ...}` is a compile error:
   `error[type.anon_struct_type_unknown]`.
 - If a field name does not exist on the target struct:
   `error[type.anon_struct_field_mismatch]`.
@@ -341,7 +348,7 @@ const b: Shape = .Rectangle(width: 5.0, height: 3.0)
 ```
 
 This keeps enum construction visually distinct from anonymous struct literals,
-which use `.{field: value}`.
+which use `{ field: value}`.
 
 ---
 
@@ -349,23 +356,23 @@ which use `.{field: value}`.
 
 ```ori
 -- list
-const names: list<string> = ["Ana", "Bo", "Cara"]
+const names: list[string] = ["Ana", "Bo", "Cara"]
 
 -- map
-const ages_by_id: map<int, int> = {1: 31, 2: 25}
+const ages_by_id: map[int, int] = {1: 31, 2: 25}
 
 -- set
-const ids: set<int> = set{1, 2, 3}
+const ids: set[int] = set{1, 2, 3}
 
 -- tuple
-const pair: tuple<int, string> = tuple(1, "one")
+const pair: tuple[int, string] = tuple(1, "one")
 ```
 
 Empty collections must have their type annotated:
 
 ```ori
-const empty: list<int> = []
-const empty_map: map<int, int> = {}
+const empty: list[int] = []
+const empty_map: map[int, int] = {}
 ```
 
 ---
@@ -373,11 +380,11 @@ const empty_map: map<int, int> = {}
 ## Range Expression
 
 ```ori
-0..9        -- range<int>: 0 to 9 inclusive
-5..3        -- range<int>: 5, 4, 3 (descending)
+0..9        -- range[int]: 0 to 9 inclusive
+5..3        -- range[int]: 5, 4, 3 (descending)
 ```
 
-The type of a range literal is `range<int>`.
+The type of a range literal is `range[int]`.
 Endpoints must be `int`.
 
 Float ranges are not part of the current language. Use an explicit loop or
@@ -395,7 +402,7 @@ if shape is Circle
 end
 ```
 
-Valid only when the left operand is `any<Trait>` or an enum type.
+Valid only when the left operand is `any[Trait]` or an enum type.
 
 ---
 

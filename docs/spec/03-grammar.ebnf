@@ -1,6 +1,9 @@
 (* ============================================================
-   Ori Language — Formal Grammar
+   Ori Language — Formal Grammar (Surface S3)
    Chapter 03 of the Ori Language Specification
+
+   Surface cutover: 0.3.0 (Auk9-inspired S3)
+   Product decisions: docs/planning/ori-surface-s3-auk9.md
 
    Notation: Extended Backus-Naur Form (EBNF)
      A = B C        -- A is B followed by C
@@ -21,22 +24,38 @@
    ============================================================ *)
 
 source_file
-    = namespace_decl
-      { import_decl }
+    = module_decl
+      { import_decl | imports_block }
       { top_level_decl }
     ;
 
-namespace_decl
-    = "namespace" qualified_name
+module_decl
+    = "module" qualified_name
     ;
 
+(* Three import forms (S3). No `as` / `only`. Multi-comma only in imports_block. *)
 import_decl
-    = [ "public" ] "import" qualified_name
-      [ "as" IDENT | "only" "(" import_item { "," import_item } [ "," ] ")" ]
+    = [ "public" ] "import" import_form
+    ;
+
+import_form
+    = qualified_name "(" import_item { "," import_item } [ "," ] ")"   (* selective *)
+    | qualified_name "=" IDENT                                         (* path = alias *)
+    | qualified_name                                                   (* bare path, no implicit alias *)
     ;
 
 import_item
-    = IDENT [ "as" IDENT ]
+    = IDENT [ "as" IDENT ]   (* member rename inside selective list only *)
+    ;
+
+imports_block
+    = "imports"
+      { import_line }
+      "end"
+    ;
+
+import_line
+    = import_form { "," import_form }
     ;
 
 qualified_name
@@ -85,16 +104,31 @@ visibility
 
 
 (* ============================================================
-   FUNCTIONS
+   FUNCTIONS (no declaration keyword `func`)
    ============================================================ *)
 
 func_decl
-    = visibility [ "mut" ] "func" IDENT
+    = visibility [ "async" ] [ "mut" ] IDENT
       [ type_params ]
+      [ bound_clause ]                 (* for T: Trait after name / params region *)
       "(" [ param_list ] ")"
       [ "->" type ]
-      [ where_clause ]
-      block
+      func_body
+    ;
+
+(* Bounds Auk9-style: `max for T: Comparable (a: T, b: T) -> T` *)
+bound_clause
+    = "for" bound_item { "," bound_item }
+    ;
+
+bound_item
+    = IDENT ":" type_ref
+    | IDENT ":" "not" type_ref
+    ;
+
+func_body
+    = "=>" expression                  (* single-expression body (S3) *)
+    | block                            (* multi-statement, ends with end [label] *)
     ;
 
 param_list
@@ -105,7 +139,7 @@ param
     = IDENT ":" type [ "..." ]           (* variadic: last param only *)
     | IDENT ":" type "=" expression      (* default value *)
     | IDENT ":" type "if" value_contract (* value contract: checked at call time *)
-    | IDENT ":" type "=" expression "if" value_contract  (* default + contract *)
+    | IDENT ":" type "=" expression "if" value_contract
     ;
 
 value_contract
@@ -113,30 +147,18 @@ value_contract
     ;
 
 type_params
-    = "<" type_param { "," type_param } ">"
+    = "[" type_param { "," type_param } "]"
     ;
 
 type_param
     = IDENT
     ;
 
-where_clause
-    = "where" where_constraint
-    | "where" "(" where_constraint { "and" where_constraint } ")"
-    ;
-
-where_constraint
-    = IDENT "is" type_ref
-    | IDENT "is" "not" type_ref
-    | "(" where_constraint { "and" where_constraint } ")"
-    ;
-
 
 (* ============================================================
-   CLOSURES
+   CLOSURES (S3: no `do` / `fn` / `given`)
    ============================================================ *)
 
-(* S3: no `do`/`fn`/`given` keyword — bare paren param list. *)
 closure_expr
     = "(" [ closure_param_list ] ")" [ "->" type ] closure_body
     ;
@@ -146,17 +168,17 @@ closure_param_list
     ;
 
 closure_param
-    = IDENT [ ":" type ]                 (* type may be omitted when context provides it *)
+    = IDENT [ ":" type ]
     ;
 
 closure_body
-    = "=>" expression                    (* single expression, no end *)
-    | block                              (* statement block, ends with end *)
+    = "=>" expression
+    | block
     ;
 
 
 (* ============================================================
-   TYPES
+   TYPES (brackets only; no angle generics; no `of` forms)
    ============================================================ *)
 
 type
@@ -182,24 +204,26 @@ named_type
     ;
 
 generic_type
-    = "optional" "<" type ">"
-    | "result"   "<" type "," type ">"
-    | "list"     "<" type ">"
-    | "map"      "<" type "," type ">"
-    | "set"      "<" type ">"
-    | "range"    "<" type ">"
-    | "lazy"     "<" type ">"
-    | "any"      "<" type_ref ">"
-    | qualified_name "<" type { "," type } ">"
+    = "optional" "[" type "]"
+    | "result"   "[" type "," type "]"
+    | "list"     "[" type "]"
+    | "map"      "[" type "," type "]"
+    | "set"      "[" type "]"
+    | "range"    "[" type "]"
+    | "lazy"     "[" type "]"
+    | "any"      "[" type_ref "]"
+    | "future"   "[" type "]"
+    | qualified_name "[" type { "," type } "]"
     ;
 
+(* Callable type still uses the word `func` (type constructor, not a declaration). *)
 func_type
     = "func" "(" [ type { "," type } ] ")" "->" type
-    | "func" "(" [ type { "," type } ] ")"       (* void return *)
+    | "func" "(" [ type { "," type } ] ")"
     ;
 
 tuple_type
-    = "tuple" "<" type "," type { "," type } ">"
+    = "tuple" "[" type "," type { "," type } "]"
     ;
 
 type_ref
@@ -208,30 +232,24 @@ type_ref
 
 
 (* ============================================================
-   STRUCTS
+   STRUCTS / ENUMS
    ============================================================ *)
 
 struct_decl
     = visibility "struct" IDENT
       [ type_params ]
-      [ where_clause ]
       { struct_field }
       { struct_method }
       "end"
     ;
 
 struct_field
-    = IDENT ":" type [ "if" value_contract ]  (* value contract: checked at construction/mutation *)
+    = IDENT ":" type [ "if" value_contract ]
     ;
 
 struct_method
     = func_decl
     ;
-
-
-(* ============================================================
-   ENUMS
-   ============================================================ *)
 
 enum_decl
     = visibility "enum" IDENT
@@ -241,12 +259,12 @@ enum_decl
     ;
 
 enum_variant
-    = IDENT                                       (* unit variant: North *)
-    | IDENT "(" named_field { "," named_field } ")"  (* named variant: Circle(radius: float) *)
+    = IDENT
+    | IDENT "(" named_field { "," named_field } ")"
     ;
 
 named_field
-    = IDENT ":" type                              (* field with explicit name and type *)
+    = IDENT ":" type
     ;
 
 
@@ -257,22 +275,21 @@ named_field
 trait_decl
     = visibility "trait" IDENT
       [ type_params ]
-      [ where_clause ]
       { trait_member }
       "end"
     ;
 
 trait_member
     = func_signature          (* required: no body *)
-    | func_decl               (* default: has body *)
+    | func_decl               (* default: has body; no `default` keyword *)
     ;
 
 func_signature
-    = visibility [ "mut" ] "func" IDENT
+    = visibility [ "mut" ] IDENT
       [ type_params ]
+      [ bound_clause ]
       "(" [ param_list ] ")"
       [ "->" type ]
-      [ where_clause ]
     ;
 
 
@@ -281,8 +298,7 @@ func_signature
    ============================================================ *)
 
 apply_decl
-    = "apply" [ type_params ] type_ref
-      [ where_clause ]
+    = "apply" type_ref
       { apply_free_member }
       { apply_use_section }
       "end"
@@ -307,17 +323,12 @@ apply_use_member
 
 
 (* ============================================================
-   ALIAS
+   ALIAS / CONST / VAR
    ============================================================ *)
 
 alias_decl
     = visibility "alias" IDENT [ type_params ] "=" type
     ;
-
-
-(* ============================================================
-   CONST AND VAR
-   ============================================================ *)
 
 const_decl
     = visibility "const" IDENT ":" type "=" expression
@@ -344,8 +355,8 @@ abi_label
     ;
 
 extern_member
-    = visibility "func" IDENT "(" [ param_list ] ")" [ "->" type ]
-    | visibility "var"  IDENT ":" type
+    = visibility IDENT "(" [ param_list ] ")" [ "->" type ]
+    | visibility "var" IDENT ":" type
     ;
 
 
@@ -355,7 +366,12 @@ extern_member
 
 block
     = { statement }
-      "end"
+      end_token
+    ;
+
+(* Optional labeled end: end if / end match / end for / … *)
+end_token
+    = "end" [ IDENT ]
     ;
 
 statement
@@ -414,18 +430,22 @@ expression_stmt
 
 
 (* ============================================================
-   CONTROL FLOW STATEMENTS
+   CONTROL FLOW
    ============================================================ *)
 
 if_stmt
-    = "if" expression block
-      { "else" "if" expression block }
-      [ "else" block ]
+    = "if" expression
+      { statement }
+      { "elif" expression { statement } }
+      [ "else" { statement } ]
+      end_token
     ;
 
 if_some_stmt
-    = "if" "some" "(" IDENT ")" "=" expression block
-      [ "else" block ]
+    = "if" "some" "(" IDENT ")" "=" expression
+      { statement }
+      [ "else" { statement } ]
+      end_token
     ;
 
 while_stmt
@@ -441,7 +461,7 @@ for_stmt
     ;
 
 repeat_stmt
-    = "repeat" expression [ "times" ] block  (* "times" is optional contextual keyword *)
+    = "repeat" expression [ "times" ] block
     ;
 
 loop_stmt
@@ -451,48 +471,42 @@ loop_stmt
 match_stmt
     = "match" expression
       { match_case }
-      "end"
+      end_token
     ;
 
 match_case
     = "case" pattern [ "if" expression ] ":"
       { statement }
-    | "case" "else" ":"                           (* explicit fallback — no pattern *)
+    | "case" "else" ":"
       { statement }
     ;
 
+(* Match enum variants: no leading dot on the case name (S3). *)
 pattern
-    = "_"                                              (* wildcard *)
-    | literal                                          (* literal pattern *)
-    | IDENT                                            (* binding *)
-    | IDENT "(" [ named_pattern { "," named_pattern } ] ")"  (* named variant payload *)
-    | "." IDENT                                        (* shorthand unit variant *)
-    | "." IDENT "(" [ named_pattern { "," named_pattern } ] ")"  (* shorthand named payload *)
-    | "some" "(" pattern ")"                           (* optional some *)
-    | "none"                                           (* optional none *)
-    | "success" "(" pattern ")"                        (* result success *)
-    | "error"   "(" pattern ")"                        (* result error *)
-    | "tuple" "(" pattern { "," pattern } ")"          (* tuple destructure *)
+    = "_"
+    | literal
+    | IDENT
+    | IDENT "(" [ named_pattern { "," named_pattern } ] ")"
+    | "some" "(" pattern ")"
+    | "none"
+    | "success" "(" pattern ")"
+    | "error"   "(" pattern ")"
+    | "tuple" "(" pattern { "," pattern } ")"
     ;
 
 named_pattern
-    = IDENT ":" pattern                               (* name: binding *)
-    | IDENT                                            (* positional shorthand — binds to same name *)
+    = IDENT ":" pattern
+    | IDENT
     ;
 
 
 (* ============================================================
-   USING (resource cleanup)
+   USING / CHECK
    ============================================================ *)
 
 using_stmt
     = "using" IDENT ":" type "=" expression
     ;
-
-
-(* ============================================================
-   CHECK
-   ============================================================ *)
 
 check_stmt
     = "check" expression [ "," STRING ]
@@ -519,7 +533,7 @@ and_expr
     ;
 
 compare_expr
-    = add_expr [ compare_op add_expr ]   (* single comparison only, no chaining *)
+    = add_expr [ compare_op add_expr ]
     ;
 
 compare_op
@@ -545,7 +559,7 @@ mul_op
 unary_expr
     = "-" unary_expr
     | "not" unary_expr
-    | "try" unary_expr                       (* readable propagation *)
+    | "try" unary_expr                       (* only propagation form; no postfix ? *)
     | postfix_expr
     ;
 
@@ -553,21 +567,22 @@ postfix_expr
     = primary_expr { postfix_op }
     ;
 
+(* Poetic call: callee IDENT expression — at most one juxtaposition per expr.
+   Nested poetic call is a hard error (parse.poetic_call_nested). *)
 postfix_op
-    = "." IDENT                           (* field access *)
-    | "." INTEGER                         (* tuple index access: pair.0, pair.1 *)
-    | "(" [ arg_list ] ")"               (* call *)
-    | "[" index_expr "]"                 (* index or slice *)
-    | "?"                                (* compact propagation *)
-    | "|>" expression                    (* pipe *)
+    = "." IDENT
+    | "." INTEGER
+    | "(" [ arg_list ] ")"
+    | "[" index_expr "]"
+    | IDENT                                  (* poetic single-arg call *)
     ;
 
 index_expr
-    = expression                          (* single index *)
-    | expression ".." expression          (* range slice *)
-    | expression ".."                     (* slice from *)
-    | ".." expression                     (* slice to *)
-    | ".."                                (* full slice *)
+    = expression
+    | expression ".." expression
+    | expression ".."
+    | ".." expression
+    | ".."
     ;
 
 arg_list
@@ -575,8 +590,8 @@ arg_list
     ;
 
 arg
-    = [ IDENT ":" ] expression            (* positional or named *)
-    | ".." expression                     (* spread list into variadic *)
+    = [ IDENT ":" ] expression
+    | ".." expression
     ;
 
 primary_expr
@@ -587,15 +602,13 @@ primary_expr
     | "(" expression ")"
     | tuple_expr
     | list_expr
-    | map_expr
-    | set_expr
-    | struct_literal
+    | map_or_struct_literal
     | enum_variant_expr
     ;
 
 
 (* ============================================================
-   IF EXPRESSION (inline)
+   IF EXPRESSION (Ori form retained)
    ============================================================ *)
 
 if_expr
@@ -604,7 +617,7 @@ if_expr
 
 
 (* ============================================================
-   STRUCT UPDATE EXPRESSION
+   STRUCT UPDATE
    ============================================================ *)
 
 struct_update_expr
@@ -615,7 +628,7 @@ struct_update_expr
 
 
 (* ============================================================
-   COLLECTION LITERALS
+   COLLECTION / STRUCT LITERALS (S3)
    ============================================================ *)
 
 tuple_expr
@@ -626,26 +639,14 @@ list_expr
     = "[" [ expression { "," expression } [ "," ] ] "]"
     ;
 
-map_expr
-    = "{" [ map_entry { "," map_entry } [ "," ] ] "}"
+(* Disambiguation: identifier before `:` → struct field; literal before `:` → map key. *)
+map_or_struct_literal
+    = [ type_ref ] "{" [ field_or_map_entry { "," field_or_map_entry } [ "," ] ] "}"
     ;
 
-map_entry
-    = expression ":" expression
-    ;
-
-set_expr
-    = "set" "{" [ expression { "," expression } [ "," ] ] "}"
-    ;
-
-
-(* ============================================================
-   STRUCT LITERALS
-   ============================================================ *)
-
-struct_literal
-    = type_ref "(" [ field_init { "," field_init } [ "," ] ] ")"   (* full form: Point(x: 0, y: 0) *)
-    | "." "{" [ field_init { "," field_init } [ "," ] ] "}"          (* anon form: .{x: 0, y: 0} *)
+field_or_map_entry
+    = IDENT ":" expression                 (* struct field *)
+    | literal ":" expression               (* map entry *)
     ;
 
 field_init
@@ -653,13 +654,13 @@ field_init
     ;
 
 enum_variant_expr
-    = type_ref "." IDENT [ "(" [ field_init { "," field_init } [ "," ] ] ")" ]  (* full: Shape.Circle(radius: 5.0) *)
-    | "." IDENT [ "(" [ field_init { "," field_init } [ "," ] ] ")" ]           (* shorthand: .Circle(radius: 5.0) *)
+    = type_ref "." IDENT [ "(" [ field_init { "," field_init } [ "," ] ] ")" ]
+    | "." IDENT [ "(" [ field_init { "," field_init } [ "," ] ] ")" ]
     ;
 
 
 (* ============================================================
-   LITERALS (terminals)
+   LITERALS
    ============================================================ *)
 
 literal

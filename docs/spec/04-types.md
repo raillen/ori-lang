@@ -2,6 +2,7 @@
 
 > Status: normative
 > Audience: compiler implementers, language designers
+> Surface: **S3** (`0.3.0`)
 
 ---
 
@@ -11,10 +12,10 @@ Ori is statically typed. Every binding, parameter, and return position has a
 type known at compile time. Type annotations are always explicit; there is no
 global type inference for binding declarations.
 
-**Design decision (2026-07-01):** global/Hindley-Milner inference for `const`/`var`
-bindings is intentionally out of scope. Local inference remains limited to generic
-call sites, literal contexts, and other checker-local unification. Do not treat
-this as a temporary gap waiting for a future language version.
+**Design decision (2026-07-01):** global/Hindley-Milner inference for `const`/`var` bindings is intentionally out of
+scope. Checker-local unification already covers generic call sites and some literal
+contexts. **Nim-style local inference** for obvious same-line bindings is planned for
+`0.3.1` (not part of the `0.3.0` surface cutover).
 
 ---
 
@@ -58,7 +59,7 @@ struct Point
     y: int
 end
 
-const p: Point = Point(x: 0, y: 0)
+const p: Point = Point { x: 0, y: 0 }
 ```
 
 Structs are value types. Assigning a struct copies all fields.
@@ -112,7 +113,7 @@ Enums are value types.
 An ordered product of named positional values.
 
 ```ori
-const pair: tuple<int, string> = tuple(1, "one")
+const pair: tuple[int, string] = tuple(1, "one")
 ```
 
 Access by index:
@@ -130,24 +131,24 @@ These types are built into the language and require no import.
 
 | Type | Description |
 |---|---|
-| `list<T>` | Ordered, resizable sequence |
-| `map<K, V>` | Key-value mapping. Current runtime supports `int`, `string`, and user-defined keys that implement `Hashable` and `Equatable` |
-| `set<T>` | Unordered unique values. Current runtime supports `int`, `string`, and user-defined elements that implement `Hashable` and `Equatable` |
-| `optional<T>` | A value that may be absent |
-| `result<T, E>` | A value that represents success or failure |
-| `range<int>` | An inclusive integer range |
-| `lazy<T>` | Lazy value computed at most once through `lazy.once` and `lazy.force` |
-| `any<Trait>` | Dynamic dispatch over a trait |
+| `list[T]` | Ordered, resizable sequence |
+| `map[K, V]` | Key-value mapping. Current runtime supports `int`, `string`, and user-defined keys that implement `Hashable` and `Equatable` |
+| `set[T]` | Unordered unique values. Current runtime supports `int`, `string`, and user-defined elements that implement `Hashable` and `Equatable` |
+| `optional[T]` | A value that may be absent |
+| `result[T, E]` | A value that represents success or failure |
+| `range[int]` | An inclusive integer range |
+| `lazy[T]` | Lazy value computed at most once through `lazy.once` and `lazy.force` |
+| `any[Trait]` | Dynamic dispatch over a trait |
 
 ---
 
 ## Optional
 
-`optional<T>` represents a value that may be absent. There is no `null`.
+`optional[T]` represents a value that may be absent. There is no `null`.
 
 ```ori
-const name: optional<string> = some("Ada")
-const empty: optional<string> = none
+const name: optional[string] = some("Ada")
+const empty: optional[string] = none
 ```
 
 Constructors: `some(value)` and `none`.
@@ -160,13 +161,13 @@ value.or_return()          -- unwrap or propagate from enclosing function
 try value                  -- unwrap or propagate from enclosing function
 ```
 
-Current status: `.or(fallback)` is accepted for `optional<T>` and
-`result<T, E>` in the checker, native backend, and C backend. The fallback is
+Current status: `.or(fallback)` is accepted for `optional[T]` and
+`result[T, E]` in the checker, native backend, and C backend. The fallback is
 evaluated only when the receiver is `none` or `error(_)`. `.or_return()` is
 accepted as shorthand for propagation. The older `.or_return(expr)` form is
 not implemented.
 
-Pattern matching over `optional<T>`:
+Pattern matching over `optional[T]`:
 
 ```ori
 match maybe_name
@@ -189,11 +190,11 @@ end
 
 ## Result
 
-`result<T, E>` represents an operation that may succeed or fail.
+`result[T, E]` represents an operation that may succeed or fail.
 
 ```ori
-const ok: result<int, string>  = success(42)
-const bad: result<int, string> = error("something went wrong")
+const ok: result[int, string]  = success(42)
+const bad: result[int, string] = error("something went wrong")
 ```
 
 Constructors: `success(value)` and `error(value)`.
@@ -208,7 +209,7 @@ try value                            -- unwrap success or propagate error
 ```
 
 Current status: `.or(fallback)` and `.or_return()` are accepted. `.or_wrap(...)`
-is accepted for `result<T, string>` and returns `success(v)` unchanged or
+is accepted for `result[T, string]` and returns `success(v)` unchanged or
 `error(context + ": " + e)` for `error(e)`. The context expression is evaluated
 only on the error path. Use `try` or `match` when explicit error handling is
 clearer. Postfix `expr?` was removed (S3); the compiler emits
@@ -229,10 +230,10 @@ end
 
 ## Range
 
-`range<int>` is an inclusive integer range with a start and end value.
+`range[int]` is an inclusive integer range with a start and end value.
 
 ```ori
-const r: range<int> = 0..9
+const r: range[int] = 0..9
 ```
 
 The range `a..b` includes both `a` and `b`.
@@ -256,15 +257,15 @@ Float ranges are not accepted by the current checker.
 ## Lazy
 
 ```ori
-const expensive: lazy<int> = lazy.once(do() => compute_heavy_value())
+const expensive: lazy[int] = lazy.once(() => compute_heavy_value())
 const value: int = lazy.force(expensive)
 ```
 
-`lazy<T>` stores a zero-argument function that produces a `T`.
+`lazy[T]` stores a zero-argument function that produces a `T`.
 
 Rules:
 
-- `lazy.once(do() => value)` creates a lazy value.
+- `lazy.once(() => value)` creates a lazy value.
 - `lazy.force(expensive)` returns the computed `T`.
 - The thunk runs at most once.
 - Later `lazy.force` calls return the cached value.
@@ -274,20 +275,20 @@ computed only if another path needs it.
 
 ---
 
-## Dynamic Dispatch (`any<Trait>`)
+## Dynamic Dispatch (`any[Trait]`)
 
-`any<Trait>` holds a value of any type that implements `Trait`, selected at runtime.
+`any[Trait]` holds a value of any type that implements `Trait`, selected at runtime.
 
 ```ori
-const shape: any<Drawable> = Circle(radius: 10.0)
+const shape: any[Drawable] = Circle(radius: 10.0)
 shape.draw()
 ```
 
 Rules:
-- `any<Trait>` values have heap-allocated vtable dispatch.
+- `any[Trait]` values have heap-allocated vtable dispatch.
 - Prefer generics for performance-sensitive paths.
-- `==` on `any<Trait>` is supported when the trait constraint includes equality (runtime vtable dispatch to the concrete type's `Equatable` implementation).
-- Passing `any<Trait>` across FFI requires explicit ABI annotation.
+- `==` on `any[Trait]` is supported when the trait constraint includes equality (runtime vtable dispatch to the concrete type's `Equatable` implementation).
+- Passing `any[Trait]` across FFI requires explicit ABI annotation.
 
 ---
 
@@ -296,7 +297,7 @@ Rules:
 A function type describes the signature of a callable value:
 
 ```ori
-const double: func(int) -> int = do(x: int) => x * 2
+const double: func(int) -> int = (x: int) => x * 2
 var handler: func(string) -> bool
 ```
 
@@ -312,7 +313,7 @@ A callable with no return value: `func(string)` (void return implied).
 
 ```ori
 alias UserId   = int
-alias UserMap  = map<int, User>
+alias UserMap  = map[int, User]
 alias Callback = func(string) -> bool
 ```
 
@@ -322,15 +323,15 @@ Aliases are transparent: `UserId` and `int` are interchangeable everywhere.
 
 ## `success()` — Void Result
 
-When a function returns `result<void, E>`, `success()` with no arguments is valid:
+When a function returns `result[void, E]`, `success()` with no arguments is valid:
 
 ```ori
-func ping() -> result<void, string>
+ping() -> result[void, string]
     try send_packet()
     return success()
 end
 
-func start() -> result<void, string>
+start() -> result[void, string]
     try ping()
     return success()
 end
@@ -338,7 +339,7 @@ end
 
 This is the exact analogue of `return` with no value in a `void` function.
 The `void` value is implicit. `success()` with no args is a compile error
-when the expected type is not `result<void, _>`.
+when the expected type is not `result[void, _]`.
 
 ---
 
@@ -347,14 +348,14 @@ when the expected type is not `result<void, _>`.
 Current implementation status:
 
 - `==` and `!=` are implemented for numeric types, `bool`, `string`, `bytes`,
-  `optional<T>`, `result<T, E>`, `tuple<...>`, `list<T>`, generic structs (with
+  `optional[T]`, `result[T, E]`, `tuple[...]`, `list[T]`, generic structs (with
   correct generic parameter substitution), opaque collections (`deque`, `queue`,
   `stack`, `linked_list`, etc.) when element types support equality, and
   non-generic structs whose fields also support equality.
 - Function values are not comparable.
-- `any<Trait>` values support structural equality via runtime vtable when the
+- `any[Trait]` values support structural equality via runtime vtable when the
   trait constraint permits it.
-- Native and C/debug structural equality for `set<T>` and `map<K, V>` is
+- Native and C/debug structural equality for `set[T]` and `map[K, V]` is
   implemented when keys/elements implement `Equatable` or builtin equality.
 
 | Type | Current `==` behavior |
@@ -363,16 +364,16 @@ Current implementation status:
 | `bool` | Value equality |
 | `string` | UTF-8 text equality |
 | `bytes` | Byte equality |
-| `list<T>` | Structural equality when `T` supports equality |
-| `map<K, V>` | Structural equality when `K` and `V` support equality |
-| `set<T>` | Structural equality when `T` supports equality |
-| `optional<T>` | Structural equality |
-| `result<T, E>` | Structural equality |
-| `tuple<...>` | Structural equality |
+| `list[T]` | Structural equality when `T` supports equality |
+| `map[K, V]` | Structural equality when `K` and `V` support equality |
+| `set[T]` | Structural equality when `T` supports equality |
+| `optional[T]` | Structural equality |
+| `result[T, E]` | Structural equality |
+| `tuple[...]` | Structural equality |
 | non-generic `struct` | Structural equality when all fields support equality |
-| generic `struct<T>` | Structural equality with generic substitution |
+| generic `struct[T]` | Structural equality with generic substitution |
 | opaque collections | Structural equality when elements/keys support equality |
-| `any<Trait>` | Vtable equality when trait constraint allows |
+| `any[Trait]` | Vtable equality when trait constraint allows |
 | `func(...)` | Compile error |
 
 Structural equality rules:
@@ -382,21 +383,23 @@ Structural equality rules:
 - Sets compare elements independent of insertion order.
 - Tuples and structs compare fields in declaration order.
 
-**`Equatable` override:** implement `Equatable for T` to provide custom equality:
+**`Equatable` override:** use `apply T` / `use Equatable` for custom equality:
 
 ```ori
-implement Equatable for User
-    func equals(other: User) -> bool
-        return self.id == other.id
+apply User
+    use Equatable
+        equals(other: User) -> bool
+            return self.id == other.id
+        end
     end
 end
 ```
 
-For user-defined types, `==` and `!=` use `equals()` when the type implements
+For user-defined types, `==` and `!=` use `equals()` when the type applies
 `ori.core.Equatable`.
 
 **Structs with incomparable fields:** if a struct contains a `func`,
-`any<Trait>`, or another unsupported field, using `==` on that struct is a
+`any[Trait]`, or another unsupported field, using `==` on that struct is a
 compile error.
 
 ---
@@ -427,18 +430,19 @@ struct Resource
     id: int
 end
 
-implement ori.core.Displayable for Resource
-    func display(self) -> string
+apply Resource
+    use ori.core.Displayable
+        display(self) -> string
         return "Resource#" + string(self.id)
     end
 end
 
-const r: Resource = Resource(id: 7)
+const r: Resource = Resource { id: 7 }
 const label: string = string(r)
 const line: string = f"value={r}"
 ```
 
-**Type checking at runtime** (for `any<Trait>`):
+**Type checking at runtime** (for `any[Trait]`):
 
 ```ori
 if shape is Circle
@@ -450,8 +454,8 @@ end
 
 ## Type Compatibility Rules
 
-1. A `result<T, E>` is compatible with `result<T, F>` only if `E == F`.
-2. A `list<T>` is compatible with `list<U>` only if `T == U` (no covariance).
+1. A `result[T, E]` is compatible with `result[T, F]` only if `E == F`.
+2. A `list[T]` is compatible with `list[U]` only if `T == U` (no covariance).
 3. Generic type parameters are invariant by default.
-4. An `any<Trait>` accepts any concrete type implementing `Trait`.
+4. An `any[Trait]` accepts any concrete type implementing `Trait`.
 5. A `func(T) -> R` is compatible with `func(T) -> R` only when signatures match exactly.

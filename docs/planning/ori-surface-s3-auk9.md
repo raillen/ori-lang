@@ -3,7 +3,7 @@
 > **Status:** decisões de produto **completas** (blocos 0–9)  
 > **Produto:** Ori (features e maturidade)  
 > **Superfície:** o mais próximo possível da Auk9 (S3)  
-> **Implementação:** via ADR + PR plan (`/execute-plan`) — ainda não iniciada no compiler  
+> **Implementação:** PRs 1–9 (compiler + migrate + fontes) + PR 10 (docs) — superfície no compiler  
 > **Versão alvo:** `0.3.0` superfície+docs · `0.3.1` inferência Nim-local  
 > **Última atualização:** 2026-07-12
 
@@ -16,7 +16,7 @@
 
 ## Norte em uma frase
 
-**Motor e features da Ori; pele e ritmo da Auk9; Auk9 deixa de ser produto e vira lab até a migração.**
+**Motor e features da Ori; pele e ritmo da Auk9; Auk9 lab aposentado como produto — superfície vivente na Ori.**
 
 ## O que não muda (fora de escopo de superfície)
 

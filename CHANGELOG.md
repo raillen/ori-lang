@@ -10,7 +10,9 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-> **Política de versionamento (2026-06-29):** Congelado em `0.2.x`. Os marcos abaixo permanecem em `[Unreleased]` sem atribuir versão — `0.3.0` só quando houver breaking change real que usuários precisem saber. Patch versions (`0.2.1`, `0.2.2`) para correções e small additive features. `1.0` é critério de maturidade (Rust dependency removida, stdlib portada em `.orl`, self-hosting, ABI estável, usuários reais, sem breaking changes por ≥6 meses) — longo prazo, anos não dias. Ver comparação com pares (Zig 0.14 após ~10 anos, Rust 0.12 pre-1.0 após ~6 anos) em `AGENTS.md` "Versioning policy".
+> Itens de **superfície S3** (breaking) estão na seção **`[0.3.0]`**. O que permanece aqui são marcos não-S3 ou pós-corte ainda sem tag de package.
+
+> **Política de versionamento (atualizada 2026-07-12):** o corte de superfície **S3** é o **breaking change real** que justifica **`[0.3.0]`** (documentado abaixo). O número de pacote Cargo workspace permanece **`0.2.0`** até o release package/tag oficial (política de tag conservadora; ver `AGENTS.md`). Marcos pós-S3 (inferência local `0.3.1`, Rust-removal residual, stdlib extra) ficam em `[Unreleased]` ou na fatia de versão seguinte. `1.0` continua critério de maturidade de longo prazo.
 
 ### Adicionado
 - **CLI/S3 (`ori migrate-syntax`):** ferramenta melhor-esforço para reescrever fonte pré-S3 → S3 (`namespace`→`module`, strip `func` em declarações, `import as`/`only`, `<>`→`[]`, `of` types, `else if`→`elif`, `case .V`→`case V`, `do(`→`(`, `?` simples→`try`, scaffold `implement`/`apply Trait to`). Opções `--dry-run` / `-v`. Ignora `packages/ori-game` e `packages/ori-imgui`. Wrapper `tools/migrate_syntax.sh`. Testes unitários em `pipeline::migrate_syntax`.
@@ -119,6 +121,73 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+
+## [0.3.0] — 2026-07-12 (surface cutover S3)
+
+**Breaking release of language surface.** Ori absorbs the Auk9-inspired **S3**
+syntax. Pre-S3 forms are **hard errors** (no dual acceptance). Product purpose
+and identity: [`docs/spec/00-manifesto.md`](docs/spec/00-manifesto.md). Decision
+log: [`docs/planning/ori-surface-s3-auk9.md`](docs/planning/ori-surface-s3-auk9.md).
+ADR: [`docs/planning/adr-ori-surface-s3-auk9.md`](docs/planning/adr-ori-surface-s3-auk9.md).
+
+**Versioning note:** CHANGELOG documents the language surface as **`0.3.0`**.
+Workspace `Cargo.toml` may still report `0.2.0` until the tagged release package
+is cut; treat S3 docs + compiler as the source of truth for syntax.
+
+**Not in 0.3.0:** Nim-style local inference (**`0.3.1` / PR 11**), pipe `|>` as
+product focus, migration of `packages/ori-game` and `packages/ori-imgui` (follow-up).
+
+### Breaking — surface S3
+
+| Area | Canonical (S3) | Removed (error) |
+|------|----------------|-----------------|
+| File header | `module path` | `namespace` → `parse.namespace_removed` |
+| Function decl | `name(params) -> T` / `=> expr`; `async name(...)` | declaration keyword `func` → `parse.func_removed` (callable type `func(T)->R` kept) |
+| Compound types | `list[T]`, `map[K,V]`, `optional[T]`, `result[T,E]`, `Name[T]` | `Type<…>` → `parse.removed_angle_type`; `list of T` / `map of K to V` → `parse.removed_of_type` |
+| Generic bounds | `for T: Trait` / `for T: not Trait` | `where T is` → `parse.removed_where_bound` |
+| Propagation | `try expr` only | postfix `expr?` → `parse.question_propagate_removed` |
+| Conditionals | `elif` | `else if` → `parse.else_if_removed` |
+| Match cases | `case Variant` / `case Variant(...)` | leading `.` → `parse.case_dot_variant_removed` |
+| Struct literals | `Type { f: v }`, `{ f: v }` | `Type(...)`, `.{…}`, guided `(…)` → `parse.removed_struct_call_literal` |
+| Map literals | `{ "k": v }` (literal key) | (disambiguation: ident before `:` = struct) |
+| Imports | `import path (A, B)`; `import path = alias`; `import path` | `as` → `parse.import_as_removed`; `only` → `parse.import_only_removed`; no Auk9 order `import alias = path` |
+| Imports block | `imports … end` with multi-comma **only** in block | — |
+| Traits | `apply Type` + `use Trait`; bind `slot = freeFn` | `implement Trait for Type` → `parse.implement_removed`; `apply Trait to/for Type` → `parse.apply_trait_to_removed` |
+| Closures | `(params) => expr` / `(params) … end` | `do(...)` → `parse.do_removed` |
+| Rhythm | poetic one-arg call; optional labeled `end if` / `end match` | nested poetic → `parse.poetic_call_nested`; label mismatch → `parse.end_label_mismatch` |
+
+### Added
+
+- **Manifesto** `docs/spec/00-manifesto.md` — purpose: study, AI-assisted programming, ND readability; **not** market competition.
+- **CLI** `ori migrate-syntax` (+ `tools/migrate_syntax.sh`) — best-effort rewrite pre-S3 → S3 (skips `ori-game` / `ori-imgui`).
+- **Diagnostics** emitted for all removed forms and rhythm errors listed above (catalog chapter 13).
+- **Docs reforma** — overview, lexical, EBNF, functions, traits, catalog, guides and READMEs aligned to S3.
+
+### Changed
+
+- **Stdlib / examples / tests** in-repo migrated to S3 (`.orl` sources).
+- **Formatter / VS Code grammar / snippets / templates** keyword surface aligned.
+- **Auk9** — retired as a parallel **product**; remains a syntax **lab** reference only. Living surface is Ori S3.
+
+### Migration
+
+```bash
+# best-effort (re-runnable)
+ori migrate-syntax stdlib examples tests
+# or
+sh tools/migrate_syntax.sh
+```
+
+Manual review still required for complex `apply` rewrites and packages outside
+this repository. See also `docs/spec/01-overview.md` (Surface S3 summary table).
+
+### Deferred to 0.3.1
+
+- Local Nim-style type omission on obvious same-line bindings (design: surface
+  doc bloco 8b; PR 11 of `pr-plan-ori-surface-s3.md`).
+- Public APIs, parameters, and return types remain annotated.
+
+---
 ## [0.2.0] — 2026-06-29
 
 Etapa 9 (Release e Publicação) do `docs/planning/PLANO-MATURIDADE-COMPLETO.md`. Esta release consolida as Etapas 0–8 (estabilização do workspace, features bloqueadoras, sistema de tipos avançado, sync documental normativa, dívida técnica do compilador, runtime/ARC, LSP semântico cross-file, catálogo de diagnósticos auditado, organização/infra/qualidade) e formaliza o versionamento semver do projeto.

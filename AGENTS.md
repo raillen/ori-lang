@@ -1,6 +1,6 @@
 # Ori Language — Project Context
 
-> Ori is a reading-first, explicitly typed programming language. Compiler written in Rust.
+> Ori is a reading-first, explicitly typed programming language (**surface S3 / 0.3.0**). Compiler written in Rust.
 
 ## Skills (Grok / agentes)
 
@@ -151,10 +151,14 @@ Source (.orl)
   → Binary
 ```
 
-## Current Status (2026-07-01)
+## Current Status (2026-07-12)
 
 - **Rust:** 1.95.0 (via `rust-toolchain.toml`)
-- **Version:** `0.2.0` (Etapas 0–9 do `PLANO-MATURIDADE-COMPLETO.md` concluídas). **Congelado em `0.2.x`** — ver "Versioning policy" abaixo. Marcos de desenvolvimento ativos (Rust removal, Stdlib Phase 0, rede v2) permanecem em `[Unreleased]` sem atribuir versão.
+- **Language surface:** **`0.3.0` S3** (Auk9-inspired cutover — breaking). Manifesto: `docs/spec/00-manifesto.md`. Decisões: `docs/planning/ori-surface-s3-auk9.md`.
+- **Cargo workspace package version:** still **`0.2.0`** until the official release package/tag; CHANGELOG documents language surface as `[0.3.0]`. See "Versioning policy".
+- **Etapas 0–9** do `PLANO-MATURIDADE-COMPLETO.md` (ciclo 0.2) concluídas; S3 PRs 1–10 = marco de superfície.
+- **Next surface slice:** local Nim-style inference **`0.3.1`** (PR 11 — **not** part of 0.3.0).
+- **Auk9:** retired as product; lab/reference only. Living surface is Ori S3.
 - **cargo check --workspace:** PASSES cleanly
 - **cargo test --workspace:** PASSES cleanly (~690+ tests, including stdlib Layer 2/3, net v2 E2E, io streams, JIT default)
 - **Release smoke:** `tools/smoke_native_release.ps1 -SkipBuild` passes — `ori compile` + `ori test` validados em package isolado com runtime empacotada (Windows MSVC).
@@ -169,19 +173,20 @@ Source (.orl)
 - **Docs website (unreleased):** Site Starlight em [github.com/raillen/ori-website](https://github.com/raillen/ori-website) — i18n en/pt/es/ja, Pagefind + busca ⌘K, referência gerada via `ori doc export`. Deploy Vercel-ready (`vercel.json`).
 - **Master plan:** `docs/planning/PLANO-MATURIDADE-COMPLETO.md` — Etapas 0–9 concluídas; backlog v2 em Apêndice C (stdlib em `.orl`, paridade C debug para async, mais triples, registry/installer, `ori doc` HTML). Roadmap fechado: híbrido A→B→D para Rust removal (Phase 3 completa), 3 camadas explícitas para stdlib (detalhes em CHANGELOG `[Unreleased]`).
 
-## Versioning policy (2026-06-29)
+## Versioning policy (2026-07-12)
 
-**Congelado em `0.2.x`.** A escalada `0.1.0 → 0.2.0 → 0.3.0` (planejada) em dias foi precipitada. Comparação com pares:
+**Histórico:** a escalada precoce `0.1.0 → 0.2.0` foi precipitada; o corte **S3** **é** o breaking que justifica documentar **`0.3.0`** no CHANGELOG. O número Cargo pode permanecer `0.2.0` até a tag de package. Comparação com pares:
 
 | Linguagem | Tempo em 0.x | Versão atual | Status |
 |-----------|-------------|--------------|--------|
 | Zig | ~10 anos | 0.14 | Consolidada, ainda sem 1.0 |
 | Rust | ~6 anos (pre-1.0) | 1.0 em 2015 | Estável após 0.12 |
-| Ori | dias | 0.2.0 | Pre-1.0, desenvolvimento ativo |
+| Ori | dias | surface 0.3.0 / pkg 0.2.0 | Pre-1.0, S3 cutover documentado |
 
 **Regras até 1.0:**
-- Marcos de desenvolvimento ficam em `[Unreleased]` no CHANGELOG **sem atribuir versão**.
-- `0.3.0` só quando houver **breaking change real** que usuários precisem saber (não por ter terminado um marco).
+- Superfície S3 documentada em CHANGELOG **`[0.3.0]`** (breaking real).
+- Marcos não-S3 / pós-corte (ex.: inferência `0.3.1`) ficam em `[Unreleased]` ou seção de versão seguinte.
+- Bump de `Cargo.toml` workspace para `0.3.0` acompanha a tag de release package (não é obrigatório no mesmo commit da reforma documental).
 - Patch versions (`0.2.1`, `0.2.2`) para correções e small additive features.
 - `1.0` é critério de maturidade (anos, não dias):
   1. Rust dependency totalmente removida (Rust removal Phase 1+2+3).
@@ -191,7 +196,7 @@ Source (.orl)
   5. Usuários reais (mesmo que poucos).
   6. Sem breaking changes por ≥6 meses.
 
-**Motivo:** o `ori compile` ainda precisa de Rust toolchain (Phase 1 mitiga, não resolve), a stdlib é 95% manifesto Rust (Phase 0 mal começou), não há bootstrapping, não há usuários além de testes. Chamar isso de "release" 0.3/0.4/0.5 infla a percepção de maturidade.
+**Motivo (package vs surface):** a superfície S3 **é** breaking e vive em CHANGELOG `[0.3.0]`. Manter o número Cargo em `0.2.0` até a tag de package evita inflar maturidade de *distribuição* enquanto AOT ainda depende de linker do sistema e a stdlib Layer 1 permanece em Rust. Inferência local = `0.3.1`, não misturar no big-bang S3.
 
 ## Rust Independence Strategy (2026-07-02)
 
@@ -245,18 +250,20 @@ Para `ori run` (JIT): **nenhum linker é necessário** — apenas o cdylib do ru
 
 ## Known Pitfalls
 
-1. **Native runtime staging:** `compile_runs` tests fail with `native.link_failed` → runtime needs re-staging. Fix: `cargo build -p ori-runtime --lib && cp target/debug/libori_runtime.a runtime/x86_64-unknown-linux-gnu/`
+1. **S3 surface (`0.3.0`):** pre-S3 forms (`namespace`, declaration `func`, `import as`/`only`, `<>`, `else if`, `?`, `do`, `implement`/`apply Trait to`, struct call literals, …) are **hard errors**. Use `ori migrate-syntax` for mechanical rewrites. Spec: `docs/spec/01-overview.md`. Catalog: `docs/spec/13-error-catalog.md`.
 
-2. **OnceLock cache in tests:** `find_native_runtime_link()` caches the FIRST result across all tests. If first test finds broken runtime, all subsequent tests fail. Run single test first to verify fix.
+2. **Native runtime staging:** `compile_runs` tests fail with `native.link_failed` → runtime needs re-staging. Fix: `cargo build -p ori-runtime --lib && cp target/debug/libori_runtime.a runtime/x86_64-unknown-linux-gnu/`
 
-3. **Runtime config:** `.cargo/config.toml` requires `relocation-model=pic`. `runtime-link.json` requires `-lpthread -ldl -lm -no-pie`.
+3. **OnceLock cache in tests:** `find_native_runtime_link()` caches the FIRST result across all tests. If first test finds broken runtime, all subsequent tests fail. Run single test first to verify fix.
 
-4. **Diagnostic code prefixes:** MUST match catalog in `docs/spec/13-error-catalog.md` (enforced by `diagnostic_catalog_matches_emitted_codes`). Convention: `name.*` for name resolution (`name.undefined`, `name.private`, `name.duplicate` for top-level duplicates); `bind.*` for binding/import/field/param errors (`bind.duplicate_field`, `bind.duplicate_param`, `bind.import_not_found`, `bind.stdlib_module_unknown`, `bind.stdlib_module_unavailable`). `bind.undefined` is a reserved alias only — the emitted code is `name.undefined`.
+4. **Runtime config:** `.cargo/config.toml` requires `relocation-model=pic`. `runtime-link.json` requires `-lpthread -ldl -lm -no-pie`.
 
-5. **Ori syntax:** `end`-delimited blocks (not braces). Struct fields and enum variants are newline-separated. Enum variants with named fields use commas inside parens.
+5. **Diagnostic code prefixes:** MUST match catalog in `docs/spec/13-error-catalog.md` (enforced by `diagnostic_catalog_matches_emitted_codes`). Convention: `name.*` for name resolution (`name.undefined`, `name.private`, `name.duplicate` for top-level duplicates); `bind.*` for binding/import/field/param errors (`bind.duplicate_field`, `bind.duplicate_param`, `bind.import_not_found`, `bind.stdlib_module_unknown`, `bind.stdlib_module_unavailable`). `bind.undefined` is a reserved alias only — the emitted code is `name.undefined`.
 
-6. **Lock file:** Regenerate with Rust 1.95 if build fails: `cargo update` or delete `Cargo.lock` and rebuild.
+6. **Ori syntax (S3):** `module` header; no declaration `func`; `end`-delimited blocks; types use `[]`; struct literals `Type { f: v }`; traits via `apply`/`use`. Enum variants with named fields use commas inside parens.
 
-7. **Windows LSP process lock:** `ori-lsp.exe` may remain locked in memory on Windows, preventing `cargo test --workspace` from rebuilding the `ori-lsp` crate. Workaround: `taskkill /F /IM ori-lsp.exe` before running tests, or use `cargo test -p <crate>` crate-by-crate.
+7. **Lock file:** Regenerate with Rust 1.95 if build fails: `cargo update` or delete `Cargo.lock` and rebuild.
 
-8. **CDYLIB desynchronization after runtime changes:** When new FFI functions are added to `ori-runtime`, the `cdylib` (`.dll`/`.so`/`.dylib`) must be re-staged alongside the static library. An outdated `cdylib` causes `ori run` (JIT default) to produce corrupted results or panic with undefined behavior (`ptr::copy_nonoverlapping` violation). Fix: `cargo build -p ori-runtime --lib` and copy both the staticlib and the cdylib into `runtime/<triple>/`.
+8. **Windows LSP process lock:** `ori-lsp.exe` may remain locked in memory on Windows, preventing `cargo test --workspace` from rebuilding the `ori-lsp` crate. Workaround: `taskkill /F /IM ori-lsp.exe` before running tests, or use `cargo test -p <crate>` crate-by-crate.
+
+9. **CDYLIB desynchronization after runtime changes:** When new FFI functions are added to `ori-runtime`, the `cdylib` (`.dll`/`.so`/`.dylib`) must be re-staged alongside the static library. An outdated `cdylib` causes `ori run` (JIT default) to produce corrupted results or panic with undefined behavior (`ptr::copy_nonoverlapping` violation). Fix: `cargo build -p ori-runtime --lib` and copy both the staticlib and the cdylib into `runtime/<triple>/`.

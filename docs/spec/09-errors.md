@@ -2,6 +2,7 @@
 
 > Status: normative
 > Audience: compiler implementers
+> Surface: **S3** (`0.3.0`)
 
 ---
 
@@ -11,8 +12,8 @@ Ori has two distinct constructs for absence and failure:
 
 | Construct | Use | Propagation |
 |---|---|---|
-| `optional<T>` | A value that may be absent | `try`, or `if some` / `match` |
-| `result<T, E>` | An operation that may fail | `try`, or `match` |
+| `optional[T]` | A value that may be absent | `try`, or `if some` / `match` |
+| `result[T, E]` | An operation that may fail | `try`, or `match` |
 
 There are no exceptions. There is no `null`. There is no `throw`/`catch`.
 
@@ -21,12 +22,12 @@ handles them.
 
 ---
 
-## `optional<T>`
+## `optional[T]`
 
-`optional<T>` represents a value that may or may not be present.
+`optional[T]` represents a value that may or may not be present.
 
 ```ori
-func find_user(id: int) -> optional<User>
+find_user(id: int) -> optional[User]
     if id <= 0
         return none
     end
@@ -38,15 +39,15 @@ Constructors:
 - `some(value)` — wraps a value.
 - `none` — the absent value.
 
-### Unwrapping `optional<T>`
+### Unwrapping `optional[T]`
 
 **Pattern match** (explicit, always safe):
 
 ```ori
 match find_user(42)
-case some(user):
-    greet(user)
-case none:
+    case some(user):
+        greet(user)
+    case none:
     io.print("not found")
 end
 ```
@@ -65,8 +66,8 @@ end
 const name: string = find_name(id).or("Anonymous")
 ```
 
-Current status: `.or(fallback)` is accepted for `optional<T>` and
-`result<T, E>` in the checker, native backend, and C backend. The fallback is
+Current status: `.or(fallback)` is accepted for `optional[T]` and
+`result[T, E]` in the checker, native backend, and C backend. The fallback is
 evaluated only when the receiver is `none` or `error(_)`.
 
 **`.or_return()`** — unwrap or propagate from the enclosing function:
@@ -74,7 +75,7 @@ evaluated only when the receiver is `none` or `error(_)`.
 ```ori
 const user: User = find_user(id).or_return()
 -- If find_user returns none, the enclosing function returns none immediately.
--- The enclosing function must return optional<_>.
+-- The enclosing function must return optional[_].
 ```
 
 Current status: `.or_return()` is accepted as shorthand for propagation. The
@@ -84,7 +85,7 @@ older `.or_return(value)` form is not implemented. Use `try`,
 **`try` propagation** — unwrap or propagate absence:
 
 ```ori
-func get_user_name(id: int) -> optional<string>
+get_user_name(id: int) -> optional[string]
     const user: User = try find_user(id)
     -- If none: return none from get_user_name
     -- If some(u): bind u to user
@@ -96,13 +97,13 @@ Postfix `find_user(id)?` is not valid surface syntax (S3); write `try find_user(
 
 ---
 
-## `result<T, E>`
+## `result[T, E]`
 
-`result<T, E>` represents an operation that either succeeds with value `T` or
+`result[T, E]` represents an operation that either succeeds with value `T` or
 fails with error `E`.
 
 ```ori
-func read_config(path: string) -> result<Config, string>
+read_config(path: string) -> result[Config, string]
     if path == ""
         return error("empty path")
     end
@@ -115,10 +116,10 @@ Constructors:
 - `success(value)` — the success variant.
 - `error(value)` — the failure variant.
 
-### `try` Propagation on `result<T, E>`
+### `try` Propagation on `result[T, E]`
 
 ```ori
-func start(path: string) -> result<void, string>
+start(path: string) -> result[void, string]
     const config: Config = try read_config(path)
     -- If error(e): return error(e) from start
     -- If success(v): bind v to config
@@ -127,10 +128,10 @@ func start(path: string) -> result<void, string>
 end
 ```
 
-Rules for `try` on `result<T, E>`:
-1. The enclosing function must return `result<_, F>` where `F` is compatible with `E`.
+Rules for `try` on `result[T, E]`:
+1. The enclosing function must return `result[_, F]` where `F` is compatible with `E`.
 2. If `E == F`: the error is propagated as-is.
-3. If `E != F`: a compile error. Use explicit conversion. For `result<T, string>`,
+3. If `E != F`: a compile error. Use explicit conversion. For `result[T, string]`,
    `.or_wrap(context)` can add string context before propagation.
 
 Postfix `read_config(path)?` is not valid surface syntax (S3); write
@@ -147,13 +148,13 @@ const config: Config = try read_config(path).or_wrap("loading configuration")
 If `read_config` returns `error("empty path")`, the result becomes
 `error("loading configuration: empty path")`.
 
-Current status: `.or_wrap(...)` is accepted for `result<T, string>` in the
+Current status: `.or_wrap(...)` is accepted for `result[T, string]` in the
 checker, HIR lowering, native backend, and C backend. It keeps `success(v)`
 unchanged and evaluates the context expression only when the receiver is
 `error(_)`. For non-string error types, use explicit conversion or handle the
 error with `match`.
 
-### Pattern Match on `result<T, E>`
+### Pattern Match on `result[T, E]`
 
 ```ori
 match load_data(path)
@@ -169,15 +170,15 @@ end
 ## `try` — Propagation
 
 `try expr` is the only surface form for propagation (S3). It works on both
-`optional<T>` and `result<T, E>`. Postfix `expr?` is rejected with
+`optional[T]` and `result[T, E]`. Postfix `expr?` is rejected with
 `parse.question_propagate_removed`.
 
 **Behavior summary:**
 
 | Type | On success | On failure |
 |---|---|---|
-| `optional<T>` | Unwraps to `T` | Returns `none` from enclosing function |
-| `result<T, E>` | Unwraps to `T` | Returns `error(e)` from enclosing function |
+| `optional[T]` | Unwraps to `T` | Returns `none` from enclosing function |
+| `result[T, E]` | Unwraps to `T` | Returns `error(e)` from enclosing function |
 
 **Compatibility rules:**
 
@@ -185,8 +186,8 @@ The enclosing function's return type must be compatible:
 
 | Expression type | Required enclosing return type |
 |---|---|
-| `try optional<T>` | `optional<_>` |
-| `try result<T, E>` | `result<_, E>` or `result<_, F>` where `E` converts to `F` |
+| `try optional[T]` | `optional[_]` |
+| `try result[T, E]` | `result[_, E]` or `result[_, F]` where `E` converts to `F` |
 
 Using `try` in a function that returns `void` or an incompatible type is a
 compile error.
@@ -194,15 +195,15 @@ compile error.
 Backend status:
 
 - The native backend supports `try` propagation.
-- The C backend supports `try` propagation for `optional<T>` and
-  `result<T, E>` when the enclosing function returns a compatible
-  `optional<_>` or `result<_, E>`.
+- The C backend supports `try` propagation for `optional[T]` and
+  `result[T, E]` when the enclosing function returns a compatible
+  `optional[_]` or `result[_, E]`.
 
 ---
 
 ## Error Types
 
-Any type may be used as the error branch of `result<T, E>`.
+Any type may be used as the error branch of `result[T, E]`.
 
 Current implementation: `ori.core.Error` exists as a marker trait. The richer
 `message()`/`cause()` trait-method contract below is planned and documents the
@@ -212,7 +213,7 @@ intended stable shape for future stdlib APIs:
 trait Error
     message() -> string
 
-    cause() -> optional<any<Error>>
+    cause() -> optional[any[Error]]
         return none
     end
 end
@@ -221,7 +222,7 @@ end
 Using `Error` is not required by the compiler today. Future rich stdlib APIs may
 require it. The current `ori.Error` value type is importable and stores
 `code: string` plus `message: string`; current `ori.io`/`ori.fs` helpers still
-use `string` errors or `optional<T>` where documented.
+use `string` errors or `optional[T]` where documented.
 
 ### Defining Error Types
 
@@ -233,7 +234,8 @@ struct ValidationError
     reason: string
 end
 
-implement Error for ValidationError
+apply ValidationError
+    use Error
     message() -> string
         return f"validation failed on '{self.field}': {self.reason}"
     end
@@ -246,12 +248,13 @@ When a function may fail with multiple distinct error types, use an enum:
 
 ```ori
 enum AppError
-    Network(error: NetworkError)
-    Validation(error: ValidationError)
-    Parse(error: ParseError)
+    Network { error: NetworkError }
+    Validation { error: ValidationError }
+    Parse { error: ParseError }
 end
 
-implement Error for AppError
+apply AppError
+    use Error
     message() -> string
         match self
         case Network(error):
@@ -264,7 +267,7 @@ implement Error for AppError
     end
 end
 
-run(input: string) -> result<Output, AppError>
+run(input: string) -> result[Output, AppError]
 ```
 
 This guarantees exhaustive handling at the call site.
@@ -286,7 +289,7 @@ Sources of panic:
 - Field contract violation.
 - Failed type narrowing (`is` check followed by wrong-type access).
 
-Panics are not catchable at the language level. Use `result<T, E>` for
+Panics are not catchable at the language level. Use `result[T, E]` for
 expected failures.
 
 ---
@@ -295,7 +298,7 @@ expected failures.
 
 Ori has no exceptions, no `throw`, no `catch`, no exception-style `try` blocks.
 The `try expr` syntax is not a catch block; it is only readable propagation for
-`optional<T>` and `result<T, E>`.
+`optional[T]` and `result[T, E]`.
 
 The reason: exceptions are invisible in function signatures. A function that
 throws can fail in ways not visible to the caller, requiring knowledge of the
@@ -309,7 +312,7 @@ says so in its return type.
 ### Chaining fallible operations
 
 ```ori
-func process(path: string) -> result<Output, string>
+process(path: string) -> result[Output, string]
     const raw: string = try ori.fs.read_text(path)
     const parsed: Input = try parse(raw)
     const output: Output = try transform(parsed)
@@ -320,15 +323,15 @@ end
 ### Converting error types
 
 ```ori
-func run(path: string) -> result<void, AppError>
-    -- result<Config, string> is not result<void, AppError>.
+run(path: string) -> result[void, AppError]
+    -- result[Config, string] is not result[void, AppError].
     -- Explicit conversion is needed today.
     match read_config(path)
     case success(c):
         apply_config(c)
         return success()
     case error(msg):
-        return error(AppError.Parse(ParseError(message: msg)))
+        return error(AppError.Parse(ParseError { message: msg }))
     end
 end
 ```
@@ -336,7 +339,7 @@ end
 ### Early return from nested optional
 
 ```ori
-func find_display_name(id: int) -> optional<string>
+find_display_name(id: int) -> optional[string]
     const user: User = try find_user(id)
     const profile: Profile = try find_profile(user.profile_id)
     return some(profile.display_name)

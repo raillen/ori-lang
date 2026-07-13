@@ -1,20 +1,26 @@
 # Ori Language Specification — Chapter 01: Overview
 
-> Status: normative
-> Audience: language designers, compiler implementers, contributors
+> Status: normative  
+> Audience: language designers, compiler implementers, contributors  
+> Surface: **S3** (Auk9-inspired), cutover `0.3.0`  
+> Identity / purpose: [`00-manifesto.md`](00-manifesto.md)
 
 ---
 
 ## What Ori Is
 
-Ori is a statically typed, reading-first programming language compiled to native code.
+Ori is a statically typed, reading-first programming language compiled to native
+code (AOT), with optional in-process JIT for `ori run`.
 
 *ori* (אוֹרִי) — Hebrew for "my light."
 
 Ori exists to make programming accessible to people who find mainstream languages
-hostile — in particular people with ADHD, autism, and dyslexia. It achieves this
-not by being simpler, but by being more honest: every piece of information the reader
-needs is visible at the point where it is needed.
+hostile — in particular people with ADHD, autism, and dyslexia — **and** as a
+serious laboratory for compiler study and AI-assisted programming. It is **not**
+a market-competition product. See the [manifesto](00-manifesto.md).
+
+It achieves readability not by being simpler, but by being more honest: every
+piece of information the reader needs is visible at the point where it is needed.
 
 ---
 
@@ -24,189 +30,205 @@ Ori optimizes for **reading**, not writing.
 
 A program is read many more times than it is written. Ori makes each read cheaper:
 
-- **Where a file belongs** — `namespace` is the first declaration in every file.
-- **What each value is** — types are explicit at every binding.
-- **Where absence can happen** — `optional<T>` is the only representation of absence.
-- **Where failure can happen** — `result<T, E>` is the only representation of recoverable failure.
-- **When resources are released** — `using` makes cleanup visible and deterministic.
-- **When behavior comes from a trait** — `implement` blocks are explicit and named.
+| Question | Visible through (S3) |
+|---|---|
+| Where does this file belong? | `module path` first in every file |
+| What type does this value have? | Explicit annotations on bindings and public contracts |
+| Can this value be absent? | `optional[T]` |
+| Can this operation fail? | `result[T, E]` |
+| When is a resource released? | `using` |
+| Where does trait behavior come from? | `apply Type` + `use Trait` |
+| What went wrong? | Structured diagnostic codes |
 
 ---
 
 ## Core Design Goals
 
 1. **Explicit over implicit.** If something happens, you can see it in the source.
-2. **No surprises.** The reader should be able to predict runtime behavior from syntax alone.
-3. **No null.** Absence is modeled as `optional<T>`.
-4. **No exceptions as control flow.** Failure is modeled as `result<T, E>`.
+2. **No surprises.** The reader should predict runtime behavior from syntax alone.
+3. **No null.** Absence is modeled as `optional[T]`.
+4. **No exceptions as control flow.** Failure is modeled as `result[T, E]`.
 5. **Composition over inheritance.** Types are composed with structs, enums, and traits.
 6. **Readable diagnostics.** Every error message names what happened, where, and what to do.
-7. **Accessible documentation.** Examples are short, syntactically valid, and always up to date.
+7. **One canonical form per concept.** Dual legacy syntax is rejected at the `0.3.0` cut (S3).
+8. **Accessible documentation.** Examples are short, syntactically valid, and up to date.
 
 ---
 
 ## What Ori Is Not
 
 - Ori is not a scripting language. Programs have explicit structure.
-- Ori is not a functional language. It supports functional patterns but is not pure.
+- Ori is not a pure functional language. It supports functional patterns.
 - Ori is not an object-oriented language. There are no classes or inheritance.
 - Ori is not a systems language in the sense of manual memory management.
   Memory is managed automatically through value semantics and automatic reference counting.
+- Ori is not a market product competing with industrial languages (see manifesto).
 
 ---
 
-## Mental Model
+## Mental Model (S3)
 
-An Ori program is a set of **namespaces**.
+An Ori program is a set of **modules**.
 
-Each namespace is a source file. The namespace name is declared first.
+Each module is a source file. The module path is declared first with `module`.
 
 ```ori
-namespace app.inventory
+module app.inventory
 
-import ori.io as io
+import ori.io = io
 
-public func item_count() -> int
+public item_count() -> int
     return 42
 end
 ```
 
-Imports create local namespace aliases. A plain import is local to the file.
+### Imports (three forms)
 
-`public import` re-exports that alias through the current namespace:
+| Intent | Form | Effect |
+|--------|------|--------|
+| Selective | `import ori.fs (readText, writeText)` | Names enter the local scope |
+| Module alias | `import ori.io = io` | Use `io.print(...)` — **path left, alias right** |
+| Whole module | `import ori.io` | Only fully-qualified `ori.io.print(...)` (no implicit alias) |
 
 ```ori
-namespace app.api
+module app.api
 
-public import app.inventory as inventory
+public import app.inventory = inventory
 ```
 
-A consumer can then write:
-
 ```ori
-namespace app.main
+module app.main
 
-import app.api as api
+import app.api = api
 
-func main()
+main()
     const count: int = api.inventory.item_count()
 end
 ```
 
-### Namespaces and Imports
-
-Current compiler behavior:
-
-- Every source file starts with one `namespace` declaration.
-- `import app.util` creates the local alias `util`.
-- `import app.util as tools` creates the local alias `tools`.
-- `import app.util only (parse, render as draw)` brings only those exported
-  members into the local file, preserving the origin in the import line.
-- `public import app.util as tools` re-exports that alias through the current
-  namespace.
-- Imports are resolved from namespace-like paths to matching `.orl` files near
-  the importing file.
-- An import cycle is rejected with `project.circular_import`.
-- If a resolved file declares a different namespace, the compiler emits
-  `project.namespace_file_mismatch`.
-- Known but unfinished standard-library modules are rejected with
-  `bind.stdlib_module_unavailable`.
-- Unknown `ori.*` modules are rejected with `bind.stdlib_module_unknown`.
-
-Selective imports are intended for files that need only a few names from a
-long module path:
+Block form (multi-import with commas **only** inside the block):
 
 ```ori
-import ori.string only (is_empty, truncate as cut)
-
-func main()
-    const empty: bool = is_empty("")
-    const label: string = cut("abcdef", 3)
+imports
+    ori.fs (read_text, write_text), ori.io = io
+    app.users = users
 end
 ```
 
-If two imports introduce the same local name, the compiler emits
-`bind.duplicate_alias`. If a selected member does not exist, the compiler emits
-`bind.import_member_unknown`.
+Removed at `0.3.0` (hard errors): `namespace`, `import path as alias`,
+`import path only (…)`, Auk9 order `import alias = path`.
 
 ### Visibility
 
-Current visibility rules:
-
 - Top-level declarations are private by default.
-- `public` makes a declaration visible to other namespaces.
-- Private declarations remain usable inside the namespace that defines them.
+- `public` makes a declaration visible to other modules.
+- `public import` re-exports; plain `import` does not.
 - Accessing a private imported declaration emits `name.private`.
-- `public import` re-exports a public alias; plain `import` does not.
-- For public functions, parameter names are part of the public API because
-  named arguments may use them at call sites.
 
-The common path through Ori code:
+### The common path through Ori code
 
 1. Define data shapes with `struct` and `enum`.
 2. Define behavior contracts with `trait`.
-3. Attach behavior with `implement Trait for Type`.
-4. Return `optional<T>` when a value may be absent.
-5. Return `result<T, E>` when an operation may fail.
-6. Use `using` to bind resources that need deterministic cleanup.
-7. Use `check` for programmer assertions that must hold.
+3. Attach behavior with `apply Type` + `use Trait` (inline or `slot = freeFn`).
+4. Return `optional[T]` when a value may be absent.
+5. Return `result[T, E]` when an operation may fail; propagate with `try expr`.
+6. Use `using` for deterministic cleanup.
+7. Use `check` for programmer assertions.
 
 ---
 
 ## Complete Introductory Example
 
 ```ori
-namespace app.main
+module app.main
 
-import ori.io as io
-import ori.core as core
+import ori.io = io
+import ori.core = core
+
+alias UserResult = result[User, string]
 
 struct User
     name: string
     age: int if it >= 0
 end
 
-implement core.Displayable for User
-    func display(self) -> string
-        return f"{self.name} ({self.age})"
+apply User
+    use core.Displayable
+        display(self) -> string
+            return f"{self.name} ({self.age})"
+        end
     end
 end
 
-func load_user(id: int) -> result<User, string>
+load_user(id: int) -> UserResult
     if id < 0
         return error("invalid id")
     end
-    return success(User(name: "Ada", age: 36))
+    return success(User { name: "Ada", age: 36 })
 end
 
-func main() -> result<void, string>
+main() -> result[void, string]
     const user: User = try load_user(1)
     io.print(string(user))
     return success()
 end
 ```
 
+### Surface highlights in this example
+
+| Concept | S3 form |
+|---------|---------|
+| File header | `module app.main` |
+| Import alias | `import ori.io = io` |
+| No `func` keyword | `load_user(...) -> …` / `main()` |
+| Types | `result[User, string]`, brackets not angles |
+| Struct literal | `User { name: …, age: … }` |
+| Traits | `apply User` + `use Displayable` |
+| Propagation | `try load_user(1)` only (`?` removed) |
+
 ---
 
-## Relationship to Zenith
+## Surface S3 summary (breaking vs 0.2.x)
 
-Ori is a new language. It was designed with the lessons of Zenith as its foundation,
-but it is not Zenith and is not compatible with Zenith source code.
+| Area | Canonical S3 | Removed |
+|------|--------------|---------|
+| Header | `module path` | `namespace` |
+| Functions | `name(params) -> T` / `=> expr` | declaration `func` |
+| Types | `list[T]`, `map[K,V]`, `optional[T]`, `result[T,E]` | `<>`, `of` / `to` forms |
+| Generics | `Name[T]`, bounds `for T: Trait` | `where T is`, `func foo<T>` as canonical |
+| Control | `elif`, `try expr` | `else if`, postfix `?` |
+| Match | `case Variant` / `case Variant(...)` | leading `.` on case variants |
+| Literals | `Type { f: v }`, `{ f: v }`, map `{ "k": v }` | `Type(...)`, `.{…}`, guided `(…)` |
+| Imports | `path (A)`, `path = alias`, bare `path` | `as`, `only` |
+| Traits | `apply Type` + `use Trait` | `implement Trait for Type`, `apply Trait to Type` |
+| Closures | `(u) => expr` / `(u) … end` | `do(...)` |
+| Rhythm | poetic call, labeled `end if` | nested poetic call |
 
-Key differences from Zenith:
+Migration aid: `ori migrate-syntax`. Full list: `CHANGELOG.md` `[0.3.0]`.
 
-| Zenith | Ori |
+**Not in 0.3.0:** local Nim-style inference (`0.3.1`), pipe `|>` as product goal,
+migration of `ori-game` / `ori-imgui`.
+
+---
+
+## Relationship to Zenith / Auk9
+
+Ori is a new language. Lessons from Zenith informed early design; source is not
+compatible with Zenith.
+
+| Historical / lab | Ori S3 |
 |---|---|
-| `text` | `string` |
-| `apply Trait to Type` | `implement Trait for Type` |
-| `func f(mut self)` | `mut func f()` |
-| `while true` | `loop` |
-| `type Alias = T` | `alias Alias = T` |
-| `to_text()` | `string()` builtin (trait method is `display(self)`) |
-| `TextRepresentable` | `Displayable` |
-| Ranges are exclusive (`0..9` = 0–8) | Ranges are inclusive (`0..9` = 0–9) |
-| Anonymous functions use `func` | Anonymous functions use `do` |
-| `std.*` stdlib namespace | `ori.*` stdlib namespace |
+| Zenith `text` | `string` |
+| Zenith / early Ori `apply Trait to Type` | `apply Type` + `use Trait` |
+| Early Ori `implement Trait for Type` | same as above |
+| Early Ori `namespace` | `module` |
+| Early Ori `func f(...)` | `f(...)` |
+| Early Ori `list<T>` / `list of T` | `list[T]` |
+| Auk9 (lab) surface | absorbed as S3 on Ori; Auk9 is **not** a product |
+| Auk9 `import io = ori.io` | Ori uses `import ori.io = io` |
+| Auk9 `do(u) =>` | Ori uses `(u) =>` |
+| Ranges exclusive | Ori ranges are inclusive (`0..9` = 0–9) |
+| `std.*` | `ori.*` |
 
 ---
 
@@ -214,6 +236,7 @@ Key differences from Zenith:
 
 | Chapter | Title |
 |---|---|
+| 00 | Manifesto (identity and purpose) |
 | 01 | Overview (this chapter) |
 | 02 | Lexical Structure |
 | 03 | Grammar (EBNF) |
@@ -221,7 +244,7 @@ Key differences from Zenith:
 | 05 | Expressions |
 | 06 | Statements and Control Flow |
 | 07 | Functions and Closures |
-| 08 | Traits and Implement |
+| 08 | Traits and Apply |
 | 09 | Errors and Propagation |
 | 10 | Memory and Cleanup |
 | 11 | Generics and Constraints |

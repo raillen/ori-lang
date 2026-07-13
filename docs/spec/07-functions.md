@@ -1,75 +1,73 @@
 # Ori Language Specification — Chapter 07: Functions and Closures
 
-> Status: normative
-> Audience: compiler implementers
+> Status: normative  
+> Audience: compiler implementers  
+> Surface: **S3** (`0.3.0`)
 
 ---
 
 ## Function Declarations
 
+There is **no** declaration keyword `func`. A function is a name, parameter
+list, optional return type, and body:
+
 ```ori
-func add(a: int, b: int) -> int
+add(a: int, b: int) -> int
     return a + b
 end
 
-public func greet(name: string) -> string
+public greet(name: string) -> string
     return f"hello {name}"
 end
 ```
 
+Single-expression body with `=>`:
+
+```ori
+double(x: int) -> int => x * 2
+
+greet(name: string) -> string => f"hi, {name}"
+```
+
 Rules:
-- `func` declares a named function.
-- Parameter types and return type are explicit.
-- `public` makes the function visible outside its namespace.
-- Private (default) functions are visible only within their namespace.
-- Functions close with `end`.
-- A function that returns `void` may omit the `-> void` annotation.
+- Parameter types are explicit on public APIs and ordinary declarations.
+- Return type may be omitted when it is `void` (same omission rules as before S3).
+- Prefer `alias` for long/repeated return types (`alias UserResult = result[User, string]`).
+- `public` makes the function visible outside its module.
+- Multi-statement bodies close with `end` (optional label: `end` / construct name).
+- Writing `func name(...)` as a **declaration** is a hard error: `parse.func_removed`.
+- The word `func` remains only in **callable types**: `func(int) -> int`.
 
 ---
 
 ## Async Functions
 
 ```ori
-import ori.task as task
+import ori.task = task
 
-async func load_count() -> int
+async load_count() -> int
     await task.sleep(1)
     return 41
 end
 
-async func main()
+async main()
     const count: int = await load_count()
 end
 ```
 
 Rules:
-- `async func f(...) -> T` has call type `future<T>`.
-- Inside the function body, `return value` still returns a `T`.
-- `await expr` may appear only inside an `async func`.
-- `await` requires `expr` to have type `future<T>` and produces `T`.
-- `async func main()` is allowed in the native backend. The generated entry
-  point waits for its returned future through the native executor.
-- `using` is allowed inside `async func`. Resources are stored in the async
-  frame and `dispose()` runs on scope exit. Full coverage of every terminal path
-  (cancellation, early exit) is tracked in the implementation master plan.
+- `async name(...) -> T` has call type `future[T]`.
+- Inside the body, `return value` still returns a `T`.
+- `await expr` may appear only inside an `async` function.
+- `await` requires `expr` to have type `future[T]` and produces `T`.
+- `async main()` is allowed in the native backend.
+- `using` is allowed inside `async` functions (resources stored in the async frame).
 
 Implementation status:
-- The native runtime has pollable futures, failed/cancelled internal states,
-  continuation scheduling, a FIFO executor queue, and non-blocking timers for
-  `task.sleep`.
-- Current native lowering creates a `future<T>` as soon as an `async func` is
-  called. Supported bodies are lowered to a generated native state machine and
-  scheduled on the native executor.
-- Source-level `await` in the supported subset uses `ori_future_poll`,
-  `ori_future_value_*`, and `ori_future_on_ready`; it does not use
-  `task.block_on`.
-- Async shapes outside the current state-machine subset fail with
-  `backend.native_unsupported` before Cranelift.
-- Failed and cancelled future states observed by the state machine are
-  propagated by generated async wrappers instead of becoming silent default
-  values.
-- Public cooperative cancellation via `task.CancelToken` (`create_token`,
-  `cancel`, `is_cancelled`, `associate`).
+- Native runtime: pollable futures, failed/cancelled states, FIFO executor,
+  non-blocking timers for `task.sleep`.
+- Unsupported async shapes fail with `backend.native_unsupported` before Cranelift.
+- Cooperative cancellation via `task.CancelToken`.
 
 ---
 
@@ -78,21 +76,19 @@ Implementation status:
 ### Required Parameters
 
 ```ori
-func connect(host: string, port: int) -> result<void, string>
+connect(host: string, port: int) -> result[void, string]
 ```
 
 ### Default Values
 
 ```ori
-func connect(host: string, port: int = 80) -> result<void, string>
+connect(host: string, port: int = 80) -> result[void, string]
 ```
 
 - Parameters with defaults must come after required parameters.
 - The default expression is evaluated at each call site.
 
 ### Named Arguments
-
-At the call site, arguments may be named:
 
 ```ori
 connect(host: "localhost", port: 8080)
@@ -106,34 +102,25 @@ Rules:
 ### Value Contracts (`if` on parameters)
 
 ```ori
-func sqrt(value: float if it >= 0.0) -> float
-func clamp(v: int, lo: int, hi: int if it >= lo) -> int
+sqrt(value: float if it >= 0.0) -> float
+clamp(v: int, lo: int, hi: int if it >= lo) -> int
 ```
 
-`it` is the contextual keyword that refers to the parameter value being checked.
-The contract is evaluated at every call site. A violation is a runtime panic
-(`contract.param_violation`).
+`it` refers to the parameter value. A violation is a runtime panic
+(`contract.param_violation` — planned/runtime).
 
 ### Variadic Parameters
 
-The last parameter may accept zero or more values of its type:
-
 ```ori
-public func log(prefix: string, values: any<Displayable>...)
+public log(prefix: string, values: any[Displayable]...)
 ```
 
-- `values` is typed as `list<any<Displayable>>` inside the function body.
+- Inside the body, `values` is typed as `list[any[Displayable]]`.
 - Only the last parameter may be variadic.
-- At the call site, pass values directly:
+- Spread a list with `..`:
 
 ```ori
-log("info", count, name, active)
-```
-
-- To spread a list into a variadic: use `..`:
-
-```ori
-const parts: list<string> = ["a", "b", "c"]
+const parts: list[string] = ["a", "b", "c"]
 concat(..parts)
 ```
 
@@ -144,7 +131,7 @@ concat(..parts)
 ### Explicit Return
 
 ```ori
-func area(w: int, h: int) -> int
+area(w: int, h: int) -> int
     return w * h
 end
 ```
@@ -152,240 +139,159 @@ end
 ### Void Return
 
 ```ori
-func print_all(items: list<string>)
+print_all(items: list[string])
     for item in items
         io.print(item)
     end
 end
 ```
 
-When a function returns `void`, `return` with no value exits early.
+When a function returns `void`, bare `return` exits early.
 
-### `result<T, E>` and propagation
-
-Most functions that can fail return `result<T, E>`:
+### `result[T, E]` and propagation
 
 ```ori
-func read_file(path: string) -> result<string, string>
+read_file(path: string) -> result[string, string]
     const file: ori.fs.File = try ori.fs.open_read(path)
     return ori.fs.read_all(file)
 end
 ```
 
-See Chapter 09 — Errors and Propagation for full semantics.
+Only `try expr` propagates. Postfix `expr?` is removed (`parse.question_propagate_removed`).
+See Chapter 09.
 
 ---
 
-## Mutating Methods (`mut func`)
-
-When a function modifies the state of `self`, it must be declared `mut func`:
+## Mutating Methods (`mut`)
 
 ```ori
 struct Counter
     value: int
 
-    mut func increment()
+    mut increment()
         self.value = self.value + 1
     end
 
-    func get() -> int
+    get() -> int
         return self.value
     end
 end
 ```
 
 Rules:
-- `mut func` may assign to `self` or its fields.
-- A non-`mut` function may not modify `self`.
-- Calling a `mut func` on a `const` binding is a compile error:
-
-```ori
-const c: Counter = Counter(value: 0)
-c.increment()    -- Error: cannot call mut func on const binding
-
-var c: Counter = Counter(value: 0)
-c.increment()    -- OK
-```
+- `mut` methods may assign to `self` or its fields.
+- Non-`mut` methods may not modify `self`.
+- Calling a `mut` method on a `const` binding is a compile error.
 
 ---
 
 ## Methods on Structs
 
-Functions declared inside a `struct` block are methods. They receive an
-implicit `self` parameter of the struct type.
+Methods may be declared inside a `struct` body (inherent) or via `apply Type`
+(free methods / trait methods). See Chapter 08 for traits.
 
 ```ori
 struct Rectangle
     width: float
     height: float
 
-    func area() -> float
+    area() -> float
         return self.width * self.height
     end
 
-    func scale(factor: float) -> Rectangle
-        return Rectangle(
-            width: self.width * factor,
-            height: self.height * factor,
-        )
+    scale(factor: float) -> Rectangle
+        return Rectangle(width: self.width * factor,
+            height: self.height * factor)
     end
 end
 ```
 
-Methods declared in a `struct` block are not required to be in an `implement`
-block (they are "inherent methods").
+---
+
+## Closures (S3)
+
+Canonical forms — **no** `do` / `fn` / `given`:
+
+```ori
+const double: func(int) -> int = (x: int) => x * 2
+const is_even: func(int) -> bool = (n: int) => n % 2 == 0
+
+users.map((u) => u.name)
+users.filter((u: User) => u.active)
+
+-- multi-statement
+users.map((u: User)
+    const n: string = u.name
+    return n.to_upper()
+end)
+```
+
+Rules:
+- `(params) => expr` — single expression.
+- `(params) … end` — statement block.
+- Parameter types may be omitted when the checker context provides them.
+- Prefer a named function when the body is large.
+- `do(...)` is rejected with `parse.do_removed`.
+
+### Callable type
+
+```ori
+const f: func(int) -> int = double
+```
 
 ---
 
-## Closures (`do`)
+## Poetic calls
 
-Closures are anonymous functions. They use `do` instead of `func`.
-
-### Inline Closure (expression body)
+A call may omit parentheses when there is **exactly one** argument on the same
+line (juxtaposition):
 
 ```ori
-const double: func(int) -> int = do(x: int) => x * 2
-const is_even: func(int) -> bool = do(n: int) => n % 2 == 0
+print name
+print greet("hello")    -- argument is a parenthesized/call form; not nested poetic
+print user.name()
 ```
 
-Syntax: `do(params) => expression`
-
-The return type is inferred from the expression type. An explicit return type
-may be provided:
+Nested poetic juxtaposition is rejected (`parse.poetic_call_nested`):
 
 ```ori
-do(x: int) -> int => x * 2
+print greet name        -- error
 ```
 
-### Block Closure (statement body)
+Mental rule: at most one “verb without parentheses” per expression.
+
+---
+
+## Generics on functions
 
 ```ori
-const process: func(string) -> bool = do(input: string)
-    const trimmed: string = input.trim()
-    return len(trimmed) > 0
-end
-```
-
-Syntax: `do(params) [ -> return_type ] block`
-
-### Closures as Arguments
-
-The most common use is passing closures to higher-order functions:
-
-```ori
-const doubled: list<int> = iter.map(numbers, do(x: int) => x * 2)
-const valid: list<string> = iter.filter(names, do(n: string) => len(n) > 0)
-```
-
-When the closure type can be inferred from the function signature, the
-return type annotation may be omitted:
-
-```ori
-iter.map(numbers, do(x: int) => x * 2)
--- The return type of `do(x: int) => x * 2` is inferred as int
--- from the expected type `func(int) -> int`
-```
-
-### Capture Rules
-
-Closures capture values from their enclosing scope by **value** (copy):
-
-```ori
-const prefix: string = "Dr. "
-const greet: func(string) -> string = do(name: string) => f"{prefix}{name}"
--- prefix is captured by copy at the time do(...) is evaluated
-```
-
-Capture rules:
-- `const` bindings: captured by copy (always safe).
-- `var` bindings: **compile error** — closures may not capture mutable bindings.
-  Extract the current value first:
-
-```ori
-var counter: int = 0
--- Error: cannot capture var binding in closure
--- const snapshot: func() -> int = do() => counter
-
--- Correct: capture the current value
-const current: int = counter
-const snapshot: func() -> int = do() => current
-```
-
-### Closures vs Named Functions
-
-For complex logic, prefer a named function:
-
-```ori
-func is_valid_name(name: string) -> bool
-    if len(name) == 0
-        return false
+max for T: Comparable (a: T, b: T) -> T
+    if a.compare(b) >= 0
+        return a
     end
-    return len(name) <= 100
+    return b
 end
-
-const valid_names: list<string> = iter.filter(names, is_valid_name)
 ```
 
-Named functions can be passed directly where a `func(T) -> R` is expected.
+See Chapter 11. Removed: `func max<T>(...) where T is Comparable`.
 
 ---
 
-## Higher-Order Functions
+## Labeled `end`
 
-Functions may accept and return callable values:
+Optional construct labels improve navigation:
 
 ```ori
-func apply_twice(value: int, f: func(int) -> int) -> int
-    return f(f(value))
-end
+if ok
+    ...
+end if
 
-const result: int = apply_twice(5, do(x: int) => x * 2)  -- 20
+match shape
+    case Circle(radius: r):
+        ...
+    case else:
+        ...
+end match
 ```
 
----
-
-## Generic Functions
-
-See Chapter 11 — Generics and Constraints for full specification.
-
-```ori
-func identity<T>(value: T) -> T
-    return value
-end
-
-func first<T>(items: list<T>) -> optional<T>
-    if len(items) == 0
-        return none
-    end
-    return some(items[0])
-end
-```
-
----
-
-## `self` Parameter
-
-`self` refers to the receiver in method and `implement` block functions.
-It is always the implicit first parameter and is never written in the
-parameter list.
-
-`self` is `const` by default. In a `mut func`, `self` is mutable.
-
----
-
-## `check`, `todo`, `unreachable`, `panic`
-
-These are special contextual forms, not regular functions:
-
-```ori
-check condition               -- assert condition; panic if false
-check condition, "message"    -- with custom panic message
-
-todo()                        -- marks unimplemented code; always panics
-todo("message")
-
-unreachable()                 -- asserts this point is never reached; panics if it is
-unreachable("message")
-
-panic("fatal error")          -- unconditional panic with message
-```
+Mismatch between label and opening construct → `parse.end_label_mismatch`.

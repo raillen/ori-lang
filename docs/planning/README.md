@@ -10,7 +10,7 @@ docs/planning/
 ├── uso-real-pequeno-medio.md           # [Ativo] Plano de maturidade para uso real em projetos pequenos e médios
 ├── PENDENTES.md                        # [Ativo] Backlog condensado e histórico de pendências operacionais
 ├── language-direction-decisions-2026-06-30.md # [Decisão] Decisões arquiteturais de direção da linguagem (ADR)
-├── ori-surface-s3-auk9.md              # [Ativo] Decisões de superfície S3 (sintaxe Auk9-inspired; corte seco 0.3.0)
+├── ori-surface-s3-auk9.md              # [Ativo] Decisões de superfície S3 (implementada no compiler; docs 0.3.0)
 ├── adr-ori-surface-s3-auk9.md          # [ADR] Aceito — superfície S3 / aposentar Auk9 como produto
 ├── pr-plan-ori-surface-s3.md           # [Ativo] PR Plan DAG para /execute-plan (0.3.0 + 0.3.1)
 ├── IMPLEMENTADOS.md                    # [Histórico] Registro cronológico de recursos já implementados
@@ -42,4 +42,6 @@ docs/planning/
 *   **[historico/](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/planning/historico):** Subdiretório contendo propostas antigas e planos de recursos cujas implementações foram concluídas com sucesso. Não devem ser alterados ou usados como backlog ativo.
 
 ---
-Para documentação normativa sobre a gramática, tipos e biblioteca padrão da linguagem Ori, consulte a [Especificação Formal](file:///c:/Users/raillen.DESKTOP-99RJ5M6/Documents/Projetos/ori-lang/docs/spec/README.md).
+Normativo: [Manifesto](../spec/00-manifesto.md) · [Especificação](../spec/README.md) · CHANGELOG `[0.3.0]`.
+
+**Auk9** lab aposentada como produto; superfície vivente = Ori S3.

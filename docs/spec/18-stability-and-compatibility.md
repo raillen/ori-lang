@@ -12,13 +12,13 @@ Durante o ciclo `0.2.x`, estes pontos devem ser tratados como contrato publico:
 
 - arquivos `.orl` em UTF-8;
 - blocos terminados por `end`;
-- `namespace` obrigatorio no topo do arquivo;
+- `module` obrigatorio no topo do arquivo;
 - imports explicitos, inclusive `as` e `only`;
 - tipos explicitos em bindings, parametros e retornos publicos;
-- ausencia via `optional<T>`;
-- falha via `result<T, E>`;
+- ausencia via `optional[T]`;
+- falha via `result[T, E]`;
 - propagacao via `try expr` ou `expr?`;
-- construcao de struct por `Type(field: value)` ou `.{field: value}` quando o
+- construcao de struct por `Type { field: value }` ou `{ field: value}` quando o
   tipo esperado e conhecido;
 - construcao de enum por `Enum.Variant(...)` ou `.Variant(...)` quando o tipo
   esperado e conhecido;
