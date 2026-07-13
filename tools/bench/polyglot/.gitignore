@@ -3,5 +3,6 @@ results/*.times
 results/*.out
 results/*.time
 results/compile_times.txt
+results/ratios_body.md
 rust_*/target/
 rust_*/Cargo.lock

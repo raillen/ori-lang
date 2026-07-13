@@ -12,9 +12,9 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Adicionado
 - **Runtime/DAP cooperativo (Ori IDE):** agent `debug_agent` no `ori-runtime` (`ori_debug_line` / `ori_debug_init`) ativado por `ORI_DEBUG_PORT`; codegen nativo instrumenta statements quando `ORI_DEBUG_INSTRUMENT=1` + `ORI_DEBUG_SOURCE=<path>`; adapter `ori-dap` (repo ori-ide) faz bind TCP e controla continue/step/breakpoints.
-- **Polyglot performance harness** `tools/bench/polyglot/` (Ori AOT vs CPython vs
-  Rust release): kernels `sum_loop`, `fib_iter`, `list_sum`, `nested`; high-res
-  timer; auto report under `results/`.
+- **Polyglot performance harness** `tools/bench/polyglot/`: Ori AOT vs **Python,
+  Rust, C, Go, JavaScript, TypeScript, Ruby, Nim** — kernels `sum_loop`,
+  `fib_iter`, `list_sum`, `nested`; high-res timer; auto report under `results/`.
 - **Performance docs:** [docs/guides/performance.md](docs/guides/performance.md)
   + [performance.pt-BR.md](docs/guides/performance.pt-BR.md); snapshot section on
   root [README.md](README.md) / [README.pt-BR.md](README.pt-BR.md); planning note
@@ -22,8 +22,9 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Notas
 - Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package line **`[0.3.4]`**.
-- Polyglot snapshot (2026-07-13): Ori ~4–46× ahead of CPython on microkernels;
-  ~1.5× behind Rust on list churn; ~100× behind on tight fib loop — see performance guide.
+- Polyglot snapshot (2026-07-13, 9 langs): Ori ~8–60× ahead of CPython; near
+  Rust/C/Go on list churn (~1.2–1.6×); large gap vs mature AOT on tight fib —
+  see performance guide.
 
 ---
 

@@ -107,27 +107,28 @@ Package / install without Rust: `[0.3.2]`. Migrate old sources with
 
 ## Performance snapshot
 
-Local microbench of **Ori AOT** vs **CPython 3.12** vs **Rust release** on the
-same `while`-loop shapes (2026-07-13, Linux x86_64, median of 5 runs). Full
-write-up and caveats: **[docs/guides/performance.md](docs/guides/performance.md)**
+Local polyglot microbench of **Ori AOT** against Python, Rust, C, Go,
+JavaScript, TypeScript, Ruby, and Nim on the same `while`-loop shapes
+(2026-07-13, Linux x86_64, median of 3 runs). Full write-up and caveats:
+**[docs/guides/performance.md](docs/guides/performance.md)**
 ([PT](docs/guides/performance.pt-BR.md)).
 
-| Workload | Ori AOT | Python 3 | Rust release | Py / Ori | Ori / Rust |
-|----------|---------|----------|--------------|----------|------------|
-| sum `0..10⁷` | **0.95 s** | 7.41 s | 0.005 s\* | **7.8×** | 184×\* |
-| fib 2·10⁷ steps (i64 wrap) | **1.16 s** | 25.1 s | 0.012 s | **21.7×** | **98×** |
-| list push+sum 10⁶ | **0.030 s** | 1.41 s | 0.020 s | **46×** | **1.54×** |
-| nested 2000×2000 | **0.485 s** | 1.84 s | 0.006 s | **3.8×** | 86× |
+| Workload | Ori | Python | Rust | C | Go | JS | TS | Ruby | Nim |
+|----------|-----|--------|------|---|-----|----|----|------|-----|
+| sum `0..10⁷` | **0.33 s** | 3.21 s | 0.002 s\* | 0.001 s\* | 0.017 s | 0.10 s | 0.09 s | 0.50 s | 0.007 s |
+| fib 2·10⁷ steps | **0.65 s** | 11.2 s | 0.009 s | 0.013 s | 0.023 s | 1.60 s | 1.60 s | 7.98 s | 0.019 s |
+| list 10⁶ | **0.017 s** | 1.00 s | 0.010 s | 0.011 s | 0.014 s | 0.14 s | 0.19 s | 0.27 s | 0.030 s |
+| nested 2000² | **0.12 s** | 1.04 s | 0.004 s | 0.002 s | 0.004 s | 0.08 s | 0.07 s | 0.21 s | 0.002 s |
 
-\* Rust `sum_loop` does **not** scale with N (LLVM closed form) — prefer
-`fib_iter` / `list_sum` for Ori↔Rust.
+\* Rust/C `sum_loop` may be optimised away — prefer **`fib_iter`** / **`list_sum`**.
 
-**Reading (pre-1.0):** Ori is clearly **faster than CPython** on these kernels
-and only **~1.5×** behind Rust on list churn; tight integer loops still leave a
-large codegen gap versus LLVM. Reproduce:
+**Reading (pre-1.0):** Ori is **~8–60×** faster than CPython and ahead of Ruby;
+**near Rust/C/Go on list churn** (~1.2–1.6×); still far behind mature AOT on
+tight integer loops. Node can win simple arithmetic; Ori wins `fib` / `list`
+vs Node. Reproduce:
 
 ```bash
-SAMPLES=5 ./tools/bench/polyglot/run_polyglot_bench.sh
+SAMPLES=3 ./tools/bench/polyglot/run_polyglot_bench.sh
 ```
 
 ## Quick start

@@ -106,28 +106,29 @@ Rust: `[0.3.2]`. Migrar: `ori migrate-syntax`.
 
 ## Snapshot de performance
 
-Microbench local de **Ori AOT** vs **CPython 3.12** vs **Rust release** nos
-mesmos formatos de `while` (2026-07-13, Linux x86_64, mediana de 5 runs). Texto
-completo e ressalvas:
+Microbench polyglot local de **Ori AOT** contra Python, Rust, C, Go,
+JavaScript, TypeScript, Ruby e Nim nos mesmos formatos de `while`
+(2026-07-13, Linux x86_64, mediana de 3 runs). Texto completo e ressalvas:
 **[docs/guides/performance.pt-BR.md](docs/guides/performance.pt-BR.md)**
 ([EN](docs/guides/performance.md)).
 
-| Workload | Ori AOT | Python 3 | Rust release | Py / Ori | Ori / Rust |
-|----------|---------|----------|--------------|----------|------------|
-| soma `0..10⁷` | **0.95 s** | 7.41 s | 0.005 s\* | **7.8×** | 184×\* |
-| fib 2·10⁷ passos (wrap i64) | **1.16 s** | 25.1 s | 0.012 s | **21.7×** | **98×** |
-| lista push+soma 10⁶ | **0.030 s** | 1.41 s | 0.020 s | **46×** | **1.54×** |
-| nested 2000×2000 | **0.485 s** | 1.84 s | 0.006 s | **3.8×** | 86× |
+| Workload | Ori | Python | Rust | C | Go | JS | TS | Ruby | Nim |
+|----------|-----|--------|------|---|-----|----|----|------|-----|
+| soma `0..10⁷` | **0.33 s** | 3.21 s | 0.002 s\* | 0.001 s\* | 0.017 s | 0.10 s | 0.09 s | 0.50 s | 0.007 s |
+| fib 2·10⁷ passos | **0.65 s** | 11.2 s | 0.009 s | 0.013 s | 0.023 s | 1.60 s | 1.60 s | 7.98 s | 0.019 s |
+| lista 10⁶ | **0.017 s** | 1.00 s | 0.010 s | 0.011 s | 0.014 s | 0.14 s | 0.19 s | 0.27 s | 0.030 s |
+| nested 2000² | **0.12 s** | 1.04 s | 0.004 s | 0.002 s | 0.004 s | 0.08 s | 0.07 s | 0.21 s | 0.002 s |
 
-\* Rust `sum_loop` **não escala** com N (forma fechada no LLVM) — prefira
-`fib_iter` / `list_sum` para Ori↔Rust.
+\* Rust/C em `sum_loop` podem otimizar o loop — prefira **`fib_iter`** /
+**`list_sum`**.
 
-**Leitura (pre-1.0):** Ori fica **acima do CPython** nestes kernels e só
-**~1.5×** atrás do Rust em churn de lista; loops inteiros tight ainda têm gap
-grande de codegen vs LLVM. Reproduzir:
+**Leitura (pre-1.0):** Ori **~8–60×** à frente do CPython e à frente do Ruby;
+**perto de Rust/C/Go em lista** (~1.2–1.6×); ainda longe de AOT maduro em loops
+inteiros tight. Node pode ganhar aritmética simples; Ori ganha `fib`/`list` vs
+Node. Reproduzir:
 
 ```bash
-SAMPLES=5 ./tools/bench/polyglot/run_polyglot_bench.sh
+SAMPLES=3 ./tools/bench/polyglot/run_polyglot_bench.sh
 ```
 
 ## Primeiros passos

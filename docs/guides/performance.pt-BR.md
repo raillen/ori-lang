@@ -1,4 +1,4 @@
-# Microbench de performance (Ori vs Python vs Rust)
+# Microbench de performance (polyglot)
 
 > **Público:** usuários e contribuidores que querem um retrato honesto do custo
 > de runtime da Ori em kernels pequenos.  
@@ -7,100 +7,97 @@
 > **Harness:** [`tools/bench/polyglot/`](../../tools/bench/polyglot/)  
 > **Relatório da máquina:** [`tools/bench/polyglot/results/LATEST.md`](../../tools/bench/polyglot/results/LATEST.md)
 
-## Snapshot (2026-07-13)
+## Snapshot (2026-07-13, expandido)
 
 | Item | Valor |
 |------|--------|
 | Host | Linux x86_64 · Intel Core i7-3632QM @ 2.20 GHz |
+| Amostras | **3** (mediana de wall time) |
+| Timer | `time.perf_counter` em torno do processo (µs) |
 | Ori | **0.3.4** AOT (`ori compile`) |
 | Python | CPython **3.12.3** |
-| Rust | **1.95.0** `cargo build --release` (sem fat LTO) |
-| Amostras | 5 (mediana de wall time) |
-| Timer | `time.perf_counter` em torno do processo (µs) |
+| Rust | **1.95.0** release |
+| C | **gcc 13.3** `-O2` |
+| Go | **1.22.2** |
+| JavaScript | **Node v24.18** |
+| TypeScript | **tsc 7.0** → Node |
+| Ruby | **3.2.3** (CRuby) |
+| Nim | **1.6.14** `-d:release` |
 
-Mesmo formato de algoritmo (`while` + índices explícitos) nas três linguagens.
-Resultados impressos batem entre Ori / Python / Rust.
+Mesmo formato de algoritmo (`while` / índices explícitos). Resultados impressos
+batem em todas as linguagens em todos os kernels.
 
 ### Runtime (mediana em segundos)
 
-| Workload | Ori AOT | Python 3 | Rust release | Py / Ori | Ori / Rust |
-|----------|---------|----------|--------------|----------|------------|
-| `sum_loop` — Σ i para i ∈ [0, 10⁷) | **0.95** | 7.41 | 0.005\* | **7.8×** | 184×\* |
-| `fib_iter` — 2·10⁷ passos fib i64 | **1.16** | 25.1 | 0.012 | **21.7×** | **98×** |
-| `list_sum` — 10⁶ push + soma | **0.030** | 1.41 | 0.020 | **46×** | **1.54×** |
-| `nested` — 2000×2000 incrementos | **0.485** | 1.84 | 0.006 | **3.8×** | 86× |
+| Workload | Ori | Python | Rust | C | Go | JS | TS | Ruby | Nim |
+|----------|-----|--------|------|---|-----|----|----|------|-----|
+| `sum_loop` Σ 0..10⁷ | **0.329** | 3.21 | 0.0015\* | 0.0013\* | 0.017 | 0.103 | 0.087 | 0.497 | 0.0066 |
+| `fib_iter` 2·10⁷ passos | **0.649** | 11.2 | 0.0085 | 0.013 | 0.023 | 1.60 | 1.60 | 7.98 | 0.019 |
+| `list_sum` 10⁶ push+soma | **0.017** | 0.998 | 0.010 | 0.011 | 0.014 | 0.142 | 0.191 | 0.272 | 0.030 |
+| `nested` 2000×2000 | **0.123** | 1.04 | 0.0039 | 0.0016 | 0.0043 | 0.081 | 0.067 | 0.209 | 0.0018 |
 
-\* **Rust `sum_loop` não é loop honesto:** o tempo fica ~5 ms para N = 10⁷ e
-N = 10⁸ (forma fechada / *strength reduction* no LLVM). Para Ori↔Rust, prefira
-**`fib_iter`** e **`list_sum`**.
+\* Rust/C em `sum_loop` podem reduzir a forma fechada. Prefira **`fib_iter`** e
+**`list_sum`** para comparar AOT.
 
-### Tempo de compilação (1 amostra, programas minúsculos)
+### Relativo à Ori (lang / Ori; **menor é mais rápido**)
 
-| Workload | Ori `ori compile` | Rust `cargo build --release` (após clean) |
-|----------|-------------------|-------------------------------------------|
-| `sum_loop` | ~1.8 s | ~0.7 s |
-| `fib_iter` | ~1.9 s | ~0.9 s |
-| `list_sum` | ~2.6 s | ~2.3 s |
-| `nested` | ~1.7 s | ~1.0 s |
-
-Python não tem etapa separada de compilação.
+| Workload | Py | Rust | C | Go | JS | TS | Ruby | Nim |
+|----------|-----|------|---|-----|----|----|------|-----|
+| `sum_loop` | 9.8× | ~0.005×\* | ~0.004×\* | 0.05× | 0.31× | 0.26× | 1.5× | 0.02× |
+| `fib_iter` | **17×** | 0.013× | 0.021× | 0.036× | 2.5× | 2.5× | 12× | 0.029× |
+| `list_sum` | **60×** | **0.61×** | **0.65×** | **0.86×** | 8.5× | 12× | 16× | 1.8× |
+| `nested` | 8.4× | 0.031× | 0.013× | 0.035× | 0.66× | 0.54× | 1.7× | 0.014× |
 
 ## Como ler
 
-### Ori vs Python (comparação justa)
+### Ori vs interpretadores
 
-| Kernel | Leitura |
-|--------|---------|
-| Loops aritméticos | Ori cerca de **4–22×** mais rápido que CPython nestes formatos |
-| Push + soma em lista | Ori cerca de **46×** mais rápido (lista tipada nativa vs objetos Python) |
+| Par | Leitura |
+|-----|---------|
+| **Python** | Ori cerca de **8–60×** mais rápida |
+| **Ruby** | Ori cerca de **1.5–16×** mais rápida |
+| **JS / TS (Node)** | Misto: Node pode ganhar em aritmética simples; Ori ganha em **`fib_iter`** (~2.5×) e sobretudo **`list_sum`** (~8–12×) |
 
-Ori fica claramente à frente do CPython nestes microkernels — esperado para AOT
-nativo frente a interpretador de bytecode.
+### Ori vs AOT / sistemas
 
-### Ori vs Rust (parcialmente justa)
-
-| Kernel | Leitura |
-|--------|---------|
-| **`list_sum`** | Ori só **~1.5×** atrás do Rust release — melhor sinal de lista gerenciada + ARC vs `Vec` |
-| **`fib_iter`** | Ori **~100×** atrás em loop inteiro dependente — espaço para codegen / opts de mid-end |
-| **`sum_loop` / `nested`** | O mid-end do Rust pode reescrever reduções simples; a Ori ainda executa o loop como escrito |
+| Par | Leitura |
+|-----|---------|
+| **`list_sum`** | Ori só **~1.2–1.6×** atrás de Rust/C/Go — melhor sinal de lista + ARC |
+| **`fib_iter`** | Ori **~30–75×** atrás de C/Go/Rust/Nim em loop inteiro tight — gap de codegen |
+| **Nim / Go** | Muito mais rápidos em loops puros; mais perto em churn de lista |
 
 ### Posicionamento (pre-1.0)
 
-- **Acima do CPython** nestes kernels.
-- **Competitiva em churn de lista** frente ao Rust release.
-- **Gap grande em loops aritméticos tight** — não é “lenta como interpretador”,
-  e sim **falta de otimizações** em relação a um pipeline LLVM maduro.
+- Claramente **acima de CPython e CRuby**.
+- **Competitiva em push+soma de lista** frente a Rust/C/Go.
+- **Atrás de AOT maduro** (C, Rust, Go, Nim) e às vezes do Node em aritmética
+  tight — espaço para otimizações de mid-end/codegen.
 
 ## Justiça / limites
 
-1. Mesmo formato de fonte nas três linguagens.
-2. Caminho Ori é **AOT** (`ori compile`), não JIT `ori run`.
-3. Python é só CPython (sem PyPy / Numba). Fib usa máscara 64-bit para não
-   explodir em bigint.
-4. Rust usa `black_box` no valor final; o mid-end ainda pode reescrever
-   reduções simples (`sum_loop`).
-5. Tempos incluem start do processo e um `print` de uma linha.
-6. Host é CPU de notebook; **razões importam mais que milissegundos absolutos**.
-7. **Não** mede I/O, async, FFI, projetos multi-arquivo ou apps reais.
+1. Mesmo formato de fonte nas linguagens.
+2. Ori é **AOT** (`ori compile`), não JIT `ori run`.
+3. Python / Ruby: máscara 64-bit no fib (sem explosão de bigint).
+4. JS/TS: BigInt com wrap 64-bit.
+5. Nim: `{.push overflowChecks: off.}` no fib wrapping.
+6. Rust pode reduzir `sum_loop`.
+7. Tempos incluem start do processo + um `print`.
+8. Host é notebook; **razões importam mais que ms absolutos**.
+9. **Não** mede I/O, async, FFI ou apps reais.
 
 ## Como reproduzir
 
-Precisa de `ori` no `PATH`, `python3` e `cargo`/`rustc`.
-
 ```bash
-SAMPLES=5 ./tools/bench/polyglot/run_polyglot_bench.sh
+SAMPLES=3 ./tools/bench/polyglot/run_polyglot_bench.sh
 ```
 
-Fontes em `tools/bench/polyglot/{ori,python,rust_*}/`.  
-Relatórios em `tools/bench/polyglot/results/`.
+Fontes em `tools/bench/polyglot/{ori,python,rust_*,c,go,javascript,typescript,ruby,nim}/`.
 
 ## Documentos relacionados
 
 | Documento | Papel |
 |-----------|--------|
-| [tools/bench/polyglot/README.md](../../tools/bench/polyglot/README.md) | Layout e comandos do harness |
-| [results/LATEST.md](../../tools/bench/polyglot/results/LATEST.md) | Relatório completo da máquina |
-| [language-comparison.md](language-comparison.md) | Suite multi-linguagem mais antiga (histórico) |
+| [tools/bench/polyglot/README.md](../../tools/bench/polyglot/README.md) | Layout do harness |
+| [results/LATEST.md](../../tools/bench/polyglot/results/LATEST.md) | Relatório completo |
+| [language-comparison.md](language-comparison.md) | Suite PowerShell antiga (histórico) |
 | [../planning/perf-baseline-2026-07-13.md](../planning/perf-baseline-2026-07-13.md) | Baseline LANG-PERF do compilador |
-| [benchmarks/language-comparison/](../../benchmarks/language-comparison/) | Suite PowerShell alternativa (C/Node/…) |

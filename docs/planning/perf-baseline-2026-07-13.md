@@ -137,36 +137,37 @@ cd compiler && cargo build -p ori-driver --release
 /usr/bin/time -f '%e' ./target/release/ori run ../tools/bench/arc_list_churn.orl
 ```
 
-## Wave 4 (2026-07-13) — polyglot Ori / Python / Rust
+## Wave 4 (2026-07-13) — polyglot multi-language
 
 Cross-language **runtime** microbench (not compiler `check`/`run` latency):
 
 | Item | Location |
 |------|----------|
 | Harness | `tools/bench/polyglot/` |
+| Languages | Ori, Python, Rust, C, Go, JS, TS, Ruby, Nim |
 | User guide (EN) | `docs/guides/performance.md` |
 | User guide (PT) | `docs/guides/performance.pt-BR.md` |
 | Machine report | `tools/bench/polyglot/results/LATEST.md` |
 | README snapshot | root `README.md` § Performance snapshot |
 
-### Headline medians (Linux x86_64, i7-3632QM, 5 samples)
+### Headline medians (Linux x86_64, i7-3632QM, 3 samples)
 
-| Kernel | Ori AOT | CPython 3.12 | Rust release | Py/Ori | Ori/Rust |
-|--------|---------|--------------|--------------|--------|----------|
-| sum 10⁷ | 0.95 s | 7.41 s | 0.005 s\* | 7.8× | 184×\* |
-| fib 2·10⁷ steps | 1.16 s | 25.1 s | 0.012 s | 21.7× | 98× |
-| list 10⁶ | 0.030 s | 1.41 s | 0.020 s | 46× | **1.54×** |
-| nested 2000² | 0.485 s | 1.84 s | 0.006 s | 3.8× | 86× |
+| Kernel | Ori | Py | Rust | C | Go | JS | TS | Ruby | Nim |
+|--------|-----|-----|------|---|-----|----|----|------|-----|
+| sum 10⁷ | 0.33 | 3.21 | 0.002\* | 0.001\* | 0.017 | 0.10 | 0.09 | 0.50 | 0.007 |
+| fib 2e7 | 0.65 | 11.2 | 0.009 | 0.013 | 0.023 | 1.60 | 1.60 | 7.98 | 0.019 |
+| list 1e6 | **0.017** | 1.00 | 0.010 | 0.011 | 0.014 | 0.14 | 0.19 | 0.27 | 0.030 |
+| nested 2k² | 0.12 | 1.04 | 0.004 | 0.002 | 0.004 | 0.08 | 0.07 | 0.21 | 0.002 |
 
-\* Rust `sum_loop` closed-form (does not scale with N). Prefer fib/list for Ori↔Rust.
+\* Rust/C `sum_loop` may strength-reduce. Prefer fib/list for AOT comparisons.
 
 ### Reading for LANG-PERF backlog
 
-- Ori **beats CPython** on these kernels (expected AOT).
-- Ori **near Rust** on list push+sum (~1.5×) — ARC/list path is not the main cliff.
-- Ori **~100× behind** Rust on tight dependent integer loops — next optimisations
-  live in mid-end / codegen, not “switch to interpreter”.
+- Ori **beats CPython and CRuby** (expected AOT vs interpreters).
+- Ori **near Rust/C/Go on list** (~1.2–1.6×) — ARC/list path is not the main cliff.
+- Ori **far behind** C/Rust/Go/Nim on tight integer loops — mid-end / codegen.
+- Node can beat Ori on simple arithmetic; Ori wins fib + list vs Node.
 
 ```bash
-SAMPLES=5 ./tools/bench/polyglot/run_polyglot_bench.sh
+SAMPLES=3 ./tools/bench/polyglot/run_polyglot_bench.sh
 ```
