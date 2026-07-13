@@ -10,7 +10,8 @@ use crate::ty::{OpaqueTy, Ty};
 use ori_ast::common::{Attr, AttrArg, Name, QualifiedName, WhereConstraint};
 use ori_ast::expr::{Arg, ArgValue, BinaryOp, ClosureBody, Expr, FStrPart, UnaryOp};
 use ori_ast::item::{
-    ExternBlock, FuncDecl, ImplementDecl, ImportDecl, ImportItem, Item, ItemWithAttrs, Param,
+    ApplyDecl, ApplyMember, ExternBlock, FuncDecl, ImportDecl, ImportItem, Item, ItemWithAttrs,
+    Param,
     ParamKind, SourceFile,
 };
 use ori_ast::pattern::Pattern;
@@ -473,18 +474,31 @@ impl<'a> Checker<'a> {
                     }
                     restore_alias(&mut self.aliases, "Self", previous_self);
                 }
-                Item::Implement(i) => {
-                    self.check_implement_decl(i);
-                    let tp: Vec<SmolStr> =
-                        i.type_params.iter().map(|p| p.name.text.clone()).collect();
-                    let previous_self = self
-                        .aliases
-                        .insert(SmolStr::new("Self"), SmolStr::new(i.for_type.to_string()));
+                Item::Apply(apply) => {
+                    self.check_apply_decl(apply);
+                    let tp: Vec<SmolStr> = apply
+                        .type_params
+                        .iter()
+                        .map(|p| p.name.text.clone())
+                        .collect();
+                    let previous_self = self.aliases.insert(
+                        SmolStr::new("Self"),
+                        SmolStr::new(apply.for_type.to_string()),
+                    );
                     let implicit_self_ty = self
-                        .resolve_def_id(&i.for_type.to_string())
+                        .resolve_def_id(&apply.for_type.to_string())
                         .map(|def_id| Ty::Named(def_id, Vec::new()));
-                    for m in &i.methods {
-                        self.check_func(m, &tp, implicit_self_ty.clone());
+                    for member in &apply.free_members {
+                        if let ApplyMember::Method(m) = member {
+                            self.check_func(m, &tp, implicit_self_ty.clone());
+                        }
+                    }
+                    for use_sec in &apply.uses {
+                        for member in &use_sec.members {
+                            if let ApplyMember::Method(m) = member {
+                                self.check_func(m, &tp, implicit_self_ty.clone());
+                            }
+                        }
                     }
                     restore_alias(&mut self.aliases, "Self", previous_self);
                 }
@@ -854,40 +868,8 @@ impl<'a> Checker<'a> {
         None // chain too long
     }
 
-    fn check_implement_decl(&mut self, implement: &ImplementDecl) {
-        let trait_name = implement.trait_name.to_string();
-        let Some(trait_def_id) = self.resolve_def_id(&trait_name) else {
-            self.sink.emit(
-                Diagnostic::error(
-                    "impl.trait_not_found",
-                    format!("trait `{}` was not found", trait_name),
-                )
-                .with_label(Label::primary(
-                    self.file_id,
-                    implement.trait_name.span,
-                    "trait used here",
-                ))
-                .with_action("define or import this trait before implementing it"),
-            );
-            return;
-        };
-        if self.def_map.get(trait_def_id).kind != DefKind::Trait {
-            self.sink.emit(
-                Diagnostic::error(
-                    "impl.trait_not_found",
-                    format!("`{}` is not a trait", trait_name),
-                )
-                .with_label(Label::primary(
-                    self.file_id,
-                    implement.trait_name.span,
-                    "not a trait",
-                ))
-                .with_action("use the name of a trait in `implement Trait for Type`"),
-            );
-            return;
-        }
-
-        let type_name = implement.for_type.to_string();
+    fn check_apply_decl(&mut self, apply: &ApplyDecl) {
+        let type_name = apply.for_type.to_string();
         let Some(type_def_id) = self.resolve_def_id(&type_name) else {
             self.sink.emit(
                 Diagnostic::error(
@@ -896,10 +878,10 @@ impl<'a> Checker<'a> {
                 )
                 .with_label(Label::primary(
                     self.file_id,
-                    implement.for_type.span,
+                    apply.for_type.span,
                     "type used here",
                 ))
-                .with_action("define or import this type before implementing a trait for it"),
+                .with_action("define or import this type before applying traits to it"),
             );
             return;
         };
@@ -914,10 +896,56 @@ impl<'a> Checker<'a> {
                 )
                 .with_label(Label::primary(
                     self.file_id,
-                    implement.for_type.span,
+                    apply.for_type.span,
                     "not a type",
                 ))
-                .with_action("implement traits for a struct, enum, or type alias"),
+                .with_action("apply traits to a struct, enum, or type alias"),
+            );
+            return;
+        }
+
+        let self_ty = Ty::Named(type_def_id, Vec::new());
+        for use_sec in &apply.uses {
+            self.check_apply_use_section(apply, use_sec, type_def_id, &self_ty, &type_name);
+        }
+    }
+
+    fn check_apply_use_section(
+        &mut self,
+        apply: &ApplyDecl,
+        use_sec: &ori_ast::item::ApplyUseSection,
+        type_def_id: DefId,
+        self_ty: &Ty,
+        type_name: &str,
+    ) {
+        let trait_name = use_sec.trait_name.to_string();
+        let Some(trait_def_id) = self.resolve_def_id(&trait_name) else {
+            self.sink.emit(
+                Diagnostic::error(
+                    "impl.trait_not_found",
+                    format!("trait `{}` was not found", trait_name),
+                )
+                .with_label(Label::primary(
+                    self.file_id,
+                    use_sec.trait_name.span,
+                    "trait used here",
+                ))
+                .with_action("define or import this trait before using it in `apply`"),
+            );
+            return;
+        };
+        if self.def_map.get(trait_def_id).kind != DefKind::Trait {
+            self.sink.emit(
+                Diagnostic::error(
+                    "impl.trait_not_found",
+                    format!("`{}` is not a trait", trait_name),
+                )
+                .with_label(Label::primary(
+                    self.file_id,
+                    use_sec.trait_name.span,
+                    "not a trait",
+                ))
+                .with_action("use the name of a trait in `use Trait`"),
             );
             return;
         }
@@ -925,106 +953,175 @@ impl<'a> Checker<'a> {
         let Some(trait_sig) = self.trait_sig(trait_def_id).cloned() else {
             return;
         };
-        let self_ty = Ty::Named(type_def_id, Vec::new());
+        let _ = type_def_id;
+
         for expected in trait_sig.methods {
-            let implemented = implement
-                .methods
+            let provided = use_sec
+                .members
                 .iter()
-                .find(|method| method.name.text == expected.name);
-            let Some(method) = implemented else {
+                .find(|m| m.slot_name().text == expected.name);
+            let Some(member) = provided else {
                 if !expected.has_default {
                     self.sink.emit(
                         Diagnostic::error(
                             "impl.missing_method",
                             format!(
-                                "implement `{}` for `{}` is missing method `{}`",
-                                trait_name, type_name, expected.name
+                                "apply `{}` / use `{}` is missing method `{}`",
+                                type_name, trait_name, expected.name
                             ),
                         )
                         .with_label(Label::primary(
                             self.file_id,
-                            implement.span,
-                            "implement block here",
+                            use_sec.span,
+                            "use section here",
                         ))
                         .with_action(format!(
-                            "add `{}` with the signature required by the trait",
-                            expected.name
+                            "add `{}` (inline body or `{} = freeFunction` bind)",
+                            expected.name, expected.name
                         )),
                     );
                 }
                 continue;
             };
 
-            if method.is_mut != expected.is_mut {
-                self.sink.emit(
-                    Diagnostic::error(
-                        "impl.mut_mismatch",
-                        format!(
-                            "method `{}` has a different mutability than the trait requires",
-                            expected.name
-                        ),
-                    )
-                    .with_label(Label::primary(
-                        self.file_id,
-                        method.span,
-                        "implemented here",
-                    ))
-                    .with_label(Label::primary(
-                        self.file_id,
-                        expected.span,
-                        "trait method declared here",
-                    ))
-                    .with_action("make both declarations use the same `mut func` form"),
-                );
-            }
+            match member {
+                ApplyMember::Method(method) => {
+                    if method.is_mut != expected.is_mut {
+                        self.sink.emit(
+                            Diagnostic::error(
+                                "impl.mut_mismatch",
+                                format!(
+                                    "method `{}` has a different mutability than the trait requires",
+                                    expected.name
+                                ),
+                            )
+                            .with_label(Label::primary(
+                                self.file_id,
+                                method.span,
+                                "implemented here",
+                            ))
+                            .with_label(Label::primary(
+                                self.file_id,
+                                expected.span,
+                                "trait method declared here",
+                            ))
+                            .with_action("make both declarations use the same `mut` form"),
+                        );
+                    }
 
-            let (actual_params, actual_return) =
-                self.lower_implement_method_signature(method, implement);
-            let expected_params: Vec<Ty> = expected
-                .params
-                .iter()
-                .map(|ty| substitute_trait_self(ty, trait_def_id, &self_ty))
-                .collect();
-            let expected_return =
-                substitute_trait_self(&expected.return_ty, trait_def_id, &self_ty);
-            if actual_params != expected_params || actual_return != expected_return {
-                self.sink.emit(
-                    Diagnostic::error(
-                        "impl.wrong_signature",
-                        format!(
-                            "method `{}` does not match the trait signature",
-                            expected.name
-                        ),
-                    )
-                    .with_label(Label::primary(
-                        self.file_id,
-                        method.span,
-                        "implemented signature here",
-                    ))
-                    .with_label(Label::primary(
-                        self.file_id,
-                        expected.span,
-                        "trait signature here",
-                    ))
-                    .with_why(format!(
-                        "expected `({}) -> {}`, found `({}) -> {}`",
-                        display_tys(&expected_params),
-                        expected_return.display(),
-                        display_tys(&actual_params),
-                        actual_return.display(),
-                    ))
-                    .with_action("change the implementation method signature to match the trait"),
-                );
+                    let (actual_params, actual_return) =
+                        self.lower_apply_method_signature(method, apply);
+                    let expected_params: Vec<Ty> = expected
+                        .params
+                        .iter()
+                        .map(|ty| substitute_trait_self(ty, trait_def_id, self_ty))
+                        .collect();
+                    let expected_return =
+                        substitute_trait_self(&expected.return_ty, trait_def_id, self_ty);
+                    if actual_params != expected_params || actual_return != expected_return {
+                        self.sink.emit(
+                            Diagnostic::error(
+                                "impl.wrong_signature",
+                                format!(
+                                    "method `{}` does not match the trait signature",
+                                    expected.name
+                                ),
+                            )
+                            .with_label(Label::primary(
+                                self.file_id,
+                                method.span,
+                                "implemented signature here",
+                            ))
+                            .with_label(Label::primary(
+                                self.file_id,
+                                expected.span,
+                                "trait signature here",
+                            ))
+                            .with_why(format!(
+                                "expected `({}) -> {}`, found `({}) -> {}`",
+                                display_tys(&expected_params),
+                                expected_return.display(),
+                                display_tys(&actual_params),
+                                actual_return.display(),
+                            ))
+                            .with_action(
+                                "change the implementation method signature to match the trait",
+                            ),
+                        );
+                    }
+                }
+                ApplyMember::Bind { slot, target, span } => {
+                    // Signature check against the free function target.
+                    let target_path = format!("{}.{}", self.namespace, target.text);
+                    let Some(target_def_id) = self.def_map.lookup(&target_path) else {
+                        // resolve already emitted name.undefined
+                        continue;
+                    };
+                    let Some(sig) = self.func_sig(target_def_id) else {
+                        continue;
+                    };
+                    let expected_params: Vec<Ty> = expected
+                        .params
+                        .iter()
+                        .map(|ty| substitute_trait_self(ty, trait_def_id, self_ty))
+                        .collect();
+                    let expected_return =
+                        substitute_trait_self(&expected.return_ty, trait_def_id, self_ty);
+                    if sig.params != expected_params || sig.return_ty != expected_return {
+                        self.sink.emit(
+                            Diagnostic::error(
+                                "impl.wrong_signature",
+                                format!(
+                                    "bind `{} = {}` does not match the trait signature",
+                                    slot.text, target.text
+                                ),
+                            )
+                            .with_label(Label::primary(
+                                self.file_id,
+                                *span,
+                                "bind here",
+                            ))
+                            .with_label(Label::primary(
+                                self.file_id,
+                                expected.span,
+                                "trait signature here",
+                            ))
+                            .with_why(format!(
+                                "expected `({}) -> {}`, found `({}) -> {}`",
+                                display_tys(&expected_params),
+                                expected_return.display(),
+                                display_tys(&sig.params),
+                                sig.return_ty.display(),
+                            ))
+                            .with_action(
+                                "bind to a free function whose signature matches the trait method",
+                            ),
+                        );
+                    }
+                    if sig.is_mut != expected.is_mut {
+                        self.sink.emit(
+                            Diagnostic::error(
+                                "impl.mut_mismatch",
+                                format!(
+                                    "bind target `{}` has a different mutability than the trait requires",
+                                    target.text
+                                ),
+                            )
+                            .with_label(Label::primary(self.file_id, *span, "bind here"))
+                            .with_action("bind to a free function with matching `mut`"),
+                        );
+                    }
+                }
             }
         }
     }
 
-    fn lower_implement_method_signature(
+    fn lower_apply_method_signature(
         &mut self,
         method: &FuncDecl,
-        implement: &ImplementDecl,
+        apply: &ApplyDecl,
     ) -> (Vec<Ty>, Ty) {
-        let mut tp: Vec<SmolStr> = implement
+        let mut tp: Vec<SmolStr> = apply
             .type_params
             .iter()
             .map(|p| p.name.text.clone())
@@ -1032,7 +1129,7 @@ impl<'a> Checker<'a> {
         tp.extend(method.type_params.iter().map(|p| p.name.text.clone()));
         let previous_self = self.aliases.insert(
             SmolStr::new("Self"),
-            SmolStr::new(implement.for_type.to_string()),
+            SmolStr::new(apply.for_type.to_string()),
         );
         let mut params: Vec<Ty> = method
             .params
@@ -1041,7 +1138,7 @@ impl<'a> Checker<'a> {
             .collect();
         if !has_explicit_self_param(&method.params) {
             let self_ty = self
-                .resolve_def_id(&implement.for_type.to_string())
+                .resolve_def_id(&apply.for_type.to_string())
                 .map(|def_id| Ty::Named(def_id, Vec::new()))
                 .unwrap_or(Ty::Infer(0));
             params.insert(0, self_ty);
@@ -6057,7 +6154,7 @@ fn item_target_name(item: &Item) -> &'static str {
         Item::Struct(_) => "struct",
         Item::Enum(_) => "enum",
         Item::Trait(_) => "trait",
-        Item::Implement(_) => "implement",
+        Item::Apply(_) => "apply",
         Item::Alias(_) => "alias",
         Item::Const(_) => "const",
         Item::Var(_) => "var",

@@ -52,7 +52,8 @@ pub enum Item {
     Struct(StructDecl),
     Enum(EnumDecl),
     Trait(TraitDecl),
-    Implement(ImplementDecl),
+    /// S3: `apply Type … end` with free members and `use Trait` sections.
+    Apply(ApplyDecl),
     Alias(AliasDecl),
     Const(TopConst),
     Var(TopVar),
@@ -66,7 +67,7 @@ impl Item {
             Item::Struct(s) => s.span,
             Item::Enum(e) => e.span,
             Item::Trait(t) => t.span,
-            Item::Implement(i) => i.span,
+            Item::Apply(a) => a.span,
             Item::Alias(a) => a.span,
             Item::Const(c) => c.span,
             Item::Var(v) => v.span,
@@ -197,18 +198,59 @@ pub enum TraitMember {
     Type(Name),
 }
 
-// ── Implement ─────────────────────────────────────────────────────────────────
+// ── Apply (trait implementation surface, S3) ──────────────────────────────────
 
-/// `implement [T] Trait for Type … end` (legacy); bounds use `for T: Trait` on methods
+/// `apply [T] Type … end` — free methods/binds, then zero or more `use Trait` sections.
+///
+/// Order is fixed (Auk9-style): free members first, then `use` sections. Inside a
+/// `use`, members may be inline methods or compile-time binds `slot = functionName`.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ImplementDecl {
+pub struct ApplyDecl {
     pub type_params: TypeParams,
-    pub trait_name: QualifiedName,
     pub for_type: QualifiedName,
     pub where_clause: Option<WhereClause>,
-    pub methods: Vec<FuncDecl>,
+    /// Methods / binds before any `use` section (inherent-style on the type).
+    pub free_members: Vec<ApplyMember>,
+    pub uses: Vec<ApplyUseSection>,
+    pub span: Span,
+}
+
+/// A member of an `apply` body or `use Trait` section.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ApplyMember {
+    /// Inline method with body.
+    Method(FuncDecl),
+    /// Compile-time bind: `slot = freeFunction` (not a runtime assignment).
+    Bind {
+        slot: Name,
+        target: Name,
+        span: Span,
+    },
+}
+
+/// `use Trait … end` inside `apply Type`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApplyUseSection {
+    pub trait_name: QualifiedName,
+    pub members: Vec<ApplyMember>,
     pub associated_types: Vec<(Name, Type)>,
     pub span: Span,
+}
+
+impl ApplyMember {
+    pub fn span(&self) -> Span {
+        match self {
+            ApplyMember::Method(m) => m.span,
+            ApplyMember::Bind { span, .. } => *span,
+        }
+    }
+
+    pub fn slot_name(&self) -> &Name {
+        match self {
+            ApplyMember::Method(m) => &m.name,
+            ApplyMember::Bind { slot, .. } => slot,
+        }
+    }
 }
 
 // ── Alias ─────────────────────────────────────────────────────────────────────

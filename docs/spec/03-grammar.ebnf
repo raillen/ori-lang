@@ -53,7 +53,7 @@ top_level_decl
     | [ attr_list ] struct_decl
     | [ attr_list ] enum_decl
     | [ attr_list ] trait_decl
-    | [ attr_list ] implement_decl
+    | [ attr_list ] apply_decl
     | [ attr_list ] alias_decl
     | [ attr_list ] const_decl
     | [ attr_list ] var_decl
@@ -276,14 +276,32 @@ func_signature
 
 
 (* ============================================================
-   IMPLEMENT
+   APPLY (S3: apply Type + use Trait + bind)
    ============================================================ *)
 
-implement_decl
-    = "implement" [ type_params ] type_ref "for" type_ref
+apply_decl
+    = "apply" [ type_params ] type_ref
       [ where_clause ]
-      { func_decl }
+      { apply_free_member }
+      { apply_use_section }
       "end"
+    ;
+
+apply_free_member
+    = func_decl
+    | IDENT "=" IDENT   (* slot = freeFunction bind *)
+    ;
+
+apply_use_section
+    = "use" type_ref
+      { apply_use_member }
+      "end"
+    ;
+
+apply_use_member
+    = func_decl
+    | IDENT "=" IDENT
+    | "type" IDENT "=" type
     ;
 
 

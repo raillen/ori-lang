@@ -27,15 +27,19 @@ enum Event
     Pair(data: tuple[int, string])
 end
 
-implement Labelled for User
-    label(self) -> string
-        return self.name + ":" + self.role
+apply User
+    use Labelled
+        label(self) -> string
+            return self.name + ":" + self.role
+        end
     end
 end
 
-implement Disposable for Resource
-    mut dispose(self)
-        io.print("disposed-" + string(self.id))
+apply Resource
+    use Disposable
+        mut dispose(self)
+            io.print("disposed-" + string(self.id))
+        end
     end
 end
 

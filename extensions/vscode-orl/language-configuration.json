@@ -24,7 +24,7 @@
   ],
   "wordPattern": "(-?\\d*\\.\\d\\w*)|([^\\`\\~\\!\\@\\#\\%\\^\\&\\*\\(\\)\\-\\=\\+\\[\\{\\]\\}\\\\\\|\\;\\:\\'\\\"\\,\\.\\<\\>\\/\\?\\s]+)",
   "indentationRules": {
-    "increaseIndentPattern": "^\\s*(?:if|else|while|for|struct|enum|trait|implement|using|match|extern)\\b.*$|^\\s*(?:(?:public|async|mut)\\s+)+[A-Za-z_][A-Za-z0-9_]*.*$|^\\s*[A-Za-z_][A-Za-z0-9_]*(?:\\s*<[^>]*>)?\\s*\\(\\s*\\)\\s*(?:->\\s*\\S+)?\\s*(?:where\\b.*)?$|^\\s*[A-Za-z_][A-Za-z0-9_]*(?:\\s*<[^>]*>)?\\s*\\(\\s*self\\b[^)]*\\)\\s*(?:->\\s*\\S+)?\\s*(?:where\\b.*)?$|^\\s*[A-Za-z_][A-Za-z0-9_]*(?:\\s*<[^>]*>)?\\s*\\([^)]*:[^)]*\\)\\s*(?:->\\s*\\S+)?\\s*(?:where\\b.*)?$|^\\s*[A-Za-z_][A-Za-z0-9_]*(?:\\s*<[^>]*>)?\\s*\\([^)]*\\)\\s*->\\s*\\S+.*$",
+    "increaseIndentPattern": "^\\s*(?:if|else|while|for|struct|enum|trait|apply|use|implement|using|match|extern)\\b.*$|^\\s*(?:(?:public|async|mut)\\s+)+[A-Za-z_][A-Za-z0-9_]*.*$|^\\s*[A-Za-z_][A-Za-z0-9_]*(?:\\s*<[^>]*>)?\\s*\\(\\s*\\)\\s*(?:->\\s*\\S+)?\\s*(?:where\\b.*)?$|^\\s*[A-Za-z_][A-Za-z0-9_]*(?:\\s*<[^>]*>)?\\s*\\(\\s*self\\b[^)]*\\)\\s*(?:->\\s*\\S+)?\\s*(?:where\\b.*)?$|^\\s*[A-Za-z_][A-Za-z0-9_]*(?:\\s*<[^>]*>)?\\s*\\([^)]*:[^)]*\\)\\s*(?:->\\s*\\S+)?\\s*(?:where\\b.*)?$|^\\s*[A-Za-z_][A-Za-z0-9_]*(?:\\s*<[^>]*>)?\\s*\\([^)]*\\)\\s*->\\s*\\S+.*$",
     "decreaseIndentPattern": "^\\s*(end|else)\\b.*$"
   }
 }

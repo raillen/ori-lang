@@ -143,9 +143,11 @@ struct Item
     label: string
 end
 
-implement Named for Item
-    name(self) -> string
-        return self.label
+apply Item
+    use Named
+        name(self) -> string
+            return self.label
+        end
     end
 end
 

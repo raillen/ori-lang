@@ -100,6 +100,13 @@ pub enum TokenKind {
     Struct,
     #[token("trait")]
     Trait,
+    /// S3 surface: `apply Type … end` with `use Trait` sections.
+    #[token("apply")]
+    Apply,
+    /// S3 surface: `use Trait … end` inside an `apply` block.
+    #[token("use")]
+    Use,
+    /// Removed in S3; kept so the parser can emit a hard error on the old form.
     #[token("implement")]
     Implement,
     #[token("enum")]
@@ -361,6 +368,8 @@ impl TokenKind {
             TokenKind::Loop => "`loop`",
             TokenKind::Struct => "`struct`",
             TokenKind::Trait => "`trait`",
+            TokenKind::Apply => "`apply`",
+            TokenKind::Use => "`use`",
             TokenKind::Implement => "`implement`",
             TokenKind::Enum => "`enum`",
             TokenKind::Where => "`where`",

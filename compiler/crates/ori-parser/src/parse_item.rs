@@ -1,9 +1,10 @@
 use crate::parser::Parser;
 use ori_ast::common::{Attr, AttrArg, Visibility};
 use ori_ast::item::{
-    AbiLabel, AliasDecl, EnumDecl, EnumVariant, ExternBlock, ExternMember, FuncDecl, FuncSignature,
-    ImplementDecl, ImportDecl, ImportItem, Item, ItemWithAttrs, NamedField, NamespaceDecl, Param,
-    ParamKind, SourceFile, StructDecl, StructField, TopConst, TopVar, TraitDecl, TraitMember,
+    AbiLabel, AliasDecl, ApplyDecl, ApplyMember, ApplyUseSection, EnumDecl, EnumVariant,
+    ExternBlock, ExternMember, FuncDecl, FuncSignature, ImportDecl, ImportItem, Item, ItemWithAttrs,
+    NamedField, NamespaceDecl, Param, ParamKind, SourceFile, StructDecl, StructField, TopConst,
+    TopVar, TraitDecl, TraitMember,
 };
 use ori_diagnostics::Span;
 use ori_lexer::TokenKind;
@@ -62,6 +63,7 @@ impl<'src> Parser<'src> {
                     TokenKind::Struct,
                     TokenKind::Enum,
                     TokenKind::Trait,
+                    TokenKind::Apply,
                     TokenKind::Implement,
                     TokenKind::Alias,
                     TokenKind::Const,
@@ -267,7 +269,18 @@ impl<'src> Parser<'src> {
             TokenKind::Struct => Some(Item::Struct(self.parse_struct_decl(vis)?)),
             TokenKind::Enum => Some(Item::Enum(self.parse_enum_decl(vis)?)),
             TokenKind::Trait => Some(Item::Trait(self.parse_trait_decl(vis)?)),
-            TokenKind::Implement => Some(Item::Implement(self.parse_implement_decl()?)),
+            TokenKind::Apply => Some(Item::Apply(self.parse_apply_decl()?)),
+            TokenKind::Implement => {
+                // S3 cutover: `implement Trait for Type` is a hard error.
+                let span = self.current_span();
+                self.error(
+                    "parse.implement_removed",
+                    "`implement Trait for Type` was removed; use `apply Type` with `use Trait`",
+                    span,
+                );
+                // Recover by consuming the old form into an apply AST when possible.
+                Some(Item::Apply(self.parse_legacy_implement_as_apply()?))
+            }
             TokenKind::Alias => Some(Item::Alias(self.parse_alias_decl(vis)?)),
             TokenKind::Const => Some(Item::Const(self.parse_top_const(vis)?)),
             TokenKind::Var => Some(Item::Var(self.parse_top_var(vis)?)),
@@ -982,18 +995,169 @@ impl<'src> Parser<'src> {
         i
     }
 
-    // ── Implement ─────────────────────────────────────────────────────────────
+    // ── Apply (S3: `apply Type` + `use Trait` + bind) ─────────────────────────
 
-    fn parse_implement_decl(&mut self) -> Option<ImplementDecl> {
+    /// Canonical S3 form: `apply [T] Type … end`.
+    ///
+    /// Old form `apply Trait to Type` is a hard error (recovered into a single
+    /// `use` section so later stages still see a usable AST).
+    fn parse_apply_decl(&mut self) -> Option<ApplyDecl> {
+        let start = self.advance().unwrap().span; // apply
+        let type_params = self.parse_type_params_opt();
+        let first_name = self.parse_qualified_name()?;
+
+        // Removed form: `apply Trait to Type` (also `apply Trait for Type`).
+        if self.at_contextual("to") || self.at(&TokenKind::For) {
+            let connector_span = self.current_span();
+            let connector = if self.at(&TokenKind::For) {
+                "for"
+            } else {
+                "to"
+            };
+            self.advance(); // consume `to` / `for`
+            self.error(
+                "parse.apply_trait_to_removed",
+                format!(
+                    "`apply Trait {connector} Type` was removed; use `apply Type` with `use Trait`"
+                ),
+                start.cover(connector_span),
+            );
+            let for_type = self.parse_qualified_name()?;
+            let where_clause = self.parse_where_clause_opt();
+            let (members, associated_types) = self.parse_apply_use_body_members()?;
+            let end = self.expect_block_end(start, "apply")?;
+            let use_span = first_name.span.cover(end);
+            return Some(ApplyDecl {
+                type_params,
+                for_type,
+                where_clause,
+                free_members: Vec::new(),
+                uses: vec![ApplyUseSection {
+                    trait_name: first_name,
+                    members,
+                    associated_types,
+                    span: use_span,
+                }],
+                span: start.cover(end),
+            });
+        }
+
+        let for_type = first_name;
+        let where_clause = self.parse_where_clause_opt();
+        let mut free_members = Vec::new();
+        let mut uses = Vec::new();
+        let mut seen_use = false;
+
+        while !self.at(&TokenKind::End) && !self.at_eof() {
+            if self.at(&TokenKind::Use) {
+                seen_use = true;
+                uses.push(self.parse_apply_use_section()?);
+                continue;
+            }
+
+            // Free member (method or bind). After the first `use`, free members
+            // are illegal (fixed Auk9 order: free → use sections).
+            if seen_use {
+                let span = self.current_span();
+                self.error(
+                    "parse.apply_member_after_use",
+                    "free methods and binds must appear before `use Trait` sections",
+                    span,
+                );
+            }
+
+            if self.at_apply_bind_start() {
+                free_members.push(self.parse_apply_bind()?);
+            } else {
+                // Associated `type Name = Ty` only valid inside `use`.
+                let is_assoc = self.peek().is_some_and(|tok| {
+                    tok.kind == TokenKind::Ident && self.slice(tok.span) == "type"
+                });
+                if is_assoc {
+                    let span = self.current_span();
+                    self.error(
+                        "parse.unexpected_token",
+                        "associated types belong inside a `use Trait` section",
+                        span,
+                    );
+                    self.advance(); // type
+                    let _ = self.parse_name();
+                    let _ = self.eat(&TokenKind::Eq);
+                    let _ = self.parse_type();
+                    continue;
+                }
+                let mvis = self.parse_visibility();
+                free_members.push(ApplyMember::Method(self.parse_func_decl(mvis)?));
+            }
+        }
+
+        let end = self.expect_block_end(start, "apply")?;
+        Some(ApplyDecl {
+            type_params,
+            for_type,
+            where_clause,
+            free_members,
+            uses,
+            span: start.cover(end),
+        })
+    }
+
+    /// Recovery path for removed `implement Trait for Type`.
+    fn parse_legacy_implement_as_apply(&mut self) -> Option<ApplyDecl> {
         let start = self.advance().unwrap().span; // implement
         let type_params = self.parse_type_params_opt();
         let trait_name = self.parse_qualified_name()?;
-        self.expect(&TokenKind::For)?;
+        if self.at(&TokenKind::For) {
+            self.advance();
+        } else if self.at_contextual("to") {
+            self.advance();
+        } else {
+            self.error(
+                "parse.unexpected_token",
+                "expected `for` after the trait name in a legacy `implement` declaration",
+                self.current_span(),
+            );
+        }
         let for_type = self.parse_qualified_name()?;
         let where_clause = self.parse_where_clause_opt();
-        let mut methods = Vec::new();
+        let (members, associated_types) = self.parse_apply_use_body_members()?;
+        let end = self.expect_block_end(start, "implement")?;
+        let use_span = trait_name.span.cover(end);
+        Some(ApplyDecl {
+            type_params,
+            for_type,
+            where_clause,
+            free_members: Vec::new(),
+            uses: vec![ApplyUseSection {
+                trait_name,
+                members,
+                associated_types,
+                span: use_span,
+            }],
+            span: start.cover(end),
+        })
+    }
+
+    fn parse_apply_use_section(&mut self) -> Option<ApplyUseSection> {
+        let start = self.advance().unwrap().span; // use
+        let trait_name = self.parse_qualified_name()?;
+        let (members, associated_types) = self.parse_apply_use_body_members()?;
+        let end = self.expect_block_end(start, "use")?;
+        Some(ApplyUseSection {
+            trait_name,
+            members,
+            associated_types,
+            span: start.cover(end),
+        })
+    }
+
+    /// Body of a `use Trait` (or recovered legacy implement): methods, binds, assoc types.
+    fn parse_apply_use_body_members(
+        &mut self,
+    ) -> Option<(Vec<ApplyMember>, Vec<(ori_ast::common::Name, ori_ast::ty::Type)>)> {
+        let mut members = Vec::new();
         let mut associated_types = Vec::new();
-        while !self.at(&TokenKind::End) && !self.at_eof() {
+        while !self.at(&TokenKind::End) && !self.at(&TokenKind::Use) && !self.at_eof() {
             let is_assoc = self
                 .peek()
                 .is_some_and(|tok| tok.kind == TokenKind::Ident && self.slice(tok.span) == "type");
@@ -1005,19 +1169,32 @@ impl<'src> Parser<'src> {
                 associated_types.push((name, ty));
                 continue;
             }
-            let mvis = self.parse_visibility();
-            methods.push(self.parse_func_decl(mvis)?);
+            if self.at_apply_bind_start() {
+                members.push(self.parse_apply_bind()?);
+            } else {
+                let mvis = self.parse_visibility();
+                members.push(ApplyMember::Method(self.parse_func_decl(mvis)?));
+            }
         }
-        let end = self.expect_block_end(start, "implement")?;
-        Some(ImplementDecl {
-            type_params,
-            trait_name,
-            for_type,
-            where_clause,
-            methods,
-            associated_types,
-            span: start.cover(end),
-        })
+        Some((members, associated_types))
+    }
+
+    /// `slot = freeFunction` (both identifiers, no type params / parens).
+    fn at_apply_bind_start(&self) -> bool {
+        let mut i = self.skip_trivia_after(self.pos);
+        if self.kind_at(i) != Some(&TokenKind::Ident) {
+            return false;
+        }
+        i = self.skip_trivia_after(i + 1);
+        self.kind_at(i) == Some(&TokenKind::Eq)
+    }
+
+    fn parse_apply_bind(&mut self) -> Option<ApplyMember> {
+        let slot = self.parse_name()?;
+        self.expect(&TokenKind::Eq)?;
+        let target = self.parse_name()?;
+        let span = slot.span.cover(target.span);
+        Some(ApplyMember::Bind { slot, target, span })
     }
 
     // ── Alias / Const / Var ───────────────────────────────────────────────────
@@ -1168,6 +1345,7 @@ fn is_import_alias_recovery_boundary(kind: Option<&TokenKind>) -> bool {
             | Some(TokenKind::Struct)
             | Some(TokenKind::Enum)
             | Some(TokenKind::Trait)
+            | Some(TokenKind::Apply)
             | Some(TokenKind::Implement)
             | Some(TokenKind::Alias)
             | Some(TokenKind::Const)

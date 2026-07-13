@@ -211,9 +211,11 @@ struct Priority
     level: int
 end
 
-implement core.Comparable for Priority
-    compare(self, other: Priority) -> int
-        return self.level - other.level
+apply Priority
+    use core.Comparable
+        compare(self, other: Priority) -> int
+            return self.level - other.level
+        end
     end
 end
 
@@ -294,12 +296,16 @@ struct Player
     id: int
 end
 
-implement core.Hashable for Player
+apply Player
+    use core.Hashable
+    end
 end
 
-implement core.Equatable for Player
-    equals(self, other: Player) -> bool
-        return self.id == other.id
+apply Player
+    use core.Equatable
+        equals(self, other: Player) -> bool
+            return self.id == other.id
+        end
     end
 end
 

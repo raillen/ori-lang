@@ -109,8 +109,8 @@ end
 }
 
 #[test]
-fn build_lowers_implement_method_call() {
-    let dir = TestDir::new("implement_method");
+fn build_lowers_apply_method_call() {
+    let dir = TestDir::new("apply_method");
     dir.write(
         "main.orl",
         r#"module app.main
@@ -123,9 +123,11 @@ trait Entity
     id(self) -> int
 end
 
-implement Entity for Player
-    id(self) -> int
-        return self.score
+apply Player
+    use Entity
+        id(self) -> int
+            return self.score
+        end
     end
 end
 
@@ -172,15 +174,19 @@ trait Beta
     output(self) -> string
 end
 
-implement Alpha for Thing
-    output(self) -> string
-        return "alpha"
+apply Thing
+    use Alpha
+        output(self) -> string
+            return "alpha"
+        end
     end
 end
 
-implement Beta for Thing
-    output(self) -> string
-        return "beta"
+apply Thing
+    use Beta
+        output(self) -> string
+            return "beta"
+        end
     end
 end
 
@@ -215,15 +221,19 @@ trait Beta
     output(self) -> string
 end
 
-implement Alpha for Thing
-    output(self) -> string
-        return "alpha"
+apply Thing
+    use Alpha
+        output(self) -> string
+            return "alpha"
+        end
     end
 end
 
-implement Beta for Thing
-    output(self) -> string
-        return "beta"
+apply Thing
+    use Beta
+        output(self) -> string
+            return "beta"
+        end
     end
 end
 
@@ -265,7 +275,9 @@ trait Entity
     end
 end
 
-implement Entity for Player
+apply Player
+    use Entity
+    end
 end
 
 main()
@@ -300,9 +312,11 @@ trait Entity
     tick(self) -> void
 end
 
-implement Entity for Player
-    id(self) -> int
-        return 1
+apply Player
+    use Entity
+        id(self) -> int
+            return 1
+        end
     end
 end
 "#,
@@ -327,9 +341,11 @@ trait Cloneable
     merge(self, other: Self) -> Self
 end
 
-implement Cloneable for Player
-    merge(self, other: int) -> Player
-        return self
+apply Player
+    use Cloneable
+        merge(self, other: int) -> Player
+            return self
+        end
     end
 end
 "#,
@@ -354,9 +370,11 @@ trait Stackable
     mut push(self) -> void
 end
 
-implement Stackable for Bag
-    push(self) -> void
-        return
+apply Bag
+    use Stackable
+        push(self) -> void
+            return
+        end
     end
 end
 "#,
@@ -395,8 +413,54 @@ end
 }
 
 #[test]
-fn check_reports_duplicate_implement_pair() {
-    let dir = TestDir::new("duplicate_implement");
+fn build_lowers_apply_bind_to_free_function() {
+    let dir = TestDir::new("apply_bind");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+struct Player
+    score: int
+end
+
+trait Entity
+    id(self) -> int
+end
+
+playerId(player: Player) -> int
+    return player.score
+end
+
+apply Player
+    use Entity
+        id = playerId
+    end
+end
+
+main()
+    const player: Player = Player(score: 99)
+    const id: int = player.id()
+end
+"#,
+    );
+
+    let check = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!check.has_errors, "{:?}", check.diagnostics);
+
+    let build = run_build(&dir.path("main.orl")).unwrap();
+    assert!(!build.has_errors, "{:?}", build.diagnostics);
+    // Bind reuses the free function path (no Type.Trait.method wrapper).
+    assert!(
+        build.c_source.contains("ORI__app_dot_main_dot_playerId")
+            || build.c_source.contains("playerId"),
+        "{}",
+        build.c_source
+    );
+}
+
+#[test]
+fn check_rejects_legacy_implement_and_apply_trait_to() {
+    let dir = TestDir::new("legacy_apply_forms");
     dir.write(
         "main.orl",
         r#"module app.main
@@ -413,10 +477,62 @@ implement Entity for Player
         return 1
     end
 end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(diagnostic_codes(&out).contains(&"parse.implement_removed"));
 
-implement Entity for Player
+    dir.write(
+        "legacy_to.orl",
+        r#"module app.main
+
+struct Player
+end
+
+trait Entity
     id(self) -> int
-        return 2
+end
+
+apply Entity to Player
+    id(self) -> int
+        return 1
+    end
+end
+"#,
+    );
+    let out = run_check(&dir.path("legacy_to.orl")).unwrap();
+    assert!(out.has_errors);
+    assert!(diagnostic_codes(&out).contains(&"parse.apply_trait_to_removed"));
+}
+
+#[test]
+fn check_reports_duplicate_apply_pair() {
+    let dir = TestDir::new("duplicate_apply");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+struct Player
+end
+
+trait Entity
+    id(self) -> int
+end
+
+apply Player
+    use Entity
+        id(self) -> int
+            return 1
+        end
+    end
+end
+
+apply Player
+    use Entity
+        id(self) -> int
+            return 2
+        end
     end
 end
 "#,

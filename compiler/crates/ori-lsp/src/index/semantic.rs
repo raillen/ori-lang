@@ -388,11 +388,18 @@ impl SemanticIndex {
                     summary: format!("var {}", v.name.text),
                 });
             }
-            ori_ast::item::Item::Implement(imp) => {
-                for method in &imp.methods {
+            ori_ast::item::Item::Apply(apply) => {
+                for member in apply
+                    .free_members
+                    .iter()
+                    .chain(apply.uses.iter().flat_map(|u| u.members.iter()))
+                {
+                    let ori_ast::item::ApplyMember::Method(method) = member else {
+                        continue;
+                    };
                     let range = span_to_range(source, method.span);
                     let sig = func_signature(method);
-                    let hover = format!("```ori\n{sig}\n```\n\nMethod implementation.");
+                    let hover = format!("```ori\n{sig}\n```\n\nApply method.");
                     self.add(SemanticSymbol {
                         name: method.name.text.to_string(),
                         kind: SymbolKind::Method,
@@ -400,7 +407,7 @@ impl SemanticIndex {
                         hover,
                         summary: format!(
                             "method {}.{}",
-                            imp.for_type.last().text,
+                            apply.for_type.last().text,
                             method.name.text
                         ),
                     });

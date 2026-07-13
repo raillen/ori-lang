@@ -8,33 +8,43 @@ public struct Vec2
     y: float
 end
 
-implement core.Addable for Vec2
-    add(self, other: Vec2) -> Vec2
-        return Vec2(x: self.x + other.x, y: self.y + other.y)
+apply Vec2
+    use core.Addable
+        add(self, other: Vec2) -> Vec2
+            return Vec2(x: self.x + other.x, y: self.y + other.y)
+        end
     end
 end
 
-implement core.Subtractable for Vec2
-    subtract(self, other: Vec2) -> Vec2
-        return Vec2(x: self.x - other.x, y: self.y - other.y)
+apply Vec2
+    use core.Subtractable
+        subtract(self, other: Vec2) -> Vec2
+            return Vec2(x: self.x - other.x, y: self.y - other.y)
+        end
     end
 end
 
-implement core.Multiplicable for Vec2
-    multiply(self, other: Vec2) -> Vec2
-        return Vec2(x: self.x * other.x, y: self.y * other.y)
+apply Vec2
+    use core.Multiplicable
+        multiply(self, other: Vec2) -> Vec2
+            return Vec2(x: self.x * other.x, y: self.y * other.y)
+        end
     end
 end
 
-implement core.Divisible for Vec2
-    divide(self, other: Vec2) -> Vec2
-        return Vec2(x: self.x / other.x, y: self.y / other.y)
+apply Vec2
+    use core.Divisible
+        divide(self, other: Vec2) -> Vec2
+            return Vec2(x: self.x / other.x, y: self.y / other.y)
+        end
     end
 end
 
-implement core.Equatable for Vec2
-    equals(self, other: Vec2) -> bool
-        return self.x == other.x and self.y == other.y
+apply Vec2
+    use core.Equatable
+        equals(self, other: Vec2) -> bool
+            return self.x == other.x and self.y == other.y
+        end
     end
 end
 

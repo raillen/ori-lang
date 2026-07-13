@@ -1736,8 +1736,10 @@ end
 struct Res
     id: int
 end
-implement Disposable for Res
-    mut dispose(self)
+apply Res
+    use Disposable
+        mut dispose(self)
+        end
     end
 end
 async load() -> int
@@ -1797,9 +1799,11 @@ end
 struct User
     n: string
 end
-implement Greetable for User
-    name(self) -> string
-        return self.n
+apply User
+    use Greetable
+        name(self) -> string
+            return self.n
+        end
     end
 end
 main()
@@ -1813,7 +1817,7 @@ end
 }
 
 #[test]
-fn trait_rejects_implement_missing_required_method() {
+fn trait_rejects_apply_missing_required_method() {
     let dir = TestDir::new("trait_missing_method");
     dir.write(
         "main.orl",
@@ -1827,7 +1831,9 @@ end
 struct User
     n: string
 end
-implement Greetable for User
+apply User
+    use Greetable
+    end
 end
 main()
 end
@@ -1859,14 +1865,18 @@ struct Rect
     w: float
     h: float
 end
-implement Drawable for Circle
-    draw(self) -> string
-        return "circle"
+apply Circle
+    use Drawable
+        draw(self) -> string
+            return "circle"
+        end
     end
 end
-implement Drawable for Rect
-    draw(self) -> string
-        return "rect"
+apply Rect
+    use Drawable
+        draw(self) -> string
+            return "rect"
+        end
     end
 end
 main()
@@ -1894,9 +1904,11 @@ end
 struct Circle
     radius: float
 end
-implement Drawable for Circle
-    draw(self) -> string
-        return "circle"
+apply Circle
+    use Drawable
+        draw(self) -> string
+            return "circle"
+        end
     end
 end
 main()
@@ -1932,14 +1944,18 @@ trait Beta
     output(self) -> string
 end
 struct S end
-implement Alpha for S
-    output(self) -> string
-        return "alpha"
+apply S
+    use Alpha
+        output(self) -> string
+            return "alpha"
+        end
     end
 end
-implement Beta for S
-    output(self) -> string
-        return "beta"
+apply S
+    use Beta
+        output(self) -> string
+            return "beta"
+        end
     end
 end
 main()
@@ -2168,8 +2184,10 @@ end
 struct Res
     name: string
 end
-implement Disposable for Res
-    mut dispose(self)
+apply Res
+    use Disposable
+        mut dispose(self)
+        end
     end
 end
 main()
@@ -2195,9 +2213,11 @@ end
 struct Logger
     label: string
 end
-implement Disposable for Logger
-    mut dispose(self)
-        io.print(f"disposed {self.label}")
+apply Logger
+    use Disposable
+        mut dispose(self)
+            io.print(f"disposed {self.label}")
+        end
     end
 end
 main()
@@ -2280,9 +2300,11 @@ end
 struct User
     name: string
 end
-implement Labelled for User
-    label(self) -> string
-        return self.name
+apply User
+    use Labelled
+        label(self) -> string
+            return self.name
+        end
     end
 end
 show for T: Labelled (value: T) -> string
@@ -2361,8 +2383,10 @@ trait Disposable
     mut dispose(self)
 end
 struct Res end
-implement Disposable for Res
-    mut dispose(self)
+apply Res
+    use Disposable
+        mut dispose(self)
+        end
     end
 end
 raw_copy for T: not Disposable (src: T) -> T
@@ -2509,15 +2533,19 @@ struct Session
     user: User
 end
 
-implement Disposable for Session
-    mut dispose(self)
-        io.print(f"session of {self.user.name} disposed")
+apply Session
+    use Disposable
+        mut dispose(self)
+            io.print(f"session of {self.user.name} disposed")
+        end
     end
 end
 
-implement Loggable for User
-    to_log(self) -> string
-        return f"User({self.name}, {self.age})"
+apply User
+    use Loggable
+        to_log(self) -> string
+            return f"User({self.name}, {self.age})"
+        end
     end
 end
 
@@ -2689,9 +2717,11 @@ fn crosscut_variadic_rejects_not_last_parameter() {
 trait Displayable
     display(self) -> string
 end
-implement Displayable for string
-    display(self) -> string
-        return self
+apply string
+    use Displayable
+        display(self) -> string
+            return self
+        end
     end
 end
 log(values: any[Displayable]..., prefix: string)
