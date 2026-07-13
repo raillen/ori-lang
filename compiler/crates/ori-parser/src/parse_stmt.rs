@@ -12,8 +12,12 @@ use ori_lexer::TokenKind;
 use smol_str::SmolStr;
 
 /// Tokens that terminate a block (without consuming them).
-const BLOCK_TERMINATORS: &[TokenKind] =
-    &[TokenKind::End, TokenKind::Else, TokenKind::Elif, TokenKind::Case];
+const BLOCK_TERMINATORS: &[TokenKind] = &[
+    TokenKind::End,
+    TokenKind::Else,
+    TokenKind::Elif,
+    TokenKind::Case,
+];
 
 impl<'src> Parser<'src> {
     /// Parse a block: zero or more statements, stopping at a terminator token.
@@ -114,10 +118,17 @@ impl<'src> Parser<'src> {
         }))
     }
 
-    fn parse_local_binding_body(&mut self, start: Span) -> Option<(Name, Type, Expr, Span)> {
+    fn parse_local_binding_body(
+        &mut self,
+        start: Span,
+    ) -> Option<(Name, Option<Type>, Expr, Span)> {
         let name = self.parse_name()?;
-        self.expect(&TokenKind::Colon)?;
-        let ty = self.parse_type()?;
+        // S3 / 0.3.1: `const n: int = 1` or `const n = 1` (local inference).
+        let ty = if self.eat(&TokenKind::Colon) {
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
         self.expect(&TokenKind::Eq)?;
         let value = self.parse_expr()?;
         let span = start.cover(value.span());

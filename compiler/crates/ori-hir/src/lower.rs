@@ -2555,9 +2555,15 @@ impl<'a> Lowerer<'a> {
     fn lower_stmt(&mut self, stmt: &Stmt, tp: &[SmolStr]) -> Option<HirStmt> {
         match stmt {
             Stmt::Const(c) => {
-                let ty = self.lower_ast_ty(&c.ty, tp);
                 let mut val = self.lower_expr(&c.value, tp);
-                apply_expected_expr_ty(&mut val, &ty);
+                let ty = if let Some(ast_ty) = &c.ty {
+                    let ty = self.lower_ast_ty(ast_ty, tp);
+                    apply_expected_expr_ty(&mut val, &ty);
+                    ty
+                } else {
+                    // 0.3.1: type omitted; HIR type comes from the lowered value.
+                    val.ty.clone()
+                };
                 self.bind(c.name.text.clone(), ty.clone());
                 Some(HirStmt::Let {
                     name: c.name.text.clone(),
@@ -2568,9 +2574,14 @@ impl<'a> Lowerer<'a> {
                 })
             }
             Stmt::Var(v) => {
-                let ty = self.lower_ast_ty(&v.ty, tp);
                 let mut val = self.lower_expr(&v.value, tp);
-                apply_expected_expr_ty(&mut val, &ty);
+                let ty = if let Some(ast_ty) = &v.ty {
+                    let ty = self.lower_ast_ty(ast_ty, tp);
+                    apply_expected_expr_ty(&mut val, &ty);
+                    ty
+                } else {
+                    val.ty.clone()
+                };
                 self.bind(v.name.text.clone(), ty.clone());
                 Some(HirStmt::Let {
                     name: v.name.text.clone(),

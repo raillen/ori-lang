@@ -22,10 +22,17 @@ Declares an immutable binding.
 ```ori
 const name: string = "Ada"
 const max: int = 100
+
+-- 0.3.1 Nim-local: omit type when the RHS is obvious on the same line
+const n = 1
+const label = "ready"
+const user = User { name: "Ada", age: 36 }
 ```
 
 - Cannot be reassigned after declaration.
-- The type annotation is required.
+- Type annotation is **required** on top-level / `pub` bindings and whenever the
+  RHS is not locally obvious; locals may omit it (`0.3.1`).
+- Failure to infer a local type → `type.local_inference_failed`.
 - The initializer is evaluated once, at declaration time.
 
 ### `var`
@@ -35,10 +42,12 @@ Declares a mutable binding.
 ```ori
 var count: int = 0
 count = count + 1
+
+var total = 0   -- 0.3.1 local inference
 ```
 
 - Can be reassigned with `=`.
-- The type annotation is required.
+- Type annotation rules match `const` (required unless local Nim-style inference applies).
 - Compound assignment operators are available: `+=`, `-=`, `*=`, `/=`.
 
 ---

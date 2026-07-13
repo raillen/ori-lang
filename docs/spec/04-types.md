@@ -9,13 +9,28 @@
 ## Overview
 
 Ori is statically typed. Every binding, parameter, and return position has a
-type known at compile time. Type annotations are always explicit; there is no
-global type inference for binding declarations.
+type known at compile time. There is **no global** (Hindley–Milner) type
+inference for bindings.
 
-**Design decision (2026-07-01):** global/Hindley-Milner inference for `const`/`var` bindings is intentionally out of
-scope. Checker-local unification already covers generic call sites and some literal
-contexts. **Nim-style local inference** for obvious same-line bindings is planned for
-`0.3.1` (not part of the `0.3.0` surface cutover).
+**Local Nim-style inference (`0.3.1`):** inside function bodies, `const`/`var`
+may omit the type annotation when the right-hand side is obvious on the same
+line:
+
+```ori
+const n = 1
+const name = "Ada"
+const u = User { name: "Ada", age: 36 }
+const xs = [1, 2, 3]
+```
+
+If inference fails, the compiler emits `type.local_inference_failed` and asks
+for an explicit annotation. Still **required** to write types on:
+
+- `pub` items, parameters, and API return types;
+- `try expr`, empty `[]`/`{}`, bare `none`, and other non-obvious RHS.
+
+**Design decision (2026-07-01, restated):** global inference remains out of
+scope permanently.
 
 ---
 

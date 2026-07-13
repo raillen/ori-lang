@@ -503,6 +503,87 @@ end
 }
 
 #[test]
+fn type_accepts_local_nim_style_inference() {
+    let dir = TestDir::new("type_local_nim_infer");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io = io
+
+struct User
+    name: string
+    age: int
+end
+
+main()
+    const n = 1
+    const name = "Ada"
+    const flag = true
+    const u = User { name: "Ada", age: 36 }
+    const xs = [1, 2, 3]
+    io.print(f"{n} {name} {flag} {u.name}")
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn type_rejects_local_inference_on_try() {
+    let dir = TestDir::new("type_local_infer_try");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+alias TextResult = result[string, string]
+
+load() -> TextResult
+    return success("ok")
+end
+
+main() -> TextResult
+    const raw = try load()
+    return success(raw)
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "expected inference failure on try");
+    assert!(
+        out.diagnostics
+            .iter()
+            .any(|d| d.code == "type.local_inference_failed"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn type_rejects_local_inference_on_empty_list() {
+    let dir = TestDir::new("type_local_infer_empty_list");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+main()
+    const xs = []
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "expected inference failure on empty list");
+    assert!(
+        out.diagnostics
+            .iter()
+            .any(|d| d.code == "type.local_inference_failed"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
 fn type_accepts_enum_named_variants() {
     let dir = TestDir::new("type_enum_named");
     dir.write(

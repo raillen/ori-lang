@@ -10,9 +10,9 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-> Itens de **superfície S3** (breaking) estão na seção **`[0.3.0]`**. O que permanece aqui são marcos não-S3 ou pós-corte ainda sem tag de package.
+> Itens de **superfície S3** (breaking) estão na seção **`[0.3.0]`**. Inferência local Nim-style está em **`[0.3.1]`**.
 
-> **Política de versionamento (atualizada 2026-07-12):** o corte de superfície **S3** é o **breaking change real** que justifica **`[0.3.0]`** (documentado abaixo). O número de pacote Cargo workspace permanece **`0.2.0`** até o release package/tag oficial (política de tag conservadora; ver `AGENTS.md`). Marcos pós-S3 (inferência local `0.3.1`, Rust-removal residual, stdlib extra) ficam em `[Unreleased]` ou na fatia de versão seguinte. `1.0` continua critério de maturidade de longo prazo.
+> **Política de versionamento:** Cargo workspace package permanece **`0.2.0`** até tag de release oficial; superfícies documentadas em `[0.3.0]` / `[0.3.1]`.
 
 ### Adicionado
 - **CLI/S3 (`ori migrate-syntax`):** ferramenta melhor-esforço para reescrever fonte pré-S3 → S3 (`namespace`→`module`, strip `func` em declarações, `import as`/`only`, `<>`→`[]`, `of` types, `else if`→`elif`, `case .V`→`case V`, `do(`→`(`, `?` simples→`try`, scaffold `implement`/`apply Trait to`). Opções `--dry-run` / `-v`. Ignora `packages/ori-game` e `packages/ori-imgui`. Wrapper `tools/migrate_syntax.sh`. Testes unitários em `pipeline::migrate_syntax`.
@@ -121,6 +121,19 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+
+## [0.3.1] — 2026-07-13 (Nim-local inference)
+
+### Adicionado
+- **Tipos / bindings locais:** omissão de anotação em `const`/`var` **locais** quando o RHS é óbvio na mesma linha (feeling Nim, não HM global). Exemplos: `const n = 1`, `const name = "Ada"`, `const u = User { … }`, `const xs = [1, 2, 3]`.
+- **Diagnóstico:** `type.local_inference_failed` quando a omissão não é segura (`try`, `[]`/`{}` vazios, `none` sem contexto, tipos não concretos).
+- **Testes:** `type_accepts_local_nim_style_inference`, `type_rejects_local_inference_on_try`, `type_rejects_local_inference_on_empty_list`.
+- **Docs:** caps. 04 e 06 atualizados; catálogo 13.
+
+### Não incluído
+- Inferência global; omissão em `pub`/params/retornos de API; pipe `|>`.
+
+---
 
 ## [0.3.0] — 2026-07-12 (surface cutover S3)
 

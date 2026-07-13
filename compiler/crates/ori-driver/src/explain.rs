@@ -39,6 +39,13 @@ const ENTRIES: &[ExplainEntry] = &[
         fix: "Adjust the expression, add an explicit conversion, or change the expected type annotation.",
     },
     ExplainEntry {
+        code: "type.local_inference_failed",
+        severity: "error",
+        summary: "A local binding omitted its type, but the compiler could not infer a safe type.",
+        cause: "The right-hand side is not obvious on the same line (e.g. `try`, empty `[]`/`{}`, bare `none`, or an open generic).",
+        fix: "Write an explicit annotation: `const name: Type = expr` (or `var`). Prefer aliases for long `result`/`list` types.",
+    },
+    ExplainEntry {
         code: "type.arg_type_mismatch",
         severity: "error",
         summary: "A function argument has the wrong type.",

@@ -41,7 +41,8 @@ pub enum Stmt {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalConst {
     pub name: Name,
-    pub ty: Type,
+    /// Explicit type, or `None` when omitted for local Nim-style inference (`0.3.1`).
+    pub ty: Option<Type>,
     pub value: Box<Expr>,
     pub span: Span,
 }
@@ -49,7 +50,8 @@ pub struct LocalConst {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalVar {
     pub name: Name,
-    pub ty: Type,
+    /// Explicit type, or `None` when omitted for local Nim-style inference (`0.3.1`).
+    pub ty: Option<Type>,
     pub value: Box<Expr>,
     pub span: Span,
 }

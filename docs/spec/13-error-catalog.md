@@ -109,6 +109,7 @@ when the compiler starts producing it.
 | `type.iterable_next_signature` | error | `Iterable.next` does not match `mut next() -> optional[T]` |
 | `type.is_target_not_type` | error | `is` target is not a valid type |
 | `type.list_element_mismatch` | error | List literal elements have incompatible types |
+| `type.local_inference_failed` | error | Local `const`/`var` omitted its type but the RHS is not obvious enough to infer (`0.3.1` Nim-local) |
 | `type.map_key_mismatch` | error | Map literal keys have incompatible types |
 | `type.map_value_mismatch` | error | Map literal values have incompatible types |
 | `type.missing_return` | error | Non-void function may finish without returning a value |
@@ -351,7 +352,7 @@ design, or deferred to v2. They are no longer tracked as planned.
 | `generic.ambiguous_type_arg` | Ambiguous type argument inference is reported via `type.type_mismatch` when inference fails; a dedicated code is deferred to v2. |
 | `match.guard_not_exhaustive` | Guard exhaustiveness analysis is not implemented in v1; `match.non_exhaustive` covers unguarded cases. Guarded exhaustiveness deferred to v2. |
 | `type.ambiguous_generic` | Alias for existing generic diagnostics (`type.type_mismatch`, `generic.constraint_not_satisfied`); no separate emission needed. |
-| `type.annotation_required` | Ori is explicitly typed; type annotations are enforced by the grammar (`parse.expected_type`), not by an inference diagnostic. Not applicable. |
+| `type.annotation_required` | Superseded for locals by `type.local_inference_failed` (`0.3.1`). Top-level and API positions still require annotations via the grammar. |
 | `using.non_result_init` | `using` accepts any `Disposable` value; non-disposable inits are reported by `using.not_disposable`. The `result`-specific variant is not part of the v1 `using` contract. |
 
 ---

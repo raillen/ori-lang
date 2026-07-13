@@ -390,13 +390,19 @@ impl ProjectSemanticIndex {
     fn collect_bindings_from_stmt(&self, stmt: &Stmt, out: &mut HashMap<String, String>) {
         match stmt {
             Stmt::Const(c) => {
-                if let Some(tn) = named_type_simple_name(&c.ty) {
+                if let Some(ast_ty) = &c.ty {
+                    if let Some(tn) = named_type_simple_name(ast_ty) {
+                        out.insert(c.name.text.to_string(), tn);
+                    }
+                } else if let Some(tn) = infer_type_from_expr(&c.value) {
                     out.insert(c.name.text.to_string(), tn);
                 }
             }
             Stmt::Var(v) => {
-                if let Some(tn) = named_type_simple_name(&v.ty) {
-                    out.insert(v.name.text.to_string(), tn);
+                if let Some(ast_ty) = &v.ty {
+                    if let Some(tn) = named_type_simple_name(ast_ty) {
+                        out.insert(v.name.text.to_string(), tn);
+                    }
                 } else if let Some(tn) = infer_type_from_expr(&v.value) {
                     out.insert(v.name.text.to_string(), tn);
                 }

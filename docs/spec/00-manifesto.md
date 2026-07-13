@@ -45,7 +45,7 @@ Uso real em projetos **pequenos e médios** e maturidade de features existem com
 | **Pele / ritmo de leitura** | Superfície **S3**, o mais próximo possível da Auk9 (lab), com exceções documentadas |
 | **Arquivos / CLI** | Extensão **`.orl`**, CLI **`ori`**, stdlib **`ori.*`** |
 | **Corte** | **Seco** no artefato `0.3.0` — forma antiga deixa de ser aceita |
-| **Inferência local (Nim-style)** | Fora do big-bang: alvo **`0.3.1`** (PR 11; **não** nesta release) |
+| **Inferência local (Nim-style)** | **`0.3.1` entregue** — omissão em `const`/`var` locais quando o RHS é óbvio; sem HM global |
 | **Auk9** | **Lab aposentado como produto** — referência de sintaxe; superfície vivente na Ori |
 
 Exceções conscientes vs Auk9 pura (ADR):

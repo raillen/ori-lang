@@ -528,7 +528,7 @@ Quando a superfície S3 estiver definida (e na implementação/`0.3.0`):
 | **8b.2** | Referência de *feeling* | **Nim-local** (não C# `var` como marca; **não** HM global) |
 | **8b.3** | Global HM | **Continua proibida** (decisão Ori 2026-07-01) |
 | **8b.4** | API pública | **`pub`, params e retornos de API: anotar** (aliases ok; não esconder `result` difícil) |
-| **8b.5** | Quando implementar | **`0.3.1`** (PR 11 do plano) — depois do `0.3.0` verde |
+| **8b.5** | Quando implementar | **`0.3.1` entregue** (2026-07-13) — omissão local no checker + testes + docs |
 
 ### Pode omitir (lista inicial de implementação)
 

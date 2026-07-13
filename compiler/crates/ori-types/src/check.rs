@@ -11,8 +11,7 @@ use ori_ast::common::{Attr, AttrArg, Name, QualifiedName, WhereConstraint};
 use ori_ast::expr::{Arg, ArgValue, BinaryOp, ClosureBody, Expr, FStrPart, UnaryOp};
 use ori_ast::item::{
     ApplyDecl, ApplyMember, ExternBlock, FuncDecl, ImportDecl, ImportItem, Item, ItemWithAttrs,
-    Param,
-    ParamKind, SourceFile,
+    Param, ParamKind, SourceFile,
 };
 use ori_ast::pattern::Pattern;
 use ori_ast::stmt::{Block, LValue, Stmt};
@@ -1076,11 +1075,7 @@ impl<'a> Checker<'a> {
                                     slot.text, target.text
                                 ),
                             )
-                            .with_label(Label::primary(
-                                self.file_id,
-                                *span,
-                                "bind here",
-                            ))
+                            .with_label(Label::primary(self.file_id, *span, "bind here"))
                             .with_label(Label::primary(
                                 self.file_id,
                                 expected.span,
@@ -1160,19 +1155,91 @@ impl<'a> Checker<'a> {
         self.pop_scope();
     }
 
+    /// Resolve the type of a local `const`/`var` binding.
+    ///
+    /// With an explicit annotation, behave as before. Without one (`0.3.1`
+    /// Nim-local inference), accept only RHS shapes that are obvious on the
+    /// same line; otherwise emit `type.local_inference_failed`.
+    fn resolve_local_binding_ty(
+        &mut self,
+        name: &Name,
+        ann: Option<&ori_ast::ty::Type>,
+        value: &Expr,
+        tp: &[SmolStr],
+    ) -> Ty {
+        if let Some(ast_ty) = ann {
+            let ann_ty = self.lower(ast_ty, tp);
+            self.check_collection_runtime_limits(&ann_ty, ast_ty.span());
+            self.check_expr_assignable_to(value, &ann_ty);
+            return ann_ty;
+        }
+
+        if expr_blocks_local_inference(value) {
+            self.emit_local_inference_failed(
+                name,
+                value.span(),
+                "this expression is not a candidate for local type inference",
+            );
+            let _ = self.infer_expr(value);
+            return Ty::Error;
+        }
+
+        let inferred = if expr_needs_expected_context(value) {
+            // Anon struct / empty collection / bare `.Variant` need a written type.
+            self.emit_local_inference_failed(
+                name,
+                value.span(),
+                "this value needs an expected type; write an explicit annotation",
+            );
+            let _ = self.infer_expr(value);
+            return Ty::Error;
+        } else {
+            self.infer_expr(value)
+        };
+
+        if !ty_is_locally_inferable(&inferred) {
+            self.emit_local_inference_failed(
+                name,
+                value.span(),
+                &format!(
+                    "inferred type `{}` is not obvious enough to omit the annotation",
+                    inferred.display()
+                ),
+            );
+            return Ty::Error;
+        }
+
+        self.check_collection_runtime_limits(&inferred, value.span());
+        inferred
+    }
+
+    fn emit_local_inference_failed(&mut self, name: &Name, span: Span, why: &str) {
+        self.sink.emit(
+            Diagnostic::error(
+                "type.local_inference_failed",
+                format!(
+                    "cannot infer type for local binding `{}`; write an explicit type annotation",
+                    name.text
+                ),
+            )
+            .with_label(Label::primary(self.file_id, span, "value here"))
+            .with_why(why.to_string())
+            .with_action(format!(
+                "write `const {}: T = ...` or `var {}: T = ...` with an explicit type",
+                name.text, name.text
+            )),
+        );
+    }
+
     fn check_stmt(&mut self, stmt: &Stmt, expected_ret: &Ty, tp: &[SmolStr]) {
         match stmt {
             Stmt::Const(c) => {
-                let ann_ty = self.lower(&c.ty, tp);
-                self.check_collection_runtime_limits(&ann_ty, c.ty.span());
-                self.check_expr_assignable_to(&c.value, &ann_ty);
-                self.bind_checked(&c.name, ann_ty, false, false);
+                let ty = self.resolve_local_binding_ty(&c.name, c.ty.as_ref(), &c.value, tp);
+                self.bind_checked(&c.name, ty, false, false);
             }
             Stmt::Var(v) => {
-                let ann_ty = self.lower(&v.ty, tp);
-                self.check_collection_runtime_limits(&ann_ty, v.ty.span());
-                self.check_expr_assignable_to(&v.value, &ann_ty);
-                self.bind_checked(&v.name, ann_ty, true, false);
+                let ty = self.resolve_local_binding_ty(&v.name, v.ty.as_ref(), &v.value, tp);
+                self.bind_checked(&v.name, ty, true, false);
             }
             Stmt::Return(r) => {
                 let ret_ty = r.value.as_ref().map_or(Ty::Void, |e| {
@@ -6345,12 +6412,44 @@ fn expr_needs_expected_context(expr: &Expr) -> bool {
         Expr::AnonStructLit { .. }
         | Expr::EnumVariantUnit { ty: None, .. }
         | Expr::EnumVariantNamed { ty: None, .. } => true,
+        Expr::List { elements, .. } if elements.is_empty() => true,
+        Expr::Map { entries, .. } if entries.is_empty() => true,
+        Expr::None(_) => true,
         Expr::IfExpr {
             then_expr,
             else_expr,
             ..
         } => expr_needs_expected_context(then_expr) || expr_needs_expected_context(else_expr),
         _ => false,
+    }
+}
+
+/// Expressions that must never be inferred for unannotated local bindings (`0.3.1`).
+fn expr_blocks_local_inference(expr: &Expr) -> bool {
+    matches!(expr, Expr::Try { .. })
+}
+
+/// Whether a fully inferred type is concrete enough to omit a local annotation.
+fn ty_is_locally_inferable(ty: &Ty) -> bool {
+    match ty {
+        Ty::Error | Ty::Infer(_) | Ty::Never => false,
+        Ty::Optional(inner)
+        | Ty::List(inner)
+        | Ty::Set(inner)
+        | Ty::Range(inner)
+        | Ty::Lazy(inner)
+        | Ty::Handle(inner) => ty_is_locally_inferable(inner),
+        Ty::Result(ok, err) | Ty::Map(ok, err) => {
+            ty_is_locally_inferable(ok) && ty_is_locally_inferable(err)
+        }
+        Ty::Tuple(parts) => parts.iter().all(ty_is_locally_inferable),
+        Ty::Func { params, ret } => {
+            params.iter().all(ty_is_locally_inferable) && ty_is_locally_inferable(ret)
+        }
+        Ty::Named(_, args) | Ty::Opaque { args, .. } => args.iter().all(ty_is_locally_inferable),
+        Ty::Any(_) => false,
+        // Primitives and fully-resolved named/opaque shapes without open args.
+        _ => true,
     }
 }
 
@@ -6608,10 +6707,7 @@ fn import_visible_bindings(import: &ImportDecl) -> Vec<(SmolStr, Span)> {
 
     // Bare whole-module import: only the full path is usable; track that key
     // for unused-import warnings (matches identity entry in `import_aliases`).
-    vec![(
-        SmolStr::new(import.path.to_string()),
-        import.span,
-    )]
+    vec![(SmolStr::new(import.path.to_string()), import.span)]
 }
 
 fn selected_import_alias(item: &ImportItem) -> SmolStr {
