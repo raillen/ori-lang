@@ -1,6 +1,6 @@
 module ori.bytes.algorithms
 
-import ori.bytes.utils = bu
+import ori.bytes = bu
 import ori.list = lists
 
 public compare_lex(a: bytes, b: bytes) -> int

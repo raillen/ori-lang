@@ -1,0 +1,27 @@
+module ori.stack
+
+import ori.list = lists
+
+public from_list[T](items: list[T]) -> ori.stack.Stack[T]
+    var s: ori.stack.Stack[T] = ori.stack.new()
+    var i: int = 0
+    const n: int = lists.len(items)
+    while i < n
+        if some(item) = lists.try_get(items, i)
+            ori.stack.push(s, item)
+        end
+        i = i + 1
+    end
+    return s
+end
+
+public peek_or[T](s: ori.stack.Stack[T], fallback: T) -> T
+    if some(value) = ori.stack.peek(s)
+        return value
+    end
+    return fallback
+end
+
+public is_singleton[T](s: ori.stack.Stack[T]) -> bool
+    return ori.stack.len(s) == 1
+end

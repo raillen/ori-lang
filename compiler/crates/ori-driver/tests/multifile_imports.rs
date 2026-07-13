@@ -4166,7 +4166,7 @@ fn compile_runs_native_showcase_example() {
         .ancestors()
         .nth(3)
         .expect("ori-driver crate is inside compiler/crates");
-    let source = repo_root.join("examples/native_showcase.orl");
+    let source = repo_root.join("examples/native_showcase/main.orl");
     let dir = TestDir::new("compile_native_showcase_example");
     let exe = dir.path(if cfg!(windows) {
         "native_showcase.exe"
@@ -9023,23 +9023,33 @@ end
 #[test]
 fn check_official_examples() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    // M2.layout: each example is a mini-project (`ori.proj` + `main.orl`).
     let examples = [
-        "examples/hello_world.orl",
-        "examples/calculator.orl",
-        "examples/bytes_usage.orl",
-        "examples/collections_demo.orl",
-        "examples/logic_and_matching.orl",
-        "examples/file_organizer.orl",
-        "examples/json_validator.orl",
-        "examples/log_analyzer.orl",
-        "examples/task_cli.orl",
-        "examples/process_runner.orl",
+        "examples/hello",
+        "examples/hello_world",
+        "examples/calculator",
+        "examples/bytes_usage",
+        "examples/collections_demo",
+        "examples/logic_and_matching",
+        "examples/file_organizer",
+        "examples/json_validator",
+        "examples/log_analyzer",
+        "examples/task_cli",
+        "examples/process_runner",
     ];
 
     for example in examples {
         let path = root.join(example);
-        assert!(path.exists(), "missing official example: {example}");
-        let out = run_check(&path).unwrap();
+        assert!(
+            path.join("ori.proj").is_file() || path.join("main.orl").is_file(),
+            "missing official example project: {example}"
+        );
+        let entry = if path.join("ori.proj").is_file() {
+            path.join("ori.proj")
+        } else {
+            path.join("main.orl")
+        };
+        let out = run_check(&entry).unwrap();
         assert!(
             !out.has_errors,
             "{example} should type-check: {:?}",
@@ -10396,7 +10406,6 @@ end
 }
 
 #[test]
-#[ignore = "pending: multiple sequential path.relative calls produce non-deterministic wrong output (c/a, c/b instead of c/d) — likely memory corruption in list/string management across .orl function calls. Single-call path.relative works correctly (see compile_runs_stdlib_source_module_path)."]
 fn compile_runs_stdlib_source_module_path_edge_cases() {
     let dir = TestDir::new("stdlib_source_path_edge");
     dir.write(

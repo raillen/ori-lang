@@ -1,0 +1,36 @@
+module ori.iter
+
+import ori.list = lists
+
+public count[T](items: list[T]) -> int
+    return lists.len(items)
+end
+
+public is_empty[T](items: list[T]) -> bool
+    return lists.len(items) == 0
+end
+
+public first[T](items: list[T]) -> optional[T]
+    return lists.try_get(items, 0)
+end
+
+public sum_int(items: list[int]) -> int
+    return ori.iter.reduce(items, 0, (acc: int, x: int) => acc + x)
+end
+
+public contains_int(items: list[int], target: int) -> bool
+    return ori.iter.any(items, (x: int) => x == target)
+end
+
+public all_equal_int(items: list[int], expected: int) -> bool
+    return ori.iter.all(items, (x: int) => x == expected)
+end
+
+public unique_count_int(items: list[int]) -> int
+    const unique: list[int] = ori.iter.unique(items)
+    return lists.len(unique)
+end
+
+public reversed_copy[T](items: list[T]) -> list[T]
+    return ori.iter.reverse(items)
+end

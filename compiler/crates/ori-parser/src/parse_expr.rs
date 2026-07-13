@@ -357,8 +357,6 @@ impl<'src> Parser<'src> {
                     | TokenKind::False
                     | TokenKind::None
                     | TokenKind::Some
-                    | TokenKind::OkKw
-                    | TokenKind::ErrKw
                     | TokenKind::SuccessRemoved
                     | TokenKind::ErrorRemoved
                     | TokenKind::SelfKw
@@ -418,8 +416,8 @@ impl<'src> Parser<'src> {
                 Some(Expr::None(span))
             }
 
-            // Builtin wrappers: some(x), ok(x), err(x)
-            TokenKind::Some | TokenKind::OkKw | TokenKind::ErrKw => {
+            // Builtin wrapper: some(x)
+            TokenKind::Some => {
                 let tok = self.advance().unwrap();
                 let name = ori_ast::common::Name::new(
                     smol_str::SmolStr::new(self.slice(tok.span)),

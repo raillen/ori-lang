@@ -7,7 +7,6 @@ public get_or(m: map[string, int], key: string, fallback: int) -> int
     return fallback
 end
 
-
 public contains_key(m: map[string, int], key: string) -> bool
     return ori.map.contains(m, key)
 end
@@ -63,4 +62,3 @@ public invert_string_int(m: map[string, int]) -> map[int, string]
     end
     return out
 end
-

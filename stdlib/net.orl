@@ -1,6 +1,8 @@
 module ori.net
 
 import ori.net = net
+import ori.string = str
+import ori.task = task
 
 public connect_tls(host: string, port: int, timeout_ms: int) -> result[net.Connection, string]
     return net.connect_tls(host, port, timeout_ms)
@@ -40,4 +42,56 @@ end
 
 public udp_local_port(sock: net.UdpSocket) -> int
     return net.udp_local_port(sock)
+end
+
+-- M2: merged helpers
+
+public read_text(conn: ori.net.Connection, max_bytes: int) -> result[string, string]
+    match ori.net.read_some(conn, max_bytes)
+        case ok(payload):
+            match str.from_bytes(payload)
+                case ok(text):
+                    return ok(text)
+                case err(msg):
+                    return err(msg)
+            end
+        case err(msg):
+            return err(msg)
+    end
+    return err("read failed")
+end
+
+public write_text(conn: ori.net.Connection, text: string) -> result[void, string]
+    return ori.net.write_all(conn, str.to_bytes(text))
+end
+
+public is_open(conn: ori.net.Connection) -> bool
+    return not ori.net.is_closed(conn)
+end
+
+public read_bytes(conn: ori.net.Connection, max_bytes: int) -> result[bytes, string]
+    return ori.net.read_some(conn, max_bytes)
+end
+
+public write_bytes(conn: ori.net.Connection, payload: bytes) -> result[void, string]
+    return ori.net.write_all(conn, payload)
+end
+
+-- Blocking TCP/TLS I/O runs on a worker thread via task.run_blocking (same = task.spawn).
+-- Join the returned job from sync code; from async code prefer spawning before await boundaries.
+
+public connect_in_background(host: string, port: int, timeout_ms: int) -> task.Job[result[ori.net.Connection, string]]
+    return task.run_blocking(() => net.connect(host, port, timeout_ms))
+end
+
+public connect_tls_in_background(host: string, port: int, timeout_ms: int) -> task.Job[result[ori.net.Connection, string]]
+    return task.run_blocking(() => net.connect_tls(host, port, timeout_ms))
+end
+
+public listen_local(port: int) -> result[ori.net.Listener, string]
+    return ori.net.listen("127.0.0.1", port)
+end
+
+public udp_bind_local(port: int) -> result[ori.net.UdpSocket, string]
+    return ori.net.udp_bind("127.0.0.1", port)
 end

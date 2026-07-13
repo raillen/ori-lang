@@ -25,3 +25,5 @@ end
 public move_path(from: string, to: string) -> result[void, string]
     return ori.fs.rename(from, to)
 end
+
+-- M2: merged helpers

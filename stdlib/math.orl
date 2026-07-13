@@ -1,0 +1,78 @@
+module ori.math
+
+public sign(n: int) -> int
+    if n < 0
+        return -1
+    end
+    if n > 0
+        return 1
+    end
+    return 0
+end
+
+public approx_eq(a: float, b: float, eps: float) -> bool
+    const diff: float = a - b
+    if diff < 0.0
+        return -diff <= eps
+    end
+    return diff <= eps
+end
+
+public clamp_int(value: int, min_val: int, max_val: int) -> int
+    return ori.math.clamp(value, min_val, max_val)
+end
+
+public lerp(a: float, b: float, t: float) -> float
+    return a + (b - a) * t
+end
+
+public deg_to_rad(degrees: float) -> float
+    return degrees * 3.141592653589793 / 180.0
+end
+
+public rad_to_deg(radians: float) -> float
+    return radians * 180.0 / 3.141592653589793
+end
+
+public trunc_float(value: float) -> float
+    return ori.math.trunc(value)
+end
+
+public abs_float(value: float) -> float
+    if value < 0.0
+        return -value
+    end
+    return value
+end
+
+public clamp_float(value: float, min_val: float, max_val: float) -> float
+    if value < min_val
+        return min_val
+    end
+    if value > max_val
+        return max_val
+    end
+    return value
+end
+
+public hypot(a: float, b: float) -> float
+    return ori.math.sqrt(a * a + b * b)
+end
+
+public lerp_float(a: float, b: float, t: float) -> float
+    return lerp(a, b, t)
+end
+
+public is_approx_zero(value: float) -> bool
+    return approx_eq(value, 0.0, 0.00001)
+end
+
+public sign_float(value: float) -> int
+    if value < 0.0
+        return -1
+    end
+    if value > 0.0
+        return 1
+    end
+    return 0
+end

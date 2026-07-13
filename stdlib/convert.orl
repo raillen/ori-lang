@@ -1,0 +1,25 @@
+module ori.convert
+
+public parse_int_or(s: string, default: int) -> int
+    if some(n) = ori.convert.string_to_int(s)
+        return n
+    end
+    return default
+end
+
+public parse_float_or(s: string, default: float) -> float
+    if some(f) = ori.convert.string_to_float(s)
+        return f
+    end
+    return default
+end
+
+public parse_bool_or(s: string, default: bool) -> bool
+    if s == "true"
+        return true
+    end
+    if s == "false"
+        return false
+    end
+    return default
+end

@@ -77,27 +77,24 @@ código interno/testes podem ainda tocar `.utils`; **exemplos e guias não**.
 
 ---
 
-## Plano de implementação de código (após docs)
+## Plano de implementação de código
 
-| Fase | Trabalho |
-|------|----------|
-| **M2.1** | Inventário pai vs utils vs algorithms + lista de duplicatas |
-| **M2.2** | Lote 1: `fs` (dedup pai/utils), alinhar `io`/`time`/`net` se overlap |
-| **M2.3** | Fix residual `path.relative` sequencial (ignored) |
-| **M2.4** | Lote 2: string/list/map já flat — só limpar leftovers |
-| **M2.5** | Lote 3: collections (queue/stack/…) — pais flat ou reexport |
-| **M2.6** | Atualizar testes que só usam `.utils` onde o pai já cobre; manter 1–2 testes de **compat** |
+| Fase | Trabalho | Status |
+|------|----------|--------|
+| **M2.1–2.6** | Pais `ori.X` + utils/algorithms compat + testes | ✅ |
+| **path.relative** | multi-call un-ignored | ✅ |
+| **layout** | Cargo em `compiler/`; examples mini-projetos; `_archive/` | ✅ |
+| **result-ctors** | `ok`/`err` | ✅ |
 
 ---
 
-## Critério de pronto M2 (docs desta fatia)
+## Critério de pronto M2
 
-- [x] Este arquivo de política
-- [x] `stdlib/README.md` alinhado
-- [x] Spec cap. 12 resumindo a política
-- [x] `PENDENTES.md` M2 com ordem e decisão
-- [x] Exemplos sem ensinar `.utils` como estilo preferido
-- [ ] Merge físico de arquivos (código — **próxima** fatia)
+- [x] Política + README + spec
+- [x] Pais `stdlib/X.orl` para domínios com helpers
+- [x] Compat `ori.X.utils` / `algorithms`
+- [x] Exemplos como projetos
+- [x] Suíte stdlib/flatten/official examples
 
 ---
 
@@ -106,3 +103,4 @@ código interno/testes podem ainda tocar `.utils`; **exemplos e guias não**.
 | Data | Evento |
 |------|--------|
 | 2026-07-13 | Recomendação D+A/B aceita; alias silencioso; docs primeiro; exemplos no estilo `ori.X` |
+| 2026-07-13 | **M2 fechado** — merge pais + layout monorepo + examples + path.relative |

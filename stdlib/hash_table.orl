@@ -1,0 +1,35 @@
+module ori.hash_table
+
+import ori.map = maps
+
+public get_or_string_int(table: ori.hash_table.HashTable[string, int], key: string, fallback: int) -> int
+    if some(value) = ori.hash_table.get(table, key)
+        return value
+    end
+    return fallback
+end
+
+public set_if_absent_string_int(table: ori.hash_table.HashTable[string, int], key: string, value: int) -> bool
+    if ori.hash_table.contains(table, key)
+        return false
+    end
+    ori.hash_table.set(table, key, value)
+    return true
+end
+
+public from_map_string_int(source: map[string, int]) -> ori.hash_table.HashTable[string, int]
+    const entries: list[tuple[string, int]] = maps.entries(source)
+    return ori.hash_table.from_entries(entries)
+end
+
+public key_count_string_int(table: ori.hash_table.HashTable[string, int]) -> int
+    return ori.hash_table.len(table)
+end
+
+public is_empty_string_int(table: ori.hash_table.HashTable[string, int]) -> bool
+    return ori.hash_table.is_empty(table)
+end
+
+public keys_string_int(table: ori.hash_table.HashTable[string, int]) -> list[string]
+    return ori.hash_table.keys(table)
+end

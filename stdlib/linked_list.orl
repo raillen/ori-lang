@@ -1,0 +1,23 @@
+module ori.linked_list
+
+import ori.list = lists
+
+public from_list[T](items: list[T]) -> ori.linked_list.LinkedList[T]
+    var node: ori.linked_list.LinkedList[T] = ori.linked_list.new()
+    var i: int = 0
+    const n: int = lists.len(items)
+    while i < n
+        if some(item) = lists.try_get(items, i)
+            ori.linked_list.push_back(node, item)
+        end
+        i = i + 1
+    end
+    return node
+end
+
+public front_or[T](node: ori.linked_list.LinkedList[T], fallback: T) -> T
+    if some(value) = ori.linked_list.front(node)
+        return value
+    end
+    return fallback
+end

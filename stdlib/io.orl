@@ -40,14 +40,3 @@ public write_text(output: ori.io.Output, text: string) -> result[int, string]
     return ori.io.write(output, str.to_bytes(text))
 end
 
-public flush(output: ori.io.Output) -> result[void, string]
-    return ori.io.flush(output)
-end
-
-public close_input(input: ori.io.Input)
-    ori.io.close_input(input)
-end
-
-public close_output(output: ori.io.Output)
-    ori.io.close_output(output)
-end

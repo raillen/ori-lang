@@ -1,0 +1,27 @@
+module ori.queue
+
+import ori.list = lists
+
+public from_list[T](items: list[T]) -> ori.queue.Queue[T]
+    var q: ori.queue.Queue[T] = ori.queue.new()
+    var i: int = 0
+    const n: int = lists.len(items)
+    while i < n
+        if some(item) = lists.try_get(items, i)
+            ori.queue.enqueue(q, item)
+        end
+        i = i + 1
+    end
+    return q
+end
+
+public peek_or[T](q: ori.queue.Queue[T], fallback: T) -> T
+    if some(value) = ori.queue.peek(q)
+        return value
+    end
+    return fallback
+end
+
+public drain_count[T](q: ori.queue.Queue[T]) -> int
+    return ori.queue.len(q)
+end

@@ -1,0 +1,17 @@
+module ori.format
+
+public number_with(value: float, decimals: int) -> string
+    return ori.format.number(value, decimals)
+end
+
+public number_int(value: int) -> string
+    return ori.format.number(float(value), 0)
+end
+
+public percent_with(value: float, decimals: int) -> string
+    return ori.format.percent(value, decimals)
+end
+
+public bytes_size_unit(value: int, unit: string) -> string
+    return ori.format.bytes_size(value, unit)
+end

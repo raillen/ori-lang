@@ -1,0 +1,27 @@
+module ori.process
+
+import ori.convert = conv
+import ori.map = maps
+
+public exit_code(capture: map[string, string]) -> int
+    if some(raw) = maps.try_get(capture, "status")
+        if some(code) = conv.string_to_int(raw)
+            return code
+        end
+    end
+    return -1
+end
+
+public stdout(capture: map[string, string]) -> string
+    if some(out) = maps.try_get(capture, "stdout")
+        return out
+    end
+    return ""
+end
+
+public stderr(capture: map[string, string]) -> string
+    if some(out) = maps.try_get(capture, "stderr")
+        return out
+    end
+    return ""
+end

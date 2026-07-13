@@ -59,3 +59,48 @@ end
 public sleep_duration(duration: Duration)
     ori.time.sleep(duration.millis)
 end
+
+-- M2: merged helpers
+
+public milliseconds(n: int) -> int
+    return n
+end
+
+public seconds(n: int) -> int
+    return n * 1000
+end
+
+public minutes(n: int) -> int
+    return n * 60 * 1000
+end
+
+public hours(n: int) -> int
+    return n * 60 * 60 * 1000
+end
+
+public since(start: int) -> int
+    return ori.time.now() - start
+end
+
+public until(target: int) -> int
+    return target - ori.time.now()
+end
+
+public diff(a: int, b: int) -> int
+    if a >= b
+        return a - b
+    end
+    return b - a
+end
+
+public from_unix_ms(ts: int) -> int
+    return ts
+end
+
+public to_unix_ms(at: int) -> int
+    return at
+end
+
+public sleep_ms(duration: int)
+    ori.time.sleep(duration)
+end

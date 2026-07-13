@@ -1247,7 +1247,7 @@ end
             "vendor/ori-game/src/main.orl"
         )));
         assert!(!should_skip_path(Path::new("stdlib/list.orl")));
-        assert!(!should_skip_path(Path::new("examples/hello_world.orl")));
+        assert!(!should_skip_path(Path::new("examples/hello_world/main.orl")));
         assert!(!should_skip_path(Path::new(
             "packages/other-lib/src/main.orl"
         )));

@@ -28,13 +28,13 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 
 | # | Item | Ordem | Notas |
 |---|------|-------|--------|
-| **M2** | **Stdlib** + **layout** + **surface result** | **1º** | Merge: [`stdlib-merge-policy.md`](stdlib-merge-policy.md). Layout: [`repo-and-project-layout.md`](repo-and-project-layout.md). **M2.result-ctors:** `success`/`error` → **`ok`/`err`** ([`result-ctors-ok-err.md`](result-ctors-ok-err.md)) |
+| **M2** | **Stdlib** + **layout** + **surface result** | **✅ fechado** | Pais `ori.X`; utils compat; path.relative; examples projetos; Cargo `compiler/`; `ok`/`err` |
 | **M3** | **ABI estável** documentada | **2º** | Após integração das funcionalidades finais (não congelar cedo) |
 | **M1** | **Independência do Rust para usuário final** | **3º** | Depois de M2+M3: smoke sem Rust, SystemLinker/JIT, CI `smoke-no-rust` |
 | **M4** | Self-hosting | **última** discussão de linguagem | Só depois de tudo o resto já funcional |
 
 > **Ordem acordada (2026-07-13):** **M2 → M3 → M1 → M4**.  
-> **M2 inclui:** (1) mesclagem stdlib `ori.X`, (2) layout monorepo/projetos, (3) **`success`/`error` → `ok`/`err`** ([`result-ctors-ok-err.md`](result-ctors-ok-err.md)).
+> **M2 fechado.** Próximo: **M3 ABI**.
 
 ### Explicitamente fora da fila agora
 

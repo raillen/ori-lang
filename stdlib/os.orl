@@ -1,0 +1,45 @@
+module ori.os
+
+import ori.string = su
+
+public env_or(name: string, fallback: string) -> string
+    if some(value) = ori.os.env(name)
+        return value
+    end
+    return fallback
+end
+
+public has_env(name: string) -> bool
+    if some(_) = ori.os.env(name)
+        return true
+    end
+    return false
+end
+
+public is_windows() -> bool
+    const p: string = ori.os.platform()
+    return su.has_prefix(p, "windows")
+end
+
+public is_linux() -> bool
+    const p: string = ori.os.platform()
+    return su.has_prefix(p, "linux")
+end
+
+public is_macos() -> bool
+    const p: string = ori.os.platform()
+    if su.has_prefix(p, "macos")
+        return true
+    end
+    return su.has_prefix(p, "darwin")
+end
+
+public current_dir_or(fallback: string) -> string
+    match ori.os.current_dir()
+        case ok(path):
+            return path
+        case err(_):
+            return fallback
+    end
+    return fallback
+end

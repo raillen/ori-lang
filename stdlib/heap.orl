@@ -1,0 +1,27 @@
+module ori.heap
+
+public from_list_int(items: list[int]) -> ori.heap.Heap[int]
+    return ori.heap.from_list(items)
+end
+
+public peek_or_int(h: ori.heap.Heap[int], fallback: int) -> int
+    if some(value) = ori.heap.peek(h)
+        return value
+    end
+    return fallback
+end
+
+public pop_or_int(h: ori.heap.Heap[int], fallback: int) -> int
+    if some(value) = ori.heap.pop(h)
+        return value
+    end
+    return fallback
+end
+
+public into_sorted_int(h: ori.heap.Heap[int]) -> list[int]
+    return ori.heap.into_sorted_list(h)
+end
+
+public is_singleton_int(h: ori.heap.Heap[int]) -> bool
+    return ori.heap.len(h) == 1
+end

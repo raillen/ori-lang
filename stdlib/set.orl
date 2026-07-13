@@ -1,0 +1,62 @@
+module ori.set
+
+public contains_all(s: set[string], items: list[string]) -> bool
+    for item in items
+        if not ori.set.contains(s, item)
+            return false
+        end
+    end
+    return true
+end
+
+public from_list(items: list[string]) -> set[string]
+    var out: set[string] = ori.set.new()
+    for item in items
+        ori.set.add(out, item)
+    end
+    return out
+end
+
+public is_subset(subset: set[string], superset: set[string]) -> bool
+    const items: list[string] = ori.set.to_list(subset)
+    return contains_all(superset, items)
+end
+
+public contains_all_int(s: set[int], items: list[int]) -> bool
+    for item in items
+        if not ori.set.contains(s, item)
+            return false
+        end
+    end
+    return true
+end
+
+public union_string(a: set[string], b: set[string]) -> set[string]
+    return ori.set.union(a, b)
+end
+
+public intersection_string(a: set[string], b: set[string]) -> set[string]
+    return ori.set.intersection(a, b)
+end
+
+public difference_string(a: set[string], b: set[string]) -> set[string]
+    return ori.set.difference(a, b)
+end
+
+public intersection_size_string(a: set[string], b: set[string]) -> int
+    const inter: set[string] = ori.set.intersection(a, b)
+    return ori.set.len(inter)
+end
+
+public is_disjoint_string(a: set[string], b: set[string]) -> bool
+    const inter: set[string] = ori.set.intersection(a, b)
+    return ori.set.is_empty(inter)
+end
+
+public union_int(a: set[int], b: set[int]) -> set[int]
+    return ori.set.union(a, b)
+end
+
+public intersection_int(a: set[int], b: set[int]) -> set[int]
+    return ori.set.intersection(a, b)
+end

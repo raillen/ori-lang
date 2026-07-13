@@ -1,0 +1,24 @@
+module ori.json
+
+import ori.fs = fs
+import ori.string = str
+
+public read(file_path: string) -> result[ori.json.Value, string]
+    match fs.read_text(file_path)
+        case ok(text):
+            return ori.json.parse(text)
+        case err(_):
+            return err("failed to read json file")
+    end
+    return err("failed to read json file")
+end
+
+public write(file_path: string, value: ori.json.Value) -> result[string, string]
+    const text: string = ori.json.stringify(value)
+    return fs.write_text(file_path, text)
+end
+
+public write_pretty(file_path: string, value: ori.json.Value) -> result[string, string]
+    const text: string = ori.json.stringify_pretty(value)
+    return fs.write_text(file_path, text)
+end

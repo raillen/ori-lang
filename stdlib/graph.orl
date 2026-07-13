@@ -1,0 +1,92 @@
+module ori.graph
+
+import ori.queue = queue
+import ori.set = sets
+
+public has_path(g: ori.graph.Graph[string], start: string, goal: string) -> bool
+    if start == goal
+        return true
+    end
+    if not ori.graph.has_node(g, start)
+        return false
+    end
+    if not ori.graph.has_node(g, goal)
+        return false
+    end
+    var visited: set[string] = sets.new()
+    var frontier: queue.Queue[string] = queue.new()
+    queue.enqueue(frontier, start)
+    sets.add(visited, start)
+    while not queue.is_empty(frontier)
+        if some(cur) = queue.dequeue(frontier)
+            if cur == goal
+                return true
+            end
+            const neighbors: list[string] = ori.graph.neighbors(g, cur)
+            for next in neighbors
+                if not sets.contains(visited, next)
+                    sets.add(visited, next)
+                    queue.enqueue(frontier, next)
+                end
+            end
+        end
+    end
+    return false
+end
+
+public reachable_count(g: ori.graph.Graph[string], start: string) -> int
+    if not ori.graph.has_node(g, start)
+        return 0
+    end
+    var visited: set[string] = sets.new()
+    var frontier: queue.Queue[string] = queue.new()
+    queue.enqueue(frontier, start)
+    sets.add(visited, start)
+    while not queue.is_empty(frontier)
+        if some(cur) = queue.dequeue(frontier)
+            const neighbors: list[string] = ori.graph.neighbors(g, cur)
+            for next in neighbors
+                if not sets.contains(visited, next)
+                    sets.add(visited, next)
+                    queue.enqueue(frontier, next)
+                end
+            end
+        end
+    end
+    return sets.len(visited)
+end
+
+public is_reachable(g: ori.graph.Graph[string], start: string, goal: string) -> bool
+    return has_path(g, start, goal)
+end
+
+public has_path_int(g: ori.graph.Graph[int], start: int, goal: int) -> bool
+    if start == goal
+        return true
+    end
+    if not ori.graph.has_node(g, start)
+        return false
+    end
+    if not ori.graph.has_node(g, goal)
+        return false
+    end
+    var visited: set[int] = sets.new()
+    var frontier: queue.Queue[int] = queue.new()
+    queue.enqueue(frontier, start)
+    sets.add(visited, start)
+    while not queue.is_empty(frontier)
+        if some(cur) = queue.dequeue(frontier)
+            if cur == goal
+                return true
+            end
+            const neighbors: list[int] = ori.graph.neighbors(g, cur)
+            for next in neighbors
+                if not sets.contains(visited, next)
+                    sets.add(visited, next)
+                    queue.enqueue(frontier, next)
+                end
+            end
+        end
+    end
+    return false
+end

@@ -1,0 +1,99 @@
+module ori.bytes
+
+import ori.string = str
+
+public is_empty(b: bytes) -> bool
+    return ori.bytes.len(b) == 0
+end
+
+public equals(a: bytes, b: bytes) -> bool
+    const a_len: int = ori.bytes.len(a)
+    if a_len != ori.bytes.len(b)
+        return false
+    end
+    var i: int = 0
+    while i < a_len
+        if ori.bytes.get(a, i) != ori.bytes.get(b, i)
+            return false
+        end
+        i = i + 1
+    end
+    return true
+end
+
+public from_hex_or(hex: string, fallback: bytes) -> bytes
+    return ori.bytes.from_hex(hex).or(fallback)
+end
+
+public empty_bytes() -> bytes
+    return str.to_bytes("")
+end
+
+public join(left: bytes, right: bytes) -> bytes
+    return ori.bytes.concat(left, right)
+end
+
+public starts_with(value: bytes, prefix: bytes) -> bool
+    const prefix_len: int = ori.bytes.len(prefix)
+    if ori.bytes.len(value) < prefix_len
+        return false
+    end
+    var i: int = 0
+    while i < prefix_len
+        if ori.bytes.get(value, i) != ori.bytes.get(prefix, i)
+            return false
+        end
+        i = i + 1
+    end
+    return true
+end
+
+public ends_with(value: bytes, suffix: bytes) -> bool
+    const suffix_len: int = ori.bytes.len(suffix)
+    const value_len: int = ori.bytes.len(value)
+    if value_len < suffix_len
+        return false
+    end
+    const offset: int = value_len - suffix_len
+    var i: int = 0
+    while i < suffix_len
+        if ori.bytes.get(value, offset + i) != ori.bytes.get(suffix, i)
+            return false
+        end
+        i = i + 1
+    end
+    return true
+end
+
+public contains(value: bytes, part: bytes) -> bool
+    const part_len: int = ori.bytes.len(part)
+    if part_len == 0
+        return true
+    end
+    const value_len: int = ori.bytes.len(value)
+    var pos: int = 0
+    while pos + part_len <= value_len
+        var matched: bool = true
+        var i: int = 0
+        while i < part_len
+            if ori.bytes.get(value, pos + i) != ori.bytes.get(part, i)
+                matched = false
+                break
+            end
+            i = i + 1
+        end
+        if matched
+            return true
+        end
+        pos = pos + 1
+    end
+    return false
+end
+
+public from_list(values: list[int]) -> bytes
+    return ori.bytes.from_list(values)
+end
+
+public to_list(value: bytes) -> list[int]
+    return ori.bytes.to_list(value)
+end

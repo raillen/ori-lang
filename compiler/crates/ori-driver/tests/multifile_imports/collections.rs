@@ -1893,7 +1893,7 @@ main()
         "meta": null
     }"""
     match json.parse(input)
-    case success(val):
+    case ok(val):
         match val
         case Object(fields):
             match maps.get(fields, "name")
@@ -1943,7 +1943,7 @@ main()
         case else:
             io.println("not object")
         end
-    case error(err):
+    case err(err):
         io.println(err)
     end
 end

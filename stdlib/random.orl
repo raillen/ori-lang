@@ -1,0 +1,33 @@
+module ori.random
+
+import ori.list = lists
+
+public int_range(min_val: int, max_val: int) -> int
+    return ori.random.int(min_val, max_val)
+end
+
+public float_range(min_val: float, max_val: float) -> float
+    return ori.random.float(min_val, max_val)
+end
+
+public coin() -> bool
+    return ori.random.bool()
+end
+
+public pick[T](items: list[T]) -> optional[T]
+    return ori.random.choice(items)
+end
+
+public seeded_int(seed: int, min_val: int, max_val: int) -> int
+    ori.random.seed(seed)
+    return ori.random.int(min_val, max_val)
+end
+
+public seeded_pick[T](seed: int, items: list[T]) -> optional[T]
+    ori.random.seed(seed)
+    return ori.random.choice(items)
+end
+
+public is_empty_choice[T](items: list[T]) -> bool
+    return lists.len(items) == 0
+end

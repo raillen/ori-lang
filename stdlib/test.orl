@@ -1,0 +1,25 @@
+module ori.test
+
+public is_true(value: bool)
+    ori.test.assert(value, "expected true")
+end
+
+public is_false(value: bool)
+    ori.test.assert(not value, "expected false")
+end
+
+public equal_int(actual: int, expected: int)
+    ori.test.assert_eq(actual, expected)
+end
+
+public equal_text(actual: string, expected: string)
+    ori.test.assert_eq(actual, expected)
+end
+
+public not_equal_int(actual: int, expected: int)
+    ori.test.assert_ne(actual, expected)
+end
+
+public not_equal_text(actual: string, expected: string)
+    ori.test.assert_ne(actual, expected)
+end

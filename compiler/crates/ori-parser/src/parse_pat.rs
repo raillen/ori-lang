@@ -29,22 +29,23 @@ impl<'src> Parser<'src> {
                 Some(Pattern::Some(Box::new(inner), span.cover(end)))
             }
 
-            // `ok(pat)` — result success pattern
-            TokenKind::OkKw => {
+            // Soft keywords: `ok(pat)` / `err(pat)` when Ident is followed by `(`.
+            TokenKind::Ident
+                if {
+                    let s = self.slice(span);
+                    (s == "ok" || s == "err") && self.peek_nth_kind(1) == Some(&TokenKind::LParen)
+                } =>
+            {
+                let is_ok = self.slice(span) == "ok";
                 self.advance();
                 self.expect(&TokenKind::LParen)?;
                 let inner = self.parse_pattern()?;
                 let end = self.expect(&TokenKind::RParen)?;
-                Some(Pattern::Ok(Box::new(inner), span.cover(end)))
-            }
-
-            // `err(pat)` — result failure pattern
-            TokenKind::ErrKw => {
-                self.advance();
-                self.expect(&TokenKind::LParen)?;
-                let inner = self.parse_pattern()?;
-                let end = self.expect(&TokenKind::RParen)?;
-                Some(Pattern::Err(Box::new(inner), span.cover(end)))
+                if is_ok {
+                    Some(Pattern::Ok(Box::new(inner), span.cover(end)))
+                } else {
+                    Some(Pattern::Err(Box::new(inner), span.cover(end)))
+                }
             }
 
             // Removed: `success(...)` / `error(...)` patterns

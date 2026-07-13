@@ -1,0 +1,41 @@
+module ori.deque
+
+import ori.list = lists
+
+public from_list[T](items: list[T]) -> ori.deque.Deque[T]
+    var d: ori.deque.Deque[T] = ori.deque.new()
+    var i: int = 0
+    const n: int = lists.len(items)
+    while i < n
+        if some(item) = lists.try_get(items, i)
+            ori.deque.push_back(d, item)
+        end
+        i = i + 1
+    end
+    return d
+end
+
+public front_or[T](d: ori.deque.Deque[T], fallback: T) -> T
+    if some(value) = ori.deque.front(d)
+        return value
+    end
+    return fallback
+end
+
+public back_or[T](d: ori.deque.Deque[T], fallback: T) -> T
+    if some(value) = ori.deque.back(d)
+        return value
+    end
+    return fallback
+end
+
+public push_all[T](d: ori.deque.Deque[T], items: list[T])
+    var i: int = 0
+    const n: int = lists.len(items)
+    while i < n
+        if some(item) = lists.try_get(items, i)
+            ori.deque.push_back(d, item)
+        end
+        i = i + 1
+    end
+end

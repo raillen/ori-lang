@@ -1,0 +1,66 @@
+module ori.tree
+
+import ori.list = lists
+
+public is_leaf[T](t: ori.tree.Tree[T], node: ori.tree.NodeId) -> bool
+    const kids: list[ori.tree.NodeId] = ori.tree.children(t, node)
+    return lists.is_empty(kids)
+end
+
+public values_preorder[T](t: ori.tree.Tree[T]) -> list[T]
+    var out: list[T] = []
+    var stack: list[ori.tree.NodeId] = [ori.tree.root(t)]
+    while not lists.is_empty(stack)
+        if some(node) = lists.try_pop(stack)
+            lists.push(out, ori.tree.value(t, node))
+            const kids: list[ori.tree.NodeId] = ori.tree.children(t, node)
+            var i: int = lists.len(kids) - 1
+            while i >= 0
+                if some(child) = lists.try_get(kids, i)
+                    lists.push(stack, child)
+                end
+                i = i - 1
+            end
+        end
+    end
+    return out
+end
+
+public leaf_count[T](t: ori.tree.Tree[T]) -> int
+    var n: int = 0
+    var stack: list[ori.tree.NodeId] = [ori.tree.root(t)]
+    while not lists.is_empty(stack)
+        if some(node) = lists.try_pop(stack)
+            if is_leaf(t, node)
+                n = n + 1
+            else
+                const kids: list[ori.tree.NodeId] = ori.tree.children(t, node)
+                for child in kids
+                    lists.push(stack, child)
+                end
+            end
+        end
+    end
+    return n
+end
+
+public max_depth_from[T](t: ori.tree.Tree[T], node: ori.tree.NodeId) -> int
+    var deepest: int = 0
+    var stack: list[ori.tree.NodeId] = [node]
+    var depths: list[int] = [0]
+    while not lists.is_empty(stack)
+        if some(cur) = lists.try_pop(stack)
+            if some(d) = lists.try_pop(depths)
+                if d > deepest
+                    deepest = d
+                end
+                const kids: list[ori.tree.NodeId] = ori.tree.children(t, cur)
+                for child in kids
+                    lists.push(stack, child)
+                    lists.push(depths, d + 1)
+                end
+            end
+        end
+    end
+    return deepest
+end

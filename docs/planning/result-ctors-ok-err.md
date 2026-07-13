@@ -19,6 +19,8 @@ Tipo continua **`result[T, E]`** (não muda).
 
 Alinhamento mental: Rust `Ok`/`Err`, Go-style curto, menos colisão semântica com a palavra “error” de diagnóstico.
 
+**Soft keywords:** `ok`/`err` só são especiais quando seguidos de `(` (construtor/padrão). Bindings como `const err: T = ...` e `case ok(ok):` continuam válidos.
+
 ---
 
 ## É fácil?
