@@ -14650,8 +14650,10 @@ fn link_with_system_linker(
         cmd.arg("-o").arg(exe_path);
     }
 
-    // `cc`/`gcc` as link driver: let the driver supply CRT + multiarch `-lc`.
-    // Manual crt1/crti/crtn + -dynamic-linker is for bare `ld`/`mold`/`ld.lld`.
+    // `cc`/`gcc` as link driver: supply multiarch `-L` explicitly (GHA runners
+    // have broken default search for `-lc` even for `/usr/bin/cc`), but skip
+    // manual CRT objects / -dynamic-linker (the driver owns those).
+    // Bare `ld`/`mold`/`ld.lld` need full CRT + -dynamic-linker.
     if !cc_driver {
         if let Some(dl) = dynamic_linker {
             cmd.arg("-dynamic-linker").arg(dl);
@@ -14660,20 +14662,24 @@ fn link_with_system_linker(
     for arg in extra_args {
         cmd.arg(arg);
     }
+    for dir in lib_dirs {
+        if cfg!(windows) {
+            cmd.arg(format!("/LIBPATH:{}", dir.display()));
+        } else {
+            cmd.arg(format!("-L{}", dir.display()));
+        }
+    }
+    if cfg!(target_os = "linux") {
+        for extra in linux_multiarch_lib_dirs() {
+            cmd.arg(format!("-L{extra}"));
+        }
+        // Also ask the C driver where libc actually lives (more reliable than
+        // hard-coded multiarch paths on odd images).
+        for dir in linux_cc_library_dirs(linker) {
+            cmd.arg(format!("-L{}", dir.display()));
+        }
+    }
     if !cc_driver {
-        for dir in lib_dirs {
-            if cfg!(windows) {
-                cmd.arg(format!("/LIBPATH:{}", dir.display()));
-            } else {
-                cmd.arg(format!("-L{}", dir.display()));
-            }
-        }
-        // Bare `ld` on Debian/Ubuntu multiarch often needs these for `-lc`.
-        if cfg!(target_os = "linux") {
-            for extra in linux_multiarch_lib_dirs() {
-                cmd.arg(format!("-L{extra}"));
-            }
-        }
         for crt in crt_pre {
             cmd.arg(crt);
         }
@@ -14688,7 +14694,6 @@ fn link_with_system_linker(
             if cc_driver && (s == "-lc" || s == "-no-pie") {
                 continue;
             }
-            // Avoid PathBuf turning flags into relative paths on some platforms.
             cmd.arg(s.as_ref());
         } else {
             cmd.arg(lib);
@@ -14735,6 +14740,56 @@ fn linux_multiarch_lib_dirs() -> Vec<&'static str> {
     .into_iter()
     .filter(|p| Path::new(p).is_dir())
     .collect()
+}
+
+/// Library directories reported by the C compiler (`cc -print-search-dirs` and
+/// the directory of `cc -print-file-name=libc.so`).
+fn linux_cc_library_dirs(cc: &Path) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Ok(output) = std::process::Command::new(cc)
+        .arg("-print-file-name=libc.so")
+        .output()
+    {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !path.is_empty() && path != "libc.so" {
+                let p = PathBuf::from(&path);
+                if let Some(parent) = p.parent() {
+                    if parent.is_dir() {
+                        dirs.push(parent.to_path_buf());
+                    }
+                }
+                // Also resolve `../x86_64-linux-gnu` relative to gcc lib dirs.
+                if let Some(grand) = Path::new(&path).parent().and_then(|p| p.parent()) {
+                    let multi = grand.join("x86_64-linux-gnu");
+                    if multi.is_dir() {
+                        dirs.push(multi);
+                    }
+                }
+            }
+        }
+    }
+    if let Ok(output) = std::process::Command::new(cc)
+        .arg("-print-search-dirs")
+        .output()
+    {
+        if output.status.success() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            for line in text.lines() {
+                if let Some(rest) = line.strip_prefix("libraries: =") {
+                    for part in rest.split(':') {
+                        let p = PathBuf::from(part);
+                        if p.is_dir() {
+                            dirs.push(p);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    dirs.sort();
+    dirs.dedup();
+    dirs
 }
 
 fn link_with_raw_native_command(
