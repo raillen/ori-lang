@@ -12,6 +12,15 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Notas
 - Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package + M1/M3/stdlib = **`[0.3.2]`**.
+- **Foco de produto:** linguagem + docs/exemplos + performance + DX local.
+  Distribuição multi-OS e publicação em lojas de extensão **adiadas**.
+
+### Adicionado (editor DX local)
+- **VS Code extension `0.3.2`:** discovery de `ori`/`ori-lsp` em
+  `compiler/target/{debug,release}`; setting `ori.useAot`; install local via
+  `.vsix` apenas (sem Marketplace). README alinhado ao monorepo.
+- **Zed extension** `extensions/zed-ori`: linguagem `.orl` + discovery de
+  `ori-lsp` no PATH; install como **dev extension** (sem store).
 
 ### Adicionado / refatorado (exemplos P1–P4)
 - **Catálogo enxuto (21 mini-projetos):** removidos/fundidos duplicatas
@@ -24,9 +33,114 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Polidos:** `collections_demo` (tour único), `language_features`,
   `native_showcase` (`Displayable` via `ori.core`), `async_demo`, `cli_args`.
 - **`examples/README.md`:** trilha de aprendizado + catálogo alinhado.
-- **Smoke/release:** `tools/smoke_native_release.*` passam a usar
-  `examples/hello` (em vez de `hello_world` removido).
+- **Smoke/release:** `tools/smoke_native_release.*` usam `examples/hello`
+  (em vez de `hello_world` removido).
 
+### Corrigido (linguagem / exemplos)
+- **TLS / rustls:** enable feature `ring` + install default
+  `CryptoProvider` so `connect_tls` / `http.get_tls` no longer panic at
+  process start. Example `examples/http_get` runs again.
+
+### Performance (LANG-PERF)
+- **Cranelift product flags:** disable IR verifier; AOT `opt_level=speed`;
+  JIT `opt_level=none` for faster `ori run` lower.
+- **Default AOT linker:** prefer **BundledRustLld** when packaged/discovered
+  (`runtime/bin/rust-lld`), then SystemLinker, then rustc driver. Measured
+  `ori compile examples/hello` ~1.0 s (was ~2.5–4 s with system `ld`).
+  Force: `ORI_USE_SYSTEM_LINKER=1` / `ORI_USE_BUNDLED_RUST_LLD=1`.
+- Numbers: `docs/planning/perf-baseline-2026-07-13.md`.
+
+### Documentação (LANG-DOC — fechado como onda)
+- Tour EN/PT: trait `Displayable` com `import ori.core`, `string(value)`, seção
+  async; links para `examples/`.
+- Cookbook PT alinhado ao EN (args, config, fs, time, HTTP, streams, pipe).
+- Spec `01-overview` example: `ok`/`err` (não `success`/`error`).
+- Guides errors/first-project/testing/install + índices: snippets com `module`,
+  registry note, Zed + VS Code local, link a examples.
+- Root **README** EN/PT: layout `main.orl` (não `src/`), editores locais,
+  roadmap language-first, BACKLOG único, CLI package/registry atualizado.
+- `ori new` documentado sem pasta `docs/` obrigatória.
+
+### Adicionado (close-backlog Linux plan)
+- **Linux-only distribution:** `release.yml` packages/publishes
+  `x86_64-unknown-linux-gnu` only; Windows/macOS smoke jobs deferred
+  (`if: false` on multi-OS smoke). Policy in `BACKLOG.md` + `docs/install.md`.
+- **PKG-4:** `docs/planning/manifest-schema.md` + edge tests
+  (`package_manifest_rejects_git_and_path_together`,
+  `package_manifest_rejects_invalid_version`).
+- **FREEZE-1 / ABI-1:** freeze window opened 2026-07-13; ABI enforcement in
+  force (`ori-native-abi-1`, spec 19). Criteria:
+  `docs/planning/freeze-and-abi-gates.md`.
+- **STDLIB-4 MVP:** file async via L1 `fs.read_text_async` /
+  `write_text_async` (`compile_runs_async_fs_read_and_write_native`);
+  net offload via `*_in_background` + `task.run_blocking`.
+- **STDLIB-4b:** await-able net I/O via worker-thread `OriFuture` —
+  `net.connect_async` / `connect_tls_async` / `accept_async` /
+  `read_some_async` / `write_all_async`. Gate:
+  `compile_runs_net_connect_async_loopback`. Match pattern bindings now
+  persist into the async frame (fixes Connection null after nested
+  `await` / `match`).
+- **STDLIB-4k:** shared I/O reactor with Unix `poll(2)` readiness for
+  `accept_async` / `read_some_async` / `write_all_async` /
+  `udp_recv_from_async` / `udp_send_to_async` (one reactor thread,
+  multiplexed waits). Connect/TLS/FS async remain worker-backed.
+  Gate: `compile_runs_net_udp_async_loopback`.
+- **LANG-2 (closed):** C/debug real bodies for `string.*`, `io.eprint` /
+  `read_line`, `convert.*`, `len`; matrix flags +
+  `build_c_backend_compiles_convert_eprint_and_string_surface`. Prior
+  slice: open_input shadow fix; trait/Displayable C tests green.
+  C async remains **wontfix v1** (LANG-3).
+- **STDLIB-5:** closed as wontfix — no mass L1→.orl ports (Layer 1 by design).
+- **DOC-1:** `install.md` / `install.pt-BR.md` + tour links Linux-primary.
+- Design: `docs/planning/design-close-backlog-linux-2026-07-13.md`.
+
+### Adicionado (packages / language)
+- **PKG-1 / PKG-2 git dependencies:** declare
+  `dep = { git = "url", rev|tag|branch = "...", version = "..."? }` in
+  `ori.proj` or `ori.pkg.toml`. `ori get [path]` fetches into
+  `ORI_PACKAGE_CACHE` / `~/.ori/packages` (`git/<url>/<ref>/` checkout +
+  `name/version` layout). check/build auto-fetch git deps and resolve
+  version-only deps from cache. Tests: `package_git_dependency_fetches_and_resolves_during_check`,
+  `project_git_dependency_resolves_during_check_from_ori_proj`,
+  `package_version_dependency_resolves_from_cache_after_install`.
+- **PKG-3 registry + `ori publish`:** `ORI_REGISTRY` as directory or HTTP base;
+  file layout `packages/{name}/{version}/` + `versions.json` + tarball;
+  `ori publish <path> [--registry] [--force] [--token]`; `ori install name[@ver]`
+  from registry; version pins fetch on cache miss. Contract:
+  `docs/planning/registry-v1.md`. Tests: `package_registry_publish_install_and_resolve_on_check`,
+  `package_publish_refuses_overwrite_without_force`.
+- **LANG-1 async honesty:** promised native async subset treated as closed
+  (coverage in `concurrency_async.rs`). Spec `14-backend-support.md` documents
+  residual `backend.native_unsupported` as layout residual or non-async gaps;
+  negative test `compile_rejects_for_iterable_without_native_abi`.
+
+### Adicionado (stdlib)
+- **STDLIB-2 `ori.net.http`:** HTTP/1.1 helpers in `stdlib/net/http.orl` —
+  `build_request`, `parse_response`, `get`/`post`/`get_tls`/`get_plain` over
+  existing TCP/TLS. Tests: `check_accepts_http_parse_and_build_request`,
+  `compile_runs_http_get_loopback_native`. Example: `examples/http_get`.
+- **STDLIB-3 file stream adapters:** Layer 1 `ori.io.open_input` /
+  `open_output` (file-backed `Input`/`Output`); `using` accepts Input/Output
+  (dispose → `close_input`/`close_output`). Test:
+  `compile_runs_io_file_stream_adapters_native`.
+- **STDLIB-1 canonical parents:** public surface is **`ori.X` only**.
+  Layer-1 symbols and true Layer-2/3 helpers are imported via the parent path;
+  nested `ori.X.utils` / `ori.X.algorithms` remain **silent compat** (not taught).
+  Do **not** re-wrap same-named L1 entry points on the parent (shadowing breaks
+  arity / monomorphization). True L2 lifts that remain: e.g.
+  `ori.bytes.compare_lex` / `is_prefix_of` (from algorithms). Gate:
+  `compile_runs_stdlib_parent_canonical_no_utils_import`. Policy:
+  `docs/planning/stdlib-merge-policy.md`, `stdlib/README.md`.
+
+### Documentação
+- **Reorganização e padronização:** `docs/README.md` + `docs/README.pt-BR.md`
+  (política: EN primário no GitHub, PT paralelo); `docs/language/tour` EN/PT;
+  guias S3 atualizados (`first-project`, `cookbook`, `errors-null-void`,
+  `report-bugs`, `testing`); `install.md` EN + `install.pt-BR.md`; índices de
+  guides/planning; planos mortos em `planning/historico/`.
+- **Backlog único:** `docs/planning/BACKLOG.md` — única lista ativa do que falta
+  implementar (prioridade, dificuldade, dependências, waves). `PENDENTES`,
+  `uso-real`, `roadtov1` apontam para ela.
 
 ---
 

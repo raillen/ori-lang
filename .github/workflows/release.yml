@@ -1,7 +1,7 @@
 name: release
 
-# Builds native packages (Linux + Windows) and publishes a GitHub Release
-# when a version tag is pushed (e.g. v0.3.2).
+# Builds the **Linux** native package and publishes a GitHub Release on tag `v*`.
+# Windows/macOS packages are deferred (Linux-only product path — BACKLOG DIST-1/2).
 
 on:
   push:
@@ -18,20 +18,9 @@ permissions:
   contents: write
 
 jobs:
-  package:
-    name: package-${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            smoke: sh
-          - name: x86_64-pc-windows-msvc
-            os: windows-latest
-            smoke: powershell
-
+  package-linux:
+    name: package-x86_64-unknown-linux-gnu
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -43,114 +32,47 @@ jobs:
           rustc -Vv
           cargo -V
 
-      - name: Package (Unix)
-        if: matrix.smoke == 'sh'
+      - name: Package (Linux)
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential
           sh tools/package_native_release.sh \
-            --package-root "compiler/target/dist/ori-${{ matrix.name }}" \
-            --archive "compiler/target/dist/ori-${{ github.ref_name }}-${{ matrix.name }}.tar.gz" \
+            --package-root "compiler/target/dist/ori-x86_64-unknown-linux-gnu" \
+            --archive "compiler/target/dist/ori-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz" \
             --force
           ls -la compiler/target/dist/ || true
 
-      - name: Package (Windows)
-        if: matrix.smoke == 'powershell'
-        shell: pwsh
-        env:
-          ORI_REQUIRE_PACKAGED_RUNTIME: "1"
-        run: |
-          $ErrorActionPreference = "Stop"
-          $PSNativeCommandUseErrorActionPreference = $false
-          $root = $env:GITHUB_WORKSPACE
-          if (-not $root) { $root = (Get-Location).Path }
-          Write-Host "root=$root ps=$($PSVersionTable.PSVersion)"
-          rustc -Vv
-          cargo -V
-
-          $manifest = Join-Path $root "compiler\Cargo.toml"
-          Write-Host "Building release CLI..."
-          cargo --manifest-path $manifest build -p ori-driver -p ori-lsp --release
-          if ($LASTEXITCODE -ne 0) { throw "cargo build failed: $LASTEXITCODE" }
-
-          $hostTriple = "x86_64-pc-windows-msvc"
-          $pkg = Join-Path $root "compiler\target\dist\ori-$hostTriple"
-          $archive = Join-Path $root "compiler\target\dist\ori-${{ github.ref_name }}-$hostTriple.zip"
-          $runtimeDir = Join-Path $pkg "runtime"
-          $examplesDir = Join-Path $pkg "examples"
-          $stdlibDir = Join-Path $pkg "stdlib"
-          $oriExe = Join-Path $root "compiler\target\release\ori.exe"
-          $lspExe = Join-Path $root "compiler\target\release\ori-lsp.exe"
-
-          if (-not (Test-Path $oriExe)) { throw "missing $oriExe" }
-          if (-not (Test-Path $lspExe)) { throw "missing $lspExe" }
-
-          if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }
-          New-Item -ItemType Directory -Force -Path $examplesDir, $runtimeDir | Out-Null
-          Copy-Item $oriExe (Join-Path $pkg "ori.exe")
-          Copy-Item $lspExe (Join-Path $pkg "ori-lsp.exe")
-          Copy-Item (Join-Path $root "stdlib") $stdlibDir -Recurse
-          Copy-Item (Join-Path $root "examples\hello_world\main.orl") (Join-Path $examplesDir "hello_world.orl")
-
-          Write-Host "Staging runtime..."
-          & (Join-Path $root "tools\stage_native_runtime.ps1") -Target $hostTriple -Profile release -OutputRoot $runtimeDir
-          if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
-            # stage script may not set LASTEXITCODE on throw; rethrow if runtime missing
-          }
-          $staticLib = Join-Path $runtimeDir "$hostTriple\ori_runtime.lib"
-          if (-not (Test-Path $staticLib)) { throw "runtime not staged at $staticLib" }
-
-          Write-Host "Smoke compile hello_world..."
-          Push-Location $pkg
-          try {
-            & ".\ori.exe" compile "examples\hello_world.orl" --out "hello_world.exe"
-            if ($LASTEXITCODE -ne 0) { throw "ori compile failed: $LASTEXITCODE" }
-            $out = & ".\hello_world.exe"
-            if (($out -join "`n") -notmatch "The answer is: 42") { throw "unexpected hello output: $out" }
-            $jit = & ".\ori.exe" run "examples\hello_world.orl"
-            if (($jit -join "`n") -notmatch "The answer is: 42") { throw "unexpected jit output: $jit" }
-            & ".\ori.exe" doctor
-          } finally {
-            Pop-Location
-          }
-
-          if (Test-Path $archive) { Remove-Item $archive -Force }
-          Compress-Archive -Path $pkg -DestinationPath $archive -Force
-          Write-Host "archive=$archive size=$((Get-Item $archive).Length)"
+      # True smoke-no-rust (no rustc on PATH) lives in native-route.yml
+      # (smoke-no-rust-linux). This job already has Rust to *build* the package.
 
       - name: Upload package artifact
-        if: always() && matrix.smoke == 'powershell' || matrix.smoke == 'sh'
         uses: actions/upload-artifact@v4
         with:
-          name: ori-${{ matrix.name }}
+          name: ori-x86_64-unknown-linux-gnu
           path: |
-            compiler/target/dist/ori-*-${{ matrix.name }}.tar.gz
-            compiler/target/dist/ori-*-${{ matrix.name }}.zip
-            compiler/target/dist/ori-windows-package.log
-          if-no-files-found: warn
+            compiler/target/dist/ori-*-x86_64-unknown-linux-gnu.tar.gz
+          if-no-files-found: error
 
   publish:
     name: publish-release
-    needs: package
+    needs: package-linux
     runs-on: ubuntu-latest
-    # Publish even if one OS matrix leg fails (prefer partial release + fix follow-up).
-    if: always() && startsWith(github.ref, 'refs/tags/') && needs.package.result != 'cancelled'
+    if: always() && startsWith(github.ref, 'refs/tags/') && needs.package-linux.result == 'success'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all packages
+      - name: Download Linux package
         uses: actions/download-artifact@v4
         with:
+          name: ori-x86_64-unknown-linux-gnu
           path: dist
-          merge-multiple: true
-        continue-on-error: true
 
       - name: List assets
         run: find dist -type f -ls || true
 
-      - name: Require at least one package asset
+      - name: Require Linux package asset
         run: |
-          count=$(find dist -type f \( -name '*.tar.gz' -o -name '*.zip' \) | wc -l)
+          count=$(find dist -type f -name '*.tar.gz' | wc -l)
           echo "asset_count=$count"
           test "$count" -ge 1
 
@@ -160,19 +82,19 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Ori ${{ github.ref_name }}
           body: |
-            Ori **${{ github.ref_name }}** native packages.
+            Ori **${{ github.ref_name }}** native package (**Linux only**).
 
             - Linux: `ori-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz`
-            - Windows: `ori-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip`
 
-            Install notes: `docs/install.md`. ABI: `ori-native-abi-1`.
+            Windows/macOS release packages are deferred. See `docs/install.md` and
+            `docs/planning/BACKLOG.md` (DIST-1 / DIST-2).
+
+            ABI: `ori-native-abi-1`.
           prerelease: true
           fail_on_unmatched_files: false
           make_latest: true
           files: |
             dist/**/*.tar.gz
-            dist/**/*.zip
             dist/*.tar.gz
-            dist/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

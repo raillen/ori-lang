@@ -139,8 +139,10 @@ jobs:
         run: |
           sh tools/smoke_no_rust.sh --package-root ~/ori-smoke
 
+  # Deferred under Linux-only package policy (BACKLOG DIST-1).
   smoke-no-rust-windows:
     name: smoke-no-rust (windows-msvc)
+    if: false
     needs: native-route
     runs-on: windows-latest
     steps:
@@ -219,8 +221,10 @@ jobs:
           $env:ORI_REQUIRE_PACKAGED_RUNTIME = "1"
           & "$pkg\ori.exe" test $env:TEMP\test.orl
 
+  # Deferred under Linux-only package policy (BACKLOG DIST-2).
   smoke-no-rust-macos:
     name: smoke-no-rust (macos-x86_64)
+    if: false
     needs: native-route
     runs-on: macos-15-intel
     steps:
