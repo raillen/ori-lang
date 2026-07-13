@@ -1,7 +1,8 @@
 module ori.bytes.utils
 
 import ori.bytes = bytes_mod
-import ori.string = str
+
+-- Avoid importing ori.string: parent string.orl imports ori.bytes (cycle risk).
 
 public is_empty(b: bytes) -> bool
     return bytes_mod.len(b) == 0
@@ -27,7 +28,7 @@ public from_hex_or(hex: string, fallback: bytes) -> bytes
 end
 
 public empty_bytes() -> bytes
-    return str.to_bytes("")
+    return bytes_mod.from_list([])
 end
 
 public join(left: bytes, right: bytes) -> bytes

@@ -96,6 +96,18 @@ código interno/testes podem ainda tocar `.utils`; **exemplos e guias não**.
 - [x] Exemplos como projetos
 - [x] Suíte stdlib/flatten/official examples
 
+### Residual S3 1.3 / 2.4 — **fechado**
+
+| Item | Status |
+|------|--------|
+| Pais `ori.X` com helpers | ✅ |
+| Compat `utils` / `algorithms` (módulos legados) | ✅ |
+| “Alias silencioso” de **módulos** (import `ori.X.utils` ainda compila) | ✅ |
+| **`public alias` de tipos** nos pais (e espelho em utils) | ✅ `fs`/`io`/`net`/`json`/`config` |
+
+Aliases de domínio (ex.: `ori.fs.TextResult`, `ori.net.ConnectionResult`) —
+não renomear primitivos (`string` → `text` continua fora).
+
 ---
 
 ## Histórico
@@ -104,3 +116,5 @@ código interno/testes podem ainda tocar `.utils`; **exemplos e guias não**.
 |------|--------|
 | 2026-07-13 | Recomendação D+A/B aceita; alias silencioso; docs primeiro; exemplos no estilo `ori.X` |
 | 2026-07-13 | **M2 fechado** — merge pais + layout monorepo + examples + path.relative |
+| 2026-07-13 | Auditoria: type/`public alias` de domínio **não** implementados (residual) |
+| 2026-07-13 | Residual fechado: `public alias` em `fs`/`io`/`net`/`json`/`config` (+ utils) |

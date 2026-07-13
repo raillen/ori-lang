@@ -32,6 +32,24 @@ contrato publico:
 Mudancas nesses pontos devem ser documentadas no `CHANGELOG.md` e precisam de
 teste de regressao.
 
+## Contrato binario nativo (M3)
+
+O backend nativo documenta o ABI em [`19-abi.md`](19-abi.md) sob a tag
+**`ori-native-abi-1`** (`ORI_ABI_VERSION` no `ori-runtime`). Isso inclui:
+
+- layouts de primitivos, structs, enums (tag `i32`), `optional`/`result`/tuples;
+- header ARC (`OriHeapHeader`) e simbolos `ori_alloc` / `ori_arc_*`;
+- layouts de colecoes runtime (`OriList`, `OriMap`, `OriSet`, …);
+- mangling `ORI__*` e export de `main`;
+- checagem de `abi_version` no `runtime-link.json`.
+
+Mudanca **incompativel** com runtimes ja staged exige bump de
+`ori-native-abi-N`, atualizacao do cap. 19 e re-stage staticlib+cdylib.
+Simbolos `ori_*` **aditivos** nao exigem bump, mas devem ser listados no
+manifesto stdlib.
+
+O backend C/debug **nao** e referencia de ABI.
+
 ## Contrato experimental
 
 Estes pontos podem mudar antes de `1.0`:
@@ -44,10 +62,12 @@ Estes pontos podem mudar antes de `1.0`:
 - superficie publica do backend C/debug;
 - detalhes finos de inferencia local alem da opcao B ja documentada
   (literais + campo/index/call/pipe); **HM global permanece fora**);
-- formatos de package/registry ainda nao estabilizados.
+- formatos de package/registry ainda nao estabilizados;
+- nomes finais de aliases de dominio na stdlib alem dos ja documentados.
 
 > **Ja estabilizado na superficie pre-1.0 (mas ainda pre-1.0):** pipe `|>`
-> (mantido na Ori), inferencia local Nim-style + opcao B (`0.3.1`+).
+> (mantido na Ori), inferencia local Nim-style + opcao B (`0.3.1`+), ABI nativo
+> `ori-native-abi-1` (M3), caminho de instalacao sem Rust (M1).
 
 ## Regra de documentacao
 

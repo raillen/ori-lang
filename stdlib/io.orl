@@ -2,6 +2,12 @@ module ori.io
 
 import ori.string = str
 
+-- Public domain aliases (S3 culture 1.3 / 2.4)
+public alias OptionalBytesResult = result[optional[bytes], string]
+public alias OptionalTextResult = result[optional[string], string]
+public alias WriteResult = result[int, string]
+public alias IoResult = result[void, string]
+
 public print_line(value: string)
     ori.io.println(value)
 end
@@ -10,11 +16,11 @@ public try_read_line() -> optional[string]
     return ori.io.read_line()
 end
 
-public read_bytes(input: ori.io.Input, max_bytes: int) -> result[optional[bytes], string]
+public read_bytes(input: ori.io.Input, max_bytes: int) -> OptionalBytesResult
     return ori.io.read(input, max_bytes)
 end
 
-public read_text(input: ori.io.Input, max_chars: int) -> result[optional[string], string]
+public read_text(input: ori.io.Input, max_chars: int) -> OptionalTextResult
     match ori.io.read(input, max_chars)
         case ok(payload):
             if some(raw) = payload
@@ -32,11 +38,10 @@ public read_text(input: ori.io.Input, max_chars: int) -> result[optional[string]
     return err("read failed")
 end
 
-public write_bytes(output: ori.io.Output, data: bytes) -> result[int, string]
+public write_bytes(output: ori.io.Output, data: bytes) -> WriteResult
     return ori.io.write(output, data)
 end
 
-public write_text(output: ori.io.Output, text: string) -> result[int, string]
+public write_text(output: ori.io.Output, text: string) -> WriteResult
     return ori.io.write(output, str.to_bytes(text))
 end
-

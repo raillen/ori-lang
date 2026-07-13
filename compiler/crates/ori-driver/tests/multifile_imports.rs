@@ -11465,3 +11465,73 @@ end
     let out = run_build(&dir.path("main.orl")).unwrap();
     assert!(!out.has_errors, "{:?}", out.diagnostics);
 }
+
+#[test]
+fn check_accepts_stdlib_public_type_aliases() {
+    // S3 culture 1.3/2.4: domain `public alias` on stdlib parents (M2 residual closed).
+    let dir = TestDir::new("stdlib_public_type_aliases");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.fs (TextResult, BoolResult, IoResult, write_text_result, exists_result, remove_file)
+import ori.io (WriteResult)
+import ori.net (ConnectionResult, TextResult = NetTextResult)
+import ori.json (ValueResult, TextResult = JsonTextResult)
+import ori.config (JsonResult, TextResult = ConfigTextResult)
+
+uses_fs(path: string) -> TextResult
+    return write_text_result(path, "x")
+end
+
+uses_bool(path: string) -> BoolResult
+    return exists_result(path)
+end
+
+uses_io(path: string) -> IoResult
+    return remove_file(path)
+end
+
+write_count_err(msg: string) -> WriteResult
+    return err(msg)
+end
+
+net_text_err(msg: string) -> NetTextResult
+    return err(msg)
+end
+
+json_value_err(msg: string) -> ValueResult
+    return err(msg)
+end
+
+json_text_err(msg: string) -> JsonTextResult
+    return err(msg)
+end
+
+config_json_err(msg: string) -> JsonResult
+    return err(msg)
+end
+
+config_text_err(msg: string) -> ConfigTextResult
+    return err(msg)
+end
+
+conn_err(msg: string) -> ConnectionResult
+    return err(msg)
+end
+
+main()
+    const _w: WriteResult = write_count_err("x")
+    const _nt: NetTextResult = net_text_err("x")
+    const _jv: ValueResult = json_value_err("x")
+    const _jt: JsonTextResult = json_text_err("x")
+    const _cj: JsonResult = config_json_err("x")
+    const _ct: ConfigTextResult = config_text_err("x")
+    const _c: ConnectionResult = conn_err("x")
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}

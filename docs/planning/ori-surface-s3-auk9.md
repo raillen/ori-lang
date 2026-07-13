@@ -575,7 +575,7 @@ end
 | **9.1** | Escopo de release | **`0.3.0` = S3 + reforma docs (B)**; **`0.3.1` = inferência Nim-local (C)** | Não misturar 8b no big-bang do 0.3.0 |
 | **9.2** | Fases internas | **Ordem P0…P10 / PR plan** | Ver `pr-plan-ori-surface-s3.md` |
 | **9.3** | Migração | **Script** + dual **só em dev** se preciso; produto = corte seco | `ori migrate-syntax` / tools |
-| **9.4** | Pacotes externos | **B** — compiler + stdlib + examples **primeiro**; `ori-game` / `ori-imgui` **depois** | |
+| **9.4** | Pacotes game/imgui | **Cancelado (2026-07-13)** — `ori-game` / `ori-imgui` **fora do produto**; removidos do repo | |
 | **9.5** | Checklist pronto | **Aceito** | test workspace, catalog, examples, docs, CHANGELOG, forma antiga = erro |
 | **9.6** | Próximo passo de processo | **ADR + PR plan para `/execute-plan`** | Arquivos abaixo |
 

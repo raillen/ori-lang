@@ -10,41 +10,38 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-> Itens de **superfície S3** (breaking) estão na seção **`[0.3.0]`**. Inferência local Nim-style está em **`[0.3.1]`**.
+### Notas
+- Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package + M1/M3/stdlib = **`[0.3.2]`**.
 
-> **Política de versionamento (2026-07-13):** workspace Cargo = **`0.3.1`** (tags `v0.3.0` / `v0.3.1`). **Package** adiado. Ordem médio prazo: **M2 stdlib → M3 ABI → M1 Rust-indep → M4 self-host**. `ori-game`/`ori-imgui` = última migração. Auk9 = arquivada.
+---
+
+## [0.3.2] — 2026-07-13
+
+> **Package release** Win/Linux. M2 residual + M3 ABI + M1 Rust-indep fechados.
+> `ori-game`/`ori-imgui` **fora do produto**. Auk9 arquivada. Ordem restante: **M4 self-host**.
+
+### Removido
+- **`packages/ori-game` e `packages/ori-imgui`:** fora do produto; removidos do
+  repositório e dos planos de migração. `ori migrate-syntax` deixa de ter skip
+  especial para esses paths.
 
 ### Adicionado
-- **Tipos / Inferência local opção B:** formaliza omissão de tipo em `const`/`var` locais para **campo**, **index**, **chamada com retorno conhecido** e **pipe `|>`** (tipado como `f(value)`). Rejeita binding de resultado `void`. Testes: `type_accepts_local_inference_option_b_field_index_call_pipe`, `type_rejects_local_inference_on_void_call`.
-- **Docs (opção B + pipe):** specs `00`–`06`, `13`, `18`, `03-grammar.ebnf`; READMEs en/pt/ja; manifesto; ADR; PR plan; `AGENTS.md`; guia cookbook; extensão VS Code README.
-- **Stdlib / M2 (docs):** política de mesclagem em `docs/planning/stdlib-merge-policy.md` — API canônica `ori.X`, disco preferir `X.orl`, `ori.X.utils`/`algorithms` = **alias silencioso**; `stdlib/README.md` + spec 12; exemplos `process_runner` e `generics_showcase` sem ensinar `.utils`. Merge físico de arquivos = lotes de código posteriores.
-- **M2.layout:** monorepo com **Cargo workspace em `compiler/`** (estilo Auk9); projetos de usuário **raiz-first** — obrigatório só `ori.proj`; `main.orl` na raiz recomendado; pastas de domínio opcionais (sem forçar `src/`). `ori new` gera `ori.proj` + `main.orl` + `docs/`. Spec 17 + `docs/planning/repo-and-project-layout.md`. Exemplo canônico: `examples/hello/`.
-- **M2.result-ctors:** construtores e padrões de `result` renomeados de `success`/`error` para **`ok`/`err`**. Formas antigas → `parse.result_ctor_renamed` (recover para `ok`/`err`). Diagnóstico `contract.ok_void_mismatch` (ex-`contract.success_void_mismatch`). `ori migrate-syntax` reescreve `success`/`error`. Spec 05/06/09/10/02/13; grammar VS Code; stdlib/examples/tests.
-- **M2 fechado (stdlib + layout):** pais `stdlib/X.orl` para domínios com helpers (`queue`, `os`, `math`, …); `X/utils` e `X/algorithms` permanecem compat; sem wrappers `.orl` que só espelham L1 com o mesmo nome; `path.relative` multi-call un-ignored; examples convertidos em mini-projetos (`ori.proj` + `main.orl`); monorepo Cargo em `compiler/`; ruído de WIP em `_archive/`.
-- **CLI/S3 (`ori migrate-syntax`):** ferramenta melhor-esforço para reescrever fonte pré-S3 → S3 (`namespace`→`module`, strip `func` em declarações, `import as`/`only`, `<>`→`[]`, `of` types, `else if`→`elif`, `case .V`→`case V`, `do(`→`(`, `?` simples→`try`, scaffold `implement`/`apply Trait to`). Opções `--dry-run` / `-v`. Ignora `packages/ori-game` e `packages/ori-imgui`. Wrapper `tools/migrate_syntax.sh`. Testes unitários em `pipeline::migrate_syntax`.
-- **Stdlib/Rede v2 (Layer 1+2):** `net.connect_tls` (rustls + webpki-roots), servidor TCP (`listen`/`accept`/`close_listener`/`listener_port`), UDP (`udp_bind`/`udp_send_to`/`udp_recv_from`/`udp_close`/`udp_local_port`); tipos opacos `ori.net.Listener` e `ori.net.UdpSocket`; `stdlib/net.orl` flatten; helpers `ori.net.utils` com `connect_*_in_background` via `task.run_blocking` (alias de `task.spawn`). Exemplo `examples/http_get.orl`. Design: `docs/planning/net-v2-design.md`. Testes: `compile_runs_net_tcp_listen_accept_loopback`, `compile_runs_net_udp_loopback`, `compile_runs_net_connect_tls_reports_error_on_refused_port`, `check_accepts_net_v2_flatten_selective_imports`.
-- **Tipos/Inferência:** decisão explícita de **não** implementar inferência global de bindings; spec cap. 04 atualizada; comentário de `Ty::is_assignable_to` clarificado.
-- **Stdlib/Flatten:** `import ori.X only (...)` agora agrega automaticamente `X/utils.orl` e `X/algorithms.orl` quando não existe `stdlib/X.orl` pai; aliases flatten no checker e catálogo LSP (`ori.map.get_or` → `ori.map.utils.get_or`). Teste `check_accepts_flattened_stdlib_parent_selective_imports`.
-- **Stdlib/I/O streams (Layer 1+2):** tipos opacos `ori.io.Input` / `ori.io.Output`; FFI `stdin`/`stdout`/`stderr`, `read`, `write`, `flush`, `close_input`, `close_output`; módulo achatado `stdlib/io.orl` com helpers `read_text`/`write_text`; `stdlib/io/utils.orl` atualizado com wrappers `read_bytes`, `read_text`, `write_bytes`, `write_text`, `flush`, `close_input`, `close_output`. Teste `compile_runs_stdlib_io_streams_native`.
-- **AGENTS.md / Rust Independence Strategy:** Nova seção documentando a estratégia completa de independência do Rust: definição de "independência para usuários finais" (vs. self-hosting), status das Phases 1–3, tabela de prereqs do sistema por OS, decisões arquiteturais fechadas (self-hosting adiado, SystemLinker default, Layer 1 permanece Rust), e próximos passos táticos (smoke em máquinas sem Rust, CI job sem Rust, `docs/install.md`).
-
-### Alterado
-- **Sintaxe S3 (P0 — literais struct/map/enum/list):** struct canônico `Type { field: v }` e anônimo `{ field: v }` (tipo pelo contexto); map `{ "k": v }` / `{ 1: v }` com disambiguação por token antes de `:` (ident → struct, literal → map); list permanece `[…]`; enum fora do match `Enum.Variant` / `.Variant(...)`. Formas removidas com `parse.removed_struct_call_literal`: `Type(...)`, `.{…}`, construção guiada `(field: v)`. Checker tipa `StructLit` e variantes shorthand com contexto. Stdlib (`time`, `vec2`/`vec3`/`mat3`), examples e fixtures de testes migrados.
-- **Sintaxe S3 (P0 — traits/apply):** `apply Type` com seções `use Trait` substitui `implement Trait for Type` e `apply Trait to Type`. Membros soltos (métodos ou binds `slot = freeFn`) vêm antes dos `use`; defaults de trait continuam = método com corpo (sem keyword `default`); `self` sem tipo ok. Formas antigas → `parse.implement_removed` / `parse.apply_trait_to_removed`; ordem violada → `parse.apply_member_after_use`.
-- **Sintaxe S3 (P0 — gramática de tipos):** tipos compostos canônicos só com `[]` — `list[T]`, `map[K, V]`, `optional[T]`, `result[T, E]`, genéricos de usuário `Name[T]` / `struct Pair[A, B]`. Bounds Auk9-style `for T: Trait` (e `for T: not Trait`) após o nome; `where T is` → `parse.removed_where_bound`. Formas removidas com erro dedicado: `Type<…>` → `parse.removed_angle_type`; `list of T` / `map of K to V` → `parse.removed_of_type`. Callable `func(T) -> R` permanece (parênteses, não ângulos). Fixtures/stdlib/examples e assinaturas de doc stdlib migrados.
-- **Sintaxe S3 (imports):** três formas canônicas — seletivo `import path (A, B)`, alias `import path = alias` (path à esquerda), módulo inteiro `import path` (só caminho completo, sem alias implícito do último segmento). Removidos `as` e `only` (`parse.import_as_removed`, `parse.import_only_removed`). Bloco `imports … end` com as mesmas formas e multi-import por vírgula **somente** no bloco. `public import` nas formas novas. Resolver/checker e fixtures `multifile_imports`/stdlib/examples alinhados.
-- **Sintaxe S3 (P0 — superfície de arquivo):** cabeçalho canônico `module path` (substitui `namespace`; `namespace` → `parse.namespace_removed`). Declarações de função sem keyword `func` (`name(...)`, `async name(...)`, métodos de trait/apply/struct/extern iguais); `func` em declaração → `parse.func_removed`. Tipo callable `func(T) -> R` permanece. Omissões de `->` inalteradas. Formatter, snippets VS Code e templates `ori new` alinhados. Fixtures/stdlib/examples do repo migrados para a nova forma.
-- **Sintaxe S3 (fluxo):** propagação só com `try expr` (postfix `expr?` → `parse.question_propagate_removed`); cadeias condicionais com `elif` (`else if` → `parse.else_if_removed`); patterns de enum no `match` sem ponto (`case Variant` / `case Variant(...)`; `case .Variant` → `parse.case_dot_variant_removed`). If-expressão Ori `if cond then a else b` mantida.
-- **Sintaxe S3 (ritmo):** corpo de função `name(params) -> T => expr`; closures canônicas `(params) => expr` e `(params) … end` (tipos de parâmetro opcionais; `do(...)` → `parse.do_removed`); chamada poética de um argumento na mesma linha (`print name`, `print greet("hello")`; poetic aninhada → `parse.poetic_call_nested`); `end` rotulado opcional (`end if` / `end match` / …; mismatch → `parse.end_label_mismatch`). Formatter e grammar VS Code alinhados.
-- **S3 migração em massa (repo):** `stdlib/**/*.orl`, `examples/**/*.orl`, `tests/*.orl` e fixtures positivos do `ori-driver` alinhados à superfície S3 completa (incl. closures sem `do`). Pacotes `ori-game`/`ori-imgui` **não** migrados neste PR.
-- **Codegen/Link (Rust removal default):** `NativeLinker::discover()` agora tenta **`SystemLinker` antes de `BundledRustLld`** no caminho default (quando nenhuma flag de opt-in está setada). Isso elimina a dependência implícita do binário `rust-lld` (proveniente da toolchain Rust) para usuários finais que já possuem o linker do sistema instalado (Visual Studio Build Tools no Windows, `build-essential` no Linux, Xcode Command Line Tools no macOS). O fallback para `BundledRustLld` e `RustcDriver` permanece quando o system linker não é encontrado. Opt-out via `ORI_USE_RUSTC_DRIVER=1`.
+- **Release pipeline:** `.github/workflows/release.yml` — package Linux + Windows
+  em tag `v*` e publica assets no GitHub Releases.
+- **M1 / independência do Rust (usuário final):** `docs/install.md` S3-aligned;
+  `tools/smoke_no_rust.sh`; smoke/package/stage scripts usam
+  `compiler/Cargo.toml` + `compiler/target`, exemplos S3 e
+  `examples/*/main.orl`; CI `smoke-no-rust-*` sem Rust no PATH.
+- **Stdlib / public aliases de domínio:** `public alias` em
+  `ori.fs` / `ori.io` / `ori.net` / `ori.json` / `ori.config` (+ `*/utils`).
+  Teste `check_accepts_stdlib_public_type_aliases`.
+- **M3 / ABI nativo documentado:** `docs/spec/19-abi.md` = **`ori-native-abi-1`**
+  (layouts reais, ARC, mangling `ORI__*`, política de bump).
 
 ### Corrigido
-- **Codegen/Link (Linux/gcc 15):** `cc_print_prog_name`/`cc_print_file_name`/`discover_linux_dynamic_linker` agora usam a forma `=-print-prog-name=ld`/`-print-file-name=<file>` (argumento único com `=`) em vez da forma com espaço (`-print-prog-name ld`). O gcc 15 rejeita a forma com espaço (`unrecognized command-line option '-print-prog-name'`), o que quebrava a estratégia `SystemLinker` no Linux e impedia o `ori compile` AOT em distros recentes. Testes `native_backend/tests.rs` continuam verdes (55 passed).
-- **Stdlib:** removido `import ori.list as lists` não usado em `stdlib/bytes/utils.orl` (warning `bind.unused_import` transivo a qualquer compilação que carregava o módulo, incluindo o smoke de release).
-- **Tooling/Release (PowerShell 5.1):** `tools/smoke_native_release.ps1` agora envolve a chamada `ori doctor 2>&1` com `ErrorActionPreference = "Continue"` temporário. Antes, sob `EAP=Stop` (padrão do script), o stderr do `ori doctor` (que usa `eprintln!` para os checks `[OK]`) era tratado como erro fatal `NativeCommandError`, impedindo a conclusão do smoke e a geração do `.zip` no Windows.
-- **Async/Codegen:** mensagem de erro de shapes async não cobertos alinhada com o subset real (loops aninhados suportados via plano geral).
-- **Types:** registro de `ori.io.Input`, `ori.io.Output`, `ori.net.Connection`, `ori.net.Listener` e `ori.net.UdpSocket` em `stdlib_named_ty_exists`.
+- **Stdlib (ciclo string↔bytes):** `empty_bytes` sem import de `ori.string`.
+- **Driver/M1:** `ORI_REQUIRE_PACKAGED_RUNTIME=1` prefere `<ori>/stdlib` empacotada.
+- **Codegen/Link (SystemLinker):** resolve `ld` bare no `PATH` (GCC).
 
 ### Decidido (sem mudança de código)
 - **Inferência global:** abandonada permanentemente; Ori permanece reading-first com anotações explícitas.

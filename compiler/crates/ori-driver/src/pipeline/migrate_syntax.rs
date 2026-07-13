@@ -3,7 +3,7 @@
 //! Mechanical rewrites only. Complex forms (`implement` bodies, ambiguous `?`,
 //! misplaced `where` bounds) are flagged as notes for manual review.
 //! Does **not** touch `.oridoc` sidecars (their `namespace` / `doc func` are a
-//! separate DSL) or packages `ori-game` / `ori-imgui`.
+//! separate DSL).
 //!
 //! All rewrites operate on UTF-8 `str`/`char` boundaries (never raw bytes as
 //! Latin-1) so comments with box-drawing / accented text stay intact.
@@ -217,14 +217,9 @@ fn collect_orl_files(
     Ok(())
 }
 
-fn should_skip_path(path: &Path) -> bool {
-    let text = path.to_string_lossy().replace('\\', "/");
-    text.contains("/packages/ori-game")
-        || text.contains("/packages/ori-imgui")
-        || text.ends_with("packages/ori-game")
-        || text.ends_with("packages/ori-imgui")
-        || text.contains("/ori-game/")
-        || text.contains("/ori-imgui/")
+fn should_skip_path(_path: &Path) -> bool {
+    // Reserved for future path filters (e.g. vendor trees). No packages skipped today.
+    false
 }
 
 fn push_tag(tags: &mut Vec<String>, tag: &str) {
@@ -1234,23 +1229,10 @@ end
     }
 
     #[test]
-    fn skips_ori_game_and_ori_imgui_package_paths() {
-        assert!(should_skip_path(Path::new("packages/ori-game")));
-        assert!(should_skip_path(Path::new("packages/ori-imgui")));
-        assert!(should_skip_path(Path::new(
-            "/repo/packages/ori-game/src/main.orl"
-        )));
-        assert!(should_skip_path(Path::new(
-            "/repo/packages/ori-imgui/src/lib.orl"
-        )));
-        assert!(should_skip_path(Path::new(
-            "vendor/ori-game/src/main.orl"
-        )));
+    fn should_skip_path_is_permissive_by_default() {
         assert!(!should_skip_path(Path::new("stdlib/list.orl")));
         assert!(!should_skip_path(Path::new("examples/hello_world/main.orl")));
-        assert!(!should_skip_path(Path::new(
-            "packages/other-lib/src/main.orl"
-        )));
+        assert!(!should_skip_path(Path::new("packages/other-lib/src/main.orl")));
     }
 
     #[test]
@@ -1270,12 +1252,12 @@ end
                     notes: Vec::new(),
                 },
             ],
-            skipped: vec![PathBuf::from("packages/ori-game")],
+            skipped: vec![PathBuf::from("vendor/legacy")],
         };
         let quiet = report.format_summary(false);
         assert!(quiet.contains("[changed] b.orl"));
         assert!(!quiet.contains("[ok] a.orl"));
-        assert!(quiet.contains("[skipped] packages/ori-game"));
+        assert!(quiet.contains("[skipped] vendor/legacy"));
 
         let verbose = report.format_summary(true);
         assert!(verbose.contains("[ok] a.orl"), "{verbose}");

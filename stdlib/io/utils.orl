@@ -3,6 +3,11 @@ module ori.io.utils
 import ori.io = io
 import ori.string = str
 
+public alias OptionalBytesResult = result[optional[bytes], string]
+public alias OptionalTextResult = result[optional[string], string]
+public alias WriteResult = result[int, string]
+public alias IoResult = result[void, string]
+
 public print_line(value: string)
     io.println(value)
 end
@@ -15,11 +20,11 @@ public write(value: string)
     io.print(value)
 end
 
-public read_bytes(input: ori.io.Input, max_bytes: int) -> result[optional[bytes], string]
+public read_bytes(input: ori.io.Input, max_bytes: int) -> OptionalBytesResult
     return ori.io.read(input, max_bytes)
 end
 
-public read_text(input: ori.io.Input, max_chars: int) -> result[optional[string], string]
+public read_text(input: ori.io.Input, max_chars: int) -> OptionalTextResult
     match ori.io.read(input, max_chars)
         case ok(payload):
             if some(raw) = payload
@@ -37,15 +42,15 @@ public read_text(input: ori.io.Input, max_chars: int) -> result[optional[string]
     return err("read failed")
 end
 
-public write_bytes(output: ori.io.Output, data: bytes) -> result[int, string]
+public write_bytes(output: ori.io.Output, data: bytes) -> WriteResult
     return ori.io.write(output, data)
 end
 
-public write_text(output: ori.io.Output, text: string) -> result[int, string]
+public write_text(output: ori.io.Output, text: string) -> WriteResult
     return ori.io.write(output, str.to_bytes(text))
 end
 
-public flush(output: ori.io.Output) -> result[void, string]
+public flush(output: ori.io.Output) -> IoResult
     return ori.io.flush(output)
 end
 

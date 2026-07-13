@@ -2348,7 +2348,14 @@ fn find_stdlib_source_module(import: &str) -> Option<PathBuf> {
     }
 }
 
-/// Resolve the stdlib root directory (`ORI_STDLIB_ROOT` → dev layout → release package).
+/// Resolve the stdlib root directory.
+///
+/// Order:
+/// 1. `ORI_STDLIB_ROOT`
+/// 2. When `ORI_REQUIRE_PACKAGED_RUNTIME=1` (release smoke): `<ori exe dir>/stdlib` first
+/// 3. Dev layout from `CARGO_MANIFEST_DIR` (only if that tree still exists)
+/// 4. `<ori exe dir>/stdlib` (end-user package)
+/// 5. Walk cwd parents for a `stdlib/` directory
 pub fn find_stdlib_root() -> Option<PathBuf> {
     if let Ok(path) = std::env::var("ORI_STDLIB_ROOT") {
         let path = PathBuf::from(path);
@@ -2356,26 +2363,45 @@ pub fn find_stdlib_root() -> Option<PathBuf> {
             return Some(path);
         }
     }
+
+    let packaged_only = std::env::var_os("ORI_REQUIRE_PACKAGED_RUNTIME").is_some_and(|v| {
+        let s = v.to_string_lossy();
+        s == "1" || s.eq_ignore_ascii_case("true") || s.eq_ignore_ascii_case("yes")
+    });
+
+    let next_to_exe = || -> Option<PathBuf> {
+        let exe = std::env::current_exe().ok()?;
+        let exe_dir = exe.parent()?;
+        let release_candidate = exe_dir.join("stdlib");
+        release_candidate.is_dir().then_some(release_candidate)
+    };
+
+    // M1: packaged smoke / release gate must not leak into the build-tree stdlib
+    // via the compile-time `CARGO_MANIFEST_DIR` path when a sibling stdlib exists.
+    if packaged_only {
+        if let Some(path) = next_to_exe() {
+            return Some(path);
+        }
+    }
+
     let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let dev_candidate = manifest_root.join("../../../stdlib");
     if dev_candidate.is_dir() {
         return Some(dev_candidate);
     }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exe_dir) = exe.parent() {
-            let release_candidate = exe_dir.join("stdlib");
-            if release_candidate.is_dir() {
-                return Some(release_candidate);
-            }
-        }
+    if let Some(path) = next_to_exe() {
+        return Some(path);
     }
     if let Ok(cwd) = std::env::current_dir() {
         let mut dir = cwd;
         for _ in 0..8 {
             let candidate = dir.join("stdlib");
+            // Accept either nested helpers (string/) or parent modules (string.orl).
             if candidate.is_dir()
-                && candidate.join("string").is_dir()
-                && candidate.join("list").is_dir()
+                && (candidate.join("string.orl").is_file()
+                    || candidate.join("string").is_dir()
+                    || candidate.join("list.orl").is_file()
+                    || candidate.join("list").is_dir())
             {
                 return Some(candidate);
             }

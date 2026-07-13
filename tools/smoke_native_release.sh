@@ -10,7 +10,7 @@ usage() {
 Usage: tools/smoke_native_release.sh [--package-root DIR] [--skip-build] [--keep-package]
 
 Builds a release-style Ori package in a clean folder, stages the native runtime,
-then verifies `ori compile` and `ori test` using only package-local files.
+then verifies `ori compile`, `ori test`, and `ori run` (JIT) using only package-local files.
 USAGE
 }
 
@@ -42,6 +42,7 @@ done
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
+compiler_root="$repo_root/compiler"
 
 host_triple() {
     rustc -Vv | awk -F': ' '/^host:/ { print $2; exit }'
@@ -64,7 +65,7 @@ run_checked() {
     }
 }
 
-target_root="${CARGO_TARGET_DIR:-$repo_root/target}"
+target_root="${CARGO_TARGET_DIR:-$compiler_root/target}"
 ori_exe=$(output_exe_name ori)
 lsp_exe=$(output_exe_name ori-lsp)
 source_ori="$target_root/release/$ori_exe"
@@ -96,7 +97,7 @@ trap cleanup EXIT
 
 if [ "$skip_build" -eq 0 ]; then
     run_checked "cargo build -p ori-driver -p ori-lsp --release" \
-        sh -c "cd '$repo_root/compiler' && cargo build -p ori-driver -p ori-lsp --release"
+        sh -c "cd '$compiler_root' && cargo build -p ori-driver -p ori-lsp --release"
 fi
 
 if [ ! -f "$source_ori" ]; then
@@ -113,8 +114,8 @@ mkdir -p "$examples_dir"
 cp "$source_ori" "$package_ori"
 cp "$source_lsp" "$package_lsp"
 cp -R "$repo_root/stdlib" "$stdlib_dir"
-cp "$repo_root/examples/hello_world.orl" "$examples_dir/hello_world.orl"
-cp "$repo_root/examples/async_demo.orl" "$examples_dir/async_demo.orl"
+cp "$repo_root/examples/hello_world/main.orl" "$examples_dir/hello_world.orl"
+cp "$repo_root/examples/async_demo/main.orl" "$examples_dir/async_demo.orl"
 
 stage_args="--target $host --profile release --output-root $runtime_dir"
 if [ "$skip_build" -eq 1 ]; then
@@ -124,32 +125,59 @@ run_checked "tools/stage_native_runtime.sh" \
     sh -c "cd '$repo_root' && tools/stage_native_runtime.sh $stage_args"
 
 cat > "$examples_dir/package_smoke_test.orl" <<'ORI'
-namespace app.package_smoke
+module app.package_smoke
 
-import ori.test as test
-import ori.task as task
+import ori.test = test
+import ori.task = task
 
 @test
-func package_smoke_test()
+package_smoke_test()
     check 1 + 1 == 2
     test.assert(true, "package smoke test")
 end
 
 @test
-async func package_async_smoke_test()
+async package_async_smoke_test()
     await task.sleep(1)
     test.assert(true, "package async smoke test")
 end
 ORI
 
 cat > "$examples_dir/stdlib_package_smoke.orl" <<'ORI'
-namespace app.stdlib_package_smoke
+module app.stdlib_package_smoke
 
-import ori.io as io
-import ori.string only (trim_all)
+import ori.io = io
+import ori.string (trim_all)
 
-func main()
+main()
     io.print(trim_all("hello   packaged   stdlib"))
+end
+ORI
+
+cat > "$examples_dir/alias_package_smoke.orl" <<'ORI'
+module app.alias_package_smoke
+
+import ori.fs (TextResult, IoResult, write_text_result, remove_file)
+import ori.io = io
+
+uses_aliases(path: string) -> TextResult
+    return write_text_result(path, "ok")
+end
+
+main()
+    match uses_aliases("/tmp/ori-alias-smoke.txt")
+        case ok(_):
+            io.print("alias ok")
+        case err(msg):
+            io.print(msg)
+    end
+    const cleanup: IoResult = remove_file("/tmp/ori-alias-smoke.txt")
+    match cleanup
+        case ok(_):
+            return
+        case err(_):
+            return
+    end
 end
 ORI
 
@@ -210,6 +238,21 @@ case "$stdlib_output" in
         ;;
 esac
 
+alias_exe="$package_root/$(output_exe_name alias_package_smoke)"
+(
+    cd "$package_root"
+    ORI_REQUIRE_PACKAGED_RUNTIME=1 "$package_ori" compile "examples/alias_package_smoke.orl" --out "$alias_exe"
+)
+alias_output=$("$alias_exe")
+case "$alias_output" in
+    *"alias ok"*) ;;
+    *)
+        echo "compiled alias_package_smoke did not exercise public aliases" >&2
+        echo "$alias_output" >&2
+        exit 1
+        ;;
+esac
+
 (
     cd "$package_root"
     ORI_REQUIRE_PACKAGED_RUNTIME=1 "$package_ori" test "examples/package_smoke_test.orl"
@@ -239,5 +282,10 @@ case "$jit_output" in
         exit 1
         ;;
 esac
+
+(
+    cd "$package_root"
+    ORI_REQUIRE_PACKAGED_RUNTIME=1 "$package_ori" doctor
+) >/dev/null
 
 printf 'native release smoke passed: %s\n' "$package_root"

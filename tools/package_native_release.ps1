@@ -24,7 +24,10 @@ function Get-HostTriple {
 }
 
 function Get-WorkspaceVersion([string]$RepoRoot) {
-    $cargoToml = Join-Path $RepoRoot "Cargo.toml"
+    $cargoToml = Join-Path $RepoRoot "compiler/Cargo.toml"
+    if (-not (Test-Path -LiteralPath $cargoToml -PathType Leaf)) {
+        $cargoToml = Join-Path $RepoRoot "Cargo.toml"
+    }
     $match = Select-String -LiteralPath $cargoToml -Pattern '^\s*version\s*=\s*"([^"]+)"' | Select-Object -First 1
     if ($null -eq $match) {
         throw "Could not find workspace version in $cargoToml."
@@ -36,7 +39,12 @@ function Get-WorkspaceVersion([string]$RepoRoot) {
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $version = Get-WorkspaceVersion $repoRoot
 $hostTriple = Get-HostTriple
-$distRoot = Join-Path $repoRoot "target/dist"
+$compilerTarget = if ($env:CARGO_TARGET_DIR) {
+    [System.IO.Path]::GetFullPath($env:CARGO_TARGET_DIR)
+} else {
+    Join-Path $repoRoot "compiler/target"
+}
+$distRoot = Join-Path $compilerTarget "dist"
 
 if ([string]::IsNullOrWhiteSpace($PackageRoot)) {
     $PackageRoot = Join-Path $distRoot "ori-$version-$hostTriple"

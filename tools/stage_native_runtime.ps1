@@ -73,7 +73,10 @@ function Get-RuntimeCdylibName([string]$TargetTriple) {
 }
 
 function Get-WorkspaceVersion([string]$RepoRoot) {
-    $cargoToml = Join-Path $RepoRoot "Cargo.toml"
+    $cargoToml = Join-Path $RepoRoot "compiler/Cargo.toml"
+    if (-not (Test-Path -LiteralPath $cargoToml -PathType Leaf)) {
+        $cargoToml = Join-Path $RepoRoot "Cargo.toml"
+    }
     $inWorkspacePackage = $false
     foreach ($line in Get-Content -LiteralPath $cargoToml) {
         $text = [string]$line
@@ -193,7 +196,7 @@ try {
     $targetRoot = if ($env:CARGO_TARGET_DIR) {
         [System.IO.Path]::GetFullPath($env:CARGO_TARGET_DIR)
     } else {
-        Join-Path $repoRoot "target"
+        Join-Path $repoRoot "compiler/target"
     }
 
     $candidates = @(

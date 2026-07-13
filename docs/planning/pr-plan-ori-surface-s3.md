@@ -15,7 +15,7 @@ lexer/parser/checker/fmt/LSP grammar, migração de fontes do **repo ori-lang**
 (stdlib, tests, examples), reforma documental, script de migração.
 
 **Pós-0.3.0 (entregue):** inferência Nim-local (`0.3.1`) + opção B; pipe `|>`
-**mantido** na Ori. **Ainda fora:** `ori-game` / `ori-imgui` (última migração).
+**mantido** na Ori. **`ori-game` / `ori-imgui`:** cancelados / fora do produto.
 
 **Skills:** `compiler-dev`, `lang-compiled` (se tocar codegen só por desugar),
 `ori-testing`, `living-docs`, `clean-code`, `rust`.
@@ -154,7 +154,7 @@ Testes ori_spec + concurrency se tocar async surface só na casca.
 `compiler/crates/ori-driver/tests/`, `tests/*.orl` se houver. Ajustes manuais
 para `apply Trait to Type` → `apply Type`/`use` onde o script não der conta.
 `cargo test -p ori-driver` e subset workspace relevantes verdes.
-**Não** migrar `ori-game`/`ori-imgui` neste PR.
+`ori-game`/`ori-imgui` **fora do produto** (não migrar; removidos).
 
 **Files/components affected:** `compiler/crates/ori-driver/` (CLI migrate), `tools/`, `stdlib/`, `examples/`, `compiler/crates/ori-driver/tests/`, `tests/`
 
@@ -240,7 +240,7 @@ PR2 (module/func) ┼──▶ PR3 (types []) ──▶ PR5 (literals) ──┐
    (import `path = alias`, if-then, closures `(u)=>`, sem `default` keyword).
 5. **Codegen/runtime:** preferir desugar para AST/HIR existente; evitar
    redesign de async/ARC neste plano.
-6. **Pacotes externos:** documentar quebra; migração `ori-game`/`ori-imgui`
+6. **Pacotes game/imgui:** **cancelados** — fora do produto
    é backlog pós-0.3.0 (decisão 9.4 B).
 7. **Script de migração:** não precisa ser perfeito; deve ser idempotente o
    bastante para re-rodar em CI local.

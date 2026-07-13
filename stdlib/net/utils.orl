@@ -4,15 +4,22 @@ import ori.net = net
 import ori.string = str
 import ori.task = task
 
-public connect(host: string, port: int, timeout_ms: int) -> result[net.Connection, string]
+public alias ConnectionResult = result[net.Connection, string]
+public alias ListenerResult = result[net.Listener, string]
+public alias UdpSocketResult = result[net.UdpSocket, string]
+public alias TextResult = result[string, string]
+public alias BytesResult = result[bytes, string]
+public alias IoResult = result[void, string]
+
+public connect(host: string, port: int, timeout_ms: int) -> ConnectionResult
     return net.connect(host, port, timeout_ms)
 end
 
-public connect_tls(host: string, port: int, timeout_ms: int) -> result[net.Connection, string]
+public connect_tls(host: string, port: int, timeout_ms: int) -> ConnectionResult
     return net.connect_tls(host, port, timeout_ms)
 end
 
-public read_text(conn: net.Connection, max_bytes: int) -> result[string, string]
+public read_text(conn: net.Connection, max_bytes: int) -> TextResult
     match net.read_some(conn, max_bytes)
         case ok(payload):
             match str.from_bytes(payload)
@@ -27,7 +34,7 @@ public read_text(conn: net.Connection, max_bytes: int) -> result[string, string]
     return err("read failed")
 end
 
-public write_text(conn: net.Connection, text: string) -> result[void, string]
+public write_text(conn: net.Connection, text: string) -> IoResult
     return net.write_all(conn, str.to_bytes(text))
 end
 
@@ -39,28 +46,28 @@ public is_open(conn: net.Connection) -> bool
     return not net.is_closed(conn)
 end
 
-public read_bytes(conn: net.Connection, max_bytes: int) -> result[bytes, string]
+public read_bytes(conn: net.Connection, max_bytes: int) -> BytesResult
     return net.read_some(conn, max_bytes)
 end
 
-public write_bytes(conn: net.Connection, payload: bytes) -> result[void, string]
+public write_bytes(conn: net.Connection, payload: bytes) -> IoResult
     return net.write_all(conn, payload)
 end
 
 -- Blocking TCP/TLS I/O runs on a worker thread via task.run_blocking (same = task.spawn).
 -- Join the returned job from sync code; from async code prefer spawning before await boundaries.
-public connect_in_background(host: string, port: int, timeout_ms: int) -> task.Job[result[net.Connection, string]]
+public connect_in_background(host: string, port: int, timeout_ms: int) -> task.Job[ConnectionResult]
     return task.run_blocking(() => connect(host, port, timeout_ms))
 end
 
-public connect_tls_in_background(host: string, port: int, timeout_ms: int) -> task.Job[result[net.Connection, string]]
+public connect_tls_in_background(host: string, port: int, timeout_ms: int) -> task.Job[ConnectionResult]
     return task.run_blocking(() => connect_tls(host, port, timeout_ms))
 end
 
-public listen_local(port: int) -> result[net.Listener, string]
+public listen_local(port: int) -> ListenerResult
     return net.listen("127.0.0.1", port)
 end
 
-public udp_bind_local(port: int) -> result[net.UdpSocket, string]
+public udp_bind_local(port: int) -> UdpSocketResult
     return net.udp_bind("127.0.0.1", port)
 end

@@ -16,8 +16,8 @@ Isso não significa que o *compilador em si* deixa de ser escrito em Rust. A ind
 
 | Nível | Definição | Status | Para 1.0? |
 |-------|-----------|--------|-----------|
-| **Usuário final** | Instala via release package; não precisa de `rustc`/`cargo` | Quase completo | **Sim** |
-| **Self-hosting** | Compilador escrito em Ori | Não iniciado | **Não** |
+| **Usuário final** | Instala via release package; não precisa de `rustc`/`cargo` | **M1 ✅** (smoke + CI + install) | **Sim** |
+| **Self-hosting** | Compilador escrito em Ori | Não iniciado (M4) | **Não** |
 
 ---
 

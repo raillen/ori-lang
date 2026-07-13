@@ -13,7 +13,7 @@
 | ID | Tema | Decisão |
 |----|------|---------|
 | **R1** | Workspace Cargo | Mora em **`compiler/`** (não na raiz do repo) |
-| **R2** | Raiz do repo | Papéis da **linguagem**: `stdlib/`, `runtime/`, `docs/`, `examples/`, `tools/`, `extensions/`, `packages/`, … |
+| **R2** | Raiz do repo | Papéis da **linguagem**: `stdlib/`, `runtime/`, `docs/`, `examples/`, `tools/`, `extensions/`, … |
 | **R3** | Desenvolvimento | `cd compiler && cargo test --workspace` (ou `cargo --manifest-path compiler/Cargo.toml …` da raiz) |
 | **R4** | Examples | **Projetos** com `ori.proj` (+ fontes), não scrapbook de `.orl` soltos |
 | **R5** | Higiene | WIP/patches/scratch fora da raiz (ou `_archive/`) |
@@ -40,7 +40,6 @@ ori-lang/
       README.md
   tools/
   extensions/
-  packages/                 # ori-game / ori-imgui (última migração)
   tests/                    # fixtures .orl se ainda existirem
 ```
 

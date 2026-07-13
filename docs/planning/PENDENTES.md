@@ -14,9 +14,9 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 
 | # | Item | Status | Notas |
 |---|------|--------|-------|
-| 1 | Tags de release `v0.3.0` / `v0.3.1` + Cargo `0.3.1` | **feito** | Package zip/tar **não** nesta fatia |
-| 2 | Package de distribuição | **adiado** | Depois de stdlib + ABI + (depois) Rust-indep |
-| 3 | Migrar `ori-game` / `ori-imgui` | **última** | Depois de tudo o resto |
+| 1 | Tags de release `v0.3.0` / `v0.3.1` + Cargo `0.3.1` | **feito** | |
+| 2 | Package de distribuição (zip/tar + smoke) | **publicado em v0.3.2** | Win MSVC + Linux GNU via `.github/workflows/release.yml` |
+| 3 | `ori-game` / `ori-imgui` | **cancelado** | Removidos do repo e dos planos (2026-07-13) |
 | 4 | Arquivar Auk9 como produto | feito | README no repo `auk9-lang` |
 | 5 | Corrigir falhas ARC (`list_push` ownership + enum layout) | feito | Re-stage runtime se `_Unwind_Resume` / symbols |
 | 6 | Warning `classify_stdlib_import` | feito | `_has_selected_items` |
@@ -28,20 +28,19 @@ Este documento descreve as funcionalidades pendentes, bugs conhecidos e melhoria
 
 | # | Item | Ordem | Notas |
 |---|------|-------|--------|
-| **M2** | **Stdlib** + **layout** + **surface result** | **✅ fechado** | Pais `ori.X`; utils compat; path.relative; examples projetos; Cargo `compiler/`; `ok`/`err` |
-| **M3** | **ABI estável** documentada | **2º** | Após integração das funcionalidades finais (não congelar cedo) |
-| **M1** | **Independência do Rust para usuário final** | **3º** | Depois de M2+M3: smoke sem Rust, SystemLinker/JIT, CI `smoke-no-rust` |
-| **M4** | Self-hosting | **última** discussão de linguagem | Só depois de tudo o resto já funcional |
+| **M2** | **Stdlib** + **layout** + **surface result** | **✅ fechado** | Pais `ori.X`; utils compat; `ok`/`err`; **`public alias` de domínio** (`fs`/`io`/`net`/`json`/`config`) |
+| **M3** | **ABI estável** documentada | **✅ fechado** | Spec `19-abi.md` = `ori-native-abi-1` |
+| **M1** | **Independência do Rust para usuário final** | **✅ fechado** | `docs/install.md`; tools smoke S3 + paths `compiler/`; `tools/smoke_no_rust.sh`; CI jobs `smoke-no-rust-*` |
+| **M4** | Self-hosting | **próxima discussão** (última) | Só depois do restante já útil |
 
-> **Ordem acordada (2026-07-13):** **M2 → M3 → M1 → M4**.  
-> **M2 fechado.** Próximo: **M3 ABI**.
+> **Ordem acordada:** **M2 → M3 → M1 → M4**.  
+> **M2 + M3 + M1 fechados.** Residual stdlib limpo. Próximo opcional: publicar package; **M4** quando for a hora.
 
 ### Explicitamente fora da fila agora
 
-- Empacotar release binário (até fechar M2/M3 e, se desejado, M1)
-- Migrar game/imgui (última migração de packages)
 - Self-hosting (M4 — última discussão)
 - Inferência global HM / opções C–D
+- Pacotes de jogo/UI (`ori-game` / `ori-imgui`) — **fora do produto**; não migrar
 
 ---
 

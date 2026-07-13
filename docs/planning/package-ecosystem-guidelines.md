@@ -1,46 +1,46 @@
 # Ori Package Ecosystem Guidelines
 
-Este documento define as convenções oficiais para o ecossistema de pacotes da linguagem Ori, especialmente para pacotes que provêm *bindings* C via FFI (`extern c`), como o `ori-imgui` e o `ori-raylib`.
+Este documento define as convenÃ§Ãµes oficiais para o ecossistema de pacotes da linguagem Ori, especialmente para pacotes que provÃªm *bindings* C via FFI (`extern c`).
 
 ## 1. Nomenclatura
 
-### 1.1 Repositório no GitHub
-Todos os pacotes criados para a linguagem Ori devem usar o prefixo `ori-` em seus repositórios no GitHub para facilitar o _discoverability_ e indicar claramente sua finalidade.
+### 1.1 Repositï¿½rio no GitHub
+Todos os pacotes criados para a linguagem Ori devem usar o prefixo `ori-` em seus repositï¿½rios no GitHub para facilitar o _discoverability_ e indicar claramente sua finalidade.
 - **Formato:** `ori-<nome-da-lib>`
-- **Exemplo:** `ori-imgui`, `ori-raylib`, `ori-sqlite`.
+- **Exemplo:** `ori-raylib`, `ori-sqlite` (pacotes de comunidade; `ori-game`/`ori-imgui` **nÃ£o** fazem parte do produto Ori).
 
 ### 1.2 Nome do Pacote (`ori.pkg.toml`)
-Internamente, o manifesto do pacote (`ori.pkg.toml`) não deve conter o prefixo `ori-`. O nome deve ser limpo, refletindo o namespace pelo qual a biblioteca será importada no código fonte.
+Internamente, o manifesto do pacote (`ori.pkg.toml`) nï¿½o deve conter o prefixo `ori-`. O nome deve ser limpo, refletindo o namespace pelo qual a biblioteca serï¿½ importada no cï¿½digo fonte.
 - **Formato:** `name = "<nome-da-lib>"`
 - **Exemplo:** `name = "imgui"`
-- **Uso no código:** `import imgui.ui`
+- **Uso no cï¿½digo:** `import imgui.ui`
 
-## 2. Estrutura de Diretórios Recomendada
+## 2. Estrutura de Diretï¿½rios Recomendada
 
-Pacotes que lidam com bibliotecas nativas devem adotar a seguinte estrutura canônica:
+Pacotes que lidam com bibliotecas nativas devem adotar a seguinte estrutura canï¿½nica:
 
 ```
 ori-<pacote>/
 +-- ori.pkg.toml           # Manifesto do pacote
-+-- README.md              # Instruções claras de instalação e uso
-+-- src/                   # Código fonte Ori (.orl)
-¦   +-- ffi.orl            # Declarações puras de `extern c` e structs opacas
-¦   +-- ui.orl             # Wrappers idiomáticos e abstractions do Ori
-+-- lib/                   # Artefatos Nativos Pré-compilados (C/C++)
-¦   +-- win-x64/           # .dll e .lib para Windows
-¦   +-- linux-x64/         # .so e .a para Linux
-¦   +-- macos-arm64/       # .dylib e .a para macOS (Apple Silicon)
++-- README.md              # Instruï¿½ï¿½es claras de instalaï¿½ï¿½o e uso
++-- src/                   # Cï¿½digo fonte Ori (.orl)
+ï¿½   +-- ffi.orl            # Declaraï¿½ï¿½es puras de `extern c` e structs opacas
+ï¿½   +-- ui.orl             # Wrappers idiomï¿½ticos e abstractions do Ori
++-- lib/                   # Artefatos Nativos Prï¿½-compilados (C/C++)
+ï¿½   +-- win-x64/           # .dll e .lib para Windows
+ï¿½   +-- linux-x64/         # .so e .a para Linux
+ï¿½   +-- macos-arm64/       # .dylib e .a para macOS (Apple Silicon)
 +-- tools/                 # Scripts auxiliares (ex: build do C/C++ do zero)
-¦   +-- build_native.ps1
-+-- examples/              # Códigos demonstrando como usar a biblioteca
+ï¿½   +-- build_native.ps1
++-- examples/              # Cï¿½digos demonstrando como usar a biblioteca
     +-- demo.orl
 ```
 
 ## 3. Diretrizes de Bibliotecas Nativas (FFI)
 
-Como o Ori v0.2.1 ainda não possui um sistema automatizado de *build scripts* nativos (como o `build.rs` do Rust), a responsabilidade de prover os artefatos nativos recai sobre o autor do pacote.
+Como o Ori v0.2.1 ainda nï¿½o possui um sistema automatizado de *build scripts* nativos (como o `build.rs` do Rust), a responsabilidade de prover os artefatos nativos recai sobre o autor do pacote.
 
-### Regras para o diretório `lib/`:
-1. **Artefatos Prontos:** O repositório deve conter as bibliotecas `.dll`, `.so` e `.dylib` pré-compiladas na pasta `lib/<target>/`. Isso garante que quando um usuário baixar o pacote e der `ori run`, a execução JIT encontre a biblioteca compartilhada imediatamente.
-2. **Bibliotecas Estáticas:** Recomenda-se também fornecer as bibliotecas estáticas (`.lib` ou `.a`) nas mesmas pastas. Isso permitirá que comandos futuros como `ori compile` liguem (link) a dependência diretamente no executável final (AOT).
-3. **Scripts de Build (Opcional, mas Recomendado):** Para transparência e atualizações futuras, crie um script na pasta `tools/` que baixe o código fonte C/C++ original via `git clone`, rode o `cmake` ou similar, e mova os `.dll`/`.so`/`.dylib` resultantes para a pasta `lib/` apropriada.
+### Regras para o diretï¿½rio `lib/`:
+1. **Artefatos Prontos:** O repositï¿½rio deve conter as bibliotecas `.dll`, `.so` e `.dylib` prï¿½-compiladas na pasta `lib/<target>/`. Isso garante que quando um usuï¿½rio baixar o pacote e der `ori run`, a execuï¿½ï¿½o JIT encontre a biblioteca compartilhada imediatamente.
+2. **Bibliotecas Estï¿½ticas:** Recomenda-se tambï¿½m fornecer as bibliotecas estï¿½ticas (`.lib` ou `.a`) nas mesmas pastas. Isso permitirï¿½ que comandos futuros como `ori compile` liguem (link) a dependï¿½ncia diretamente no executï¿½vel final (AOT).
+3. **Scripts de Build (Opcional, mas Recomendado):** Para transparï¿½ncia e atualizaï¿½ï¿½es futuras, crie um script na pasta `tools/` que baixe o cï¿½digo fonte C/C++ original via `git clone`, rode o `cmake` ou similar, e mova os `.dll`/`.so`/`.dylib` resultantes para a pasta `lib/` apropriada.

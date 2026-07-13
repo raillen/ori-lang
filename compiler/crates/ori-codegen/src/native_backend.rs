@@ -14077,20 +14077,50 @@ fn cc_print_prog_name(cc: &str, prog: &str) -> Result<PathBuf, String> {
         ));
     }
     let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if path.is_empty() || !path.contains(std::path::MAIN_SEPARATOR) {
+    if path.is_empty() {
         return Err(format!(
-            "`{cc} -print-prog-name={prog}` returned `{path}` (not found); \
+            "`{cc} -print-prog-name={prog}` returned empty; \
              install binutils or set ORI_SYSTEM_LINKER"
         ));
     }
-    let candidate = PathBuf::from(path);
+    // GCC often prints a bare tool name (`ld`) rather than an absolute path.
+    // Resolve via PATH so SystemLinker works for end users without ORI_SYSTEM_LINKER.
+    let candidate = if path.contains(std::path::MAIN_SEPARATOR) {
+        PathBuf::from(&path)
+    } else {
+        which_on_path(&path).ok_or_else(|| {
+            format!(
+                "`{cc} -print-prog-name={prog}` returned `{path}` (not found on PATH); \
+                 install binutils or set ORI_SYSTEM_LINKER"
+            )
+        })?
+    };
     if !candidate.is_file() {
         return Err(format!(
-            "`{cc} -print-prog-name={prog}` returned `{}` which does not exist",
+            "`{cc} -print-prog-name={prog}` resolved to `{}` which does not exist",
             candidate.display()
         ));
     }
     Ok(candidate)
+}
+
+/// Resolve a bare executable name against `PATH` (Unix-style `:` or Windows `;`).
+fn which_on_path(name: &str) -> Option<PathBuf> {
+    let path_var = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path_var) {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        #[cfg(windows)]
+        {
+            let with_exe = dir.join(format!("{name}.exe"));
+            if with_exe.is_file() {
+                return Some(with_exe);
+            }
+        }
+    }
+    None
 }
 
 fn discover_linux_dynamic_linker(cc: &str) -> Result<PathBuf, String> {

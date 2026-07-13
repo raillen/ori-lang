@@ -66,7 +66,7 @@ A Ori **não** visa competir com linguagens de mercado. Existe para:
 ### Negativas / custos
 
 - Breaking change grande (`0.3.0`)  
-- Migração de stdlib, testes, examples (game/imgui **depois**, 9.4 B)  
+- Migração de stdlib, testes, examples (game/imgui **cancelados** / fora do produto)  
 - Risco de bugs de parser em poetic call / struct-vs-map  
 
 ### Mitigações
@@ -82,7 +82,7 @@ A Ori **não** visa competir com linguagens de mercado. Existe para:
 
 - Self-hosting, registry remoto  
 - Inferência global HM (continua proibida); opções C/D de inferência “pelo uso”  
-- Migrar `ori-game` / `ori-imgui` no mesmo dia do 0.3.0 (plano: **última** migração)  
+- Migrar `ori-game` / `ori-imgui` (plano antigo): **cancelado** — fora do produto  
 - Reimplementar features Ori na Auk9  
 - Package de distribuição (adiado até fechar pendências de runtime/stdlib/LSP)
 

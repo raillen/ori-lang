@@ -53,11 +53,13 @@ Almost every domain now has a **parent** `X.orl` so `import ori.X` sees helpers 
 
 ---
 
-## Residual notes
+## Notes
 
 - Pure L1 symbols (e.g. `ori.fs.create_dir_all`) live only in the runtime — no redundant `.orl` wrapper of the same name.
-- `path.relative` sequential calls: regression un-ignored (fixed with ARC `list_push`).
 - Do not add new public APIs only under `ori.*.utils`.
+- **Domain type aliases (S3 1.3):** parents export `public alias` where returns
+  repeat (`ori.fs.TextResult`, `ori.net.ConnectionResult`, `ori.io.WriteResult`, …).
+  Prefer importing aliases with selective imports: `import ori.fs (TextResult, …)`.
 
 ---
 

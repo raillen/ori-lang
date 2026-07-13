@@ -3,7 +3,11 @@ module ori.config
 import ori.fs = fs
 import ori.json = json
 
-public read_text(path: string) -> result[string, string]
+-- Public domain aliases (S3 culture 1.3 / 2.4)
+public alias TextResult = result[string, string]
+public alias JsonResult = result[json.Value, string]
+
+public read_text(path: string) -> TextResult
     return fs.read_text(path)
 end
 
@@ -17,11 +21,11 @@ public read_text_or(path: string, fallback: string) -> string
     return fallback
 end
 
-public write_text(path: string, content: string) -> result[string, string]
+public write_text(path: string, content: string) -> TextResult
     return fs.write_text(path, content)
 end
 
-public read_json(path: string) -> result[json.Value, string]
+public read_json(path: string) -> JsonResult
     match fs.read_text(path)
         case ok(text):
             return json.parse(text)
@@ -31,6 +35,6 @@ public read_json(path: string) -> result[json.Value, string]
     return err("failed to read config")
 end
 
-public write_json(path: string, value: json.Value) -> result[string, string]
+public write_json(path: string, value: json.Value) -> TextResult
     return fs.write_text(path, json.stringify_pretty(value))
 end

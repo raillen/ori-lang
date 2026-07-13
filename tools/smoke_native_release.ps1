@@ -54,11 +54,12 @@ function Invoke-Checked([scriptblock]$Command, [string]$Description) {
 }
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$compilerRoot = Join-Path $repoRoot "compiler"
 $hostTriple = Get-HostTriple
 $targetRoot = if ($env:CARGO_TARGET_DIR) {
     [System.IO.Path]::GetFullPath($env:CARGO_TARGET_DIR)
 } else {
-    Join-Path $repoRoot "target"
+    Join-Path $compilerRoot "target"
 }
 
 if ([string]::IsNullOrWhiteSpace($PackageRoot)) {
@@ -100,8 +101,8 @@ try {
     Copy-Item -LiteralPath $sourceOri -Destination $packageOri -Force
     Copy-Item -LiteralPath $sourceLsp -Destination $packageLsp -Force
     Copy-Item -LiteralPath (Join-Path $repoRoot "stdlib") -Destination $stdlibDir -Recurse -Force
-    Copy-Item -LiteralPath (Join-Path $repoRoot "examples/hello_world.orl") -Destination (Join-Path $examplesDir "hello_world.orl") -Force
-    Copy-Item -LiteralPath (Join-Path $repoRoot "examples/async_demo.orl") -Destination (Join-Path $examplesDir "async_demo.orl") -Force
+    Copy-Item -LiteralPath (Join-Path $repoRoot "examples/hello_world/main.orl") -Destination (Join-Path $examplesDir "hello_world.orl") -Force
+    Copy-Item -LiteralPath (Join-Path $repoRoot "examples/async_demo/main.orl") -Destination (Join-Path $examplesDir "async_demo.orl") -Force
 
     $stageArgs = @{
         Target = $hostTriple
@@ -114,19 +115,19 @@ try {
     Invoke-Checked { & (Join-Path $PSScriptRoot "stage_native_runtime.ps1") @stageArgs } "stage_native_runtime.ps1"
 
     $testSource = @'
-namespace app.package_smoke
+module app.package_smoke
 
-import ori.test as test
-import ori.task as task
+import ori.test = test
+import ori.task = task
 
 @test
-func package_smoke_test()
+package_smoke_test()
     check 1 + 1 == 2
     test.assert(true, "package smoke test")
 end
 
 @test
-async func package_async_smoke_test()
+async package_async_smoke_test()
     await task.sleep(1)
     test.assert(true, "package async smoke test")
 end
@@ -135,12 +136,12 @@ end
     Set-Content -LiteralPath $testPath -Value $testSource -Encoding ASCII
 
     $stdlibSmokeSource = @'
-namespace app.stdlib_package_smoke
+module app.stdlib_package_smoke
 
-import ori.io as io
-import ori.string only (trim_all)
+import ori.io = io
+import ori.string (trim_all)
 
-func main()
+main()
     io.print(trim_all("hello   packaged   stdlib"))
 end
 '@

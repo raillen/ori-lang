@@ -48,11 +48,23 @@ done
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
-version=$(awk -F'"' '/^[[:space:]]*version[[:space:]]*=/ { print $2; exit }' "$repo_root/Cargo.toml")
+cargo_toml="$repo_root/compiler/Cargo.toml"
+if [ ! -f "$cargo_toml" ]; then
+    cargo_toml="$repo_root/Cargo.toml"
+fi
+version=$(awk '
+    /^\[workspace\.package\]/ { in_section=1; next }
+    in_section && /^\[/ { exit }
+    in_section && /^[[:space:]]*version[[:space:]]*=/ {
+        gsub(/"/, "", $3)
+        print $3
+        exit
+    }
+' "$cargo_toml")
 host=$(rustc -Vv | awk -F': ' '/^host:/ { print $2; exit }')
 
 if [ -z "$version" ]; then
-    echo "could not find workspace version in Cargo.toml" >&2
+    echo "could not find workspace version in $cargo_toml" >&2
     exit 2
 fi
 if [ -z "$host" ]; then
@@ -60,7 +72,7 @@ if [ -z "$host" ]; then
     exit 2
 fi
 
-dist_root="$repo_root/target/dist"
+dist_root="${CARGO_TARGET_DIR:-$repo_root/compiler/target}/dist"
 if [ -z "$package_root" ]; then
     package_root="$dist_root/ori-$version-$host"
 fi

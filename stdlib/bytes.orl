@@ -1,6 +1,7 @@
 module ori.bytes
 
-import ori.string = str
+-- No import of ori.string here: string.orl imports ori.bytes (capitalize path).
+-- A cycle string↔bytes would break packaged stdlib loading (M1).
 
 public is_empty(b: bytes) -> bool
     return ori.bytes.len(b) == 0
@@ -26,7 +27,7 @@ public from_hex_or(hex: string, fallback: bytes) -> bytes
 end
 
 public empty_bytes() -> bytes
-    return str.to_bytes("")
+    return ori.bytes.from_list([])
 end
 
 public join(left: bytes, right: bytes) -> bytes

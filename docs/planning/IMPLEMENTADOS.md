@@ -159,7 +159,7 @@ Snapshot completo do que entra na release `v0.2.0` (Etapa 9 do `PLANO-MATURIDADE
 ### Componentes versionados
 
 - **Workspace version:** `0.2.0` (`Cargo.toml [workspace.package]`); todos os 10 crates usam `version.workspace = true`.
-- **Runtime ABI:** `ori-native-abi-1` (`ORI_ABI_VERSION` em `ori-runtime/src/lib.rs`).
+- **Runtime ABI (M3):** `ori-native-abi-1` (`ORI_ABI_VERSION` em `ori-runtime/src/lib.rs`); contrato normativo em `docs/spec/19-abi.md` (layouts, ARC header, mangling `ORI__*`, link versioning).
 - **Rust toolchain:** `1.95.0` via `rust-toolchain.toml` (canal + `rustfmt` + `clippy`).
 
 ### Binários de release (Windows MSVC, build desta release)

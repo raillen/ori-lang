@@ -1,80 +1,484 @@
-# Ori Language Specification — Chapter 19: ABI and FFI Contract
+# Ori Language Specification — Chapter 19: Native ABI
 
-> Status: normative
-> Audience: compiler implementers, runtime maintainers, tooling authors
-> Surface: **S3** (`0.3.0`)
-
----
-
-## Overview
-
-This document specifies the Application Binary Interface (ABI) for the Ori language in its `1.0` stability cycle. The ABI guarantees stable memory layouts, name mangling, and calling conventions so that external C libraries can interoperate safely with Ori, and so the Ori compiler can safely interface with its own runtime.
+> Status: **normative for the native backend** (pre-1.0 freeze of documented layouts)  
+> Audience: compiler implementers, runtime maintainers, FFI authors  
+> Surface: **S3** (`0.3.0`) + workspace **`0.3.1`**  
+> Revision tag: **`ori-native-abi-1`** (`ORI_ABI_VERSION` in `ori-runtime`)  
+> Source of truth: `compiler/crates/ori-runtime/src/lib.rs` + `ori-codegen` native backend  
+> Related: [10-memory.md](10-memory.md), [16-runtime-ffi-safety.md](16-runtime-ffi-safety.md), [18-stability-and-compatibility.md](18-stability-and-compatibility.md)
 
 ---
 
-## Memory Layouts
+## 1. Purpose and scope
 
-Ori data types are designed to be explicitly predictable in memory, closely matching C's `repr(C)` guarantees.
+This chapter is the **M3 ABI contract**: what memory layouts, symbol names, and
+calling conventions the native pipeline actually uses today, so that:
 
-### Primitives
-- `bool`: 1 byte (0x00 is false, 0x01 is true).
-- `int`: 64-bit signed integer (`int64_t`).
-- `float`: 64-bit floating point (`double`).
-- Pointers (`*T`, `*const T`, `*mut T` in runtime): size of machine word (64-bit on supported architectures).
+1. Cranelift object code and `libori_runtime.a` / `libori_runtime.so` stay linked.
+2. Future changes to layouts are deliberate (bump `ORI_ABI_VERSION` + CHANGELOG).
+3. External C code that calls runtime symbols has a documented contract.
 
-### Structs
-All `struct` declarations in Ori are guaranteed to have a memory layout identical to a C `struct` with the same fields declared in the same order.
-- Alignment follows the standard C ABI for the target architecture.
-- There is no automatic field reordering.
-- Padding bytes are inserted as dictated by the platform's C compiler.
+**Out of scope here:**
 
-### Enums
-An `enum` without payloads (C-like enum) is represented as a single integer. The default size is the smallest integer type that can hold all variant values (typically 1 byte for < 256 variants), though this is subject to C alignment rules when inside a struct.
+- C debug/transpile backend (partial parity; not the semantic reference).
+- Self-hosting / interpreter ABI (none).
+- Guaranteeing that every user-defined Ori function is a stable C export for
+  third parties (only entry `main` and `extern "C"` are unmangled exports).
 
-An `enum` *with payloads* (tagged union) is represented as:
-1. A discriminant tag (typically 1 byte, aligned to the largest alignment requirement of any payload).
-2. A union containing the payload of each variant.
+**In scope:**
 
-This matches Rust's `#[repr(C, u8)]` enum layout.
-
-### Tuples
-Tuples are represented exactly like anonymous `struct`s with fields ordered from left to right.
+- Primitive and composite value layouts emitted by the native backend.
+- ARC heap header and managed type representations.
+- Runtime collection structs (`OriList`, `OriMap`, `OriSet`, …).
+- Symbol mangling for Ori functions and globals.
+- Link-time ABI versioning via `runtime-link.json`.
+- Calling convention for `extern "C"` and Cranelift-emitted functions.
 
 ---
 
-## Calling Conventions
+## 2. ABI version
 
-The default calling convention for Ori functions and FFI interactions is the standard C calling convention (`cdecl` on Unix-like systems, standard Microsoft x64 calling convention on Windows).
+| Item | Value |
+|------|--------|
+| Constant | `ORI_ABI_VERSION` in `ori-runtime` |
+| Current string | **`ori-native-abi-1`** |
+| Consumer | `ori-driver` embeds the same string in staged `runtime-link.json` |
+| Check | Driver rejects a staged runtime whose `abi_version` ≠ driver constant |
 
-- All `extern "C"` functions imported into Ori assume this calling convention.
-- All Ori functions emitted by Cranelift follow the system's default C calling convention. This makes any Ori function directly callable from C without wrapper thunks.
+When any **documented layout or stable `ori_*` symbol signature** in this chapter
+changes in a way that breaks binary compatibility with previously staged
+runtimes, maintainers must:
 
----
+1. Bump the revision string (e.g. `ori-native-abi-2`).
+2. Note the change in `CHANGELOG.md`.
+3. Re-stage runtime staticlib + cdylib for all packaged triples.
 
-## Name Mangling
-
-To avoid naming collisions and to support namespaces, Ori applies a deterministic name mangling scheme to all top-level functions and static variables.
-
-### The Scheme
-The mangled name is a concatenation of the module, the entity name, and an optional type hash (for monomorphized generics).
-
-Format: `ori_MANGLE_<module>_<name>[_<hash>]`
-
-- `module`: The fully qualified module, with dots `.` replaced by underscores `_`. (e.g., `ori.string.utils` becomes `ori_string_utils`).
-- `name`: The function or variable name.
-- `hash`: A 16-character hexadecimal hash of the generic type arguments (only present if the function is a monomorphized instance of a generic function).
-
-### Exceptions (No Mangling)
-Functions declared as `extern "C"` are NOT mangled. They use the exact name specified in the binding.
-The `main` function (entry point of an Ori executable) is emitted without mangling as `main` (or wrapped by the system's CRT `main` entry).
+Additive runtime symbols that old object code never called do not require a
+version bump, but should still be documented here or in the stdlib manifest.
 
 ---
 
-## FFI Safety and ARC
+## 3. Target and calling convention
 
-When crossing the ABI boundary to external C code, memory ownership must be respected. Ori uses Automatic Reference Counting (ARC).
+| Aspect | Contract |
+|--------|----------|
+| Word size | 64-bit only on supported desktop triples (`x86_64-*`, `aarch64-apple-darwin`) |
+| Pointer size | 8 bytes |
+| Default CC | Platform C ABI (System V AMD64 / Microsoft x64 / Apple AArch64) |
+| Cranelift functions | Declared with the system default C calling convention |
+| `extern "C"` imports | Same platform C ABI; symbol name is exact (no Ori mangling) |
+| Runtime exports | `#[no_mangle] unsafe extern "C"` — C symbol = Rust `fn` name (`ori_list_new`, …) |
 
-- **Borrowing**: Passing a managed type (like `string` or `list`) to C passes a borrowed pointer. The C code MUST NOT free it.
-- **Ownership**: If C code returns a managed pointer allocated via Ori's runtime allocators, the Ori caller assumes ownership and will release it.
+Managed values are almost always passed as **payload pointers** (`*mut u8` /
+`i64` bit-pattern of a pointer). Primitive `int`/`float`/`bool` use native
+integer and IEEE floats as below.
 
-For detailed FFI safety rules regarding the runtime, refer to [Chapter 16: Runtime FFI safety contracts](16-runtime-ffi-safety.md).
+---
+
+## 4. Primitive layouts
+
+| Ori type | Native representation | Size | Notes |
+|----------|----------------------|------|--------|
+| `bool` | `i8` | 1 | `0` = false, non-zero treated as true at boundaries; codegen uses 0/1 |
+| `int` | `i64` | 8 | Signed 64-bit |
+| `float` | `f64` | 8 | IEEE-754 binary64 |
+| `void` | empty / ignored | 0 | Not a value; result `ok()` may store null payload |
+| Function pointers | pointer | 8 | Platform function pointer |
+| Raw pointers (FFI) | pointer | 8 | As declared in `extern` bindings |
+
+Alignment for a field of size *N* bytes (backend helper `field_size_align`):
+
+```text
+align = min(N, 8).max(1)
+```
+
+So `bool` aligns to 1, `int`/`float`/pointers align to 8 on current targets.
+
+---
+
+## 5. Composite layouts (codegen)
+
+All offsets and sizes below are computed by the native backend
+(`compute_struct_layout`, `compute_enum_layout`, `optional_layout`,
+`result_layout`, `tuple_layout`, `lazy_layout`).
+
+### 5.1 Structs
+
+- Field order = declaration order (no reordering).
+- Default and `repr(C)` path: **natural alignment** (pad each field to its
+  align; pad total size to struct max align).
+- Packed path (`repr_c = false` in HIR): no inter-field padding (legacy /
+  special cases).
+- Size is at least 1 if the struct is non-empty layout path requires storage.
+
+C mental model for default structs:
+
+```c
+struct User {   /* fields in source order, C-like padding */
+    /* ... */
+};
+```
+
+### 5.2 Tuples
+
+Anonymous struct of elements left-to-right with natural alignment. Same rules
+as structs for offsets and total size.
+
+### 5.3 Enums (tagged unions)
+
+User-defined `enum` with or without payloads:
+
+| Part | Representation |
+|------|----------------|
+| Discriminant tag | **`i32`** at offset 0 (size 4, align 4) |
+| Variant index | Declaration order, starting at **0** |
+| Payload | Union of per-variant field structs, starting at `payload_offset` |
+| `payload_offset` | `align_up(4, max_payload_align)` — natural align, **not** packed |
+| Total size | `align_up(payload_offset + max_payload_size, overall_align)`, at least 4 |
+
+Payload field layouts use **natural alignment** so pointer-bearing variants
+(e.g. `ori.json.Value`) keep payloads at pointer-aligned offsets (commonly
+offset 8 when max payload align is 8).
+
+C mental model:
+
+```c
+struct EnumValue {
+    int32_t tag;
+    /* padding to payload_offset */
+    union {
+        /* per-variant payloads */
+    } payload;
+};
+```
+
+This is **not** Rust `#[repr(C, u8)]` (tag is 32-bit, not 8-bit). Older
+aspirational text that claimed a 1-byte tag was incorrect for the native backend.
+
+### 5.4 `optional[T]` (codegen layout)
+
+```text
+{ has_value: i8, [padding], value: T }
+```
+
+- `value_offset = align_up(1, align_of(T))`
+- `total = align_up(value_offset + size_of(T), align_of(T))`, minimum 2
+
+When `T` is a managed pointer type, runtime helpers often allocate a
+**pointer-sized** optional box (see §7) that is ABI-compatible with “flag +
+pointer payload at word offset”.
+
+### 5.5 `result[T, E]` (codegen layout)
+
+```text
+{ is_ok: i8, [padding], union { ok: T, err: E } }
+```
+
+- `payload_offset = align_up(1, max(align_of(T), align_of(E)))`
+- `payload_size = max(size_of(T), size_of(E))`
+- `total = align_up(payload_offset + payload_size, max align)`, minimum 2
+
+`is_ok != 0` means Ok arm; `0` means Err arm.
+
+Runtime constructors for pointer-shaped results often use a simplified
+**word-aligned box** (see §7.3).
+
+### 5.6 `lazy[T]`
+
+```text
+{ thunk: ptr, forced: i8, [padding], value: T }
+```
+
+- Value starts at `align_up(ptr_size + 1, align_of(T))`.
+
+### 5.7 Closures
+
+Environment is a packed capture record (offsets via `closure_env_layout`).
+A closure value at runtime is typically two words: function pointer + env
+pointer (see task spawn path in runtime).
+
+---
+
+## 6. ARC heap model
+
+### 6.1 Header (`OriHeapHeader`)
+
+Every object allocated with `ori_alloc` is:
+
+```text
+[ OriHeapHeader | payload ... ]
+                 ^── pointer returned to callers (payload start)
+```
+
+```c
+/* Rust: #[repr(C)] OriHeapHeader */
+struct OriHeapHeader {
+    int64_t refcount;   /* AtomicI64 in Rust */
+    void (*destructor)(uint8_t *payload);  /* optional; may be null */
+};
+```
+
+| Field | Role |
+|-------|------|
+| `refcount` | Starts at 1; `ori_arc_retain` / `ori_arc_release` |
+| `destructor` | Called with the **payload** pointer when refcount hits 0, before free |
+
+Callers never pass the header pointer to retain/release — only the payload.
+
+**Note:** A historical comment in the runtime mentioned `[u32 ref][u32 type_tag]`.
+That is **obsolete**. The live header is refcount + optional destructor function
+pointer. Type-specific cleanup is via the destructor hook, not a type tag field.
+
+### 6.2 Core ARC API (stable symbols)
+
+| Symbol | Contract |
+|--------|----------|
+| `ori_alloc(size, destructor)` | Allocate header+payload; register; return payload; refcount = 1 |
+| `ori_arc_retain(ptr)` | No-op if null or not registered |
+| `ori_arc_release(ptr)` | No-op if null or not registered; free at 0 after dtor |
+| `ori_arc_register_edge(owner, child)` | Strong edge owner→child for cycle GC; retains child |
+| `ori_arc_unregister_edge(owner, child)` | Remove edge; release child edge retain |
+| `ori_arc_collect_cycles()` | Trial-deletion collector; returns reclaimed count |
+
+Detailed safety rules: [16-runtime-ffi-safety.md](16-runtime-ffi-safety.md).  
+Language-level ARC rules: [10-memory.md](10-memory.md).
+
+### 6.3 Registration
+
+Only payloads returned by `ori_alloc` (or constructors that call it) are
+registered. Static/literal C strings and some runtime `malloc` boxes are
+**not** ARC-managed; retain/release ignore them.
+
+---
+
+## 7. Managed language types
+
+In Ori values, managed types are **references** (payload pointers). Assigning
+copies the reference and the backend inserts retain/release.
+
+### 7.1 `string`
+
+- Representation: `*mut u8` → **NUL-terminated UTF-8** payload from `ori_alloc`
+  (length = `registered_size - 1`, or `strlen` fallback for non-registered).
+- Interior NUL is not a valid Ori string; use `bytes` for binary data.
+- Index/slice APIs are **character**-oriented unless the symbol name says bytes.
+
+### 7.2 `bytes`
+
+- Length-aware binary payload (not C string semantics).
+- Null data pointer only valid when length is 0.
+- May include `0x00` bytes; must not use `CStr` to measure length.
+
+### 7.3 Runtime boxes for `optional` / `result` (FFI helpers)
+
+Several runtime helpers allocate simplified boxes (often `2 * sizeof(void*)`):
+
+```text
+offset 0:          flag byte (has_value or is_ok), rest of first word zeroed
+offset ptr_size:   payload word (pointer or i64/f64 bit pattern)
+```
+
+Examples:
+
+- `new_optional_ptr` → `ori_alloc` (ARC-managed optional of pointer).
+- `new_result` / `ori_new_result` → plain `malloc` box (not always ARC-registered).
+- `new_result_raw` / `new_result_i64_ok` → same 2-word shape with unaligned write of i64/f64.
+
+**Important for FFI authors:** prefer calling the documented `ori_*` entry points
+rather than hand-building these boxes. When codegen and runtime disagree on
+whether a box is ARC-registered, the backend’s retain/release path is the
+reference for Ori-compiled code.
+
+### 7.4 `list[T]` — `OriList`
+
+```c
+typedef struct OriList {
+    int64_t *data;   /* elements as i64 bit patterns / pointers */
+    int64_t  len;
+    int64_t  cap;
+    int64_t  version; /* bump on structural mutation (iterators) */
+} OriList;
+```
+
+- Object itself is ARC-allocated with `ori_list_dtor` (frees `data` buffer).
+- Elements that are managed register edges list→element on insert.
+- `ori_list_new`, `ori_list_push`, `ori_list_get`, `ori_list_len`, …
+
+### 7.5 `set[T]` — `OriSet`
+
+Prefix matches `OriList` so list len/get can operate on the dense prefix:
+
+```c
+typedef struct OriSet {
+    int64_t *items;  /* dense [0..len) — same offset as OriList.data */
+    int64_t  len;
+    int64_t  cap;
+    int64_t  version;
+    int64_t *ht;
+    int64_t  ht_cap;
+    uint8_t  item_kind;
+} OriSet;
+```
+
+### 7.6 `map[K,V]` — `OriMap`
+
+```c
+typedef struct OriMap {
+    int64_t *keys;
+    int64_t *values;
+    int64_t  len;
+    int64_t  cap;
+    int64_t  version;
+    int64_t *ht;
+    int64_t  ht_cap;
+    uint8_t  key_kind;
+    void    *hash_fn;
+    void    *eq_fn;
+} OriMap;
+```
+
+Dense `keys[0..len)` / `values[0..len)`; hash table stores dense indices.
+
+### 7.7 Other runtime structs
+
+Additional `#[repr(C)]` payloads exist for concurrency and domain types
+(`OriTaskJob`, `OriChannel`, `OriFuture`, `OriAtomicInt`, `RuntimeCancelToken`,
+trees, graphs, deques, I/O streams, net sockets, …). Treat their field layouts
+as **runtime-internal** unless a public Ori type documents a stable C view.
+Opaque handles in the stdlib (e.g. `ori.fs.File`, `ori.net.Connection`) are
+payload pointers; do not depend on their private layout from C without a
+versioned export.
+
+---
+
+## 8. Symbol naming
+
+### 8.1 Runtime / stdlib Layer 1
+
+- Exact C names: `ori_<domain>_<op>` (examples: `ori_io_print`, `ori_list_new`,
+  `ori_string_concat`, `ori_arc_retain`).
+- Declared `#[no_mangle] extern "C"`.
+- Manifest mapping lives in `ori-types` stdlib tables (`STDLIB_RUNTIME_FUNCTIONS`).
+
+### 8.2 User Ori functions (native backend)
+
+Qualified name `module.path.fn` (and nested paths) is mangled as:
+
+```text
+ORI__<escaped>
+```
+
+Escape rules (`mangle_symbol`):
+
+| Character | Encoding |
+|-----------|----------|
+| ASCII alphanumeric or `_` | unchanged |
+| `.` | `_dot_` |
+| other | `_xNN_` where `NN` is lowercase hex of the code unit |
+
+Examples:
+
+| Ori name | Native symbol |
+|----------|---------------|
+| `app.main.foo` | `ORI__app_dot_main_dot_foo` |
+| `ori.string.is_empty` (user code path) | `ORI__ori_dot_string_dot_is_empty` |
+
+Globals:
+
+```text
+ORI_GLOBAL__<escaped>
+```
+
+Function-pointer thunks:
+
+```text
+ORI__<escaped>__fnptr_wrapper
+```
+
+**Historical note:** older drafts used `ori_MANGLE_<module>_<name>[_hash]`. That
+scheme is **not** what the native backend emits. Generics are monomorphized to
+distinct function names; there is no separate 16-char type hash suffix in the
+current mangler.
+
+### 8.3 Entry point
+
+- If the program has an entry function named `main` (or `<module>.main` with
+  empty params), the backend exports a C symbol **`main`** (Linkage::Export)
+  that wraps the Ori main.
+- That is the CRT entry for AOT executables and the JIT entry lookup target.
+
+### 8.4 Destructors generated by codegen
+
+Synthetic names such as `__dtor_struct_{id}`, `__dtor_enum_{id}`,
+`__dtor_tuple_{n}` are compiler-private. They are registered as `ori_alloc`
+destructor hooks for managed composite allocations.
+
+---
+
+## 9. Linking and packaging
+
+| Artifact | Role |
+|----------|------|
+| `libori_runtime.a` (staticlib) | AOT link (`ori compile` / `ori test`) |
+| `libori_runtime.so` / `.dll` / `.dylib` (cdylib) | JIT `ori run` symbol resolution |
+| `runtime-link.json` | `target`, `runtime`, `ori_version`, **`abi_version`**, native static libs |
+
+Link strategy priority (see [16-runtime-ffi-safety.md](16-runtime-ffi-safety.md)):
+
+1. `ORI_NATIVE_LINKER` (raw)
+2. `ORI_USE_BUNDLED_RUST_LLD=1`
+3. `ORI_USE_SYSTEM_LINKER=1` / SystemLinker default path
+4. `RustcDriver` fallback
+
+Staging after runtime changes must refresh **both** staticlib and cdylib for
+the host triple (stale cdylib → JIT UB).
+
+---
+
+## 10. Stability policy (pre-1.0)
+
+Until Ori `1.0`, this ABI is **documented and versioned**, not forever frozen:
+
+| Class | Change policy |
+|-------|----------------|
+| `ori-native-abi-1` layouts in §§4–7 | Breaking → new `ori-native-abi-N` + re-stage |
+| New `ori_*` symbols | Additive OK without bump if old code never needed them |
+| Mangling `ORI__*` | Breaking for tools that parse symbols → document + bump if tools depend |
+| C debug backend | Not covered; may diverge |
+| Opaque stdlib handles | Layout private; only constructor/destructor FFI is public |
+
+Chapter [18-stability-and-compatibility.md](18-stability-and-compatibility.md)
+lists language-surface stability separately from this binary contract.
+
+---
+
+## 11. Implementation map
+
+| Concern | Primary location |
+|---------|------------------|
+| `ORI_ABI_VERSION`, ARC, collections | `compiler/crates/ori-runtime/src/lib.rs` |
+| Layout math, mangling, main export | `compiler/crates/ori-codegen/src/native_backend.rs` |
+| Driver ABI check + `runtime-link.json` | `compiler/crates/ori-driver/src/pipeline.rs` |
+| Manifest symbol list | `ori-types` stdlib modules |
+| FFI safety narrative | `docs/spec/16-runtime-ffi-safety.md` |
+| ARC language rules | `docs/spec/10-memory.md` |
+
+---
+
+## 12. Checklist for ABI-touching PRs
+
+- [ ] Layout or `ori_*` signature change justified and noted in CHANGELOG
+- [ ] `ORI_ABI_VERSION` bumped if binary-incompatible with staged runtimes
+- [ ] This chapter updated in the same PR
+- [ ] Runtime re-staged (staticlib + cdylib) for CI/dev host
+- [ ] Relevant `ori-driver` / runtime tests green
+- [ ] No reliance on C debug backend for “truth”
+
+---
+
+## History
+
+| Date | Event |
+|------|--------|
+| pre-M3 | Draft chapter mixed aspirational C layouts with incorrect mangling/tag size |
+| 2026-07-13 | **M3:** rewritten from runtime + native backend source of truth (`ori-native-abi-1`) |

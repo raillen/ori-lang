@@ -103,7 +103,7 @@ Uma forma canônica por conceito é **norma** (superfície S3 + reforma document
 ## Migração 0.2 → 0.3
 
 - Script melhor-esforço: `ori migrate-syntax` (wrapper `tools/migrate_syntax.sh`)  
-- Pacotes externos `ori-game` / `ori-imgui`: **depois** do corte (decisão 9.4 B)  
+- Pacotes `ori-game` / `ori-imgui`: **fora do produto** (removidos do repo; sem migração)  
 - Lista breaking completa: [`CHANGELOG.md`](../../CHANGELOG.md) seção `[0.3.0]`  
 - Catálogo de erros de forma removida: [`13-error-catalog.md`](13-error-catalog.md)  
 

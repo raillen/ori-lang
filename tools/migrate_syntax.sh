@@ -3,7 +3,7 @@
 # Usage:
 #   tools/migrate_syntax.sh [--dry-run] [-v] [paths...]
 # Defaults to stdlib examples tests when no paths are given.
-# Skips packages/ori-game and packages/ori-imgui (handled by the CLI).
+# Best-effort pre-S3 → S3 rewrite for `.orl` trees.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

@@ -90,6 +90,10 @@ find_rust_lld() {
 }
 
 workspace_version() {
+    cargo_toml="$repo_root/compiler/Cargo.toml"
+    if [ ! -f "$cargo_toml" ]; then
+        cargo_toml="$repo_root/Cargo.toml"
+    fi
     awk '
         /^\[workspace\.package\]/ { in_section=1; next }
         in_section && /^\[/ { exit }
@@ -98,7 +102,7 @@ workspace_version() {
             print $3
             exit
         }
-    ' "$repo_root/Cargo.toml"
+    ' "$cargo_toml"
 }
 
 ori_abi_version() {
@@ -209,13 +213,17 @@ if [ "$skip_build" -eq 0 ]; then
     (cd "$repo_root/compiler" && cargo build -p ori-runtime --lib --target "$target" $profile_args)
 fi
 
-target_root="${CARGO_TARGET_DIR:-$repo_root/target}"
+target_root="${CARGO_TARGET_DIR:-$repo_root/compiler/target}"
 source="$target_root/$target/$profile/$artifact"
 if [ ! -f "$source" ]; then
     source="$target_root/$profile/$artifact"
 fi
+# Host-triple builds without --target land under profile/ only.
 if [ ! -f "$source" ]; then
-    echo "Runtime artifact $artifact was not found after build." >&2
+    source="$target_root/$profile/$artifact"
+fi
+if [ ! -f "$source" ]; then
+    echo "Runtime artifact $artifact was not found after build under $target_root." >&2
     exit 1
 fi
 

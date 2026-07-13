@@ -65,7 +65,7 @@ Utilizando o novo `.oriproj` e o Ori JIT/AOT para envelopar bibliotecas em C pes
 - [ ] **4.2. `ori-sqlite`**
   - [ ] Criar repositório `ori-sqlite` gerenciando a DB do SQLite em memória e arquivo.
   - [ ] Validar Iteradores e geradores `.orl` com a API FFI do SQLite.
-- [ ] **4.3. `ori-imgui` (cimgui)**
+- [x] **4.3. `ori-imgui` (cimgui)** — **cancelado / fora do produto** (2026-07-13)
   - [ ] Construir o *wrapper* baseado em lambdas/closures para esconder chamadas perigosas (`EndWindow`).
 
 ---

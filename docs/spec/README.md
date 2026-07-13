@@ -22,7 +22,8 @@ Use:
 - `16-runtime-ffi-safety.md` for runtime FFI safety contracts.
 - `17-project-and-docs.md` for `ori.proj` and `.oridoc`.
 - `18-stability-and-compatibility.md` for pre-1.0 stability rules.
-- `19-abi.md` for ABI notes.
+- `19-abi.md` for the **native ABI contract** (`ori-native-abi-1`, M3): layouts,
+  ARC header, mangling, link versioning.
 
 Surface S3 product decisions and ADR:
 

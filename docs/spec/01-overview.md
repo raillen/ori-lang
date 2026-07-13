@@ -214,7 +214,9 @@ Migration aid: `ori migrate-syntax`. Full list: `CHANGELOG.md` `[0.3.0]`.
 | **Option B** | Also omit on **field / index / call / pipe** with a concrete return type; reject `void` / `try` / empty `[]`/`{}` / bare `none` |
 | **Pipe `\|\>`** | **Kept** as first-class Ori syntax (typed as `f(value)`) |
 
-**Still deferred:** migration of `ori-game` / `ori-imgui` (**last**); distribution
+**Still deferred / out of product:** distribution polish beyond packaged
+releases; self-hosting (M4). **`ori-game` / `ori-imgui` removed from the repo
+and plans** (not part of Ori product scope).
 package until remaining pendencies close.
 
 ---

@@ -58,7 +58,7 @@ enum Commands {
     },
     /// Install an Ori package into the local package cache.
     Install {
-        /// Package name or GitHub URL (e.g. `github.com/raillen/ori-imgui`).
+        /// Package name or GitHub URL (e.g. `github.com/org/ori-pkg`).
         name: String,
         /// Local package directory or `ori.pkg.toml` path.
         #[arg(long)]
@@ -149,8 +149,7 @@ enum Commands {
     ///
     /// Mechanical migrations: `namespace`→`module`, strip decl `func`,
     /// `import as`/`only`, `<>`→`[]`, `else if`→`elif`, `do(`→`(`, simple `?`→`try`,
-    /// and scaffold headers for `implement`/`apply Trait to`. Skips
-    /// `packages/ori-game` and `packages/ori-imgui`. Does not rewrite `.oridoc`.
+    /// and scaffold headers for `implement`/`apply Trait to`. Does not rewrite `.oridoc`.
     #[command(name = "migrate-syntax")]
     MigrateSyntax {
         /// Files or directories to migrate (recurses for `*.orl`).

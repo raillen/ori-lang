@@ -159,11 +159,11 @@ Source (.orl)
 
 - **Rust:** 1.95.0 (via `rust-toolchain.toml`)
 - **Language surface:** **`0.3.0` S3** + **`0.3.1`** Nim-local inference + **option B** (field/index/call/pipe). Manifesto: `docs/spec/00-manifesto.md`. Decisões: `docs/planning/ori-surface-s3-auk9.md`. Spec: `04-types`, `05-expressions` (pipe), `06-statements`.
-- **Cargo workspace package version:** **`0.3.1`**. Git tags `v0.3.0` / `v0.3.1`. **Package** de distribuição (zip/tar) **adiado** até fechar pendências.
+- **Cargo workspace package version:** **`0.3.2`**. Tags `v0.3.0` / `v0.3.1` / **`v0.3.2`** (package Win/Linux).
 - **Etapas 0–9** do `PLANO-MATURIDADE-COMPLETO.md` (ciclo 0.2) concluídas; S3 PRs 1–10 + PR11 + 11b (B) = superfície atual.
 - **Pipe `|>`:** **mantido** e tipado no checker como `f(value)`; entra na inferência local B.
 - **Auk9:** produto **arquivado** (README no repo auk9-lang). Living surface is Ori S3.
-- **Última migração:** `packages/ori-game` / `packages/ori-imgui` (depois de tudo o resto).
+- **Pacotes game/imgui:** **fora do produto** — `packages/ori-game` e `packages/ori-imgui` removidos; não há plano de migração.
 - **cargo check --workspace:** PASSES cleanly
 - **cargo test --workspace:** PASSES cleanly (~690+ tests, including stdlib Layer 2/3, net v2 E2E, io streams, JIT default)
 - **Release smoke:** `tools/smoke_native_release.ps1 -SkipBuild` passes — `ori compile` + `ori test` validados em package isolado com runtime empacotada (Windows MSVC).
@@ -176,32 +176,31 @@ Source (.orl)
 - **Stdlib/Rede v2 (unreleased):** `connect_tls`, servidor TCP (`listen`/`accept`), UDP síncrono, `task.run_blocking`; design `docs/planning/net-v2-design.md`; exemplo `examples/http_get.orl`.
 - **LSP/VS Code (unreleased):** Catálogo stdlib Layer 1+2, hover/goto stdlib, sync incremental, dot-complete via aliases, `ori doctor`, extensão `extensions/vscode-orl/`.
 - **Docs website (unreleased):** Site Starlight em [github.com/raillen/ori-website](https://github.com/raillen/ori-website) — i18n en/pt/es/ja, Pagefind + busca ⌘K, referência gerada via `ori doc export`. Deploy Vercel-ready (`vercel.json`).
-- **Master plan:** `docs/planning/PLANO-MATURIDADE-COMPLETO.md` — Etapas 0–9 concluídas; backlog v2 em Apêndice C (stdlib em `.orl`, paridade C debug para async, mais triples, registry/installer, `ori doc` HTML). Roadmap fechado: híbrido A→B→D para Rust removal (Phase 3 completa), 3 camadas explícitas para stdlib (detalhes em CHANGELOG `[Unreleased]`).
+- **Master plan:** `docs/planning/PLANO-MATURIDADE-COMPLETO.md` — Etapas 0–9 concluídas; backlog v2 em Apêndice C. **M2 ✅** (stdlib + `public alias` de domínio); **M3 ✅** (`19-abi.md`); **M1 ✅** (`docs/install.md`, `tools/smoke_no_rust.sh`, CI smoke-no-rust). Próximo opcional: publicar package; **M4** self-host por último.
 
 ## Versioning policy (2026-07-13)
 
-**Histórico:** S3 justifica **`0.3.0`** (breaking de superfície). Inferência Nim-local = **`0.3.1`**; opção B (campo/index/call/pipe) formalizada em seguida. Cargo workspace e tags git acompanham a superfície; **package** de distribuição fica para depois das pendências.
+**Histórico:** S3 = **`0.3.0`**. Inferência + opção B = **`0.3.1`**. Package + M1/M3/stdlib residual = **`0.3.2`**.
 
 | Linguagem | Tempo em 0.x | Versão atual | Status |
 |-----------|-------------|--------------|--------|
 | Zig | ~10 anos | 0.14 | Consolidada, ainda sem 1.0 |
 | Rust | ~6 anos (pre-1.0) | 1.0 em 2015 | Estável após 0.12 |
-| Ori | dias | **0.3.1** (tags; package adiado) | Pre-1.0, S3 + inference |
+| Ori | dias | **0.3.2** (package Win/Linux) | Pre-1.0, S3 + inference + M1 |
 
 **Regras até 1.0:**
-- Superfície S3 = CHANGELOG **`[0.3.0]`**; inference = **`[0.3.1]`**.
-- Cargo/`runtime-link.json` = versão atual do workspace (**0.3.1**).
-- **Package** (zip/tar + smoke release) só após fechar pendências de runtime/stdlib/tooling — não bloqueia tags de superfície.
-- Patch versions (`0.3.2`, …) para correções e small additive features.
+- Superfície S3 = CHANGELOG **`[0.3.0]`**; inference = **`[0.3.1]`**; package/M1 = **`[0.3.2]`**.
+- Cargo/`runtime-link.json` = versão atual do workspace (**0.3.2**).
+- Patch versions (`0.3.3`, …) para correções e small additive features.
 - `0.4+` só com breaking real ou marco grande acordado.
 - `1.0` é critério de maturidade (anos, não dias), na **ordem tática**:
-  1. **Stdlib** corrigida/consolidada (Layer 2+3; mesclagem a discutir) — **M2**
-  2. **ABI estável documentada** — **após** features finais — **M3**
-  3. **Independência do Rust** para quem instala Ori sem toolchain Rust — **M1** (depois de M2+M3)
+  1. **Stdlib** consolidada (Layer 2+3; pais `ori.X` + `public alias` de domínio) — **M2 ✅**
+  2. **ABI estável documentada** — **M3 ✅** (`docs/spec/19-abi.md`, `ori-native-abi-1`)
+  3. **Independência do Rust** para quem instala Ori sem toolchain Rust — **M1 ✅**
   4. Self-hosting = **última** discussão de linguagem (**M4**)
   5. Estabilidade de contrato (ex.: sem breaking prolongado) quando se aproximar de 1.0
 
-**Prioridade tática (2026-07-13):** **M2 → M3 → M1 → M4**. Ver `docs/planning/PENDENTES.md`.
+**Prioridade tática (2026-07-13):** **M2 ✅ → M3 ✅ → M1 ✅ → M4 (última)**. Ver `docs/planning/PENDENTES.md`.
 
 ## Rust Independence Strategy (2026-07-02)
 
@@ -238,19 +237,21 @@ Para `ori run` (JIT): **nenhum linker é necessário** — apenas o cdylib do ru
 
 ### Critérios técnicos para 1.0 (ordem: M2 → M3 → M1 → M4)
 
-1. Stdlib consolidada (Layer 2+3; Layer 1 Rust por design) — **M2**
-2. ABI estável documentada — **M3**
-3. Independência do Rust no caminho do instalador final — **M1**
+1. Stdlib consolidada (Layer 2+3; Layer 1 Rust por design) — **M2 ✅**
+2. ABI estável documentada (`docs/spec/19-abi.md`, `ori-native-abi-1`) — **M3 ✅**
+3. Independência do Rust no caminho do instalador final — **M1 ✅**
 4. Self-hosting **ou** bootstrapping documentado — **M4** (última)
 5. Estabilidade de contrato (ex. janela sem breaking) ao aproximar 1.0
 
 ### Próximos passos táticos
 
-**Ordem:** M2 stdlib → M3 ABI → **depois** M1 (itens abaixo) → M4 self-host.
+**Ordem:** M2 ✅ → M3 ✅ → M1 ✅ → **M4** self-host (última discussão).
 
-- [ ] *(M1, após M2+M3)* Smoke Windows/Linux/macOS sem Rust toolchain
-- [ ] *(M1)* CI job que valida release package em runner sem Rust
-- [ ] *(M1)* Manter `docs/install.md` alinhado aos prereqs do sistema
+- [x] *(M1)* Smoke package (`tools/smoke_native_release.*` S3 + `compiler/target`)
+- [x] *(M1)* CI `smoke-no-rust` (linux/windows/macos) sem Rust no PATH
+- [x] *(M1)* `docs/install.md` + `tools/smoke_no_rust.sh`
+- [x] *(opcional)* Publicar package Win/Linux em release GitHub (ver `docs/install.md`)
+- [ ] *(M4)* Self-hosting — só quando o resto estiver estável
 
 ## Known Pitfalls
 
