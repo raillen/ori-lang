@@ -1,8 +1,8 @@
 # Ori — single implementation backlog
 
 > **This file is the only active “what remains to implement” list.**  
-> Surface baseline: **S3 `0.3.0`** + inference B **`0.3.1`** + package **`0.3.2`**.  
-> Last consolidated: **2026-07-13** (language-first focus).
+> Surface baseline: **S3 `0.3.0`** + inference B **`0.3.1`** + package **`0.3.3`**.  
+> Last consolidated: **2026-07-13** (language-first closed; FREEZE-1 + Linux deb).
 
 ---
 
@@ -43,7 +43,8 @@
 | DONE-STDLIB-1…5 / 4b / 4k | Canonical stdlib + async I/O + poll reactor |
 | DONE-LANG-1 / LANG-2 | Native async subset + C/debug sync matrix slice |
 | DONE-PKG-1…4 | Path/git/registry (code exists; not market push) |
-| DONE-FREEZE-1 / ABI-1 | Freeze window open; ABI-1 in force |
+| DONE-FREEZE-1 / ABI-1 | Freeze window open; ABI-1 in force; readiness checklist finalized |
+| DONE-DIST-LINUX-DEB | Linux `.tar.gz` + `.deb` via `package_native_release` / `package_deb`; CI release assets |
 | DONE-LANG-DOC | User docs + examples aligned to S3 / current stdlib / editors local |
 | DONE-LANG-PERF | AOT/JIT, stage release, mold/lld PATH, microbench + ARC bench; living JIT lower only |
 | DONE-LANG-RES | Native residual inventory Spec 14; product surface gate test; reopen only on concrete blocker |
@@ -77,7 +78,7 @@ Do **not** pull these into “what’s next” until the user re-opens them:
 
 | ID | Item |
 |----|------|
-| DIST-1 / DIST-2 / DIST-3 / DIST-4 | Multi-OS packages, smoke matrix, extra triples |
+| DIST-1 / DIST-2 / DIST-3 / DIST-4 | Multi-OS packages (Win/macOS), smoke matrix, extra triples — Linux ship + deb **done** |
 | TOOL-MP | VS Code Marketplace / Open VSX publish |
 | ECO-1 / ECO-2 | External demos (raylib/sqlite community packages) |
 | M4 | Self-hosting |

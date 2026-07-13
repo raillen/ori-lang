@@ -69,4 +69,4 @@ The extension sets `ORI_STDLIB_ROOT` when it finds `stdlib/` in the worktree.
 
 ## Version
 
-Matches Ori package line **0.3.2** (S3 + inference B).
+Matches Ori package line **0.3.3** (S3 + inference B + FREEZE-1).

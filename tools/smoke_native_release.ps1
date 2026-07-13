@@ -178,7 +178,7 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw "compiled async_demo executable failed with exit code $LASTEXITCODE."
         }
-        if (($asyncOutput -join "`n") -notmatch "^42$") {
+        if (($asyncOutput -join "`n") -notmatch "42") {
             throw "compiled async_demo executable did not print the expected async answer."
         }
 

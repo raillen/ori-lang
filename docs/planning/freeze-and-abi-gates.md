@@ -1,8 +1,9 @@
 # Freeze and ABI gates (FREEZE-1 / ABI-1)
 
-> **Status (2026-07-13):** both gates **done / in force**.  
+> **Status (2026-07-13):** both gates **done / in force** — process **finalized**.  
 > Calendar window: opened **2026-07-13** · remains open through pre-1.0 `0.3.x`
-> until an explicit exit is recorded in CHANGELOG + this file.
+> until an explicit exit is recorded in CHANGELOG + this file.  
+> 1.0 readiness checklist: [`freeze-1-0-readiness.md`](freeze-1-0-readiness.md).
 
 ---
 

@@ -3,7 +3,7 @@
 > **Audience:** end users who want to write Ori programs **without** cloning this
 > repository and **without** a Rust toolchain.  
 > **Portuguese:** [install.pt-BR.md](install.pt-BR.md)  
-> **Surface:** S3 · package **v0.3.2** · M1 (Rust-free install path) complete
+> **Surface:** S3 · package **v0.3.3** · M1 (Rust-free install path) complete · FREEZE-1 on 0.3.x
 
 ## System prerequisites
 
@@ -64,22 +64,33 @@ xcode-select --install
 > DIST-1/2). On those OSes, use **build from source** below.
 
 1. Download from [GitHub Releases](https://github.com/raillen/ori-lang/releases).
-   Example **v0.3.2**:
-   - **Linux (shipped):** `ori-v0.3.2-x86_64-unknown-linux-gnu.tar.gz`
-   - Windows / macOS: build from source (release zip/tar not published yet)
+   Example **v0.3.3**:
+   - **Linux tarball:** `ori-v0.3.3-x86_64-unknown-linux-gnu.tar.gz`
+   - **Linux Debian/Ubuntu:** `ori_0.3.3_amd64.deb`
+   - Windows / macOS: build from source (release packages not published yet)
 
-2. Extract to a directory (e.g. `~/ori`, `C:\Tools\ori`).
+#### Option A — tarball
+
+2. Extract to a directory (e.g. `~/ori`).
 
 3. Expected layout:
 
    | Path | Role |
    |------|------|
-   | `ori` / `ori.exe` | CLI |
-   | `ori-lsp` / `ori-lsp.exe` | LSP server |
+   | `ori` | CLI |
+   | `ori-lsp` | LSP server |
    | `stdlib/` | Layer 2/3 `.orl` modules |
    | `runtime/<triple>/` | staticlib + cdylib + `runtime-link.json` |
 
 4. Put the directory on your `PATH`.
+
+#### Option B — `.deb` (Debian / Ubuntu)
+
+```bash
+sudo dpkg -i ori_0.3.3_amd64.deb
+# installs /usr/lib/ori + /usr/bin/ori + /usr/bin/ori-lsp
+# AOT still needs: sudo apt install build-essential
+```
 
 5. Verify:
 

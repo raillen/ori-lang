@@ -6,11 +6,15 @@ archive_path=""
 skip_build=0
 force=0
 
+skip_deb=0
+deb_path=""
+
 usage() {
     cat <<'USAGE'
-Usage: tools/package_native_release.sh [--package-root DIR] [--archive PATH] [--skip-build] [--force]
+Usage: tools/package_native_release.sh [--package-root DIR] [--archive PATH] [--deb PATH] [--skip-build] [--skip-deb] [--force]
 
-Builds and validates a release-style Ori package, then writes a .tar.gz archive.
+Builds and validates a release-style Ori package, then writes a .tar.gz archive
+and (on Linux with dpkg-deb) a .deb package.
 The package is created through tools/smoke_native_release.sh, so compile/test/JIT
 smoke checks must pass before the archive is produced.
 USAGE
@@ -26,8 +30,16 @@ while [ "$#" -gt 0 ]; do
             archive_path="${2:-}"
             shift 2
             ;;
+        --deb)
+            deb_path="${2:-}"
+            shift 2
+            ;;
         --skip-build)
             skip_build=1
+            shift
+            ;;
+        --skip-deb)
+            skip_deb=1
             shift
             ;;
         --force)
@@ -100,3 +112,26 @@ tar -czf "$archive_path" -C "$(dirname -- "$package_root")" "$(basename -- "$pac
 
 printf 'native release package: %s\n' "$package_root"
 printf 'native release archive: %s\n' "$archive_path"
+
+# Debian package (Linux only). Optional; skip when dpkg-deb missing or --skip-deb.
+case "$(uname -s)" in
+    Linux)
+        if [ "$skip_deb" -eq 0 ] && command -v dpkg-deb >/dev/null 2>&1; then
+            if [ -z "$deb_path" ]; then
+                deb_path="$dist_root/ori_${version}_amd64.deb"
+            fi
+            if [ -e "$deb_path" ] && [ "$force" -eq 0 ]; then
+                echo "deb already exists at $deb_path; pass --force to replace it" >&2
+                exit 2
+            fi
+            "$script_dir/package_deb.sh" \
+                --package-root "$package_root" \
+                --output "$deb_path" \
+                --version "$version" \
+                --arch amd64
+            printf 'native release deb: %s\n' "$deb_path"
+        elif [ "$skip_deb" -eq 0 ]; then
+            echo "warning: dpkg-deb not found; skipping .deb (install dpkg-dev to enable)" >&2
+        fi
+        ;;
+esac

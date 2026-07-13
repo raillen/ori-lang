@@ -13859,7 +13859,8 @@ fn find_bundled_rust_lld() -> Result<PathBuf, String> {
         }
         let candidate = PathBuf::from(path);
         if candidate.is_file() {
-            return Ok(candidate);
+            // Explicit path: still require a runnable binary (missing libLLVM → fail early).
+            return validate_rust_lld_runs(&candidate).map(|()| candidate);
         }
         return Err(format!(
             "ORI_RUST_LLD points to `{}` which does not exist",
@@ -13872,10 +13873,12 @@ fn find_bundled_rust_lld() -> Result<PathBuf, String> {
     }
 
     if let Some(sysroot_lld) = discover_rust_lld_from_rustc(Path::new("rustc")) {
-        return Ok(sysroot_lld);
+        if validate_rust_lld_runs(&sysroot_lld).is_ok() {
+            return Ok(sysroot_lld);
+        }
     }
 
-    Err("could not locate rust-lld; set ORI_RUST_LLD or install Rust toolchain".to_string())
+    Err("could not locate a runnable rust-lld; set ORI_RUST_LLD or install Rust toolchain".to_string())
 }
 
 fn discover_bundled_rust_lld_next_to_exe() -> Option<PathBuf> {
@@ -13891,7 +13894,31 @@ fn discover_bundled_rust_lld_from_exe_dir(dir: &Path) -> Option<PathBuf> {
         "rust-lld"
     };
     let candidates = [dir.join("runtime").join("bin").join(name), dir.join(name)];
-    candidates.into_iter().find(|candidate| candidate.is_file())
+    candidates
+        .into_iter()
+        .find(|candidate| candidate.is_file() && validate_rust_lld_runs(candidate).is_ok())
+}
+
+/// `rust-lld` from the Rust sysroot is often dynamically linked to `libLLVM` and
+/// fails with exit 127 when copied into a release package without that library.
+/// Prefer SystemLinker in that case rather than a non-runnable BundledRustLld.
+fn validate_rust_lld_runs(lld: &Path) -> Result<(), String> {
+    let output = std::process::Command::new(lld)
+        .arg("--version")
+        .output()
+        .map_err(|e| format!("could not execute `{}`: {e}", lld.display()))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Err(format!(
+        "`{} --version` failed (status {:?}): {}{}",
+        lld.display(),
+        output.status.code(),
+        stdout.trim(),
+        stderr.trim()
+    ))
 }
 
 /// Discover Windows MSVC CRT library directories using `vswhere.exe` and the

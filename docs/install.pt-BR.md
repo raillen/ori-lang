@@ -3,7 +3,7 @@
 > **Público-alvo:** usuários finais que querem desenvolver em Ori **sem** clonar
 > o repositório e **sem** toolchain Rust.  
 > **English:** [install.md](install.md)  
-> **Superfície:** S3 · package **v0.3.2** · M1 (instalação sem Rust) fechada
+> **Superfície:** S3 · package **v0.3.3** · M1 (instalação sem Rust) fechada · FREEZE-1 em 0.3.x
 
 ## Requisitos do sistema
 
@@ -44,15 +44,23 @@ sudo apt update && sudo apt install build-essential
 > (BACKLOG DIST-1/2). Nesses OSes, use **build a partir do código-fonte**.
 
 1. Baixe em [GitHub Releases](https://github.com/raillen/ori-lang/releases)
-   (ex. **v0.3.2**):
-   - **Linux (publicado):** `ori-v0.3.2-x86_64-unknown-linux-gnu.tar.gz`
-   - Windows / macOS: compile do fonte (zip/tar de release ainda não publicados)
-2. Extraia (ex. `~/ori`).
-3. Layout: `ori`, `ori-lsp`, `stdlib/`, `runtime/<triple>/`.
-4. Coloque no `PATH`.
-5. Verifique: `ori --version` e `ori doctor`.
+   (ex. **v0.3.3**):
+   - **Linux tarball:** `ori-v0.3.3-x86_64-unknown-linux-gnu.tar.gz`
+   - **Linux .deb:** `ori_0.3.3_amd64.deb`
+   - Windows / macOS: compile do fonte (packages de release ainda não publicados)
 
-Esperado: stdlib, runtime AOT + JIT, triple, **SystemLinker**, JIT para `ori run`.
+**Tarball:** extraia (ex. `~/ori`), layout `ori` + `ori-lsp` + `stdlib/` + `runtime/<triple>/`, coloque no `PATH`.
+
+**Debian/Ubuntu:**
+
+```bash
+sudo dpkg -i ori_0.3.3_amd64.deb
+# AOT: sudo apt install build-essential
+```
+
+Verifique: `ori --version` e `ori doctor`.
+
+Esperado: stdlib, runtime AOT + JIT, triple, linker (BundledRustLld ou SystemLinker), JIT para `ori run`.
 
 ---
 

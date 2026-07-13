@@ -11,15 +11,34 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Notas
-- Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package + M1/M3/stdlib = **`[0.3.2]`**.
-- **Foco de produto:** linguagem + docs/exemplos + performance + DX local.
-  Distribuição multi-OS e publicação em lojas de extensão **adiadas**.
+- Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package line **`[0.3.3]`**.
+
+---
+
+## [0.3.3] — 2026-07-13
+
+### Notas
+- Language-first implementation queue **closed** (LANG-DOC/PERF/RES done).
+- **FREEZE-1** remains open on `0.3.x` (readiness: `docs/planning/freeze-1-0-readiness.md`).
+- Linux release assets: **`.tar.gz` + `.deb`**.
+
+### Adicionado (distribuição Linux)
+- **`tools/package_deb.sh`:** builds `ori_<ver>_amd64.deb` (`/usr/lib/ori` +
+  `/usr/bin/ori{,-lsp}`).
+- **`tools/package_native_release.sh`:** also emits `.deb` when `dpkg-deb` is
+  available.
+- **CI `release.yml`:** publishes tarball **and** deb on tag `v*`.
+- **Install docs:** deb path in `docs/install.md`.
+- **Package smoke:** does not bundle non-portable `rust-lld` (needs libLLVM);
+  AOT uses **SystemLinker**. BundledRustLld only if `rust-lld --version` runs.
+- **Freeze readiness:** `docs/planning/freeze-1-0-readiness.md` (FREEZE-1 process
+  finalized; window remains open on 0.3.x).
 
 ### Adicionado (editor DX local)
-- **VS Code extension `0.3.2`:** discovery de `ori`/`ori-lsp` em
+- **VS Code extension `0.3.3`:** discovery de `ori`/`ori-lsp` em
   `compiler/target/{debug,release}`; setting `ori.useAot`; install local via
   `.vsix` apenas (sem Marketplace). README alinhado ao monorepo.
-- **Zed extension** `extensions/zed-ori`: linguagem `.orl` + discovery de
+- **Zed extension** `extensions/zed-ori` **0.3.3**: linguagem `.orl` + discovery de
   `ori-lsp` no PATH; install como **dev extension** (sem store).
 
 ### Adicionado / refatorado (exemplos P1–P4)

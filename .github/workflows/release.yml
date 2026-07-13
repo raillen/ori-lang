@@ -1,7 +1,7 @@
 name: release
 
-# Builds the **Linux** native package and publishes a GitHub Release on tag `v*`.
-# Windows/macOS packages are deferred (Linux-only product path — BACKLOG DIST-1/2).
+# Builds the **Linux** native package (.tar.gz + .deb) and publishes a GitHub
+# Release on tag `v*`. Windows/macOS packages deferred (DIST multi-OS).
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (must already exist on the branch tip, e.g. v0.3.2)"
+        description: "Tag to release (must already exist on the branch tip, e.g. v0.3.3)"
         required: true
         type: string
 
@@ -32,18 +32,17 @@ jobs:
           rustc -Vv
           cargo -V
 
-      - name: Package (Linux)
+      - name: Package (Linux tar.gz + deb)
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential
+          sudo apt-get install -y build-essential dpkg-dev
+          version=$(echo "${{ github.ref_name }}" | sed 's/^v//')
           sh tools/package_native_release.sh \
             --package-root "compiler/target/dist/ori-x86_64-unknown-linux-gnu" \
             --archive "compiler/target/dist/ori-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz" \
+            --deb "compiler/target/dist/ori_${version}_amd64.deb" \
             --force
           ls -la compiler/target/dist/ || true
-
-      # True smoke-no-rust (no rustc on PATH) lives in native-route.yml
-      # (smoke-no-rust-linux). This job already has Rust to *build* the package.
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
@@ -51,6 +50,7 @@ jobs:
           name: ori-x86_64-unknown-linux-gnu
           path: |
             compiler/target/dist/ori-*-x86_64-unknown-linux-gnu.tar.gz
+            compiler/target/dist/ori_*_amd64.deb
           if-no-files-found: error
 
   publish:
@@ -70,11 +70,13 @@ jobs:
       - name: List assets
         run: find dist -type f -ls || true
 
-      - name: Require Linux package asset
+      - name: Require Linux package assets
         run: |
-          count=$(find dist -type f -name '*.tar.gz' | wc -l)
-          echo "asset_count=$count"
-          test "$count" -ge 1
+          tar_count=$(find dist -type f -name '*.tar.gz' | wc -l)
+          deb_count=$(find dist -type f -name '*.deb' | wc -l)
+          echo "tar_count=$tar_count deb_count=$deb_count"
+          test "$tar_count" -ge 1
+          test "$deb_count" -ge 1
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
@@ -84,17 +86,33 @@ jobs:
           body: |
             Ori **${{ github.ref_name }}** native package (**Linux only**).
 
-            - Linux: `ori-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz`
+            ### Assets
+            - Portable: `ori-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz`
+            - Debian/Ubuntu: `ori_*_amd64.deb`
 
-            Windows/macOS release packages are deferred. See `docs/install.md` and
-            `docs/planning/BACKLOG.md` (DIST-1 / DIST-2).
+            ### Install
+            ```bash
+            # tarball
+            tar -xzf ori-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz
+            export PATH="$PWD/ori-x86_64-unknown-linux-gnu:$PATH"
 
-            ABI: `ori-native-abi-1`.
+            # or deb
+            sudo dpkg -i ori_*_amd64.deb
+            ori doctor
+            ```
+
+            AOT needs `build-essential`. JIT (`ori run`) does not.
+
+            Windows/macOS packages deferred. See `docs/install.md`.
+
+            ABI: `ori-native-abi-1` · FREEZE-1 in force on 0.3.x.
           prerelease: true
           fail_on_unmatched_files: false
           make_latest: true
           files: |
             dist/**/*.tar.gz
+            dist/**/*.deb
             dist/*.tar.gz
+            dist/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
