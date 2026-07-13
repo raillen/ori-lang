@@ -175,8 +175,8 @@ end
                 r#"module app.main
 import ori.task = task
 main()
-    const callback: func() -> int = do() => 1
-    const job: task.Job[int] = task.spawn(do() => callback())
+    const callback: func() -> int = () => 1
+    const job: task.Job[int] = task.spawn(() => callback())
 end
 "#,
             )],

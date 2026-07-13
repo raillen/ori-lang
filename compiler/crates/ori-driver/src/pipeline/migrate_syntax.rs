@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 pub struct MigrateSyntaxOptions {
     /// When true, do not write files; only report planned changes.
     pub dry_run: bool,
-    /// Print each rewrite tag applied per file.
+    /// When true, list every scanned file in the summary (`[ok]` for unchanged).
     pub verbose: bool,
 }
 
@@ -50,7 +50,12 @@ impl MigrateSyntaxReport {
         self.files.iter().filter(|f| f.changed).count()
     }
 
-    pub fn format_summary(&self) -> String {
+    /// Format a human-readable summary.
+    ///
+    /// When `verbose` is true, every scanned file is listed (`[ok]` for
+    /// unchanged sources). When false, only changed files, files with notes,
+    /// and skipped paths are shown.
+    pub fn format_summary(&self, verbose: bool) -> String {
         let mut out = String::new();
         let scanned = self.files.len();
         let changed = self.changed_count();
@@ -58,16 +63,25 @@ impl MigrateSyntaxReport {
             "migrate-syntax: scanned {scanned} file(s), changed {changed}\n"
         ));
         for file in &self.files {
-            if !file.changed && file.notes.is_empty() {
+            let quiet_unchanged = !file.changed && file.notes.is_empty();
+            if quiet_unchanged && !verbose {
                 continue;
             }
-            let status = if file.changed { "changed" } else { "notes" };
+            let status = if file.changed {
+                "changed"
+            } else if !file.notes.is_empty() {
+                "notes"
+            } else {
+                "ok"
+            };
             out.push_str(&format!("  [{status}] {}\n", file.path.display()));
-            for tag in &file.rewrites {
-                out.push_str(&format!("    - {tag}\n"));
-            }
-            for note in &file.notes {
-                out.push_str(&format!("    ! {note}\n"));
+            if verbose || file.changed || !file.notes.is_empty() {
+                for tag in &file.rewrites {
+                    out.push_str(&format!("    - {tag}\n"));
+                }
+                for note in &file.notes {
+                    out.push_str(&format!("    ! {note}\n"));
+                }
             }
         }
         for path in &self.skipped {
@@ -1179,5 +1193,55 @@ end
             result.source
         );
         assert!(result.source.contains("list[int]"));
+    }
+
+    #[test]
+    fn skips_ori_game_and_ori_imgui_package_paths() {
+        assert!(should_skip_path(Path::new("packages/ori-game")));
+        assert!(should_skip_path(Path::new("packages/ori-imgui")));
+        assert!(should_skip_path(Path::new(
+            "/repo/packages/ori-game/src/main.orl"
+        )));
+        assert!(should_skip_path(Path::new(
+            "/repo/packages/ori-imgui/src/lib.orl"
+        )));
+        assert!(should_skip_path(Path::new(
+            "vendor/ori-game/src/main.orl"
+        )));
+        assert!(!should_skip_path(Path::new("stdlib/list.orl")));
+        assert!(!should_skip_path(Path::new("examples/hello_world.orl")));
+        assert!(!should_skip_path(Path::new(
+            "packages/other-lib/src/main.orl"
+        )));
+    }
+
+    #[test]
+    fn format_summary_verbose_lists_unchanged_files() {
+        let report = MigrateSyntaxReport {
+            files: vec![
+                MigratedFile {
+                    path: PathBuf::from("a.orl"),
+                    changed: false,
+                    rewrites: Vec::new(),
+                    notes: Vec::new(),
+                },
+                MigratedFile {
+                    path: PathBuf::from("b.orl"),
+                    changed: true,
+                    rewrites: vec!["namespace→module".into()],
+                    notes: Vec::new(),
+                },
+            ],
+            skipped: vec![PathBuf::from("packages/ori-game")],
+        };
+        let quiet = report.format_summary(false);
+        assert!(quiet.contains("[changed] b.orl"));
+        assert!(!quiet.contains("[ok] a.orl"));
+        assert!(quiet.contains("[skipped] packages/ori-game"));
+
+        let verbose = report.format_summary(true);
+        assert!(verbose.contains("[ok] a.orl"), "{verbose}");
+        assert!(verbose.contains("[changed] b.orl"));
+        assert!(verbose.contains("namespace→module"));
     }
 }

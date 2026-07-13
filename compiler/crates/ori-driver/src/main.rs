@@ -158,7 +158,7 @@ enum Commands {
         /// Report changes without writing files.
         #[arg(long)]
         dry_run: bool,
-        /// Print rewrite tags for every touched file.
+        /// List every scanned file (`[ok]` for unchanged) and rewrite tags.
         #[arg(long, short = 'v')]
         verbose: bool,
     },
@@ -725,7 +725,7 @@ fn main() {
                     process::exit(2);
                 }
                 Ok(report) => {
-                    print!("{}", report.format_summary());
+                    print!("{}", report.format_summary(*verbose));
                     if *dry_run {
                         eprintln!(
                             "migrate-syntax: dry-run only ({} file(s) would change)",
