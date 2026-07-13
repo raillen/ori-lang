@@ -41,8 +41,8 @@ test_engine() -> void
     assert(eng.entities.len() == 0)
 
     var e = engine.spawn_entity(eng, vec2.Vec2 {x: 100.0, y: 200.0},
-        update_fn = do(e: Entity, dt: float) => end,
-        draw_fn = do(e: Entity) => end
+        update_fn = (e: Entity, dt: float) => end,
+        draw_fn = (e: Entity) => end
     )
     assert(e.id == 0)
     assert(e.pos.x == 100.0)
@@ -51,7 +51,7 @@ end
 
 test_timer() -> void
     var completed = false
-    var t = ori.game.timer.create_timer(1.0, false, do() =>
+    var t = ori.game.timer.create_timer(1.0, false, () =>
         completed = true
     end)
 

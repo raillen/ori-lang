@@ -115,7 +115,7 @@ test_timer() -> void
     var completed = false
     var t = Timer {
         duration: 1.0,
-        on_complete = do() =>
+        on_complete = () =>
             completed = true
         end
     }

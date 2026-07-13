@@ -145,6 +145,23 @@ enum Commands {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
+    /// Best-effort rewrite of pre-S3 Ori syntax (`.orl` files).
+    ///
+    /// Mechanical migrations: `namespace`→`module`, strip decl `func`,
+    /// `import as`/`only`, `<>`→`[]`, `else if`→`elif`, `do(`→`(`, simple `?`→`try`,
+    /// and scaffold headers for `implement`/`apply Trait to`. Skips
+    /// `packages/ori-game` and `packages/ori-imgui`. Does not rewrite `.oridoc`.
+    #[command(name = "migrate-syntax")]
+    MigrateSyntax {
+        /// Files or directories to migrate (recurses for `*.orl`).
+        paths: Vec<PathBuf>,
+        /// Report changes without writing files.
+        #[arg(long)]
+        dry_run: bool,
+        /// Print rewrite tags for every touched file.
+        #[arg(long, short = 'v')]
+        verbose: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -690,6 +707,35 @@ fn main() {
                 process::exit(if errors > 0 { 1 } else { 0 });
             }
         },
+
+        Commands::MigrateSyntax {
+            paths,
+            dry_run,
+            verbose,
+        } => {
+            match pipeline::run_migrate_syntax(
+                paths,
+                pipeline::MigrateSyntaxOptions {
+                    dry_run: *dry_run,
+                    verbose: *verbose,
+                },
+            ) {
+                Err(e) => {
+                    eprintln!("ori: {e}");
+                    process::exit(2);
+                }
+                Ok(report) => {
+                    print!("{}", report.format_summary());
+                    if *dry_run {
+                        eprintln!(
+                            "migrate-syntax: dry-run only ({} file(s) would change)",
+                            report.changed_count()
+                        );
+                    }
+                    process::exit(0);
+                }
+            }
+        }
     }
 }
 

@@ -433,7 +433,7 @@ apply Point
 end
 
 main()
-    const p: Point = Point(x: 1, y: 2)
+    const p: Point = Point { x: 1, y: 2 }
     const name: string = p.debugName()
 end
 "#,
@@ -470,7 +470,7 @@ apply Point
 end
 
 main()
-    const p: Point = Point(x: 3)
+    const p: Point = Point { x: 3 }
     const v: int = p.freeMethod()
 end
 "#,
@@ -545,7 +545,7 @@ apply Player
 end
 
 main()
-    const player: Player = Player(score: 99)
+    const player: Player = Player { score: 99 }
     const id: int = player.id()
 end
 "#,

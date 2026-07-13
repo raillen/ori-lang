@@ -18,6 +18,12 @@ const NATIVE_ABI_MISMATCH: &str = "native.abi_mismatch";
 
 mod doc_html;
 mod fmt;
+mod migrate_syntax;
+
+pub use migrate_syntax::{
+    migrate_source, run_migrate_syntax, MigrateSyntaxOptions, MigrateSyntaxReport, MigrateTextResult,
+    MigratedFile,
+};
 
 // â”€â”€ Output types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 

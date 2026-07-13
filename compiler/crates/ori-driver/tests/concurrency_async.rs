@@ -64,7 +64,7 @@ import ori.channel = channel
 import ori.atomic = atomic
 
 main()
-    const job: task.Job[int] = task.spawn(do() => 41)
+    const job: task.Job[int] = task.spawn(() => 41)
     const joined: result[int, task.JoinError] = task.join(job)
     const ch: channel.Channel[int] = channel.create()
     const sent: result[void, channel.SendError] = channel.send(ch, 7)
@@ -194,8 +194,8 @@ fn check_rejects_non_transferable_spawn_capture() {
 import ori.task = task
 
 main()
-    const callback: func() -> int = do() => 1
-    const job: task.Job[int] = task.spawn(do() => callback())
+    const callback: func() -> int = () => 1
+    const job: task.Job[int] = task.spawn(() => callback())
 end
 "#,
     );
@@ -220,7 +220,7 @@ import ori.channel = channel
 
 main()
     const ch: channel.Channel[func() -> int] = channel.create()
-    const sent: result[void, channel.SendError] = channel.send(ch, do() => 1)
+    const sent: result[void, channel.SendError] = channel.send(ch, () => 1)
 end
 "#,
     );
@@ -302,7 +302,7 @@ import ori.io = io
 import ori.task = task
 
 main()
-    const job: task.Job[int] = task.spawn(do() => 41)
+    const job: task.Job[int] = task.spawn(() => 41)
     match task.join(job)
         case success(value):
             io.print(string(value))
@@ -1020,7 +1020,7 @@ import ori.task = task
 
 async main()
     const prefix: string = "value"
-    const format: func(int) -> string = do(x: int) -> string
+    const format: func(int) -> string = (x: int) -> string
         const next: int = x + 1
         return prefix
     end
@@ -1582,7 +1582,7 @@ end
 
 main()
     const token: task.CancelToken = task.create_token()
-    const job: task.Job[void] = task.spawn(do() -> void
+    const job: task.Job[void] = task.spawn(() -> void
         task.block_on(worker(token))
     end)
     task.block_on(task.sleep(50))
@@ -1694,7 +1694,7 @@ end
 main()
     const path: string = "{test_file}"
     const token: task.CancelToken = task.create_token()
-    const job: task.Job[void] = task.spawn(do() -> void
+    const job: task.Job[void] = task.spawn(() -> void
         task.block_on(worker(token, path))
     end)
     task.block_on(task.sleep(50))
@@ -1924,7 +1924,7 @@ end
 end
 
 main()
-const job: task.Job[int] = task.spawn(do() => 41)
+const job: task.Job[int] = task.spawn(() => 41)
 const r: int = task.block_on(work(task.join(job)))
 io.print(string(r))
 end
@@ -1948,7 +1948,7 @@ end
     );
     // task.spawn with closure at 4-space indent inside main.
     assert!(
-        once.contains("    const job: task.Job[int] = task.spawn(do() => 41)\n"),
+        once.contains("    const job: task.Job[int] = task.spawn(() => 41)\n"),
         "task.spawn formatting: {once}"
     );
     // Nested using: `using file` at 4, match at 4, case arm at 4, `using copy`

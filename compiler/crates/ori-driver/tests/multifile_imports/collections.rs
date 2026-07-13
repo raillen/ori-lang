@@ -536,7 +536,7 @@ import ori.list = lists
 import ori.tree = tree
 
 main()
-    const t: tree.Tree<string> = tree.new("root")
+    const t: tree.Tree[string] = tree.new("root")
     const root: tree.NodeId = tree.root(t)
     const left: tree.NodeId = tree.add_child(t, root, "left")
     const right: tree.NodeId = tree.add_child(t, root, "right")
@@ -614,7 +614,7 @@ import ori.io = io
 import ori.tree = tree
 
 main()
-    const t: tree.Tree<int> = tree.new(1)
+    const t: tree.Tree[int] = tree.new(1)
     io.print(string(tree.value(t, 999)))
 end
 "#,
@@ -1171,7 +1171,7 @@ main()
     const table_copy: map[string, int] = maps.clone(table)
     io.print(string(maps.len(table_copy)))
 
-    const outline: tree.Tree<string> = tree.new("root")
+    const outline: tree.Tree[string] = tree.new("root")
     const root: tree.NodeId = tree.root(outline)
     const left: tree.NodeId = tree.add_child(outline, root, "left")
     const right: tree.NodeId = tree.add_child(outline, root, "right")
@@ -1191,9 +1191,9 @@ main()
         case none:
             io.print("missing")
     end
-    const branch: tree.Tree<string> = tree.clone_subtree(outline, right)
+    const branch: tree.Tree[string] = tree.clone_subtree(outline, right)
     io.print(tree.value(branch, tree.root(branch)))
-    const outline_copy: tree.Tree<string> = tree.clone(outline)
+    const outline_copy: tree.Tree[string] = tree.clone(outline)
     io.print(string(tree.len(outline_copy)))
 
     const dag: graph.Graph[int] = graph.new(true)
@@ -1401,7 +1401,7 @@ main()
             io.print("doubly-missing")
     end
 
-    const tree_values: tree.Tree<string> = tree.new("tree-root")
+    const tree_values: tree.Tree[string] = tree.new("tree-root")
     const root: tree.NodeId = tree.root(tree_values)
     const leaf: tree.NodeId = tree.add_child(tree_values, root, "tree-leaf")
     io.print(tree.value(tree_values, leaf))

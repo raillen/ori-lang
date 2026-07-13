@@ -139,8 +139,8 @@ fn declaration_line_without_modifiers(mut line: &str) -> &str {
 ///
 /// Expression bodies (`=> expr`) do not open an indent block.
 ///
-/// TODO(S3 PR9 migrate-syntax): drop legacy `func name(...)` recognition once
-/// the migrate tooling lands and no format-only dual surface is needed.
+/// Legacy `func name(...)` is still recognized so `ori fmt` can indent
+/// unmigrated buffers; prefer `ori migrate-syntax` then re-format.
 fn is_function_decl_line(line: &str) -> bool {
     // `name(params) -> T => expr` is a single-line body — no indent increase.
     if line.contains("=>") {
