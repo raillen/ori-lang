@@ -1,9 +1,8 @@
-[CmdletBinding()]
 param(
     [string]$PackageRoot = "",
     [string]$ArchivePath = "",
     [switch]$SkipBuild,
-    [switch]$Force
+    [switch]$Overwrite
 )
 
 $ErrorActionPreference = "Stop"

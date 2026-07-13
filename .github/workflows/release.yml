@@ -60,36 +60,55 @@ jobs:
         if: matrix.smoke == 'powershell'
         shell: pwsh
         run: |
-          $ErrorActionPreference = "Stop"
+          $ErrorActionPreference = "Continue"
           $PSNativeCommandUseErrorActionPreference = $false
-          $root = (Resolve-Path .).Path
-          $pkg = Join-Path $root "compiler\target\dist\ori-${{ matrix.name }}"
-          $archive = Join-Path $root "compiler\target\dist\ori-${{ github.ref_name }}-${{ matrix.name }}.zip"
-          Write-Host "PackageRoot=$pkg"
-          Write-Host "ArchivePath=$archive"
-          Write-Host "PSVersion=$($PSVersionTable.PSVersion)"
-          rustc -Vv
-          cargo -V
+          $log = Join-Path $env:RUNNER_TEMP "ori-windows-package.log"
+          Start-Transcript -Path $log -Force | Out-Null
           try {
-            & "$root\tools\package_native_release.ps1" -PackageRoot $pkg -ArchivePath $archive -Force
+            $ErrorActionPreference = "Stop"
+            $root = (Resolve-Path .).Path
+            $pkg = Join-Path $root "compiler\target\dist\ori-${{ matrix.name }}"
+            $archive = Join-Path $root "compiler\target\dist\ori-${{ github.ref_name }}-${{ matrix.name }}.zip"
+            Write-Host "PackageRoot=$pkg"
+            Write-Host "ArchivePath=$archive"
+            Write-Host "PSVersion=$($PSVersionTable.PSVersion)"
+            Write-Host "PWD=$root"
+            Get-ChildItem "$root\tools\*.ps1" | ForEach-Object { Write-Host "tool: $($_.FullName)" }
+            rustc -Vv
+            cargo -V
+            # Dot-source free: invoke with explicit args
+            $script = Join-Path $root "tools\package_native_release.ps1"
+            if (-not (Test-Path -LiteralPath $script)) { throw "missing $script" }
+            & $script -PackageRoot $pkg -ArchivePath $archive -Overwrite
+            if (-not (Test-Path -LiteralPath $archive)) {
+              throw "Archive not produced: $archive"
+            }
+            Get-Item $archive | Format-List FullName, Length
           } catch {
-            Write-Host "ERROR: $($_.Exception.Message)"
-            Write-Host $_.ScriptStackTrace
+            Write-Host "ERROR: $($_.Exception.GetType().FullName): $($_.Exception.Message)"
+            Write-Host "ScriptStackTrace:`n$($_.ScriptStackTrace)"
+            Write-Host "InvocationInfo: $($_.InvocationInfo.PositionMessage)"
             throw
+          } finally {
+            Stop-Transcript | Out-Null
+            if (Test-Path -LiteralPath $log) {
+              Copy-Item -LiteralPath $log -Destination "compiler\target\dist\ori-windows-package.log" -Force -ErrorAction SilentlyContinue
+              New-Item -ItemType Directory -Force -Path "compiler\target\dist" | Out-Null
+              Copy-Item -LiteralPath $log -Destination "compiler\target\dist\ori-windows-package.log" -Force
+              Get-Content $log | Select-Object -Last 80
+            }
           }
-          if (-not (Test-Path -LiteralPath $archive)) {
-            throw "Archive not produced: $archive"
-          }
-          Get-Item $archive | Format-List FullName, Length
 
       - name: Upload package artifact
+        if: always() && matrix.smoke == 'powershell' || matrix.smoke == 'sh'
         uses: actions/upload-artifact@v4
         with:
           name: ori-${{ matrix.name }}
           path: |
             compiler/target/dist/ori-*-${{ matrix.name }}.tar.gz
             compiler/target/dist/ori-*-${{ matrix.name }}.zip
-          if-no-files-found: error
+            compiler/target/dist/ori-windows-package.log
+          if-no-files-found: warn
 
   publish:
     name: publish-release
@@ -116,7 +135,7 @@ jobs:
           echo "asset_count=$count"
           test "$count" -ge 1
 
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -124,7 +143,10 @@ jobs:
           generate_release_notes: true
           prerelease: true
           fail_on_unmatched_files: false
+          make_latest: true
           files: |
+            dist/**/*.tar.gz
+            dist/**/*.zip
             dist/*.tar.gz
             dist/*.zip
         env:
