@@ -44,6 +44,10 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 compiler_root="$repo_root/compiler"
 
+# End-user package AOT path is SystemLinker (no portable rust-lld). Force it for
+# smoke so CI with a Rust sysroot does not pick BundledRustLld accidentally.
+export ORI_USE_SYSTEM_LINKER="${ORI_USE_SYSTEM_LINKER:-1}"
+
 host_triple() {
     rustc -Vv | awk -F': ' '/^host:/ { print $2; exit }'
 }

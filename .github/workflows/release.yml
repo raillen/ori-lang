@@ -24,25 +24,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust (repo rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.95.0"
 
       - name: Show toolchain
         run: |
           rustc -Vv
           cargo -V
+          which rustc ld cc
+          ld --version | head -1 || true
 
       - name: Package (Linux tar.gz + deb)
+        env:
+          ORI_USE_SYSTEM_LINKER: "1"
         run: |
+          set -eux
           sudo apt-get update
           sudo apt-get install -y build-essential dpkg-dev
           version=$(echo "${{ github.ref_name }}" | sed 's/^v//')
+          # workflow_dispatch may not set github.ref_name to the tag; prefer input
+          tag="${{ github.ref_name }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ inputs.tag }}"
+            version=$(echo "$tag" | sed 's/^v//')
+          fi
           sh tools/package_native_release.sh \
             --package-root "compiler/target/dist/ori-x86_64-unknown-linux-gnu" \
-            --archive "compiler/target/dist/ori-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz" \
+            --archive "compiler/target/dist/ori-${tag}-x86_64-unknown-linux-gnu.tar.gz" \
             --deb "compiler/target/dist/ori_${version}_amd64.deb" \
             --force
           ls -la compiler/target/dist/ || true
+          test -f "compiler/target/dist/ori-${tag}-x86_64-unknown-linux-gnu.tar.gz"
+          test -f "compiler/target/dist/ori_${version}_amd64.deb"
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4

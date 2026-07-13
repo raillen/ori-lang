@@ -160,7 +160,11 @@ fi
 mkdir -p "$(dirname -- "$output_path")"
 rm -f "$output_path"
 
-dpkg-deb --build --root-owner-group "$work" "$output_path"
+if dpkg-deb --help 2>&1 | grep -q -- '--root-owner-group'; then
+    dpkg-deb --build --root-owner-group "$work" "$output_path"
+else
+    dpkg-deb --build "$work" "$output_path"
+fi
 rm -rf "$work"
 
 printf 'debian package: %s\n' "$output_path"
