@@ -44,21 +44,15 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
 compiler_root="$repo_root/compiler"
 
-# Package smoke needs a reliable AOT linker on the builder machine.
-# - End-user packages intentionally ship without portable rust-lld (M1).
-# - On CI, SystemLinker can still fail when the runner's environment is
-#   hostile to bare multiarch `cc`/`ld` (seen as `cannot find -lc`).
-# Prefer an explicit override; otherwise use the Rustc driver when available
-# (CI has Rust) and SystemLinker for pure end-user reproduction.
-if [ -z "${ORI_USE_SYSTEM_LINKER:-}" ] && [ -z "${ORI_USE_RUSTC_DRIVER:-}" ] && [ -z "${ORI_USE_BUNDLED_RUST_LLD:-}" ]; then
-    if command -v rustc >/dev/null 2>&1; then
-        export ORI_USE_RUSTC_DRIVER=1
-    else
-        export ORI_USE_SYSTEM_LINKER=1
-    fi
+# Package AOT must use SystemLinker (or BundledRustLld / explicit override).
+# Do NOT default to RustcDriver: ori-runtime is a Rust staticlib that already
+# contains libstd symbols; linking via `rustc` pulls a second libstd and fails
+# with `duplicate symbol: rust_eh_personality`.
+if [ -z "${ORI_USE_SYSTEM_LINKER:-}" ] && [ -z "${ORI_USE_RUSTC_DRIVER:-}" ] && [ -z "${ORI_USE_BUNDLED_RUST_LLD:-}" ] && [ -z "${ORI_NATIVE_LINKER:-}" ]; then
+    export ORI_USE_SYSTEM_LINKER=1
 fi
 # rustup/cargo may leave LIBRARY_PATH pointing at the Rust sysroot, which
-# shadows multiarch libc and breaks `ld`/`cc` with `cannot find -lc`.
+# shadows multiarch libc. Always clear for package smoke.
 unset LIBRARY_PATH || true
 unset LIBPATH || true
 

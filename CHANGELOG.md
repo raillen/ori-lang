@@ -13,6 +13,16 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Notas
 - Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package line **`[0.3.3]`**.
 
+### Corrigido (living maintenance)
+- **Package smoke linker:** always prefer **SystemLinker** for release packaging.
+  Auto-picking `RustcDriver` when `rustc` is on PATH broke AOT smoke by
+  double-linking libstd against `libori_runtime.a` (`duplicate symbol:
+  rust_eh_personality`). Hint added on that failure mode.
+- **Linker diagnostics:** prefer high-signal messages (`duplicate symbol`,
+  `cannot find -l…`) over the generic rustc “linking with cc failed” line.
+- **CI release:** full AOT package smoke restored (`ORI_USE_SYSTEM_LINKER=1`);
+  JIT-only package smoke is no longer the default.
+
 ---
 
 ## [0.3.3] — 2026-07-13

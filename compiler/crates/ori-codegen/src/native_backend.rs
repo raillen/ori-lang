@@ -13580,14 +13580,26 @@ fn link_with_rustc_driver(
     if output.status.success() {
         Ok(())
     } else {
-        Err(format_native_link_failure(
+        let mut err = format_native_link_failure(
             "driver",
             command,
             output.status,
             &output.stdout,
             &output.stderr,
             options,
-        ))
+        );
+        // Living-maintenance note: RustcDriver links a Rust crate (libstd) plus
+        // ori-runtime staticlib (also built with Rust std) → duplicate symbols.
+        if String::from_utf8_lossy(&output.stderr).contains("rust_eh_personality")
+            || String::from_utf8_lossy(&output.stderr).contains("duplicate symbol")
+        {
+            err.push_str(
+                "\nhint: RustcDriver is not suitable for linking against the packaged \
+                 ori-runtime staticlib (duplicate libstd symbols). Prefer SystemLinker \
+                 (`ORI_USE_SYSTEM_LINKER=1`) or BundledRustLld for AOT.",
+            );
+        }
+        Err(err)
     }
 }
 
@@ -14813,11 +14825,21 @@ fn format_native_link_failure(
 }
 
 fn first_non_empty_linker_line<'a>(stderr: &'a str, stdout: &'a str) -> Option<&'a str> {
-    stderr
-        .lines()
-        .chain(stdout.lines())
-        .map(str::trim)
-        .find(|line| !line.is_empty())
+    let lines = || stderr.lines().chain(stdout.lines()).map(str::trim);
+    // Prefer high-signal diagnostics (multiarch -lc, duplicate std symbols, …)
+    // over the generic rustc wrapper line "linking with `cc` failed".
+    for needle in [
+        "duplicate symbol",
+        "cannot find -l",
+        "undefined reference",
+        "undefined symbol",
+        "unresolved external",
+    ] {
+        if let Some(line) = lines().find(|line| line.to_ascii_lowercase().contains(needle)) {
+            return Some(line);
+        }
+    }
+    lines().find(|line| !line.is_empty())
 }
 
 fn looks_like_missing_native_symbol(text: &str) -> bool {

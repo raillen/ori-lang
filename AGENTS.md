@@ -131,7 +131,7 @@ cargo run -p ori-driver -- run ../examples/hello
 | `ORI_NATIVE_LINKER` | Diagnose raw native linker route |
 | `ORI_USE_RUST_LLD=1` | Use rust-lld instead of system linker (still via `rustc` driver) |
 | `ORI_USE_BUNDLED_RUST_LLD=1` | Force bundled `rust-lld` (hard fail if discovery fails). By default, bundled lld is tried automatically before `rustc`. |
-| `ORI_USE_RUSTC_DRIVER=1` | Opt back into the legacy `rustc` link driver when bundled/system linkers are available |
+| `ORI_USE_RUSTC_DRIVER=1` | Legacy `rustc` link driver. **Not for packaging:** double-links libstd against `ori-runtime` staticlib (`rust_eh_personality`). Prefer SystemLinker / BundledRustLld for AOT. |
 | `ORI_RUST_LLD` | Explicit path to `rust-lld[.exe]` for the bundled strategy (else discovered from `<ori.exe dir>` or `rustc` sysroot) |
 | `ORI_USE_SYSTEM_LINKER=1` | Bypass `rustc` and `rust-lld` — invoke the platform system linker directly (`link.exe`/`ld`/`mold`) with compiler-side CRT discovery (Rust removal Phase 2: Windows MSVC via `vswhere.exe` + `link.exe` discovery, Linux GNU via PATH `mold`→`ld.lld`→`ld` then `cc -print-prog-name=ld`, macOS via `xcrun --find ld`) |
 | `ORI_SYSTEM_LINKER` | Explicit path to the system linker (`link.exe`, `ld`, `mold`, etc.) for the `SystemLinker` strategy |

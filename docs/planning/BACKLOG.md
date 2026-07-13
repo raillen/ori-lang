@@ -13,12 +13,14 @@
 - Multi-OS packages / marketplace / registry marketing (DIST-*, TOOL marketplace, ECO demos)
 - Self-host (M4)
 
-**Active focus (in order):**
+**Language-first queue is empty.** Ongoing work is **living maintenance** only:
 
-1. **Language completeness** — native backend, diagnostics, stdlib contracts, async/FFI correctness  
-2. **Documentation & examples** — accurate S3 surface, install/tour/guides/examples  
-3. **Performance** — compile, runtime ARC/I/O, JIT/AOT paths  
-4. **Local DX only** — VS Code + Zed extensions (install from repo / `.vsix` / dev install; **no Marketplace publish**)
+1. Bugs / diagnostics from real programs  
+2. Docs + examples drift  
+3. Package/CI reliability (Linux tar.gz + deb already shipped)  
+4. Local DX (VS Code / Zed — **no** store publish)
+
+**Do not prioritize unless reopened:** multi-OS DIST, Marketplace, ECO demos, M4 self-host.
 
 **Discontinued forever in product conversations:** `ori-game`, `ori-imgui` (removed; do not re-open).
 
@@ -58,7 +60,8 @@
 
 | ID | Item | P | D | Status | Notes |
 |----|------|---|---|--------|-------|
-| *(none)* | Language-first implementation queue empty | — | — | — | Reopen LANG-RES / invent only with a concrete product blocker. Living maintenance only. |
+| *(none)* | Language-first implementation queue empty | — | — | — | Living maintenance only. |
+| **LIVE-LINK** | Package smoke uses **SystemLinker only** (not RustcDriver) | 2 | S | **done** | RustcDriver double-links libstd vs `ori-runtime` staticlib (`rust_eh_personality`). |
 
 ### Done this focus wave (DX + docs + perf + residual)
 
