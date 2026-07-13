@@ -346,6 +346,9 @@ fn is_qualified_name_part(kind: Option<&TokenKind>) -> bool {
     matches!(
         kind,
         Some(TokenKind::Ident)
+            // Allow `module` as a path segment (`pkg.module.name`) even though it is
+            // a keyword for the file header.
+            | Some(TokenKind::Module)
             | Some(TokenKind::Any)
             | Some(TokenKind::Optional)
             | Some(TokenKind::ResultKw)

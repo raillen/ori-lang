@@ -433,14 +433,14 @@ fn func_signature(func: &ori_ast::item::FuncDecl) -> String {
         .as_ref()
         .map(|t| format!(" -> {}", type_to_string(t)))
         .unwrap_or_default();
-    let modifiers = if func.is_mut { "mut " } else { "" };
-    format!(
-        "{}func {}({}){}",
-        modifiers,
-        func.name.text,
-        params.join(", "),
-        ret
-    )
+    let mut prefix = String::new();
+    if func.is_async {
+        prefix.push_str("async ");
+    }
+    if func.is_mut {
+        prefix.push_str("mut ");
+    }
+    format!("{}{}({}){}", prefix, func.name.text, params.join(", "), ret)
 }
 
 fn type_to_string(ty: &ori_ast::ty::Type) -> String {

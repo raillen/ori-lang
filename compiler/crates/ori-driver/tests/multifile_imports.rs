@@ -4848,6 +4848,66 @@ end
 }
 
 #[test]
+fn check_accepts_trait_default_body_starting_with_bare_call() {
+    // S3: without `func`, `say("hi")` must be a body statement, not the next method.
+    let dir = TestDir::new("trait_default_bare_call");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+say(msg: string)
+end
+
+trait Greeter
+    greet()
+        say("hi")
+    end
+end
+
+main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(
+        !out.has_errors,
+        "bare call as first trait default body stmt must parse: {:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn check_accepts_trait_required_empty_methods_and_default_path_call() {
+    let dir = TestDir::new("trait_default_path_and_required");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io as io
+
+trait Drawable
+    draw()
+    area() -> int
+    paint()
+        io.print("x")
+    end
+end
+
+main()
+end
+"#,
+    );
+
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(
+        !out.has_errors,
+        "required empty methods + default path-call body: {:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
 fn check_reports_type_error_inside_imported_top_level_const() {
     let dir = TestDir::new("imported_const_type_error");
     dir.write(
@@ -7047,7 +7107,7 @@ end
         "src/main.oridoc",
         r#"oridoc 1
 
-module app.main
+namespace app.main
 
 doc func add
     summary:
@@ -7093,7 +7153,7 @@ end
         "src/main.oridoc",
         r#"oridoc 1
 
-module app.main
+namespace app.main
 
 doc func missing
     summary:
@@ -7134,7 +7194,7 @@ end
         "src/main.oridoc",
         r#"oridoc 1
 
-module app.main
+namespace app.main
 
 doc func add
     summary:
@@ -7202,7 +7262,7 @@ end
         "src/main.oridoc",
         r#"oridoc 1
 
-module app.main
+namespace app.main
 
 doc func add
     summary:

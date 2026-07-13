@@ -124,7 +124,9 @@ fn declaration_line_without_modifiers(mut line: &str) -> &str {
 }
 
 /// S3 function form: `name(...)` / `name<T>(...)` (no `func` keyword).
-/// Legacy `func name(...)` is still recognized so old snippets format until migrated.
+///
+/// TODO(S3 PR9 migrate-syntax): drop legacy `func name(...)` recognition once
+/// the migrate tooling lands and no format-only dual surface is needed.
 fn is_function_decl_line(line: &str) -> bool {
     if let Some(rest) = line.strip_prefix("func ") {
         return is_named_function_head(rest);

@@ -947,7 +947,7 @@ impl<'a> Checker<'a> {
                             "implement block here",
                         ))
                         .with_action(format!(
-                            "add `func {}` with the signature required by the trait",
+                            "add `{}` with the signature required by the trait",
                             expected.name
                         )),
                     );

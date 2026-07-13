@@ -93,7 +93,7 @@ impl ProjectSemanticIndex {
                 .collect::<Vec<_>>()
                 .join(", ");
             return Some(format!(
-                "```ori\nfunc {symbol}({params}) -> {}\n```\n\nTop-level function.",
+                "```ori\n{symbol}({params}) -> {}\n```\n\nTop-level function.",
                 ty_to_str(&f.return_ty, &self.resolved),
             ));
         }

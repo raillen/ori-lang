@@ -135,7 +135,14 @@ fn func_signature_text(func: &FuncDecl) -> String {
         .as_ref()
         .map(|t| format!(" -> {}", type_to_string(t)))
         .unwrap_or_default();
-    format!("func {}({}){}", func.name.text, params.join(", "), ret)
+    let mut prefix = String::new();
+    if func.is_async {
+        prefix.push_str("async ");
+    }
+    if func.is_mut {
+        prefix.push_str("mut ");
+    }
+    format!("{}{}({}){}", prefix, func.name.text, params.join(", "), ret)
 }
 
 fn scan_orl_file(
@@ -198,45 +205,12 @@ fn scan_orl_layer(root: &Path, catalog: &mut Vec<ExportSymbol>, modules: &mut BT
 }
 
 const KEYWORDS: &[&str] = &[
-    "namespace",
-    "import",
-    "func",
-    "struct",
-    "enum",
-    "trait",
-    "const",
-    "var",
-    "public",
-    "if",
-    "else",
-    "then",
-    "end",
-    "match",
-    "case",
-    "while",
-    "for",
-    "loop",
-    "break",
-    "continue",
-    "return",
-    "async",
-    "await",
-    "try",
-    "using",
-    "some",
-    "none",
-    "success",
-    "error",
-    "true",
-    "false",
-    "is",
-    "as",
-    "only",
-    "where",
-    "type",
-    "lazy",
-    "spawn",
-    "defer",
+    "module", "import",
+    // Callable-type keyword only; declarations use bare `name(...)`.
+    "func", "struct", "enum", "trait", "const", "var", "public", "async", "if", "else", "then",
+    "end", "match", "case", "while", "for", "loop", "break", "continue", "return", "async",
+    "await", "try", "using", "some", "none", "success", "error", "true", "false", "is", "as",
+    "only", "where", "type", "lazy", "spawn", "defer",
 ];
 
 /// Build the full documentation export payload.

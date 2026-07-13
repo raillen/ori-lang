@@ -19,14 +19,15 @@ pub fn stdlib_dot_completion_items(receiver: &str, source: &str) -> Vec<Completi
     stdlib_catalog().dot_completion_items(receiver, &import_map)
 }
 
-/// Keyword completions for the Ori language.
+/// Keyword completions for the Ori language (S3 surface).
 pub fn keyword_completion_items() -> Vec<CompletionItem> {
     let keywords = [
-        "namespace",
+        "module",
         "import",
         "as",
         "only",
         "public",
+        // `func` remains a keyword for callable types `func(T) -> R`, not declarations.
         "func",
         "return",
         "end",
@@ -78,6 +79,8 @@ pub fn keyword_completion_items() -> Vec<CompletionItem> {
         "then",
         "tuple",
         "lazy",
+        "async",
+        "await",
     ];
 
     keywords
@@ -91,21 +94,41 @@ pub fn keyword_completion_items() -> Vec<CompletionItem> {
         .collect()
 }
 
-/// Snippet completions for common Ori constructs.
+/// Snippet completions for common Ori constructs (S3: no declaration `func`).
 pub fn snippet_completion_items() -> Vec<CompletionItem> {
     vec![
-        snippet("func", "func ${1:name}(${2:params}) -> ${3:ret}\n    ${0}\nend"),
+        snippet(
+            "fn",
+            "${1:name}(${2:params}) -> ${3:ret}\n    ${0}\nend",
+        ),
+        snippet(
+            "main",
+            "module ${1:app.main}\n\nimport ori.io as io\n\nmain() -> void\n    ${0}\nend",
+        ),
+        snippet(
+            "async fn",
+            "async ${1:name}(${2:params}) -> ${3:ret}\n    ${0}\nend",
+        ),
         snippet("struct", "struct ${1:Name}\n    ${0}\nend"),
         snippet("enum", "enum ${1:Name}\n    ${0}\nend"),
-        snippet("trait", "trait ${1:Name}\n    func ${2:method}() -> ${3:ret}\nend"),
-        snippet("implement", "implement ${1:Trait} for ${2:Type}\n    func ${3:method}() -> ${4:ret}\n        ${0}\n    end\nend"),
+        snippet(
+            "trait",
+            "trait ${1:Name}\n    ${2:method}(self) -> ${3:ret}\nend",
+        ),
+        snippet(
+            "implement",
+            "implement ${1:Trait} for ${2:Type}\n    ${3:method}(self) -> ${4:ret}\n        ${0}\n    end\nend",
+        ),
         snippet("if", "if ${1:condition}\n    ${0}\nend"),
         snippet("ifelse", "if ${1:condition}\n    ${2}\nelse\n    ${0}\nend"),
         snippet("while", "while ${1:condition}\n    ${0}\nend"),
         snippet("for", "for ${1:item} in ${2:collection}\n    ${0}\nend"),
         snippet("loop", "loop\n    ${0}\nend"),
         snippet("match", "match ${1:value}\ncase ${2:pattern}:\n    ${0}\nend"),
-        snippet("using", "using ${1:name}: ${2:Type} = ${3:expr}\n    ${0}\nend"),
+        snippet(
+            "using",
+            "using ${1:name}: ${2:Type} = ${3:expr}\n    ${0}\nend",
+        ),
         snippet("check", "check ${1:condition}, \"${2:message}\""),
         snippet("import", "import ${1:ori.module} as ${2:alias}"),
     ]

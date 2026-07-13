@@ -643,6 +643,7 @@ impl<'src> Parser<'src> {
             let sig = self.parse_func_signature(mvis)?;
             // Required methods are followed by another member or `end`.
             // Default methods have a body (statement / expression) before `end`.
+            // Bare call statements like `print("hi")` must not look like the next method.
             let has_body = !self.at_trait_member_start() && !self.at(&TokenKind::End);
             if has_body && !is_mut {
                 let body = self.parse_block()?;
@@ -693,8 +694,218 @@ impl<'src> Parser<'src> {
         {
             return true;
         }
-        // next method: `name(` / `name<`
-        self.at_named_func_head()
+        // Next method head only when the form is a real signature, not a bare call.
+        self.looks_like_trait_method_head_at(self.pos)
+    }
+
+    /// Non-mutating lookahead: is the token sequence at `start` a trait method head?
+    ///
+    /// Distinguishes method signatures (`area(self)`, `draw()`, `paint() -> void`)
+    /// from body statements that begin with a bare *call* `say("hi")`.
+    ///
+    /// Param list must be signature-shaped: empty, `self`, or `name: Type`.
+    /// Call arguments (literals, bare idents without `:`) → not a method head.
+    ///
+    /// Empty `foo()` is treated as a method head (required or default). An empty
+    /// call used as the first body statement is an accepted residual edge case;
+    /// calls with arguments are the important case (Issue 1).
+    fn looks_like_trait_method_head_at(&self, start: usize) -> bool {
+        let mut i = self.skip_trivia_after(start);
+        if self.kind_at(i) == Some(&TokenKind::Func) {
+            i = self.skip_trivia_after(i + 1);
+        }
+        if self.kind_at(i) != Some(&TokenKind::Ident) {
+            return false;
+        }
+        i = self.skip_trivia_after(i + 1);
+        if self.kind_at(i) == Some(&TokenKind::Lt) {
+            match self.skip_balanced(i, TokenKind::Lt, TokenKind::Gt) {
+                Some(after) => i = after,
+                None => return false,
+            }
+        }
+        if self.kind_at(i) != Some(&TokenKind::LParen) {
+            return false;
+        }
+        self.scan_trait_param_list_shape(i).is_some()
+    }
+
+    fn kind_at(&self, index: usize) -> Option<&TokenKind> {
+        self.tokens.get(index).map(|t| &t.kind)
+    }
+
+    fn skip_trivia_after(&self, mut index: usize) -> usize {
+        while index < self.tokens.len() && self.tokens[index].is_trivia() {
+            index += 1;
+        }
+        index
+    }
+
+    fn skip_balanced(&self, open_index: usize, open: TokenKind, close: TokenKind) -> Option<usize> {
+        if self.kind_at(open_index) != Some(&open) {
+            return None;
+        }
+        let mut depth = 0usize;
+        let mut i = open_index;
+        while i < self.tokens.len() {
+            let kind = &self.tokens[i].kind;
+            if *kind == open {
+                depth += 1;
+            } else if *kind == close {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(self.skip_trivia_after(i + 1));
+                }
+            }
+            i += 1;
+        }
+        None
+    }
+
+    /// Returns `(index_after_rparen, empty_params)` when params look like a signature.
+    /// Call-shaped args yield `None`.
+    fn scan_trait_param_list_shape(&self, lparen_index: usize) -> Option<(usize, bool)> {
+        if self.kind_at(lparen_index) != Some(&TokenKind::LParen) {
+            return None;
+        }
+        let mut i = self.skip_trivia_after(lparen_index + 1);
+        if self.kind_at(i) == Some(&TokenKind::RParen) {
+            return Some((self.skip_trivia_after(i + 1), true));
+        }
+        loop {
+            if self.kind_at(i) == Some(&TokenKind::SelfKw) {
+                i = self.skip_trivia_after(i + 1);
+            } else if self.kind_at(i) == Some(&TokenKind::Ident) {
+                i = self.skip_trivia_after(i + 1);
+                if self.kind_at(i) != Some(&TokenKind::Colon) {
+                    return None;
+                }
+                i = self.skip_trivia_after(i + 1);
+                i = self.skip_rough_type(i);
+                if matches!(
+                    self.kind_at(i),
+                    Some(TokenKind::Ellipsis) | Some(TokenKind::DotDot)
+                ) {
+                    i = self.skip_trivia_after(i + 1);
+                }
+                if self.kind_at(i) == Some(&TokenKind::Eq) {
+                    i = self.skip_trivia_after(i + 1);
+                    i = self.skip_until_param_separator(i);
+                }
+                if self.kind_at(i) == Some(&TokenKind::If) {
+                    i = self.skip_trivia_after(i + 1);
+                    i = self.skip_until_param_separator(i);
+                }
+            } else {
+                return None;
+            }
+
+            if self.kind_at(i) == Some(&TokenKind::Comma) {
+                i = self.skip_trivia_after(i + 1);
+                continue;
+            }
+            if self.kind_at(i) == Some(&TokenKind::RParen) {
+                return Some((self.skip_trivia_after(i + 1), false));
+            }
+            return None;
+        }
+    }
+
+    fn skip_rough_type(&self, mut i: usize) -> usize {
+        if self.kind_at(i) == Some(&TokenKind::Func) {
+            i = self.skip_trivia_after(i + 1);
+            if self.kind_at(i) == Some(&TokenKind::LParen) {
+                if let Some(after) = self.skip_balanced(i, TokenKind::LParen, TokenKind::RParen) {
+                    i = after;
+                }
+            }
+            if self.kind_at(i) == Some(&TokenKind::Arrow) {
+                i = self.skip_trivia_after(i + 1);
+                i = self.skip_rough_type(i);
+            }
+            return i;
+        }
+        while matches!(
+            self.kind_at(i),
+            Some(TokenKind::Ident)
+                | Some(TokenKind::Optional)
+                | Some(TokenKind::ResultKw)
+                | Some(TokenKind::List)
+                | Some(TokenKind::Map)
+                | Some(TokenKind::Set)
+                | Some(TokenKind::Range)
+                | Some(TokenKind::Void)
+                | Some(TokenKind::Tuple)
+                | Some(TokenKind::Lazy)
+                | Some(TokenKind::Any)
+                | Some(TokenKind::BoolTy)
+                | Some(TokenKind::IntTy)
+                | Some(TokenKind::Int8Ty)
+                | Some(TokenKind::Int16Ty)
+                | Some(TokenKind::Int32Ty)
+                | Some(TokenKind::Int64Ty)
+                | Some(TokenKind::U8Ty)
+                | Some(TokenKind::U16Ty)
+                | Some(TokenKind::U32Ty)
+                | Some(TokenKind::U64Ty)
+                | Some(TokenKind::FloatTy)
+                | Some(TokenKind::Float32Ty)
+                | Some(TokenKind::Float64Ty)
+                | Some(TokenKind::StringTy)
+                | Some(TokenKind::BytesTy)
+                | Some(TokenKind::SelfKw)
+        ) {
+            i = self.skip_trivia_after(i + 1);
+            if self.kind_at(i) == Some(&TokenKind::Dot) {
+                i = self.skip_trivia_after(i + 1);
+                continue;
+            }
+            break;
+        }
+        if self.kind_at(i) == Some(&TokenKind::Lt) {
+            if let Some(after) = self.skip_balanced(i, TokenKind::Lt, TokenKind::Gt) {
+                i = after;
+            }
+        } else if self.kind_at(i) == Some(&TokenKind::LParen) {
+            if let Some(after) = self.skip_balanced(i, TokenKind::LParen, TokenKind::RParen) {
+                i = after;
+            }
+        }
+        while self.kind_at(i) == Some(&TokenKind::Ident)
+            && self.tokens.get(i).is_some_and(|tok| {
+                let s = self.slice(tok.span);
+                s == "of" || s == "to"
+            })
+        {
+            i = self.skip_trivia_after(i + 1);
+            i = self.skip_rough_type(i);
+        }
+        i
+    }
+
+    fn skip_until_param_separator(&self, mut i: usize) -> usize {
+        let mut depth = 0i32;
+        while i < self.tokens.len() {
+            match self.kind_at(i) {
+                Some(TokenKind::LParen) | Some(TokenKind::Lt) | Some(TokenKind::LBracket) => {
+                    depth += 1;
+                }
+                Some(TokenKind::RParen) | Some(TokenKind::Gt) | Some(TokenKind::RBracket) => {
+                    if depth == 0 {
+                        return i;
+                    }
+                    depth -= 1;
+                }
+                Some(TokenKind::Comma) if depth == 0 => return i,
+                _ => {}
+            }
+            i += 1;
+            // Do not skip trivia via skip_trivia_after mid-loop (would skip commas); only advance one.
+            while i < self.tokens.len() && self.tokens[i].is_trivia() {
+                i += 1;
+            }
+        }
+        i
     }
 
     // ── Implement ─────────────────────────────────────────────────────────────

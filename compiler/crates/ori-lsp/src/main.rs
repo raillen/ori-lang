@@ -994,7 +994,7 @@ impl LanguageServer for Backend {
 
         let active_param = count_commas_before(&source, open_paren_pos, position);
 
-        let label = format!("func {}{}", func_name, sig_str);
+        let label = format!("{}{}", func_name, sig_str);
         let max_param = params.len().saturating_sub(1) as u32;
         let active = (active_param as u32).min(max_param);
 
@@ -1337,8 +1337,10 @@ fn encode_semantic_tokens(
     data
 }
 
-/// Ori keywords for semantic token scanning.
+/// Ori keywords for semantic token scanning (S3 surface).
 const ORI_KEYWORDS: &[&str] = &[
+    "module",
+    // `func` remains for callable types `func(T) -> R`.
     "func",
     "return",
     "end",
@@ -1390,7 +1392,8 @@ const ORI_KEYWORDS: &[&str] = &[
     "then",
     "tuple",
     "lazy",
-    "namespace",
+    "async",
+    "await",
     "import",
     "as",
     "public",
