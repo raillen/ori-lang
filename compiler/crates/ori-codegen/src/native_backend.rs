@@ -14599,6 +14599,23 @@ fn link_with_system_linker(
             cmd.arg(format!("-L{}", dir.display()));
         }
     }
+    // Bare `ld` on Debian/Ubuntu multiarch often needs these for `-lc` even when
+    // `cc -print-search-dirs` is incomplete (seen on GitHub Actions runners).
+    if cfg!(target_os = "linux") {
+        for extra in [
+            "/usr/lib/x86_64-linux-gnu",
+            "/lib/x86_64-linux-gnu",
+            "/usr/lib64",
+            "/lib64",
+            "/usr/lib",
+            "/lib",
+        ] {
+            let p = Path::new(extra);
+            if p.is_dir() {
+                cmd.arg(format!("-L{extra}"));
+            }
+        }
+    }
     for crt in crt_pre {
         cmd.arg(crt);
     }
