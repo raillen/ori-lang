@@ -55,7 +55,7 @@
 
 | ID | Item | P | D | Status | Notes |
 |----|------|---|---|--------|-------|
-| **LANG-PERF** | Measure and improve hot paths (check/compile/run, ARC, net/fs) | 1 | L | **partial** | AOT link ~4× via default BundledRustLld + Cranelift product flags; see `perf-baseline-2026-07-13.md`. Residual: JIT cold start, ARC/microbench |
+| **LANG-PERF** | Measure and improve hot paths (check/compile/run, ARC, net/fs) | 1 | L | **partial** | Wave1: BundledRustLld default + Cranelift flags. Wave2: SystemLinker PATH prefers `mold`/`ld.lld`/`ld`; stage scripts default **release**; `tools/microbench_lang_perf.sh`. Residual: JIT cold start (~100+ ms dominated by lower+cdylib), deeper ARC microbench |
 | **LANG-RES** | Native residuals only if they block real programs | 2 | M | **partial** | Spec 14; not invent features |
 
 ### Done this focus wave (DX + docs)

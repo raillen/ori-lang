@@ -1,8 +1,10 @@
 [CmdletBinding()]
 param(
     [string]$Target = "",
+    # Default release (LANG-PERF residual / package parity). Override with -Profile debug
+    # or $env:ORI_STAGE_PROFILE for faster ori-runtime rebuild loops.
     [ValidateSet("debug", "release")]
-    [string]$Profile = "debug",
+    [string]$Profile = $(if ($env:ORI_STAGE_PROFILE) { $env:ORI_STAGE_PROFILE } else { "release" }),
     [string]$OutputRoot = "",
     [switch]$SkipBuild,
     [switch]$SkipBundleLld

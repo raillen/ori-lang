@@ -2,7 +2,9 @@
 set -eu
 
 target=""
-profile="debug"
+# Default release (LANG-PERF): staged AOT/JIT runtime matches product packages.
+# Override with --profile debug or ORI_STAGE_PROFILE=debug for faster rebuild loops.
+profile="${ORI_STAGE_PROFILE:-release}"
 output_root=""
 skip_build=0
 skip_bundle_lld=0
@@ -17,6 +19,9 @@ Stages the Rust ori-runtime static library into:
 
 and writes runtime-link.json next to it. Also copies rust-lld into
 runtime/bin/ unless --skip-bundle-lld is given.
+
+Profile default is **release** (or `$ORI_STAGE_PROFILE`). Use `--profile debug`
+when iterating on ori-runtime itself.
 USAGE
 }
 

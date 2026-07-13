@@ -58,18 +58,61 @@ Default linker then: **SystemLinker** (`ld`).
 | JIT `ori run` tiny | ~0.13–0.16 s | ~0.11–0.15 s | modest; dominated by Cranelift lower + cdylib |
 | `ori check` tiny | already sub-20 ms | unchanged | |
 
-### Residual (not done this wave)
+### Residual (wave 1 — closed in wave 2 where noted)
 
-- JIT cold start still ~100+ ms for hello (codegen + load runtime).
-- Multi-file / ARC-heavy program microbench suite.
-- Optional: mold/ld.lld discovery if present on PATH.
-- Release-runtime stage in default `stage_native_runtime.sh` (currently debug artifacts).
+- JIT cold start still ~100+ ms for hello (codegen + load runtime) — **open**.
+- Multi-file / ARC-heavy program microbench suite — **added** `tools/microbench_lang_perf.sh`.
+- Optional: mold/ld.lld discovery if present on PATH — **done** (SystemLinker Linux).
+- Release-runtime stage default — **done** (`stage_native_runtime.*` default release).
+
+## Wave 2 (2026-07-13) — linker PATH + stage release + microbench
+
+### Changes
+
+1. **Linux SystemLinker:** PATH order `mold` → `ld.lld` → `ld`, then
+   `cc -print-prog-name=ld`. Override: `ORI_SYSTEM_LINKER`.
+2. **Stage scripts** default **`--profile release`** (`ORI_STAGE_PROFILE` or
+   `--profile debug` for runtime iteration).
+3. **Harness:** `tools/microbench_lang_perf.sh` samples check/run/compile on
+   `hello`, `multi_module`, `collections_demo`, `language_features`, `concurrency`.
+
+### Numbers (release `ori` + release staged runtime + BundledRustLld)
+
+Host Linux x86_64 · warm process · 2026-07-13 afternoon remeasure:
+
+| Workload | Mode | Wall time |
+|----------|------|-----------|
+| `hello` | check | ~0.00 s |
+| `hello` | run (JIT) | **~0.04–0.05 s** |
+| `hello` | compile AOT (BundledRustLld) | **~0.19–0.20 s** |
+| `hello` | compile AOT (`ORI_USE_SYSTEM_LINKER=1`, BFD `ld`) | ~0.36 s |
+| `multi_module` | run / compile | ~0.05 s / ~0.19 s |
+| `collections_demo` | run / compile | ~0.06 s / ~0.21 s |
+| `language_features` | run / compile | ~0.07 s / ~0.22 s |
+| `concurrency` | run / compile | ~0.04 s / ~0.19 s |
+
+### Wins vs wave 1 baseline
+
+| Path | Wave 1 | Wave 2 | Notes |
+|------|--------|--------|-------|
+| AOT `compile` hello | ~1.0 s | **~0.20 s** | release runtime + warm; still BundledRustLld |
+| JIT `run` hello | ~0.11–0.15 s | **~0.04–0.05 s** | release cdylib dominates residual |
+| SystemLinker vs BFD | n/a | ~0.36 s | PATH mold/lld preferred when installed |
+
+### Residual after wave 2
+
+- JIT cold start (Cranelift lower + cdylib load) still dominates `ori run` tiny
+  relative to AOT binary exec (~0 s).
+- Deeper ARC alloc/collect microbench inside the runtime (not just end-to-end).
+- Optional: prefer mold over BundledRustLld when mold is on PATH (product policy TBD).
 
 ### How to re-measure
 
 ```bash
 cd compiler && cargo build -p ori-driver --release
-../tools/stage_native_runtime.sh   # or package layout with runtime/bin/rust-lld
+../tools/stage_native_runtime.sh          # release runtime + rust-lld by default
+../tools/microbench_lang_perf.sh --skip-stage
+# or one-shot:
 /usr/bin/time -f '%e' ./target/release/ori compile ../examples/hello --out /tmp/h
 /usr/bin/time -f '%e' ./target/release/ori run ../examples/hello
 ```

@@ -13807,17 +13807,29 @@ fn find_windows_link_exe(msvc_lib: &Path) -> Result<PathBuf, String> {
     ))
 }
 
-/// Locate GNU `ld` for the `SystemLinker` strategy on Linux.
+/// Locate a system linker for the `SystemLinker` strategy on Linux.
 ///
-/// Discovery order:
+/// Discovery order (LANG-PERF residual):
 /// 1. `ORI_SYSTEM_LINKER` — explicit path.
-/// 2. `{CC} -print-prog-name=ld` (default `CC=cc`).
+/// 2. Fast PATH candidates: `mold`, then `ld.lld`, then `ld`
+///    (GNU-compatible drivers; mold/lld are typically much faster than BFD `ld`).
+/// 3. `{CC} -print-prog-name=ld` (default `CC=cc`) as last resort.
 fn find_linux_ld() -> Result<PathBuf, String> {
     if let Some(path) = find_system_linker_override()? {
         return Ok(path);
     }
+    for name in linux_system_linker_path_candidates() {
+        if let Some(path) = which_on_path(name) {
+            return Ok(path);
+        }
+    }
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
     cc_print_prog_name(&cc, "ld")
+}
+
+/// Ordered bare names tried on `PATH` before falling back to `cc -print-prog-name=ld`.
+fn linux_system_linker_path_candidates() -> &'static [&'static str] {
+    &["mold", "ld.lld", "ld"]
 }
 
 /// Locate macOS `ld` for the `SystemLinker` strategy.

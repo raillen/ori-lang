@@ -1427,6 +1427,12 @@ fn system_linker_strategy_engages_on_supported_os_or_reports_actionable_error() 
     }
 }
 
+#[test]
+fn linux_system_linker_path_prefers_mold_then_lld_then_ld() {
+    let names = linux_system_linker_path_candidates();
+    assert_eq!(names, &["mold", "ld.lld", "ld"]);
+}
+
 #[cfg(windows)]
 #[test]
 fn windows_link_exe_discovery_resolves_existing_path() {

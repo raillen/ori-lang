@@ -133,8 +133,9 @@ cargo run -p ori-driver -- run ../examples/hello
 | `ORI_USE_BUNDLED_RUST_LLD=1` | Force bundled `rust-lld` (hard fail if discovery fails). By default, bundled lld is tried automatically before `rustc`. |
 | `ORI_USE_RUSTC_DRIVER=1` | Opt back into the legacy `rustc` link driver when bundled/system linkers are available |
 | `ORI_RUST_LLD` | Explicit path to `rust-lld[.exe]` for the bundled strategy (else discovered from `<ori.exe dir>` or `rustc` sysroot) |
-| `ORI_USE_SYSTEM_LINKER=1` | Bypass `rustc` and `rust-lld` — invoke the platform system linker directly (`link.exe`/`ld`) with compiler-side CRT discovery (Rust removal Phase 2: Windows MSVC via `vswhere.exe` + `link.exe` discovery, Linux GNU via `cc -print-prog-name=ld`, macOS via `xcrun --find ld`) |
-| `ORI_SYSTEM_LINKER` | Explicit path to the system linker (`link.exe`, `ld`, etc.) for the `SystemLinker` strategy |
+| `ORI_USE_SYSTEM_LINKER=1` | Bypass `rustc` and `rust-lld` — invoke the platform system linker directly (`link.exe`/`ld`/`mold`) with compiler-side CRT discovery (Rust removal Phase 2: Windows MSVC via `vswhere.exe` + `link.exe` discovery, Linux GNU via PATH `mold`→`ld.lld`→`ld` then `cc -print-prog-name=ld`, macOS via `xcrun --find ld`) |
+| `ORI_SYSTEM_LINKER` | Explicit path to the system linker (`link.exe`, `ld`, `mold`, etc.) for the `SystemLinker` strategy |
+| `ORI_STAGE_PROFILE` | Default profile for `tools/stage_native_runtime.*` when `--profile`/`-Profile` is omitted (`debug` or `release`; scripts default to **release**) |
 | `ORI_USE_JIT=1` | Force JIT for `ori run` — execute Cranelift code in-process via `JITModule` with runtime symbols resolved from the staged cdylib through `libloading` (Rust removal Phase 3: no `.o` file, no linker, no subprocess). When unset, JIT is the default whenever a runtime cdylib is available. `ori compile` and `ori test` remain AOT. |
 | `ORI_USE_AOT=1` | Force AOT compile+link for `ori run` even when a runtime cdylib is available (opt-out of JIT default). |
 | `ORI_RUNTIME_CDYLIB` | Explicit path to the runtime cdylib (`ori_runtime.dll`/`libori_runtime.so`/`libori_runtime.dylib`) for the JIT path. When unset, resolves via packaged runtime → cargo fallback (same search order as `ORI_RUNTIME_LIB` but for the cdylib artifact). |

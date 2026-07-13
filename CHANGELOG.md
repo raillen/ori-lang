@@ -48,6 +48,11 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`runtime/bin/rust-lld`), then SystemLinker, then rustc driver. Measured
   `ori compile examples/hello` ~1.0 s (was ~2.5–4 s with system `ld`).
   Force: `ORI_USE_SYSTEM_LINKER=1` / `ORI_USE_BUNDLED_RUST_LLD=1`.
+- **SystemLinker (Linux):** PATH discovery prefers **`mold` → `ld.lld` → `ld`**
+  before `cc -print-prog-name=ld` (GNU-compatible drivers).
+- **Stage runtime default:** `tools/stage_native_runtime.sh` / `.ps1` default
+  to **release** (override `--profile debug` or `ORI_STAGE_PROFILE`).
+- **Microbench:** `tools/microbench_lang_perf.sh` (check/run/compile samples).
 - Numbers: `docs/planning/perf-baseline-2026-07-13.md`.
 
 ### Documentação (LANG-DOC — fechado como onda)
