@@ -1221,6 +1221,98 @@ end
 }
 
 #[test]
+fn expr_accepts_context_typed_struct_on_assign() {
+    let dir = TestDir::new("expr_assign_context_struct");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+import ori.io as io
+struct Point
+    x: int
+    y: int
+end
+main()
+    var p: Point = { x: 1, y: 2 }
+    p = { x: 3, y: 4 }
+    io.print(string(p.x + p.y))
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn expr_accepts_context_typed_enum_on_assign() {
+    let dir = TestDir::new("expr_assign_context_enum");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+enum Shape
+    Circle(radius: float)
+    Dot
+end
+main()
+    var s: Shape = .Dot
+    s = .Circle(radius: 1.5)
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+}
+
+#[test]
+fn expr_rejects_duplicate_enum_variant_fields() {
+    let dir = TestDir::new("expr_dup_enum_variant_fields");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+enum Shape
+    Circle(radius: float)
+end
+main()
+    const c: Shape = .Circle(radius: 1.0, radius: 2.0)
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"type.anon_struct_field_mismatch"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
+fn expr_struct_call_poison_does_not_type_as_success() {
+    // Removed Type(...) still diagnoses; type is Error so field access on the
+    // result should not silently succeed as a real Point.
+    let dir = TestDir::new("expr_struct_call_poison");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+struct Point
+    x: int
+    y: int
+end
+main()
+    const p: Point = Point(x: 1, y: 2)
+    const z: int = p.x
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"parse.removed_struct_call_literal"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
+#[test]
 fn expr_rejects_anonymous_struct_missing_field() {
     let dir = TestDir::new("expr_anon_struct_missing");
     dir.write(
@@ -2059,7 +2151,7 @@ implement Beta for S
     end
 end
 main()
-    const s: S = S()
+    const s: S = S {}
     const msg: string = s.output()
 end
 "#,
@@ -2485,7 +2577,7 @@ raw_copy for T: not Disposable (src: T) -> T
     return src
 end
 main()
-    const r: Res = raw_copy(Res())
+    const r: Res = raw_copy(Res {})
 end
 "#,
     );

@@ -1281,16 +1281,16 @@ impl<'a> Checker<'a> {
                 // propagate, cancel, fail). See `emit_async_terminal_cleanup` in native_backend.
                 let ann_ty = self.lower(&u.ty, tp);
                 self.check_collection_runtime_limits(&ann_ty, u.ty.span());
-                let val_ty = self.infer_expr(&u.value);
-                self.expect_assignable(&val_ty, &ann_ty, u.value.span());
+                // S3 context-typed `{…}` / `.Variant` need expected type on the RHS.
+                self.check_expr_assignable_to(&u.value, &ann_ty);
                 self.check_disposable_using(&ann_ty, u.name.span);
                 self.bind_checked(&u.name, ann_ty, false, true);
             }
             Stmt::Assign(a) => {
-                let rhs_ty = self.infer_expr(&a.value);
                 self.check_lvalue_mutable(&a.lvalue);
                 let lhs_ty = self.infer_lvalue_ty(&a.lvalue);
-                self.expect_assignable(&rhs_ty, &lhs_ty, a.value.span());
+                // Push expected type so context-typed struct/enum shorthand works on assign.
+                self.check_expr_assignable_to(&a.value, &lhs_ty);
             }
             Stmt::CompoundAssign(c) => {
                 let rhs_ty = self.infer_expr(&c.value);
@@ -1671,6 +1671,21 @@ impl<'a> Checker<'a> {
         let mut provided = HashSet::new();
         for field in fields {
             if !provided.insert(field.name.text.clone()) {
+                self.sink.emit(
+                    Diagnostic::error(
+                        "type.anon_struct_field_mismatch",
+                        format!(
+                            "enum variant `{}` repeats field `{}`",
+                            variant.text, field.name.text
+                        ),
+                    )
+                    .with_label(Label::primary(
+                        self.file_id,
+                        field.name.span,
+                        "duplicate field",
+                    ))
+                    .with_action("keep each field only once"),
+                );
                 self.infer_expr(&field.value);
                 continue;
             }
@@ -2310,7 +2325,8 @@ impl<'a> Checker<'a> {
                             }
                         } else if def.kind == DefKind::Struct {
                             // S3: `Type(...)` struct construction is removed.
-                            // Recover by still checking fields so diagnostics stay useful.
+                            // Still check fields for cascade diagnostics, but poison the type
+                            // so recovery does not look like a successful construction.
                             self.sink.emit(
                                 Diagnostic::error(
                                     "parse.removed_struct_call_literal",
@@ -2330,7 +2346,7 @@ impl<'a> Checker<'a> {
                                 )),
                             );
                             self.check_struct_constructor_args(def_id, args);
-                            return Ty::Named(def_id, Vec::new());
+                            return Ty::Error;
                         }
                     }
                     if let Some((def_id, _variant)) = self.resolve_enum_variant(q) {
@@ -4724,12 +4740,23 @@ impl<'a> Checker<'a> {
     }
 
     fn check_enum_variant_args(&mut self, args: &[Arg]) {
+        let mut provided = HashSet::new();
         for arg in args {
             let expr = match &arg.value {
                 ArgValue::Expr(e) | ArgValue::Spread(e) => e.as_ref(),
             };
-            self.infer_expr(expr);
-            if arg.label.is_none() {
+            if let Some(label) = &arg.label {
+                if !provided.insert(label.text.clone()) {
+                    self.sink.emit(
+                        Diagnostic::error(
+                            "type.anon_struct_field_mismatch",
+                            format!("enum variant repeats field `{}`", label.text),
+                        )
+                        .with_label(Label::primary(self.file_id, label.span, "duplicate field"))
+                        .with_action("keep each field only once"),
+                    );
+                }
+            } else {
                 self.sink.emit(
                     Diagnostic::error(
                         "type.enum_variant_named_fields_required",
@@ -4739,6 +4766,7 @@ impl<'a> Checker<'a> {
                     .with_action("write the argument as `field: value`"),
                 );
             }
+            self.infer_expr(expr);
         }
     }
 
