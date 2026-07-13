@@ -13809,14 +13809,32 @@ fn find_windows_link_exe(msvc_lib: &Path) -> Result<PathBuf, String> {
 
 /// Locate a system linker for the `SystemLinker` strategy on Linux.
 ///
-/// Discovery order (LANG-PERF residual):
+/// Discovery order:
 /// 1. `ORI_SYSTEM_LINKER` — explicit path.
-/// 2. Fast PATH candidates: `mold`, then `ld.lld`, then `ld`
-///    (GNU-compatible drivers; mold/lld are typically much faster than BFD `ld`).
-/// 3. `{CC} -print-prog-name=ld` (default `CC=cc`) as last resort.
+/// 2. **C compiler driver** (`CC`, then `cc`/`gcc`) — preferred: multiarch
+///    `-L` / `-lc` resolution works on Debian/Ubuntu CI (bare `ld` often fails
+///    with `cannot find -lc`).
+/// 3. Fast bare linkers: `mold`, `ld.lld`, `ld`.
+/// 4. `{CC} -print-prog-name=ld` as last resort.
 fn find_linux_ld() -> Result<PathBuf, String> {
     if let Some(path) = find_system_linker_override()? {
         return Ok(path);
+    }
+    if let Ok(cc) = std::env::var("CC") {
+        let cc = cc.trim();
+        if !cc.is_empty() {
+            if Path::new(cc).is_file() {
+                return Ok(PathBuf::from(cc));
+            }
+            if let Some(path) = which_on_path(cc) {
+                return Ok(path);
+            }
+        }
+    }
+    for name in ["cc", "gcc"] {
+        if let Some(path) = which_on_path(name) {
+            return Ok(path);
+        }
     }
     for name in linux_system_linker_path_candidates() {
         if let Some(path) = which_on_path(name) {
@@ -13827,9 +13845,23 @@ fn find_linux_ld() -> Result<PathBuf, String> {
     cc_print_prog_name(&cc, "ld")
 }
 
-/// Ordered bare names tried on `PATH` before falling back to `cc -print-prog-name=ld`.
+/// Ordered bare names tried on `PATH` after the C compiler driver.
 fn linux_system_linker_path_candidates() -> &'static [&'static str] {
     &["mold", "ld.lld", "ld"]
+}
+
+fn is_unix_cc_link_driver(linker: &Path) -> bool {
+    let name = linker
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    name == "cc"
+        || name == "gcc"
+        || name == "clang"
+        || name.ends_with("-gcc")
+        || name.ends_with("-cc")
+        || name.ends_with("-clang")
 }
 
 /// Locate macOS `ld` for the `SystemLinker` strategy.
@@ -14581,53 +14613,63 @@ fn link_with_system_linker(
     options: NativeLinkOptions,
 ) -> Result<(), String> {
     let mut cmd = std::process::Command::new(linker);
+    let cc_driver = !cfg!(windows) && is_unix_cc_link_driver(linker);
+
     if cfg!(windows) {
         cmd.arg(format!("/OUT:{}", exe_path.display()));
     } else {
         cmd.arg("-o").arg(exe_path);
     }
-    if let Some(dl) = dynamic_linker {
-        cmd.arg("-dynamic-linker").arg(dl);
+
+    // `cc`/`gcc` as link driver: let the driver supply CRT + multiarch `-lc`.
+    // Manual crt1/crti/crtn + -dynamic-linker is for bare `ld`/`mold`/`ld.lld`.
+    if !cc_driver {
+        if let Some(dl) = dynamic_linker {
+            cmd.arg("-dynamic-linker").arg(dl);
+        }
     }
     for arg in extra_args {
+        // Skip -no-pie duplication issues — still pass through for both drivers.
         cmd.arg(arg);
     }
-    for dir in lib_dirs {
-        if cfg!(windows) {
-            cmd.arg(format!("/LIBPATH:{}", dir.display()));
-        } else {
-            cmd.arg(format!("-L{}", dir.display()));
-        }
-    }
-    // Bare `ld` on Debian/Ubuntu multiarch often needs these for `-lc` even when
-    // `cc -print-search-dirs` is incomplete (seen on GitHub Actions runners).
-    if cfg!(target_os = "linux") {
-        for extra in [
-            "/usr/lib/x86_64-linux-gnu",
-            "/lib/x86_64-linux-gnu",
-            "/usr/lib64",
-            "/lib64",
-            "/usr/lib",
-            "/lib",
-        ] {
-            let p = Path::new(extra);
-            if p.is_dir() {
-                cmd.arg(format!("-L{extra}"));
+    if !cc_driver {
+        for dir in lib_dirs {
+            if cfg!(windows) {
+                cmd.arg(format!("/LIBPATH:{}", dir.display()));
+            } else {
+                cmd.arg(format!("-L{}", dir.display()));
             }
         }
-    }
-    for crt in crt_pre {
-        cmd.arg(crt);
+        // Bare `ld` on Debian/Ubuntu multiarch often needs these for `-lc`.
+        if cfg!(target_os = "linux") {
+            for extra in [
+                "/usr/lib/x86_64-linux-gnu",
+                "/lib/x86_64-linux-gnu",
+                "/usr/lib64",
+                "/lib64",
+                "/usr/lib",
+                "/lib",
+            ] {
+                if Path::new(extra).is_dir() {
+                    cmd.arg(format!("-L{extra}"));
+                }
+            }
+        }
+        for crt in crt_pre {
+            cmd.arg(crt);
+        }
     }
     cmd.arg(obj_path);
     for lib in extra_libs {
         cmd.arg(lib);
     }
-    if !cfg!(windows) {
+    if !cfg!(windows) && !cc_driver {
         cmd.arg("-lc");
     }
-    for crt in crt_post {
-        cmd.arg(crt);
+    if !cc_driver {
+        for crt in crt_post {
+            cmd.arg(crt);
+        }
     }
 
     let output = cmd.output().map_err(|e| {

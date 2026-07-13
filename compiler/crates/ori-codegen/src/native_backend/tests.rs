@@ -1429,6 +1429,7 @@ fn system_linker_strategy_engages_on_supported_os_or_reports_actionable_error() 
 
 #[test]
 fn linux_system_linker_path_prefers_mold_then_lld_then_ld() {
+    // Bare-linker fallback order (after CC/cc/gcc preference in find_linux_ld).
     let names = linux_system_linker_path_candidates();
     assert_eq!(names, &["mold", "ld.lld", "ld"]);
 }
