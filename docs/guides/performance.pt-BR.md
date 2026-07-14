@@ -40,11 +40,13 @@ batem em todas as linguagens em todos os kernels.
 |----------|-----|--------|------|---|-----|----|----|------|-----|
 | `sum_loop` Σ 0..10⁷ | **0.0022**\* | 2.93 | 0.0016\* | 0.0013\* | 0.0089 | 0.081 | 0.077 | 0.410 | 0.0071 |
 | `fib_iter` 2·10⁷ passos | **0.016** | 7.05 | 0.011 | 0.015 | 0.020 | 1.17 | 1.22 | 5.99 | 0.024 |
-| `list_sum` 10⁶ push+soma | **0.016** | 0.53 | 0.0089 | 0.010 | 0.0098 | 0.095 | 0.093 | 0.198 | 0.032 |
+| `list_sum` 10⁶ push+soma | **0.011**† | 0.53 | 0.0089 | 0.010 | 0.0098 | 0.095 | 0.093 | 0.198 | 0.032 |
 | `nested` 2000×2000 | **0.0018**\* | 0.97 | 0.0022 | 0.0018 | 0.0042 | 0.061 | 0.060 | 0.212 | 0.0019 |
 
 \* Soma/nested puros costumam virar forma fechada. Prefira **`fib_iter`** e
-**`list_sum`** para custo de loop / heap.
+**`list_sum`** para custo de loop / heap.  
+† Após inline de push/get escalar + `with_capacity` (remeasure 2026-07-14;
+≈ **1.25×** Rust no mesmo host). Outras colunas da suite polyglot completa.
 
 ### Relativo à Ori (lang / Ori; **menor é mais rápido**)
 
@@ -52,7 +54,7 @@ batem em todas as linguagens em todos os kernels.
 |----------|-----|------|---|-----|----|----|------|-----|
 | `sum_loop` | **1360×** | 0.73×\* | 0.61×\* | 4.1× | 37× | 36× | 190× | 3.3× |
 | `fib_iter` | **440×** | **0.68×** | 0.92× | 1.24× | 73× | 76× | 374× | 1.50× |
-| `list_sum` | **32×** | **0.55×** | 0.64× | 0.61× | 5.8× | 5.8× | 12× | 2.0× |
+| `list_sum` | **48×**† | **0.78×**† | ~0.9× | ~0.9× | ~9× | ~8× | ~18× | ~2.9× |
 | `nested` | **552×** | **1.26×** | 1.04× | 2.4× | 35× | 34× | 121× | 1.09× |
 
 ## Como ler
@@ -70,7 +72,7 @@ batem em todas as linguagens em todos os kernels.
 | Par | Leitura |
 |-----|---------|
 | **`fib_iter`** | Melhor sinal sem forma fechada: Ori **~1.5×** Rust, **ganha de Go e Nim**, perto de C |
-| **`list_sum`** | Ori **~1.5–1.8×** Rust/C/Go — custo de lista + ARC (usa `with_capacity` como Rust) |
+| **`list_sum`** | Ori **~1.25×** Rust com `with_capacity` + **push/get escalar inline** (era ~1.8×); residual é checks/version, não ARC em `list[int]` |
 | **`sum` / `nested`** | Ruído de forma fechada; Ori competitiva com C/Rust quando reduz |
 | **Go / Nim** | Não dominam mais a Ori no fib após o fix do GC |
 

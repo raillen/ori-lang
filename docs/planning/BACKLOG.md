@@ -63,7 +63,7 @@
 
 | ID | Item | P | D | Status | Notes |
 |----|------|---|---|--------|-------|
-| **LANG-PERF-2** | Runtime/mid-end performance (loops, not just compile/link) | 1 | L | **done** | Plan: [`perf-runtime-midend-plan.md`](perf-runtime-midend-plan.md). Waves 0–6 landed (optional residual: deeper list/ARC only). |
+| **LANG-PERF-2** | Runtime/mid-end performance (loops, not just compile/link) | 1 | L | **done** | Waves 0–6 + list scalar inline (wave 8). Residual vs Rust on list ~1.25×. |
 | **LANG-PERF-2-0** | Instrument: CLIF dump + polyglot smoke | 1 | S | **done** | `ORI_DUMP_CLIF`; `tools/qa/perf_polyglot_smoke.sh` |
 | **LANG-PERF-2-1** | Mid-end: const fold + DCE | 1 | M | **done** | `ori_hir::optimize`; `ORI_OPT` |
 | **LANG-PERF-2-2** | Loop hygiene (no per-iter cycle collect) | 1 | L | **done** | Native: collect only outside loops at root cleanup |

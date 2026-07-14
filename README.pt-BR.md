@@ -121,15 +121,16 @@ strength reduction no mid-end). Texto completo e ressalvas:
 |----------|-----|--------|------|---|-----|----|----|------|-----|
 | soma `0..10⁷` | **0.002 s**\* | 2.93 s | 0.002 s\* | 0.001 s\* | 0.009 s | 0.081 s | 0.077 s | 0.41 s | 0.007 s |
 | fib 2·10⁷ passos | **0.016 s** | 7.05 s | 0.011 s | 0.015 s | 0.020 s | 1.17 s | 1.22 s | 5.99 s | 0.024 s |
-| lista 10⁶ | **0.016 s** | 0.53 s | 0.009 s | 0.010 s | 0.010 s | 0.095 s | 0.093 s | 0.20 s | 0.032 s |
+| lista 10⁶ | **0.011 s** | 0.53 s | 0.009 s | 0.010 s | 0.010 s | 0.095 s | 0.093 s | 0.20 s | 0.032 s |
 | nested 2000² | **0.002 s**\* | 0.97 s | 0.002 s | 0.002 s | 0.004 s | 0.061 s | 0.060 s | 0.21 s | 0.002 s |
 
 \* Soma/nested puros podem ir para forma fechada (mid-end Default da Ori;
 Rust/C também). Prefira **`fib_iter`** / **`list_sum`** para custo de loop.
 
 **Leitura (pre-1.0):** Ori **~30–1400×** à frente do CPython; **ganha de Go e
-Nim no fib**; cerca de **~1.5× Rust no fib** e **~1.8× na lista** (era ~50×
-Rust antes do fix do GC). Mid-end: `ORI_OPT=none|default|aggressive`. Reproduzir:
+Nim no fib**; cerca de **~1.5× Rust no fib** e **~1.25× na lista** (push/get
+escalar inline + `with_capacity`; era ~50× Rust antes do fix do GC). Mid-end:
+`ORI_OPT=none|default|aggressive`. Reproduzir:
 
 ```bash
 SAMPLES=5 ./tools/bench/polyglot/run_polyglot_bench.sh

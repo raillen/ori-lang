@@ -31,10 +31,17 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `ori.list.capacity`, `ori.list.reserve` (runtime `ori_list_*`); push/insert
   share `list_ensure_capacity`; slice/clone path pre-sizes. Polyglot
   `list_sum` uses `with_capacity` like Rust `Vec::with_capacity`.
+- **Native list scalar hot path:** `list[int]` (and other non-managed integer
+  slots) **inline** push (when capacity remains) and bounds-checked get in
+  Cranelift — no per-iter `ori_list_push` / `ori_list_get` call. Managed
+  element types keep the runtime + ARC edge path. `list_sum` ~1.25× Rust on
+  the benchmark host (was ~1.8× after reserve alone).
 - **Living QA kit:** `tools/qa/` daily stages, skill `.grok/skills/ori-lang-qa`,
   agents `.grok/agents/ori-lang-*.md`, matrix
   [`docs/planning/qa/test-matrix-ori.md`](docs/planning/qa/test-matrix-ori.md);
   Spec 13 message-quality section + Spec index product facts.
+- **Examples polish:** `collections_demo` shows `with_capacity` / `reserve` /
+  `capacity`; `examples/README` links performance guide.
 
 ### Corrigido
 - **Native loops no longer call `ori_arc_collect_cycles` every iteration**

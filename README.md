@@ -122,7 +122,7 @@ strength reduction). Full write-up and caveats:
 |----------|-----|--------|------|---|-----|----|----|------|-----|
 | sum `0..10⁷` | **0.002 s**\* | 2.93 s | 0.002 s\* | 0.001 s\* | 0.009 s | 0.081 s | 0.077 s | 0.41 s | 0.007 s |
 | fib 2·10⁷ steps | **0.016 s** | 7.05 s | 0.011 s | 0.015 s | 0.020 s | 1.17 s | 1.22 s | 5.99 s | 0.024 s |
-| list 10⁶ | **0.016 s** | 0.53 s | 0.009 s | 0.010 s | 0.010 s | 0.095 s | 0.093 s | 0.20 s | 0.032 s |
+| list 10⁶ | **0.011 s** | 0.53 s | 0.009 s | 0.010 s | 0.010 s | 0.095 s | 0.093 s | 0.20 s | 0.032 s |
 | nested 2000² | **0.002 s**\* | 0.97 s | 0.002 s | 0.002 s | 0.004 s | 0.061 s | 0.060 s | 0.21 s | 0.002 s |
 
 \* Pure sum/nested may be strength-reduced to closed form (Ori mid-end Default;
@@ -130,8 +130,9 @@ Rust/C also often eliminate simple reductions). Prefer **`fib_iter`** /
 **`list_sum`** for loop cost.
 
 **Reading (pre-1.0):** Ori is **~30–1400×** faster than CPython; **beats Go and
-Nim on fib**; about **~1.5× Rust on fib** and **~1.8× on list** (was ~50× Rust
-before the loop GC fix). Mid-end: `ORI_OPT=none|default|aggressive`. Reproduce:
+Nim on fib**; about **~1.5× Rust on fib** and **~1.25× on list** (inline scalar
+push/get + `with_capacity`; was ~50× Rust before the loop GC fix). Mid-end:
+`ORI_OPT=none|default|aggressive`. Reproduce:
 
 ```bash
 SAMPLES=5 ./tools/bench/polyglot/run_polyglot_bench.sh

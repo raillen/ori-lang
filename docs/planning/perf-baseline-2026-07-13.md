@@ -235,5 +235,23 @@ Push/insert share `list_ensure_capacity`; `slice` pre-sizes output.
 | After (`with_capacity(n)`) | **~0.014 s** |
 | Rust `Vec::with_capacity` | ~0.009 s |
 
-Reserve removes realloc churn; remaining ~1.5× Rust is managed list/ARC
-hot path, not growth strategy.
+Reserve removes realloc churn; remaining gap was per-iter runtime calls.
+
+## Wave 8 (2026-07-14) — list scalar inline codegen
+
+### Change
+
+Native backend inlines `list[T]` **push** (when `len < cap`) and **get**
+(bounds-checked) for non-managed integer/bool element types. Grow and OOB
+still call the runtime. Managed elements keep push + ARC edge registration.
+
+### list_sum 10⁶ (same host, release, ~7 samples)
+
+| Binary | Median wall |
+|--------|-------------|
+| Ori before inline (~reserve only) | ~0.014 s |
+| Ori **after** inline + `with_capacity` | **~0.011 s** |
+| Rust `Vec::with_capacity` | ~0.0086 s |
+
+≈ **1.25×** Rust (was ~1.8×). Residual: capacity/bounds branches, version
+bump, process start — not ARC on `list[int]`.

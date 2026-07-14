@@ -40,11 +40,14 @@ all languages on every kernel.
 |----------|-----|--------|------|---|-----|----|----|------|-----|
 | `sum_loop` Σ 0..10⁷ | **0.0022**\* | 2.93 | 0.0016\* | 0.0013\* | 0.0089 | 0.081 | 0.077 | 0.410 | 0.0071 |
 | `fib_iter` 2·10⁷ steps | **0.016** | 7.05 | 0.011 | 0.015 | 0.020 | 1.17 | 1.22 | 5.99 | 0.024 |
-| `list_sum` 10⁶ push+sum | **0.016** | 0.53 | 0.0089 | 0.010 | 0.0098 | 0.095 | 0.093 | 0.198 | 0.032 |
+| `list_sum` 10⁶ push+sum | **0.011**† | 0.53 | 0.0089 | 0.010 | 0.0098 | 0.095 | 0.093 | 0.198 | 0.032 |
 | `nested` 2000×2000 | **0.0018**\* | 0.97 | 0.0022 | 0.0018 | 0.0042 | 0.061 | 0.060 | 0.212 | 0.0019 |
 
 \* Pure sum/nested often become closed forms (Ori mid-end; Rust/C optimisers).
-Prefer **`fib_iter`** and **`list_sum`** for loop / heap cost.
+Prefer **`fib_iter`** and **`list_sum`** for loop / heap cost.  
+† After scalar list inline codegen + `with_capacity` (2026-07-14 remeasure vs
+Rust ~0.009 s on the same host ≈ **1.25×**). Other columns still from the full
+polyglot suite unless noted.
 
 ### Relative to Ori (lang / Ori; **lower is faster**)
 
@@ -52,7 +55,7 @@ Prefer **`fib_iter`** and **`list_sum`** for loop / heap cost.
 |----------|-----|------|---|-----|----|----|------|-----|
 | `sum_loop` | **1360×** | 0.73×\* | 0.61×\* | 4.1× | 37× | 36× | 190× | 3.3× |
 | `fib_iter` | **440×** | **0.68×** | 0.92× | 1.24× | 73× | 76× | 374× | 1.50× |
-| `list_sum` | **32×** | **0.55×** | 0.64× | 0.61× | 5.8× | 5.8× | 12× | 2.0× |
+| `list_sum` | **48×**† | **0.78×**† | ~0.9× | ~0.9× | ~9× | ~8× | ~18× | ~2.9× |
 | `nested` | **552×** | **1.26×** | 1.04× | 2.4× | 35× | 34× | 121× | 1.09× |
 
 ## How to read this
@@ -70,7 +73,7 @@ Prefer **`fib_iter`** and **`list_sum`** for loop / heap cost.
 | Peer | Takeaway |
 |------|----------|
 | **`fib_iter`** | Best non-closed-form signal: Ori **~1.5×** Rust, **beats Go and Nim**, near C |
-| **`list_sum`** | Ori **~1.5–1.8×** Rust/C/Go — managed list + ARC cost (uses `with_capacity` like Rust) |
+| **`list_sum`** | Ori **~1.25×** Rust with `with_capacity` + **inline scalar push/get** (was ~1.8×); gap is checks/version, not ARC on `list[int]` |
 | **`sum` / `nested`** | Closed-form noise floor; Ori competitive with C/Rust when reduced |
 | **Go / Nim** | No longer dominate Ori on fib after the loop GC fix |
 

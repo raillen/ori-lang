@@ -23,6 +23,13 @@ main()
         io.print(fruit)
     end
 
+    -- Pre-size lists when the final length is known (avoids realloc churn).
+    var nums: list[int] = lists.with_capacity(8)
+    lists.reserve(nums, 16)
+    lists.push(nums, 10)
+    lists.push(nums, 20)
+    io.print(string(lists.capacity(nums)))
+    io.print(string(nums[0] + nums[1]))
 
     const scores: map[int, int] = {1: 95, 2: 88, 3: 92}
     maps.reserve(scores, 8)

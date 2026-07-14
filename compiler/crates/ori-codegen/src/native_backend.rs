@@ -190,6 +190,33 @@ fn is_managed_ty(ty: &Ty) -> bool {
     ty.is_runtime_managed()
 }
 
+/// Scalar list elements stored as raw `i64` slots (no ARC edge on push/get).
+/// Floats are excluded: storage uses integer slots via bitcast, handled by the
+/// runtime call path until a dedicated bitcast path is added.
+fn is_list_inline_scalar_elem(ty: &Ty) -> bool {
+    !is_managed_ty(ty)
+        && matches!(
+            ty,
+            Ty::Bool
+                | Ty::Int
+                | Ty::Int8
+                | Ty::Int16
+                | Ty::Int32
+                | Ty::Int64
+                | Ty::U8
+                | Ty::U16
+                | Ty::U32
+                | Ty::U64
+        )
+}
+
+/// `OriList` field offsets for the native `repr(C)` layout:
+/// `{ data: *i64, len: i64, cap: i64, version: i64 }`.
+const ORI_LIST_DATA_OFFSET: i32 = 0;
+const ORI_LIST_LEN_OFFSET: i32 = 8;
+const ORI_LIST_CAP_OFFSET: i32 = 16;
+const ORI_LIST_VERSION_OFFSET: i32 = 24;
+
 /// Opaque I/O handles must survive across `await` even when liveness analysis
 /// misses uses in nested match arms (e.g. `await write_all_async(client, …)` then
 /// `read_some(client)`). Auto-dropping them yields "invalid connection".
@@ -6253,9 +6280,160 @@ impl<'a> FuncCodegen<'a> {
             .get("ori_list_push")
             .ok_or_else(|| "missing runtime function `ori_list_push`".to_string())?;
         let stored = self.to_list_storage_value(value, elem_ty);
+
+        // Fast path for non-managed scalars when capacity remains: store in-place
+        // without a runtime call (dominant cost in list_sum / push loops).
+        if is_list_inline_scalar_elem(elem_ty) {
+            let len = self.builder.ins().load(
+                types::I64,
+                MemFlags::new(),
+                list,
+                ORI_LIST_LEN_OFFSET,
+            );
+            let cap = self.builder.ins().load(
+                types::I64,
+                MemFlags::new(),
+                list,
+                ORI_LIST_CAP_OFFSET,
+            );
+            let has_room = self.builder.ins().icmp(
+                ir::condcodes::IntCC::SignedLessThan,
+                len,
+                cap,
+            );
+
+            let fast = self.builder.create_block();
+            let slow = self.builder.create_block();
+            let join = self.builder.create_block();
+            self.builder
+                .ins()
+                .brif(has_room, fast, &[], slow, &[]);
+
+            self.builder.seal_block(fast);
+            self.builder.switch_to_block(fast);
+            let data = self.builder.ins().load(
+                self.ptr_ty,
+                MemFlags::new(),
+                list,
+                ORI_LIST_DATA_OFFSET,
+            );
+            let scale = self.builder.ins().iconst(types::I64, 8);
+            let byte_off = self.builder.ins().imul(len, scale);
+            let slot = self.builder.ins().iadd(data, byte_off);
+            self.builder
+                .ins()
+                .store(MemFlags::new(), stored, slot, 0);
+            let one = self.builder.ins().iconst(types::I64, 1);
+            let new_len = self.builder.ins().iadd(len, one);
+            self.builder
+                .ins()
+                .store(MemFlags::new(), new_len, list, ORI_LIST_LEN_OFFSET);
+            let version = self.builder.ins().load(
+                types::I64,
+                MemFlags::new(),
+                list,
+                ORI_LIST_VERSION_OFFSET,
+            );
+            let new_version = self.builder.ins().iadd(version, one);
+            self.builder.ins().store(
+                MemFlags::new(),
+                new_version,
+                list,
+                ORI_LIST_VERSION_OFFSET,
+            );
+            self.builder.ins().jump(join, &[]);
+
+            self.builder.seal_block(slow);
+            self.builder.switch_to_block(slow);
+            self.builder.ins().call(push_ref, &[list, stored]);
+            self.builder.ins().jump(join, &[]);
+
+            self.builder.seal_block(join);
+            self.builder.switch_to_block(join);
+            self.terminated = false;
+            // Non-managed: no ARC edge.
+            return Ok(());
+        }
+
         self.builder.ins().call(push_ref, &[list, stored]);
         self.emit_arc_register_edge_if_managed(elem_ty, list, value)?;
         Ok(())
+    }
+
+    /// Load `list[index]` — inline bounds-checked load for scalar elements.
+    fn emit_list_get_value(
+        &mut self,
+        list: ir::Value,
+        index: ir::Value,
+        elem_ty: &Ty,
+    ) -> Result<ir::Value, String> {
+        let get_ref = *self
+            .func_refs
+            .get("ori_list_get")
+            .ok_or_else(|| "missing runtime function `ori_list_get`".to_string())?;
+
+        if !is_list_inline_scalar_elem(elem_ty) {
+            let call = self.builder.ins().call(get_ref, &[list, index]);
+            let stored = self.builder.inst_results(call)[0];
+            return Ok(self.from_list_storage_value(stored, elem_ty));
+        }
+
+        let len = self
+            .builder
+            .ins()
+            .load(types::I64, MemFlags::new(), list, ORI_LIST_LEN_OFFSET);
+        let zero = self.builder.ins().iconst(types::I64, 0);
+        let ge_zero = self
+            .builder
+            .ins()
+            .icmp(ir::condcodes::IntCC::SignedGreaterThanOrEqual, index, zero);
+        let lt_len = self
+            .builder
+            .ins()
+            .icmp(ir::condcodes::IntCC::SignedLessThan, index, len);
+        let in_bounds = self.builder.ins().band(ge_zero, lt_len);
+
+        let fast = self.builder.create_block();
+        let slow = self.builder.create_block();
+        let join = self.builder.create_block();
+        self.builder.append_block_param(join, types::I64);
+        self.builder
+            .ins()
+            .brif(in_bounds, fast, &[], slow, &[]);
+
+        self.builder.seal_block(fast);
+        self.builder.switch_to_block(fast);
+        let data = self.builder.ins().load(
+            self.ptr_ty,
+            MemFlags::new(),
+            list,
+            ORI_LIST_DATA_OFFSET,
+        );
+        let scale = self.builder.ins().iconst(types::I64, 8);
+        let byte_off = self.builder.ins().imul(index, scale);
+        let slot = self.builder.ins().iadd(data, byte_off);
+        let stored = self
+            .builder
+            .ins()
+            .load(types::I64, MemFlags::new(), slot, 0);
+        self.builder
+            .ins()
+            .jump(join, &[BlockArg::Value(stored)]);
+
+        self.builder.seal_block(slow);
+        self.builder.switch_to_block(slow);
+        // Runtime path aborts with the standard bounds diagnostic.
+        let call = self.builder.ins().call(get_ref, &[list, index]);
+        let slow_stored = self.builder.inst_results(call)[0];
+        self.builder
+            .ins()
+            .jump(join, &[BlockArg::Value(slow_stored)]);
+
+        self.builder.seal_block(join);
+        self.builder.switch_to_block(join);
+        self.terminated = false;
+        let stored = self.builder.block_params(join)[0];
+        Ok(self.from_list_storage_value(stored, elem_ty))
     }
 
     fn emit_list_extend_from(
@@ -11210,15 +11388,7 @@ impl<'a> FuncCodegen<'a> {
                 let container = self.emit_expr(object)?;
                 let idx = self.emit_expr(index)?;
                 match &object.ty {
-                    Ty::List(elem_ty) => {
-                        let get_ref = *self
-                            .func_refs
-                            .get("ori_list_get")
-                            .ok_or_else(|| "missing runtime function `ori_list_get`".to_string())?;
-                        let call = self.builder.ins().call(get_ref, &[container, idx]);
-                        let stored = self.builder.inst_results(call)[0];
-                        self.from_list_storage_value(stored, elem_ty)
-                    }
+                    Ty::List(elem_ty) => self.emit_list_get_value(container, idx, elem_ty)?,
                     Ty::String => {
                         let slice_ref =
                             *self.func_refs.get("ori_string_slice").ok_or_else(|| {

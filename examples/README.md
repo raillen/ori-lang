@@ -31,6 +31,11 @@ All examples under `examples/*/main.orl` pass `ori check`.
 `http_get` needs network and TLS (runtime uses rustls + ring).  
 `using_fs` / `async_io` write a scratch file in the current working directory.
 
+**Performance:** honest polyglot numbers and mid-end notes live in
+[`docs/guides/performance.md`](../docs/guides/performance.md)
+([PT](../docs/guides/performance.pt-BR.md)). Prefer `lists.with_capacity(n)`
+when the final list length is known.
+
 ## Learning trail
 
 Suggested order for newcomers:
@@ -43,7 +48,7 @@ Suggested order for newcomers:
 | 4 | [`tests_demo/`](tests_demo/) | `@test` + `ori.test` (`ori test`) |
 | 5 | [`cli_args/`](cli_args/) | `ori.args` |
 | 6 | [`string_toolkit/`](string_toolkit/) · [`bytes_usage/`](bytes_usage/) | Text and bytes |
-| 7 | [`collections_demo/`](collections_demo/) | List, map, queue, stack, deque, linked lists, tree, hash table |
+| 7 | [`collections_demo/`](collections_demo/) | List (`with_capacity` / `reserve`), map, queue, stack, deque, linked lists, tree, hash table |
 | 8 | [`using_fs/`](using_fs/) | Streams `open_input` / `open_output` + `using` dispose |
 | 9 | [`path_time_io/`](path_time_io/) · [`file_organizer/`](file_organizer/) · [`log_analyzer/`](log_analyzer/) | Path, time, file workflows |
 | 10 | [`json_validator/`](json_validator/) | JSON |
@@ -67,7 +72,7 @@ Suggested order for newcomers:
 | [`cli_args/`](cli_args/) | CLI args + small task list |
 | [`string_toolkit/`](string_toolkit/) | `ori.string` |
 | [`bytes_usage/`](bytes_usage/) | `ori.bytes` |
-| [`collections_demo/`](collections_demo/) | Collections overview (merged former one-offs) |
+| [`collections_demo/`](collections_demo/) | Collections overview + list capacity API |
 | [`using_fs/`](using_fs/) | File streams + `using` |
 | [`path_time_io/`](path_time_io/) | Path / time / IO |
 | [`file_organizer/`](file_organizer/) | FS organization sketch |
