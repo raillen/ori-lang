@@ -4,15 +4,17 @@ use crate::hir::HirModule;
 
 use super::const_fold::fold_module;
 use super::dce::dce_module;
+use super::inline_leafs::inline_leafs_module;
+use super::strength_reduce::strength_reduce_module;
 
 /// Optimisation aggressiveness for HIR mid-end.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OptLevel {
     /// No mid-end rewrites (tests / raw lower).
     None,
-    /// Product default: const fold + DCE (fixed-point, bounded).
+    /// Product default: const fold + DCE + pure-loop strength reduction.
     Default,
-    /// Future: strength reduction, inlining, etc.
+    /// Default passes plus monomorphic leaf inlining.
     Aggressive,
 }
 
@@ -32,18 +34,23 @@ pub fn optimize_module(module: &mut HirModule, level: OptLevel) {
     match level {
         OptLevel::None => {}
         OptLevel::Default | OptLevel::Aggressive => {
-            // Bounded fixed-point: fold then DCE, up to a few rounds.
+            // Bounded fixed-point: fold → strength reduce → DCE.
             for _ in 0..4 {
                 let before = format!("{module:?}");
                 fold_module(module);
+                strength_reduce_module(module);
                 dce_module(module);
                 let after = format!("{module:?}");
                 if before == after {
                     break;
                 }
             }
-            // Aggressive reserved for strength reduction / inline (LANG-PERF-2-3/4).
-            let _ = level;
+            if level == OptLevel::Aggressive {
+                inline_leafs_module(module);
+                // One more fold/DCE round after inlining exposes constants.
+                fold_module(module);
+                dce_module(module);
+            }
         }
     }
 }

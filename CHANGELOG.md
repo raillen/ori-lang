@@ -21,8 +21,10 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   in [docs/planning/perf-baseline-2026-07-13.md](docs/planning/perf-baseline-2026-07-13.md).
 - **LANG-PERF-2 plan:** [docs/planning/perf-runtime-midend-plan.md](docs/planning/perf-runtime-midend-plan.md)
   — mid-end HIR opts, loop hygiene, strength reduction, inlining; ORC/LLVM deferred.
-- **LANG-PERF-2-0/1/2 (partial land):**
-  - HIR mid-end `ori_hir::optimize` (const fold + DCE; `ORI_OPT=none|default|aggressive`)
+- **LANG-PERF-2-0/1/2/3/4 mid-end land:**
+  - HIR mid-end `ori_hir::optimize` — const fold + DCE + pure-loop **strength
+    reduction** (default); monomorphic **leaf inlining** under
+    `ORI_OPT=aggressive` (also `none` / `default` / `2`)
   - `ORI_DUMP_CLIF=1` / path dumps Cranelift IR for defined functions
   - `tools/qa/perf_polyglot_smoke.sh` for fib+list smoke
 
@@ -30,14 +32,15 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Native loops no longer call `ori_arc_collect_cycles` every iteration**
   (was triggered whenever a block entered with empty managed stack, including
   `while`/`for` bodies). Cycle collection now only runs at function-root
-  cleanups outside loops. Tight integer loops drop from ~50× Rust to ~2× on
-  `fib_iter` (20M steps) on the benchmark host.
+  cleanups outside loops. Tight integer loops drop from ~50× Rust to ~1.6× on
+  `fib_iter` (20M steps) on the benchmark host; pure sum/nested closed forms
+  via strength reduction drop further toward process-start noise.
 
 ### Notas
 - Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package line **`[0.3.4]`**.
-- Polyglot snapshot (2026-07-13, 9 langs): Ori ~8–60× ahead of CPython; near
-  Rust/C/Go on list churn (~1.2–1.6×); large gap vs mature AOT on tight fib —
-  see performance guide.
+- Polyglot snapshot (2026-07-13/14, 9 langs, post GC fix + mid-end): Ori
+  ~50–440× ahead of CPython; ~parity with Go on sum/fib/list; ~1.6× Rust on
+  fib — see performance guide.
 
 ---
 

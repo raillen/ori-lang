@@ -63,14 +63,14 @@ ongoing work is **living maintenance**:
 
 | ID | Item | P | D | Status | Notes |
 |----|------|---|---|--------|-------|
-| **LANG-PERF-2** | Runtime/mid-end performance (loops, not just compile/link) | 1 | L | **partial** | Plan: [`perf-runtime-midend-plan.md`](perf-runtime-midend-plan.md). **0–2 landed** (cycle collect fix is the main win). |
+| **LANG-PERF-2** | Runtime/mid-end performance (loops, not just compile/link) | 1 | L | **partial** | Plan: [`perf-runtime-midend-plan.md`](perf-runtime-midend-plan.md). **0–4 landed**; optional 2-5 remains. |
 | **LANG-PERF-2-0** | Instrument: CLIF dump + polyglot smoke | 1 | S | **done** | `ORI_DUMP_CLIF`; `tools/qa/perf_polyglot_smoke.sh` |
 | **LANG-PERF-2-1** | Mid-end: const fold + DCE | 1 | M | **done** | `ori_hir::optimize`; `ORI_OPT` |
 | **LANG-PERF-2-2** | Loop hygiene (no per-iter cycle collect) | 1 | L | **done** | Native: collect only outside loops at root cleanup |
-| **LANG-PERF-2-3** | Pure-loop strength reduction | 2 | M | **todo** | Deferred — fib already ~2× Rust after 2-2 |
-| **LANG-PERF-2-4** | Monomorphic leaf inlining | 2 | M | **todo** | Deferred — measure after real apps |
-| **LANG-PERF-2-5** | List reserve path (optional) | 3 | S | **todo** | Wave 5 · optional |
-| **LANG-PERF-2-6** | Docs/README polyglot snapshot refresh | 2 | S | **todo** | Update after remeasure polyglot full suite |
+| **LANG-PERF-2-3** | Pure-loop strength reduction | 2 | M | **done** | Default mid-end; sum/nested closed form |
+| **LANG-PERF-2-4** | Monomorphic leaf inlining | 2 | M | **done** | `ORI_OPT=aggressive` only |
+| **LANG-PERF-2-5** | List reserve path (optional) | 3 | S | **todo** | Optional residual |
+| **LANG-PERF-2-6** | Docs/README polyglot snapshot refresh | 2 | S | **done** | README + performance guides + LATEST (2026-07-14) |
 | **LIVE-LINK** | Package smoke uses **SystemLinker only** (not RustcDriver) | 2 | S | **done** | RustcDriver double-links libstd vs `ori-runtime` staticlib (`rust_eh_personality`). |
 | **LIVE-QA** | Daily QA stages + test matrix + skill `ori-lang-qa` | 2 | M | **done** | `tools/qa/*`, `.grok/skills/ori-lang-qa`, agents, Spec 13 quality section |
 | **LIVE-RES** | Residual product surface clean under FREEZE-1 | 1 | S | **done** | Policy + `residual_audit.sh`; intentional residuals remain Spec 14 |

@@ -188,16 +188,29 @@ SAMPLES=3 ./tools/bench/polyglot/run_polyglot_bench.sh
 | Binary | Median wall (≈5 samples) |
 |--------|---------------------------|
 | Ori **before** | ~0.50–0.65 s |
-| Ori **after** | **~0.018 s** |
-| Rust release | ~0.009 s |
+| Ori **after** | **~0.018–0.046 s** (load-dependent) |
+| Rust release | ~0.009–0.029 s |
 
-≈ **2×** Rust (was ~50×). **G1 essentially met** for fib; strength reduction
-(2-3) / inlining (2-4) deferred unless real apps still show a cliff.
+≈ **1.6–2×** Rust (was ~50×). **G1 essentially met** for fib.
 
-### Other kernels (single sample after fix)
+## Wave 6 (2026-07-14) — LANG-PERF-2-3/4 strength + leaf inline
 
-| Kernel | Ori wall (approx) |
-|--------|-------------------|
-| sum_loop 10⁷ | ~0.011 s |
-| list_sum 10⁶ | ~0.016 s |
-| nested 2000² | ~0.006 s |
+### Changes
+
+1. **Strength reduction (Default):** pure `while i < n { s = s + i; i++ }` →
+   closed form `s = n*(n-1)/2`; nested count → `s = n*n`.
+2. **Leaf inlining (Aggressive):** same-module monomorphic `return expr` leafs
+   only; `ORI_OPT=aggressive`.
+3. Unit tests in `ori-hir::optimize`.
+
+### Ori AOT (release, 5 samples, same host)
+
+| Kernel | `ORI_OPT=none` | Default (strength) | Aggressive |
+|--------|----------------|--------------------|------------|
+| sum_loop 10⁷ | ~0.010 s | **~0.0014 s** | ~0.0011 s |
+| fib_iter 2·10⁷ | ~0.017 s | ~0.016 s | ~0.018 s |
+| list_sum 10⁶ | ~0.013 s | ~0.013 s | ~0.016 s |
+| nested 2000² | ~0.004 s | **~0.0012 s** | ~0.0014 s |
+
+Strength reduction wins on pure sum/nested; fib/list unchanged (no pattern).
+Full polyglot table: `tools/bench/polyglot/results/LATEST.md`.
