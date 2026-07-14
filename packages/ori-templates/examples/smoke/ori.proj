@@ -1,0 +1,9 @@
+manifest = 1
+name = "templates_smoke"
+version = "0.1.0"
+kind = "app"
+entry = "main.orl"
+[source]
+root_namespace = "app"
+[dependencies]
+templates = { path = "../..", version = "0.1.0" }

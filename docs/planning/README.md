@@ -24,6 +24,9 @@
 | [perf-runtime-midend-plan.md](perf-runtime-midend-plan.md) | LANG-PERF-2 mid-end / loop runtime plan (**done** 0–6) |
 | [qa/test-matrix-ori.md](qa/test-matrix-ori.md) | Product-mapped compiler test matrix |
 | [qa/residual-cleanup-2026-07-13.md](qa/residual-cleanup-2026-07-13.md) | Residual surface cleanup snapshot |
+| [web-templates-discussion-roadmap.md](web-templates-discussion-roadmap.md) | **ori-templates / ori-web / HTML-first** — discussion roadmap (syntax, SEC, packages) |
+| [web-framework-learning-course.md](web-framework-learning-course.md) | **Curso** (pt-BR): conceitos web/security/htmx + decisões Ori (estudo/revisão) |
+| (mesmo roadmap §12) | Futuro **ori-web-app** Rails-like (D21); convenções APP* |
 
 ## Historical / archive
 

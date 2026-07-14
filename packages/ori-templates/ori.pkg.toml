@@ -1,0 +1,6 @@
+[package]
+name = "templates"
+version = "0.1.0"
+entry = "src/lib.orl"
+ori_version = "0.3.0"
+description = "Server-side HTML templates for Ori (@{ } / .orix) — escape default, layouts, path jail"
