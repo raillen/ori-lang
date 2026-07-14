@@ -70,7 +70,7 @@ batem em todas as linguagens em todos os kernels.
 | Par | Leitura |
 |-----|---------|
 | **`fib_iter`** | Melhor sinal sem forma fechada: Ori **~1.5×** Rust, **ganha de Go e Nim**, perto de C |
-| **`list_sum`** | Ori **~1.6–1.8×** Rust/C/Go — custo de lista + ARC |
+| **`list_sum`** | Ori **~1.5–1.8×** Rust/C/Go — custo de lista + ARC (usa `with_capacity` como Rust) |
 | **`sum` / `nested`** | Ruído de forma fechada; Ori competitiva com C/Rust quando reduz |
 | **Go / Nim** | Não dominam mais a Ori no fib após o fix do GC |
 

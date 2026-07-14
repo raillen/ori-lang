@@ -13,9 +13,9 @@
 - Multi-OS packages / marketplace / registry marketing (DIST-*, TOOL marketplace, ECO demos)
 - Self-host (M4)
 
-**Active language-first reopening:** **LANG-PERF-2** (runtime mid-end / loops) —
-see [`perf-runtime-midend-plan.md`](perf-runtime-midend-plan.md). Otherwise
-ongoing work is **living maintenance**:
+**LANG-PERF-2 closed** (mid-end + list reserve; see
+[`perf-runtime-midend-plan.md`](perf-runtime-midend-plan.md)). Ongoing work is
+**living maintenance**:
 
 1. Bugs / diagnostics from real programs  
 2. Docs + examples drift  
@@ -63,13 +63,13 @@ ongoing work is **living maintenance**:
 
 | ID | Item | P | D | Status | Notes |
 |----|------|---|---|--------|-------|
-| **LANG-PERF-2** | Runtime/mid-end performance (loops, not just compile/link) | 1 | L | **partial** | Plan: [`perf-runtime-midend-plan.md`](perf-runtime-midend-plan.md). **0–4 landed**; optional 2-5 remains. |
+| **LANG-PERF-2** | Runtime/mid-end performance (loops, not just compile/link) | 1 | L | **done** | Plan: [`perf-runtime-midend-plan.md`](perf-runtime-midend-plan.md). Waves 0–6 landed (optional residual: deeper list/ARC only). |
 | **LANG-PERF-2-0** | Instrument: CLIF dump + polyglot smoke | 1 | S | **done** | `ORI_DUMP_CLIF`; `tools/qa/perf_polyglot_smoke.sh` |
 | **LANG-PERF-2-1** | Mid-end: const fold + DCE | 1 | M | **done** | `ori_hir::optimize`; `ORI_OPT` |
 | **LANG-PERF-2-2** | Loop hygiene (no per-iter cycle collect) | 1 | L | **done** | Native: collect only outside loops at root cleanup |
 | **LANG-PERF-2-3** | Pure-loop strength reduction | 2 | M | **done** | Default mid-end; sum/nested closed form |
 | **LANG-PERF-2-4** | Monomorphic leaf inlining | 2 | M | **done** | `ORI_OPT=aggressive` only |
-| **LANG-PERF-2-5** | List reserve path (optional) | 3 | S | **todo** | Optional residual |
+| **LANG-PERF-2-5** | List reserve path (optional) | 3 | S | **done** | `with_capacity` / `capacity` / `reserve`; list_sum uses pre-size |
 | **LANG-PERF-2-6** | Docs/README polyglot snapshot refresh | 2 | S | **done** | README + performance guides + LATEST (2026-07-14) |
 | **LIVE-LINK** | Package smoke uses **SystemLinker only** (not RustcDriver) | 2 | S | **done** | RustcDriver double-links libstd vs `ori-runtime` staticlib (`rust_eh_personality`). |
 | **LIVE-QA** | Daily QA stages + test matrix + skill `ori-lang-qa` | 2 | M | **done** | `tools/qa/*`, `.grok/skills/ori-lang-qa`, agents, Spec 13 quality section |
@@ -81,7 +81,7 @@ ongoing work is **living maintenance**:
 |----|-------|
 | **LANG-DOC** | User docs EN/PT + root READMEs + examples catalog; living maintenance only after this |
 | **LANG-PERF** | Closed — waves 1–3 (compile/link/JIT flags); see `perf-baseline-2026-07-13.md` |
-| **LANG-PERF-2** | Open — runtime mid-end; see `perf-runtime-midend-plan.md` |
+| **LANG-PERF-2** | Closed (waves 0–6) — residual list/ARC polish only if apps regress |
 | **LANG-RES** | Closed — Spec 14 inventory + `compile_runs_lang_res_product_surface_native`; see `lang-res-closure.md` |
 | **DX-VSCODE** | v0.3.2 local `.vsix` |
 | **DX-ZED** | `extensions/zed-ori` dev install |

@@ -303,7 +303,8 @@ typedef struct OriList {
 
 - Object itself is ARC-allocated with `ori_list_dtor` (frees `data` buffer).
 - Elements that are managed register edges list→element on insert.
-- `ori_list_new`, `ori_list_push`, `ori_list_get`, `ori_list_len`, …
+- `ori_list_new`, `ori_list_with_capacity`, `ori_list_reserve`,
+  `ori_list_capacity`, `ori_list_push`, `ori_list_get`, `ori_list_len`, …
 
 ### 7.5 `set[T]` — `OriSet`
 

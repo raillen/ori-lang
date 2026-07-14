@@ -214,3 +214,26 @@ SAMPLES=3 ./tools/bench/polyglot/run_polyglot_bench.sh
 
 Strength reduction wins on pure sum/nested; fib/list unchanged (no pattern).
 Full polyglot table: `tools/bench/polyglot/results/LATEST.md`.
+
+## Wave 7 (2026-07-14) — LANG-PERF-2-5 list reserve
+
+### API (additive, FREEZE-safe)
+
+| Surface | Runtime |
+|---------|---------|
+| `ori.list.with_capacity(n)` | `ori_list_with_capacity` |
+| `ori.list.capacity(xs)` | `ori_list_capacity` |
+| `ori.list.reserve(xs, n)` | `ori_list_reserve` |
+
+Push/insert share `list_ensure_capacity`; `slice` pre-sizes output.
+
+### list_sum 10⁶ (same host, release, 5 samples)
+
+| Variant | Median wall |
+|---------|-------------|
+| Before (grow from 8, doubling) | ~0.016 s |
+| After (`with_capacity(n)`) | **~0.014 s** |
+| Rust `Vec::with_capacity` | ~0.009 s |
+
+Reserve removes realloc churn; remaining ~1.5× Rust is managed list/ARC
+hot path, not growth strategy.

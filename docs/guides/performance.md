@@ -70,7 +70,7 @@ Prefer **`fib_iter`** and **`list_sum`** for loop / heap cost.
 | Peer | Takeaway |
 |------|----------|
 | **`fib_iter`** | Best non-closed-form signal: Ori **~1.5×** Rust, **beats Go and Nim**, near C |
-| **`list_sum`** | Ori **~1.6–1.8×** Rust/C/Go — managed list + ARC cost |
+| **`list_sum`** | Ori **~1.5–1.8×** Rust/C/Go — managed list + ARC cost (uses `with_capacity` like Rust) |
 | **`sum` / `nested`** | Closed-form noise floor; Ori competitive with C/Rust when reduced |
 | **Go / Nim** | No longer dominate Ori on fib after the loop GC fix |
 

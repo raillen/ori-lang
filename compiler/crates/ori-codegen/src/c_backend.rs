@@ -90,10 +90,24 @@ typedef struct { ori_list_t _f0; ori_list_t _f1; } ori_tuple_list_i64_list_i64_t
 static inline ori_list_t ori_list_new(size_t elem_size) {
     return (ori_list_t){ .data = NULL, .len = 0, .cap = 0, .version = 0, .elem_size = elem_size };
 }
+static inline void ori_list_reserve(ori_list_t* l, int64_t capacity) {
+    if (!l || capacity <= (int64_t)l->cap) return;
+    size_t next = l->cap ? l->cap : 4;
+    while ((int64_t)next < capacity) next = next ? next * 2 : 4;
+    l->data = realloc(l->data, next * l->elem_size);
+    l->cap = next;
+}
+static inline int64_t ori_list_capacity(ori_list_t* l) {
+    return l ? (int64_t)l->cap : 0;
+}
+static inline ori_list_t ori_list_with_capacity(size_t elem_size, int64_t capacity) {
+    ori_list_t l = ori_list_new(elem_size);
+    ori_list_reserve(&l, capacity);
+    return l;
+}
 static inline void ori_list_push(ori_list_t* l, const void* elem) {
     if (l->len >= l->cap) {
-        l->cap = l->cap ? l->cap * 2 : 4;
-        l->data = realloc(l->data, l->cap * l->elem_size);
+        ori_list_reserve(l, (int64_t)(l->cap ? l->cap * 2 : 4));
     }
     memcpy((char*)l->data + l->len * l->elem_size, elem, l->elem_size);
     l->len++;

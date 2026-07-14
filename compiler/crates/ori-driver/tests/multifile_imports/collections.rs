@@ -50,6 +50,40 @@ end
 }
 
 #[test]
+fn compile_runs_list_capacity_reserve_with_capacity_native() {
+    let dir = TestDir::new("compile_list_capacity_reserve_with_capacity_native");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io = io
+import ori.list = lists
+
+main()
+    var empty: list[int] = lists.with_capacity(64)
+    if lists.capacity(empty) >= 64
+        io.print("with-cap")
+    end
+    lists.reserve(empty, 128)
+    if lists.capacity(empty) >= 128
+        io.print("reserved")
+    end
+    var i: int = 0
+    while i < 100
+        lists.push(empty, i)
+        i = i + 1
+    end
+    io.print(string(lists.len(empty)))
+    io.print(string(empty[0] + empty[99]))
+end
+"#,
+    );
+
+    let stdout = compile_and_run(&dir, "list_capacity_reserve_with_capacity");
+    assert_eq!(stdout, "with-cap\nreserved\n100\n99\n");
+}
+
+#[test]
 fn compile_runs_map_set_capacity_reserve_clear_native() {
     let dir = TestDir::new("compile_map_set_capacity_reserve_clear_native");
     dir.write(

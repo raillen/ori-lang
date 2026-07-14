@@ -3702,6 +3702,13 @@ impl<M: Module> NativeBackend<M> {
         // list[T] runtime
         let id = decl("ori_list_new", &[], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_new"), id);
+        let id = decl("ori_list_with_capacity", &[types::I64], vec![], Some(pt))?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_list_with_capacity"), id);
+        let id = decl("ori_list_capacity", &[pt], vec![], Some(types::I64))?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_capacity"), id);
+        let id = decl("ori_list_reserve", &[pt, types::I64], vec![], None)?;
+        self.stdlib_ids.insert(SmolStr::new("ori_list_reserve"), id);
         let id = decl("ori_list_push", &[pt, types::I64], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_push"), id);
         let id = decl("ori_list_get", &[pt, types::I64], vec![], Some(types::I64))?;

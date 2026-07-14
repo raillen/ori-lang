@@ -2246,6 +2246,24 @@ unsafe extern "C" fn ori_list_dtor(ptr: *mut u8) {
     }
 }
 
+/// Grow list storage so `cap >= min_cap` (no-op when already large enough).
+unsafe fn list_ensure_capacity(list: *mut OriList, min_cap: i64) {
+    if list.is_null() {
+        return;
+    }
+    let min_cap = min_cap.max(0);
+    if min_cap <= (*list).cap {
+        return;
+    }
+    let mut next_cap = (*list).cap.max(8);
+    while next_cap < min_cap {
+        next_cap = (next_cap * 2).max(1);
+    }
+    let bytes = next_cap as usize * std::mem::size_of::<i64>();
+    (*list).data = libc::realloc((*list).data as *mut libc::c_void, bytes) as *mut i64;
+    (*list).cap = next_cap;
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn ori_list_new() -> *mut OriList {
     let cap = 8_i64;
@@ -2261,16 +2279,38 @@ pub unsafe extern "C" fn ori_list_new() -> *mut OriList {
     list
 }
 
+/// Create an empty list with at least `capacity` slots pre-allocated.
+#[no_mangle]
+pub unsafe extern "C" fn ori_list_with_capacity(capacity: i64) -> *mut OriList {
+    let list = ori_list_new();
+    if !list.is_null() {
+        list_ensure_capacity(list, capacity.max(0));
+    }
+    list
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn ori_list_capacity(list: *mut OriList) -> i64 {
+    if list.is_null() {
+        0
+    } else {
+        (*list).cap
+    }
+}
+
+/// Ensure the list can hold at least `capacity` elements without further realloc.
+#[no_mangle]
+pub unsafe extern "C" fn ori_list_reserve(list: *mut OriList, capacity: i64) {
+    list_ensure_capacity(list, capacity);
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn ori_list_push(list: *mut OriList, value: i64) {
     if list.is_null() {
         return;
     }
     if (*list).len >= (*list).cap {
-        let next_cap = ((*list).cap * 2).max(1);
-        let bytes = next_cap as usize * std::mem::size_of::<i64>();
-        (*list).data = libc::realloc((*list).data as *mut libc::c_void, bytes) as *mut i64;
-        (*list).cap = next_cap;
+        list_ensure_capacity(list, (*list).len + 1);
     }
     *(*list).data.add((*list).len as usize) = value;
     (*list).len += 1;
@@ -2358,10 +2398,7 @@ pub unsafe extern "C" fn ori_list_insert(list: *mut OriList, index: i64, value: 
         return;
     }
     if (*list).len >= (*list).cap {
-        let next_cap = ((*list).cap * 2).max(1);
-        let bytes = next_cap as usize * std::mem::size_of::<i64>();
-        (*list).data = libc::realloc((*list).data as *mut libc::c_void, bytes) as *mut i64;
-        (*list).cap = next_cap;
+        list_ensure_capacity(list, (*list).len + 1);
     }
     let index = index.max(0).min((*list).len) as usize;
     for i in (index..(*list).len as usize).rev() {
@@ -2416,13 +2453,13 @@ pub unsafe extern "C" fn ori_list_slice(list: *mut OriList, start: i64, end: i64
     if list.is_null() {
         abort_bounds("ori list slice bounds out of range");
     }
-    let out = ori_list_new();
     let (start, end) = checked_slice_bounds(
         (*list).len,
         start,
         end,
         "ori list slice bounds out of range",
     );
+    let out = ori_list_with_capacity((end - start) as i64);
     for i in start..end {
         ori_list_push_borrowed_maybe_managed(out, *(*list).data.add(i as usize));
     }

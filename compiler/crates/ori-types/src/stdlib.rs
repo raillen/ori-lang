@@ -194,11 +194,14 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("float", [] => "ori_to_float", c_backend),
     stdlib!("len", [] => "ori_len", c_backend),
     stdlib!("ori.list.new", ["list.new"] => "ori_list_new"),
+    stdlib!("ori.list.with_capacity", ["list.with_capacity"] => "ori_list_with_capacity"),
     stdlib!("ori.list.push", ["list.push"] => "ori_list_push"),
     stdlib!("ori.list.get", ["list.get"] => "ori_list_get"),
     stdlib!("ori.list.try_get", ["list.try_get"] => "ori_list_try_get"),
     stdlib!("ori.list.set", ["list.set"] => "ori_list_set"),
     stdlib!("ori.list.len", ["list.len"] => "ori_list_len"),
+    stdlib!("ori.list.capacity", ["list.capacity"] => "ori_list_capacity"),
+    stdlib!("ori.list.reserve", ["list.reserve"] => "ori_list_reserve"),
     stdlib!("ori.list.is_empty", ["list.is_empty"] => "ori_list_is_empty"),
     stdlib!("ori.list.clear", ["list.clear"] => "ori_list_clear"),
     stdlib!("ori.list.clone", ["list.clone"] => "ori_list_clone"),
@@ -955,6 +958,7 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.test.assert_no_leaks" => (vec![Ty::String], Ty::Int),
         "ori.panic" => (vec![Ty::String], Ty::Never),
         "ori.list.new" => (vec![], Ty::List(Box::new(Ty::Infer(0)))),
+        "ori.list.with_capacity" => (vec![Ty::Int], Ty::List(Box::new(Ty::Infer(0)))),
         "ori.list.push" => (
             vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Infer(0)],
             Ty::Void,
@@ -972,6 +976,8 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
             Ty::Void,
         ),
         "ori.list.len" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Int),
+        "ori.list.capacity" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Int),
+        "ori.list.reserve" => (vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int], Ty::Void),
         "ori.list.is_empty" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Bool),
         "ori.list.clear" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Void),
         "ori.list.clone" | "ori.list.to_list" | "ori.list.from_list" => (
@@ -1854,6 +1860,7 @@ pub fn stdlib_native_abi(
         | "ori_doubly_linked_list_cursor_back" => (vec![Ptr], Some(Ptr)),
         "ori_list_set" | "ori_list_insert" | "ori_map_set" => (vec![Ptr, I64, I64], None),
         "ori_list_len"
+        | "ori_list_capacity"
         | "ori_deque_len"
         | "ori_queue_len"
         | "ori_stack_len"
@@ -1908,7 +1915,8 @@ pub fn stdlib_native_abi(
         "ori_tree_pre_order" | "ori_tree_post_order" | "ori_tree_breadth_first" => {
             (vec![Ptr], Some(Ptr))
         }
-        "ori_set_reserve" | "ori_map_reserve" => (vec![Ptr, I64], None),
+        "ori_list_reserve" | "ori_set_reserve" | "ori_map_reserve" => (vec![Ptr, I64], None),
+        "ori_list_with_capacity" => (vec![I64], Some(Ptr)),
         "ori_list_remove" | "ori_set_remove" | "ori_map_remove" => (vec![Ptr, I64], None),
         "ori_list_try_remove" | "ori_set_try_remove" => (vec![Ptr, I64], Some(I8)),
         "ori_list_contains" | "ori_list_index_of" | "ori_set_contains" | "ori_map_contains" => (

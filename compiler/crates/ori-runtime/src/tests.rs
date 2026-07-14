@@ -670,6 +670,25 @@ fn runtime_created_collection_snapshots_keep_managed_elements_alive() {
 }
 
 #[test]
+fn list_reserve_and_with_capacity_grow_once() {
+    unsafe {
+        let list = ori_list_with_capacity(1000);
+        assert!(ori_list_capacity(list) >= 1000);
+        assert_eq!(ori_list_len(list), 0);
+        for i in 0..1000 {
+            ori_list_push(list, i);
+        }
+        assert_eq!(ori_list_len(list), 1000);
+        assert!(ori_list_capacity(list) >= 1000);
+        ori_list_reserve(list, 2000);
+        assert!(ori_list_capacity(list) >= 2000);
+        assert_eq!(ori_list_get(list, 0), 0);
+        assert_eq!(ori_list_get(list, 999), 999);
+        ori_arc_release(list as *mut u8);
+    }
+}
+
+#[test]
 fn collection_removal_paths_unregister_arc_edges() {
     let _guard = TEST_ARC_LOCK.lock().unwrap();
     arc_state().lock().unwrap().allocations.clear();

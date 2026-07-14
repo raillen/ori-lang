@@ -27,6 +27,10 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     `ORI_OPT=aggressive` (also `none` / `default` / `2`)
   - `ORI_DUMP_CLIF=1` / path dumps Cranelift IR for defined functions
   - `tools/qa/perf_polyglot_smoke.sh` for fib+list smoke
+- **LANG-PERF-2-5 list capacity API (additive):** `ori.list.with_capacity`,
+  `ori.list.capacity`, `ori.list.reserve` (runtime `ori_list_*`); push/insert
+  share `list_ensure_capacity`; slice/clone path pre-sizes. Polyglot
+  `list_sum` uses `with_capacity` like Rust `Vec::with_capacity`.
 
 ### Corrigido
 - **Native loops no longer call `ori_arc_collect_cycles` every iteration**

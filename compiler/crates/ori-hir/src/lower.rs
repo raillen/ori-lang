@@ -194,6 +194,7 @@ fn stdlib_c_func_ty_raw(c_name: &str) -> Ty {
         "ori_to_int" => (vec![Ty::Int], Ty::Int),
         "ori_to_float" => (vec![Ty::Int], Ty::Float),
         "ori_list_new" => (vec![], Ty::List(Box::new(Ty::Infer(0)))),
+        "ori_list_with_capacity" => (vec![Ty::Int], Ty::List(Box::new(Ty::Infer(0)))),
         "ori_list_push" => (
             vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Infer(0)],
             Ty::Void,
@@ -206,7 +207,8 @@ fn stdlib_c_func_ty_raw(c_name: &str) -> Ty {
             vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int, Ty::Infer(0)],
             Ty::Void,
         ),
-        "ori_list_len" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Int),
+        "ori_list_len" | "ori_list_capacity" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Int),
+        "ori_list_reserve" => (vec![Ty::List(Box::new(Ty::Infer(0))), Ty::Int], Ty::Void),
         "ori_list_free" => (vec![Ty::List(Box::new(Ty::Infer(0)))], Ty::Void),
         "ori_set_new" => (vec![], Ty::Set(Box::new(Ty::Infer(0)))),
         "ori_set_add" => (

@@ -5,7 +5,7 @@ import ori.list = lists
 
 main()
     const n: int = 1000000
-    var xs: list[int] = []
+    var xs: list[int] = lists.with_capacity(n)
     var i: int = 0
     while i < n
         lists.push(xs, i)

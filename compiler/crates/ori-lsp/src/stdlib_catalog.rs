@@ -345,6 +345,9 @@ fn stdlib_documentation(path: &str) -> Option<String> {
         "ori.list.last_or" => "Retorna o último elemento da lista, ou um valor padrão caso a lista esteja vazia.",
         "ori.list.get_or" => "Retorna o elemento no índice especificado, ou um valor padrão caso o índice esteja fora dos limites.",
         "ori.list.singleton" => "Cria uma nova lista contendo apenas um único elemento.",
+        "ori.list.with_capacity" => "Cria uma lista vazia com capacidade mínima pré-alocada (evita realocações no push).",
+        "ori.list.capacity" => "Retorna a capacidade atual (slots alocados) da lista.",
+        "ori.list.reserve" => "Garante capacidade mínima sem alterar o comprimento da lista.",
 
         // math utils
         "ori.math.sign" => "Retorna o sinal do número: `1` para positivo, `-1` para negativo e `0` para zero.",
