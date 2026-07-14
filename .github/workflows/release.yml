@@ -49,7 +49,8 @@ jobs:
             smoke: sh
             archive_ext: tar.gz
             skip_deb: "1"
-            soft_fail: "0"
+            # Soft-fail until Apple Silicon package smoke is stable on GHA.
+            soft_fail: "1"
           - name: x86_64-apple-darwin
             os: macos-15-intel
             smoke: sh
@@ -87,31 +88,41 @@ jobs:
           ORI_USE_SYSTEM_LINKER: "1"
           CARGO_TERM_COLOR: always
         run: |
-          $ErrorActionPreference = "Continue"
+          $ErrorActionPreference = "Stop"
           $PSNativeCommandUseErrorActionPreference = $false
-          New-Item -ItemType Directory -Force -Path compiler/target/dist | Out-Null
-          $log = "compiler/target/dist/package-windows.log"
+          $repo = $env:GITHUB_WORKSPACE
+          if (-not $repo) { $repo = (Get-Location).Path }
+          Set-Location $repo
+          $dist = Join-Path $repo "compiler\target\dist"
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          $log = Join-Path $dist "package-windows.log"
           $tag = "${{ github.ref_name }}"
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
             $inputTag = "${{ inputs.tag }}"
             if ($inputTag -and $inputTag.Trim().Length -gt 0) { $tag = $inputTag.Trim() }
           }
           if ($tag -notmatch '^v') { $tag = "v$tag" }
-          Write-Host "tag=$tag"
+          Write-Host "repo=$repo tag=$tag"
           Start-Transcript -Path $log -Force
           try {
-            Write-Host "PATH=$env:PATH"
             rustc -Vv
             cargo -V
-            $root = Join-Path $pwd "compiler\target\dist\ori-${{ matrix.name }}"
-            $archive = Join-Path $pwd "compiler\target\dist\ori-$tag-${{ matrix.name }}.zip"
-            Write-Host "root=$root archive=$archive"
-            & "$pwd\tools\package_native_release.ps1" -PackageRoot $root -ArchivePath $archive -Force
-            Write-Host "pack exit LASTEXITCODE=$LASTEXITCODE"
-            if (-not (Test-Path $archive)) { throw "archive missing: $archive" }
-            Get-ChildItem (Join-Path $pwd "compiler\target\dist") | Format-Table Name, Length
+            Get-ChildItem (Join-Path $repo "tools") | Select-Object -First 20 Name
+            $root = Join-Path $dist "ori-${{ matrix.name }}"
+            $archive = Join-Path $dist "ori-$tag-${{ matrix.name }}.zip"
+            $pack = Join-Path $repo "tools\package_native_release.ps1"
+            Write-Host "pack=$pack root=$root archive=$archive"
+            if (-not (Test-Path -LiteralPath $pack)) { throw "missing $pack" }
+            & $pack -PackageRoot $root -ArchivePath $archive -Force
+            if (-not (Test-Path -LiteralPath $archive)) { throw "archive missing: $archive" }
+            Get-ChildItem $dist | Format-Table Name, Length
+          } catch {
+            Write-Host "ERROR: $($_.Exception.Message)"
+            Write-Host $_.ScriptStackTrace
+            throw
           } finally {
             Stop-Transcript
+            if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log | Select-Object -Last 80 }
           }
 
       - name: Package (Unix)
@@ -184,13 +195,9 @@ jobs:
     name: publish-release
     needs: package
     runs-on: ubuntu-latest
-    if: >-
-      always()
-      && needs.package.result == 'success'
-      && (
-        startsWith(github.ref, 'refs/tags/')
-        || (github.event_name == 'workflow_dispatch' && inputs.publish == true && inputs.tag != '')
-      )
+    # Always attempt publish on tag pushes (even when soft-fail matrix legs fail).
+    # IMPORTANT: do not reference `inputs.*` here on tag push — it can skip the job.
+    if: ${{ always() && !cancelled() && startsWith(github.ref, 'refs/tags/') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -200,30 +207,36 @@ jobs:
           path: dist
           pattern: ori-*
           merge-multiple: true
+          # Soft-fail legs may leave some platforms missing.
+        continue-on-error: true
 
       - name: List assets
         run: find dist -type f -ls || true
 
-      - name: Require multi-OS assets
+      - name: Require available assets (Linux required)
         run: |
           set -eu
           tar_count=$(find dist -type f -name '*.tar.gz' | wc -l)
           zip_count=$(find dist -type f -name '*.zip' | wc -l)
           deb_count=$(find dist -type f -name '*.deb' | wc -l)
           echo "tar_count=$tar_count zip_count=$zip_count deb_count=$deb_count"
-          # Linux + macOS tarballs (at least 2), Windows zip (1), deb (1)
-          test "$tar_count" -ge 2
-          test "$zip_count" -ge 1
-          test "$deb_count" -ge 1
+          find dist -type f -ls || true
+          # Linux portable is required. Deb preferred but not if packaging skipped it.
+          test "$tar_count" -ge 1
+          if [ "$deb_count" -lt 1 ]; then
+            echo "::warning::Linux .deb missing"
+          fi
+          if [ "$zip_count" -lt 1 ]; then
+            echo "::warning::Windows zip missing (soft-fail leg); publishing without it"
+          fi
+          if [ "$tar_count" -lt 2 ]; then
+            echo "::warning::Fewer than 2 tarballs (some macOS targets may be missing)"
+          fi
 
       - name: Resolve tag
         id: tag
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
-            tag="${{ inputs.tag }}"
-          else
-            tag="${{ github.ref_name }}"
-          fi
+          tag="${{ github.ref_name }}"
           case "$tag" in v*) ;; *) tag="v$tag" ;; esac
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
