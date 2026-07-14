@@ -54,6 +54,10 @@ case err(msg):
 end
 ```
 
-## Not yet (phase C+)
+## Phase C
 
-Full CSP defaults for all apps, Redis session, argon2 passwords, keep-alive, in-process TLS, request read deadlines (B7), generators (`ori-web-app`).
+See [`docs/phase-c.md`](docs/phase-c.md): lockout, audit, re-auth, CSRF rotate, `__Host-` cookie.
+
+## Not yet
+
+Redis session, argon2 (C10), keep-alive, in-process TLS, request read deadlines (B7), 2FA package.
