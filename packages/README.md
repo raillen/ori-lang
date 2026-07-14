@@ -1,7 +1,11 @@
 # Ori packages — web stack
 
 **Status:** feature-complete for HTML-first v1 · **feature freeze** after S8 + nested JSON  
-(path-local packages under this directory; not yet a published registry product.)
+
+**Canonical framework repo:** [raillen/ori-web-framework](https://github.com/raillen/ori-web-framework)  
+(`git@github.com:raillen/ori-web-framework.git`). This `packages/` tree may stay
+in sync for language integration; prefer the dedicated repo for framework work
+and tarball releases.
 
 Outside the language FREEZE-1 *compiler* core. Apps depend via `ori.proj` path deps.
 
