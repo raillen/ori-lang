@@ -680,6 +680,19 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
         "ori.crypto.password_verify",
         ["crypto.password_verify"] => "ori_password_verify"
     ),
+    // TOTP (RFC 6238) — web C3 / ori-web-auth
+    stdlib!(
+        "ori.crypto.totp_generate_secret",
+        ["crypto.totp_generate_secret"] => "ori_totp_generate_secret"
+    ),
+    stdlib!(
+        "ori.crypto.totp_code",
+        ["crypto.totp_code"] => "ori_totp_code"
+    ),
+    stdlib!(
+        "ori.crypto.totp_verify",
+        ["crypto.totp_verify"] => "ori_totp_verify"
+    ),
     stdlib!("ori.test.skip", ["test.skip"] => "ori_test_skip", c_backend),
     stdlib!("ori.bytes.from_list", ["bytes.from_list"] => "ori_bytes_from_list"),
     stdlib!("ori.bytes.to_list", ["bytes.to_list"] => "ori_bytes_to_list"),
@@ -902,6 +915,9 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.random.bool" => (vec![], Ty::Bool),
         "ori.crypto.password_hash" => (vec![Ty::String], Ty::String),
         "ori.crypto.password_verify" => (vec![Ty::String, Ty::String], Ty::Bool),
+        "ori.crypto.totp_generate_secret" => (vec![], Ty::String),
+        "ori.crypto.totp_code" => (vec![Ty::String, Ty::Int], Ty::String),
+        "ori.crypto.totp_verify" => (vec![Ty::String, Ty::String, Ty::Int, Ty::Int], Ty::Bool),
         "ori.random.choice" => (
             vec![Ty::List(Box::new(Ty::Infer(0)))],
             Ty::Optional(Box::new(Ty::Infer(0))),
@@ -2036,6 +2052,9 @@ pub fn stdlib_native_abi(
         "ori_random_shuffle" => (vec![Ptr], Some(Ptr)),
         "ori_password_hash" => (vec![Ptr], Some(Ptr)),
         "ori_password_verify" => (vec![Ptr, Ptr], Some(I8)),
+        "ori_totp_generate_secret" => (vec![], Some(Ptr)),
+        "ori_totp_code" => (vec![Ptr, I64], Some(Ptr)),
+        "ori_totp_verify" => (vec![Ptr, Ptr, I64, I64], Some(I8)),
         "ori_json_parse" => (vec![Ptr], Some(Ptr)),
         "ori_json_stringify" => (vec![Ptr], Some(Ptr)),
         "ori_json_stringify_pretty" => (vec![Ptr], Some(Ptr)),

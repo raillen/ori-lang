@@ -29,6 +29,14 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `clear_session_cache` / `purge_expired_sessions`; expanded SEC8 suite +
   `tools/qa/web_sec8.sh` (hooked in `daily_full`); `blog_app` notes full REST;
   docs `middleware.md` + phase B/C updates (B7 soft-cap documented).
+- **`ori.crypto` TOTP (C3):** `totp_generate_secret` / `totp_code` /
+  `totp_verify` (RFC 6238 HMAC-SHA1, 30s, 6 digits) in `ori-runtime` +
+  stdlib wrappers.
+- **`packages/ori-web-auth`:** optional 2FA helpers (enrollment URI, session
+  pending/ok flags, recovery codes, `require_2fa` guard). Smoke:
+  `examples/smoke` + `tools/qa/web_auth_smoke.sh`.
+- **`ori-web` keep-alive:** `set_keep_alive(app, enabled, max)` — HTTP/1.1
+  connection reuse in `serve` (default on, max 32).
 
 ---
 

@@ -35,6 +35,11 @@ if [ -x "$script_dir/web_sec8.sh" ]; then
   "$script_dir/web_sec8.sh"
 fi
 
+echo "== S6c packages web_auth smoke =="
+if [ -x "$script_dir/web_auth_smoke.sh" ]; then
+  "$script_dir/web_auth_smoke.sh"
+fi
+
 echo "== S7 perf =="
 if [ -x "$script_dir/perf_daily.sh" ]; then
   "$script_dir/perf_daily.sh" || true

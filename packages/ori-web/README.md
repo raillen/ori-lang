@@ -110,8 +110,20 @@ HTML rendering lives in **`web_app`** (`render` / `page_data` / `csrf_field`) so
 Library layer stays free of a templates package cycle. Path-depend both packages
 in apps.
 
+## Keep-alive
+
+```ori
+a = web.set_keep_alive(a, true, 32)  -- default on; max requests per connection
+```
+
+HTTP/1.1 reuse in `serve`. Prefer proxy idle timeouts in production.
+
+## 2FA
+
+Optional package **`ori-web-auth`** (TOTP via `ori.crypto.totp_*`).
+
 ## Not yet
 
-Redis/SQLite session drivers (external packages), keep-alive, in-process TLS,
-true socket read deadlines (B7 — soft-cap only today), 2FA package.
-Password hashing is in **`ori.crypto`** (argon2id).
+Redis/SQLite session drivers (use external `ori-sqlite` / Redis clients),
+in-process TLS (edge proxy recommended), true socket read deadlines (B7 —
+soft-cap only today). Password hashing is in **`ori.crypto`** (argon2id).

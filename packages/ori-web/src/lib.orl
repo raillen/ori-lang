@@ -54,6 +54,9 @@ var CFG_ABS_MS: int = 86400000
 var CFG_CSRF_ROTATE: bool = false
 var CFG_HOST_COOKIE: bool = false
 var CFG_AUDIT_PATH: string = ""
+-- HTTP/1.1 keep-alive (same connection, multiple requests until close/max)
+var CFG_KEEP_ALIVE: bool = true
+var CFG_KEEP_ALIVE_MAX: int = 32
 
 -- C4 lockout buckets: key -> "fails|lock_until_ms"
 var LOCKOUT: map[string, string] = maps.new()
@@ -96,6 +99,8 @@ public app() -> App
     CFG_ABS_MS = 86400000
     CFG_CSRF_ROTATE = false
     CFG_HOST_COOKIE = false
+    CFG_KEEP_ALIVE = true
+    CFG_KEEP_ALIVE_MAX = 32
     -- sticky: audit path, session backend
     clear_middleware()
     return App {
@@ -236,6 +241,15 @@ end
 -- C5: append-only audit log path (empty = off)
 public set_audit_log(path: string) -> void
     CFG_AUDIT_PATH = path
+end
+
+-- HTTP/1.1 keep-alive on serve (default on). Proxy idle timeouts still recommended.
+public set_keep_alive(a: App, enabled: bool, max_requests: int) -> App
+    CFG_KEEP_ALIVE = enabled
+    if max_requests > 0
+        CFG_KEEP_ALIVE_MAX = max_requests
+    end
+    return a
 end
 
 -- B3: pluggable session store (memory | file directory)
@@ -1424,13 +1438,24 @@ cookie_get(cookie_header: string, name: string) -> string
 end
 
 format_response(res: Response, sid: string) -> string
+    return format_response_conn(res, sid, false)
+end
+
+format_response_conn(res: Response, sid: string, keep_alive: bool) -> string
     const cookie_sid: string = effective_sid(sid)
     var out: string = "HTTP/1.1 "
     out = str.concat(out, string(res.status))
     out = str.concat(out, " ")
     out = str.concat(out, status_text(res.status))
     out = str.concat(out, "\r\n")
-    out = str.concat(out, "Connection: close\r\n")
+    if keep_alive
+        out = str.concat(out, "Connection: keep-alive\r\n")
+        out = str.concat(out, "Keep-Alive: timeout=5, max=")
+        out = str.concat(out, string(CFG_KEEP_ALIVE_MAX))
+        out = str.concat(out, "\r\n")
+    else
+        out = str.concat(out, "Connection: close\r\n")
+    end
     out = str.concat(out, "Content-Length: ")
     out = str.concat(out, string(str.len(res.body)))
     out = str.concat(out, "\r\n")
@@ -1846,36 +1871,82 @@ public serve(host: string, port: int, a: App) -> result[void, string]
 end
 
 handle_conn(a: App, conn: net.Connection) -> void
-    match net.read_some(conn, CFG_MAX_BODY + 8192)
-    case err(_):
-        net.close(conn)
-    case ok(chunk):
-        match str.from_bytes(chunk)
+    var n: int = 0
+    var open: bool = true
+    while open
+        if n >= CFG_KEEP_ALIVE_MAX
+            open = false
+        end
+        if not open
+            net.close(conn)
+            return
+        end
+        match net.read_some(conn, CFG_MAX_BODY + 8192)
         case err(_):
             net.close(conn)
-        case ok(raw):
-            match parse_request(raw, CFG_MAX_BODY, CFG_IDLE_MS, CFG_ABS_MS)
-            case err(msg):
-                if msg == "payload too large"
-                    const r: Response = payload_too_large()
-                    const bytes_out: bytes = str.to_bytes(format_response(r, "x"))
-                    match net.write_all(conn, bytes_out)
+            return
+        case ok(chunk):
+            match str.from_bytes(chunk)
+            case err(_):
+                net.close(conn)
+                return
+            case ok(raw):
+                if str.len(raw) == 0
+                    net.close(conn)
+                    return
+                end
+                match parse_request(raw, CFG_MAX_BODY, CFG_IDLE_MS, CFG_ABS_MS)
+                case err(msg):
+                    if msg == "payload too large"
+                        const r: Response = payload_too_large()
+                        const bytes_out: bytes = str.to_bytes(format_response_conn(r, "x", false))
+                        match net.write_all(conn, bytes_out)
+                        case ok(_):
+                        case err(_):
+                        end
+                    end
+                    net.close(conn)
+                    return
+                case ok(req):
+                    const res: Response = dispatch(a, req)
+                    var ka: bool = CFG_KEEP_ALIVE
+                    if not client_wants_keep_alive(req)
+                        ka = false
+                    end
+                    if n + 1 >= CFG_KEEP_ALIVE_MAX
+                        ka = false
+                    end
+                    const wire: string = format_response_conn(res, req.session_id, ka)
+                    match net.write_all(conn, str.to_bytes(wire))
                     case ok(_):
                     case err(_):
+                        net.close(conn)
+                        return
+                    end
+                    n = n + 1
+                    if not ka
+                        net.close(conn)
+                        return
                     end
                 end
-                net.close(conn)
-            case ok(req):
-                const res: Response = dispatch(a, req)
-                const wire: string = format_response(res, req.session_id)
-                match net.write_all(conn, str.to_bytes(wire))
-                case ok(_):
-                case err(_):
-                end
-                net.close(conn)
             end
         end
     end
+    net.close(conn)
+end
+
+client_wants_keep_alive(req: Request) -> bool
+    if some(c) = maps.try_get(req.headers, "connection")
+        const cl: string = str.to_lower(c)
+        if str.contains(cl, "close")
+            return false
+        end
+        if str.contains(cl, "keep-alive")
+            return true
+        end
+    end
+    -- HTTP/1.1 default is keep-alive when enabled server-side
+    return true
 end
 
 -- - Auth wrapper -

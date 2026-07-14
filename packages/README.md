@@ -7,6 +7,7 @@ External to the language FREEZE-1 core. Path-depend from apps with `ori.proj`.
 | **ori-templates** | HTML templates (`@{ }`, `.orix`) | Library |
 | **ori-web** | HTTP, session, CSRF, phase B/C | Library |
 | **ori-web-app** | Rails-like App layer + generators | App |
+| **ori-web-auth** | Optional 2FA (TOTP + recovery codes) | Library |
 | **ori-web-demo** | HTML-first notes (htmx) | :3457 |
 | **ori-web-demo-api** | JSON API | :3458 |
 | **ori-web-demo-auth** | Login + argon2id + lockout | :3459 `demo`/`demo` |
@@ -28,3 +29,4 @@ ori get . && ori run main.orl
 - Templates/web design: `docs/planning/web-templates-discussion-roadmap.md`
 - Phase B/C/D: `ori-web/docs/phase-*.md`
 - Password hashing: `ori.crypto` (argon2id) — needs Ori build with staged runtime
+- 2FA: `ori-web-auth` + `ori.crypto.totp_*` — smoke: `packages/ori-web-auth/examples/smoke`

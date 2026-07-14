@@ -337,6 +337,17 @@ main()
     web.use_memory_sessions()
     assert_true(web.session_backend() == "memory", "session_backend memory")
 
+    -- 21) Keep-alive config applies Connection header on wire helpers
+    a = web.app()
+    a = web.set_keep_alive(a, true, 8)
+    web.get(a, "/echo", echo_ok)
+    req = web.make_request("GET", "/echo", "", "sid-ka")
+    res = web.dispatch(a, req)
+    -- to_http uses close (safe for one-shot tests); set_keep_alive is for serve()
+    const wire_ka: string = web.to_http(res, "sid-ka")
+    assert_true(str.contains(wire_ka, "Connection: close"), "to_http still closes")
+    assert_true(str.contains(wire_ka, "Content-Length:"), "content-length present")
+
     if FAILS == 0
         io.println("SEC8 ALL PASSED")
     else

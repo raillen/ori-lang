@@ -19,6 +19,11 @@ webpki-roots = "0.26"
 argon2 = { version = "0.5", default-features = false, features = ["std", "password-hash", "alloc"] }
 password-hash = { version = "0.5", default-features = false, features = ["alloc", "rand_core"] }
 rand_core = { version = "0.6", default-features = false, features = ["getrandom"] }
+# TOTP (RFC 6238) for web C3 / ori-web-auth
+hmac = "0.12"
+sha1 = "0.10"
+data-encoding = "2.6"
+getrandom = "0.2"
 
 [dev-dependencies]
 ori-types = { workspace = true }

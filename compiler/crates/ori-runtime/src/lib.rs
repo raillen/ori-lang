@@ -9023,6 +9023,111 @@ pub unsafe extern "C" fn ori_password_verify(password: *const u8, encoded: *cons
     }
 }
 
+// ── TOTP (RFC 6238, HMAC-SHA1, 30s, 6 digits) — web C3 ──────────────────────
+
+fn hotp_code(key: &[u8], counter: u64) -> u32 {
+    use hmac::{Hmac, Mac};
+    use sha1::Sha1;
+    type HmacSha1 = Hmac<Sha1>;
+    let mut mac = match HmacSha1::new_from_slice(key) {
+        Ok(m) => m,
+        Err(_) => return 0,
+    };
+    mac.update(&counter.to_be_bytes());
+    let result = mac.finalize().into_bytes();
+    let offset = (result[19] & 0x0f) as usize;
+    let bin = ((u32::from(result[offset]) & 0x7f) << 24)
+        | (u32::from(result[offset + 1]) << 16)
+        | (u32::from(result[offset + 2]) << 8)
+        | u32::from(result[offset + 3]);
+    bin % 1_000_000
+}
+
+fn decode_totp_secret(b32: &str) -> Option<Vec<u8>> {
+    use data_encoding::BASE32_NOPAD;
+    let cleaned: String = b32
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '=')
+        .map(|c| c.to_ascii_uppercase())
+        .collect();
+    if cleaned.is_empty() {
+        return None;
+    }
+    // Pad to multiple of 8 for standard Base32 if needed.
+    let pad = (8 - (cleaned.len() % 8)) % 8;
+    let padded = format!("{}{}", cleaned, "=".repeat(pad));
+    data_encoding::BASE32
+        .decode(padded.as_bytes())
+        .or_else(|_| BASE32_NOPAD.decode(cleaned.as_bytes()))
+        .ok()
+}
+
+/// Generate a new base32 TOTP secret (160-bit / 20 bytes).
+#[no_mangle]
+pub unsafe extern "C" fn ori_totp_generate_secret() -> *mut u8 {
+    use data_encoding::BASE32_NOPAD;
+    let mut buf = [0u8; 20];
+    if getrandom::getrandom(&mut buf).is_err() {
+        return cstring_from_str("");
+    }
+    cstring_from_str(&BASE32_NOPAD.encode(&buf))
+}
+
+/// Compute current TOTP code for `secret_b32` at `unix_secs` (step 30s).
+/// Returns a 6-digit string, or empty on failure.
+#[no_mangle]
+pub unsafe extern "C" fn ori_totp_code(secret_b32: *const u8, unix_secs: i64) -> *mut u8 {
+    let secret = cstr_str(secret_b32);
+    let Some(key) = decode_totp_secret(secret) else {
+        return cstring_from_str("");
+    };
+    if unix_secs < 0 {
+        return cstring_from_str("");
+    }
+    let counter = (unix_secs as u64) / 30;
+    let code = hotp_code(&key, counter);
+    cstring_from_str(&format!("{code:06}"))
+}
+
+/// Verify TOTP `code` against `secret_b32` at `unix_secs` with ±`window` steps.
+/// Returns 1 if ok, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn ori_totp_verify(
+    secret_b32: *const u8,
+    code: *const u8,
+    unix_secs: i64,
+    window: i64,
+) -> c_uchar {
+    let secret = cstr_str(secret_b32);
+    let code = cstr_str(code).trim();
+    if secret.is_empty() || code.is_empty() || unix_secs < 0 {
+        return 0;
+    }
+    let Some(key) = decode_totp_secret(secret) else {
+        return 0;
+    };
+    let win = window.clamp(0, 10) as i64;
+    let counter = (unix_secs as u64) / 30;
+    for delta in -win..=win {
+        let c = counter as i64 + delta;
+        if c < 0 {
+            continue;
+        }
+        let expected = format!("{:06}", hotp_code(&key, c as u64));
+        // Constant-time-ish compare of fixed 6-char codes
+        if expected.len() == code.len() {
+            let mut diff = 0u8;
+            for (a, b) in expected.bytes().zip(code.bytes()) {
+                diff |= a ^ b;
+            }
+            if diff == 0 {
+                return 1;
+            }
+        }
+    }
+    0
+}
+
 mod debug_agent;
 
 #[cfg(test)]

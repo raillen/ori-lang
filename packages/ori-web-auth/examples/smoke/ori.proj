@@ -1,0 +1,10 @@
+manifest = 1
+name = "web_auth_smoke"
+version = "0.1.0"
+kind = "app"
+entry = "main.orl"
+[source]
+root_namespace = "app"
+[dependencies]
+web = { path = "../../../ori-web", version = "0.1.0" }
+web_auth = { path = "../..", version = "0.1.0" }

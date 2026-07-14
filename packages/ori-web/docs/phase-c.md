@@ -6,7 +6,7 @@ Design: roadmap §5.5 phase C.
 |----|---------|-----|
 | **C1 CSP** | Optional policy | `set_csp` (B) — demos set HTML-first policies |
 | **C2 Re-auth** | Recent password / step-up | `mark_reauth`, `reauth_ok`, `require_reauth(max_age_ms, next)` |
-| **C3 2FA** | Out of core | future `ori-web-auth` |
+| **C3 2FA** | TOTP + recovery | package `ori-web-auth` (`generate_secret`, `verify`, `otpauth_url`, session flags) |
 | **C4 Lockout** | Fail counter + cooldown | `login_allowed`, `login_fail(key, max, lock_ms)`, `login_success` |
 | **C5 Audit** | Append-only file | `set_audit_log(path)`, `audit(event, detail)` |
 | **C6 CSRF rotate** | New token after mutation | `set_csrf_rotate(app, true)`, `rotate_csrf` |

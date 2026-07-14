@@ -10,6 +10,7 @@ Scripts for daily / weekly language quality (FREEZE-1 / 0.3.x).
 | [`residual_audit.sh`](residual_audit.sh) | Product surface + intentional residual negatives |
 | [`examples_smoke.sh`](examples_smoke.sh) | `ori check` over `examples/*` |
 | [`web_sec8.sh`](web_sec8.sh) | `ori-web` SEC8 golden suite (CSRF, jail, sessions, middleware, upload) |
+| [`web_auth_smoke.sh`](web_auth_smoke.sh) | `ori-web-auth` TOTP + recovery codes smoke |
 | [`perf_daily.sh`](perf_daily.sh) | `performance_guard` + optional microbench |
 | [`perf_polyglot_smoke.sh`](perf_polyglot_smoke.sh) | Compile+run fib + list polyglot kernels |
 

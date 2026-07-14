@@ -939,17 +939,25 @@ import ori.crypto = crypto
 
 const hash: string = crypto.password_hash("secret")
 const ok: bool = crypto.password_verify("secret", hash)
+
+const secret: string = crypto.totp_generate_secret()
+const code: string = crypto.totp_code(secret, 1_700_000_000)
+const totp_ok: bool = crypto.totp_verify(secret, code, 1_700_000_000, 1)
 ```
 
 | Function | Type | Notes |
 |----------|------|--------|
 | `password_hash(password)` | `string → string` | Empty string on failure |
 | `password_verify(password, encoded)` | `string, string → bool` | Constant-time verify via `argon2` crate |
+| `totp_generate_secret()` | `→ string` | Base32 secret (160-bit) |
+| `totp_code(secret, unix_secs)` | `string, int → string` | 6-digit code; empty on failure |
+| `totp_verify(secret, code, unix_secs, window)` | `… → bool` | ±`window` steps (max 10) |
 
-Layer 2 wrappers in `stdlib/crypto.orl`: `hash_password` / `verify_password`.
+Layer 2 wrappers in `stdlib/crypto.orl`: `hash_password` / `verify_password` /
+`totp_generate_secret` / `totp_code` / `totp_verify`.
 
 Do **not** use plain MD5/SHA for password storage. Prefer this API for auth
-(web C10 / SEC9).
+(web C10 / SEC9). TOTP is for 2FA (web C3 / `ori-web-auth`).
 
 ---
 

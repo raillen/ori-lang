@@ -1,0 +1,208 @@
+module web_auth
+
+-- Optional 2FA layer (phase C3). Uses ori.crypto TOTP (HMAC-SHA1, 30s, 6 digits).
+-- Design: docs/planning/web-templates-discussion-roadmap.md §5.5 C3
+
+import web = web
+import ori.crypto = crypto
+import ori.string = str
+import ori.time = time
+import ori.random = rnd
+import ori.list = lists
+
+public alias TotpSecret = string
+
+-- Generate a new base32 secret for authenticator apps.
+public generate_secret() -> TotpSecret
+    return crypto.totp_generate_secret()
+end
+
+-- Current 6-digit code (for tests / provisioning UI).
+public current_code(secret: TotpSecret) -> string
+    const now: int = time.instant_to_unix_ms(time.instant_now()) / 1000
+    return crypto.totp_code(secret, now)
+end
+
+public code_at(secret: TotpSecret, unix_secs: int) -> string
+    return crypto.totp_code(secret, unix_secs)
+end
+
+-- Verify user code with ±window steps (default window 1 = ±30s).
+public verify(secret: TotpSecret, code: string) -> bool
+    return verify_window(secret, code, 1)
+end
+
+public verify_window(secret: TotpSecret, code: string, window: int) -> bool
+    const now: int = time.instant_to_unix_ms(time.instant_now()) / 1000
+    const cleaned: string = str.trim(code)
+    return crypto.totp_verify(secret, cleaned, now, window)
+end
+
+-- otpauth:// URI for QR enrollment (Google Authenticator / Aegis / …).
+public otpauth_url(issuer: string, account: string, secret: TotpSecret) -> string
+    var url: string = "otpauth://totp/"
+    url = str.concat(url, url_encode(issuer))
+    url = str.concat(url, ":")
+    url = str.concat(url, url_encode(account))
+    url = str.concat(url, "?secret=")
+    url = str.concat(url, secret)
+    url = str.concat(url, "&issuer=")
+    url = str.concat(url, url_encode(issuer))
+    url = str.concat(url, "&algorithm=SHA1&digits=6&period=30")
+    return url
+end
+
+url_encode(s: string) -> string
+    var out: string = ""
+    var i: int = 0
+    while i < str.len(s)
+        const ch: string = str.slice(s, i, i + 1)
+        if is_unreserved(ch)
+            out = str.concat(out, ch)
+        elif ch == " "
+            out = str.concat(out, "%20")
+        else
+            -- best-effort: leave as-is for ASCII printable; apps accept issuer/account simple
+            out = str.concat(out, ch)
+        end
+        i = i + 1
+    end
+    return out
+end
+
+is_unreserved(ch: string) -> bool
+    return str.contains(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~",
+        ch
+    )
+end
+
+-- Session flag after password ok, before 2FA.
+public mark_pending_2fa(req: web.Request, user_id: string) -> void
+    web.session_set(req, "pending_2fa", user_id)
+    web.session_set(req, "2fa_ok", "")
+end
+
+public pending_2fa_user(req: web.Request) -> optional[string]
+    match web.session_get(req, "pending_2fa")
+    case some(u):
+        if str.len(u) > 0
+            return some(u)
+        end
+    case none:
+    end
+    return none
+end
+
+public clear_pending_2fa(req: web.Request) -> void
+    web.session_set(req, "pending_2fa", "")
+end
+
+public mark_2fa_ok(req: web.Request) -> void
+    web.session_set(req, "2fa_ok", "1")
+    clear_pending_2fa(req)
+end
+
+public is_2fa_ok(req: web.Request) -> bool
+    match web.session_get(req, "2fa_ok")
+    case some(v):
+        return v == "1"
+    case none:
+        return false
+    end
+    return false
+end
+
+-- Store secret in session after enrollment (apps should persist to user store).
+public session_set_totp_secret(req: web.Request, secret: TotpSecret) -> void
+    web.session_set(req, "totp_secret", secret)
+end
+
+public session_totp_secret(req: web.Request) -> optional[string]
+    match web.session_get(req, "totp_secret")
+    case some(s):
+        if str.len(s) > 0
+            return some(s)
+        end
+    case none:
+    end
+    return none
+end
+
+-- Recovery codes: generate N one-time codes (store hashed in real apps).
+public generate_recovery_codes(count: int) -> list[string]
+    var out: list[string] = []
+    var n: int = count
+    if n < 1
+        n = 1
+    end
+    if n > 20
+        n = 20
+    end
+    var i: int = 0
+    while i < n
+        const a: int = rnd.int_range(1000, 9999)
+        const b: int = rnd.int_range(1000, 9999)
+        lists.push(out, str.concat(string(a), str.concat("-", string(b))))
+        i = i + 1
+    end
+    return out
+end
+
+public recovery_codes_blob(codes: list[string]) -> string
+    var out: string = ""
+    var i: int = 0
+    while i < lists.len(codes)
+        if i > 0
+            out = str.concat(out, ",")
+        end
+        out = str.concat(out, codes[i])
+        i = i + 1
+    end
+    return out
+end
+
+public consume_recovery_code(blob: string, code: string) -> optional[string]
+    const cleaned: string = str.trim(code)
+    const parts: list[string] = str.split(blob, ",")
+    var next: list[string] = []
+    var found: bool = false
+    var i: int = 0
+    while i < lists.len(parts)
+        const p: string = str.trim(parts[i])
+        if str.len(p) > 0
+            if p == cleaned
+                if not found
+                    found = true
+                else
+                    lists.push(next, p)
+                end
+            else
+                lists.push(next, p)
+            end
+        end
+        i = i + 1
+    end
+    if not found
+        return none
+    end
+    return some(recovery_codes_blob(next))
+end
+
+-- Guard: require completed 2FA after password.
+public require_2fa(next: web.Handler) -> web.Handler
+    return (req: web.Request) => guard_2fa(next, req)
+end
+
+guard_2fa(next: web.Handler, req: web.Request) -> web.ActionResult
+    if is_2fa_ok(req)
+        return next(req)
+    end
+    match pending_2fa_user(req)
+    case some(_):
+        return ok(web.redirect(303, "/2fa"))
+    case none:
+        return ok(web.redirect(303, "/login"))
+    end
+    return ok(web.redirect(303, "/login"))
+end

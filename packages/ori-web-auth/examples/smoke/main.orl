@@ -1,0 +1,74 @@
+module app.main
+
+-- TOTP + recovery-code smoke (no network).
+
+import web_auth = wa
+import web = web
+import ori.io = io
+import ori.string = str
+import ori.list = lists
+
+var FAILS: int = 0
+
+assert_true(cond: bool, label: string) -> void
+    if cond
+        io.println(str.concat("ok  ", label))
+    else
+        io.println(str.concat("FAIL ", label))
+        FAILS = FAILS + 1
+    end
+end
+
+main()
+    const secret: string = wa.generate_secret()
+    assert_true(str.len(secret) >= 16, "secret length")
+
+    const code: string = wa.current_code(secret)
+    assert_true(str.len(code) == 6, "code is 6 digits")
+    assert_true(wa.verify(secret, code), "verify current code")
+    assert_true(not wa.verify(secret, "000000"), "reject wrong code")
+
+    const url: string = wa.otpauth_url("OriDemo", "demo@local", secret)
+    assert_true(str.starts_with(url, "otpauth://totp/"), "otpauth prefix")
+    assert_true(str.contains(url, secret), "otpauth embeds secret")
+
+    const codes: list[string] = wa.generate_recovery_codes(4)
+    assert_true(lists.len(codes) == 4, "recovery count")
+    const blob: string = wa.recovery_codes_blob(codes)
+    match wa.consume_recovery_code(blob, codes[0])
+    case some(next):
+        match wa.consume_recovery_code(next, codes[0])
+        case some(_):
+            assert_true(false, "cannot reuse recovery code")
+        case none:
+            assert_true(true, "cannot reuse recovery code")
+        end
+        match wa.consume_recovery_code(next, codes[1])
+        case some(_):
+            assert_true(true, "second recovery code works")
+        case none:
+            assert_true(false, "second recovery code works")
+        end
+    case none:
+        assert_true(false, "consume recovery code")
+    end
+
+    -- session flags
+    var req: web.Request = web.make_request("GET", "/", "", "sid-2fa")
+    wa.mark_pending_2fa(req, "alice")
+    match wa.pending_2fa_user(req)
+    case some(u):
+        assert_true(u == "alice", "pending 2fa user")
+    case none:
+        assert_true(false, "pending 2fa user")
+    end
+    assert_true(not wa.is_2fa_ok(req), "2fa not ok yet")
+    wa.mark_2fa_ok(req)
+    assert_true(wa.is_2fa_ok(req), "2fa ok after mark")
+
+    if FAILS == 0
+        io.println("WEB_AUTH SMOKE PASSED")
+    else
+        io.println(str.concat("WEB_AUTH FAILURES=", string(FAILS)))
+    end
+end

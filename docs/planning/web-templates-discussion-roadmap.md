@@ -730,7 +730,7 @@ Abaixo: camadas **adicionais** em fases. Não substituem o núcleo; **somam**.
 |--------|--------|--------|
 | C1 **CSP** (Content-Security-Policy) | começar restritivo; afrouxar p/ htmx inline se preciso | documentar tradeoff htmx |
 | C2 **Re-auth** / senha de novo | ações sensíveis (trocar email, apagar conta, “admin destroy”) | |
-| C3 **2FA / TOTP** (opcional package) | não no core v1 | package `ori-web-auth` futuro |
+| C3 **2FA / TOTP** (opcional package) | **done** | `packages/ori-web-auth` + `ori.crypto.totp_*` |
 | C4 Lockout / backoff login | após N falhas | com B4 |
 | C5 Audit log | login, logout, mudanças sensíveis | |
 | C6 CSRF rotation | novo token após uso opcional | defesa extra |
