@@ -14,7 +14,8 @@
 | `csrf_field(req)` | HTML hidden input |
 | `run(app)` | Listen + secret check when `ORI_ENV=production` |
 | `bin/new` | Scaffold app tree |
-| `bin/generate-controller` | Controller + view + route stub |
+| `bin/generate-controller` | Controller + index view + route stub |
+| `bin/generate-scaffold` | Resource: index / new / create + form |
 
 ## Scaffold a site
 
