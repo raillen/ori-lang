@@ -81,24 +81,13 @@ jobs:
           ORI_USE_SYSTEM_LINKER: "1"
           CARGO_TERM_COLOR: always
         run: |
-          $ErrorActionPreference = "Stop"
-          Set-Location $env:GITHUB_WORKSPACE
           $tag = "${{ github.ref_name }}"
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
             $inputTag = "${{ inputs.tag }}"
             if ($inputTag -and $inputTag.Trim().Length -gt 0) { $tag = $inputTag.Trim() }
           }
-          if ($tag -notmatch '^v') { $tag = "v$tag" }
-          Write-Host "tag=$tag target=${{ matrix.name }}"
-          $dist = Join-Path $env:GITHUB_WORKSPACE "compiler\target\dist"
-          New-Item -ItemType Directory -Force -Path $dist | Out-Null
-          $root = Join-Path $dist "ori-${{ matrix.name }}"
-          $archive = Join-Path $dist "ori-$tag-${{ matrix.name }}.zip"
-          $script = Join-Path $env:GITHUB_WORKSPACE "tools\package_native_release.ps1"
-          if (-not (Test-Path -LiteralPath $script)) { throw "missing $script" }
-          & $script -PackageRoot $root -ArchivePath $archive -Force
-          if (-not (Test-Path -LiteralPath $archive)) { throw "missing archive $archive" }
-          Get-ChildItem $dist | Format-Table Name, Length
+          pwsh -NoProfile -File tools/ci_package_windows.ps1 -Tag $tag -TargetName "${{ matrix.name }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Package (Unix)
         if: matrix.smoke == 'sh'

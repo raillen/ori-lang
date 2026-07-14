@@ -164,10 +164,8 @@ try {
 
         # Match tools/smoke_native_release.sh: CI may set ORI_PACKAGE_SMOKE_JIT_ONLY=1
         # to skip AOT compile/test (host linker flaky on some runners).
-        $smokeJitOnly = $false
-        switch -Regex ($env:ORI_PACKAGE_SMOKE_JIT_ONLY) {
-            '^(1|true|yes|on)$' { $smokeJitOnly = $true }
-        }
+        $jitEnv = [string]$env:ORI_PACKAGE_SMOKE_JIT_ONLY
+        $smokeJitOnly = @('1', 'true', 'yes', 'on') -contains $jitEnv.Trim().ToLowerInvariant()
 
         if (-not $smokeJitOnly) {
             $helloExe = Join-Path $packageRootPath (Get-OutputExeName "hello")
