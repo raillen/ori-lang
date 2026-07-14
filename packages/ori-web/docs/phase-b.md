@@ -6,7 +6,7 @@ Design: [`web-templates-discussion-roadmap.md`](../../../docs/planning/web-templ
 |----|---------|----------------|
 | **B1 HTTPS** | TLS at reverse proxy (recommended) or runtime later | See Caddy/nginx snippet below. Local HTTP is for dev only. |
 | **B2 Secure cookie** | `set_cookie_secure(app, true)` behind HTTPS | Always on in production. |
-| **B3 Session store** | `use_memory_sessions()` / `use_file_sessions(dir)` / `use_kv_sessions(path)` | Memory = single process. File = one file per sid. KV = single flat file (multi-restart). Helpers: `clear_session_cache`, `purge_expired_sessions`, `session_backend`. Redis/SQLite = external packages. |
+| **B3 Session store** | `use_memory_sessions` / `use_file_sessions` / `use_kv_sessions` / `use_custom_sessions` | Memory / file / kv built-in. Custom hooks for SQLite (`ori-web-session-sqlite`) or Redis. Helpers: `clear_session_cache`, `purge_expired_sessions`, `session_backend`. |
 | **B4 Rate limit** | `set_rate_limit(app, per_minute)` | Applied to mutations; key = `client_key` (`X-Forwarded-For` if `set_trust_proxy`). |
 | **B5 Flash + PRG** | `flash` / `take_flash` + `redirect(303, …)` | Already in MVP demos. |
 | **B6 Security headers** | Always: nosniff, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` | Optional CSP: `set_csp(app, policy)`. |

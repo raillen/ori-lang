@@ -82,6 +82,9 @@ Last registered is outermost.
 web.use_memory_sessions()                 -- default, process-local
 web.use_file_sessions("tmp/sessions")     -- one file per sid
 web.use_kv_sessions("tmp/sessions.kv")    -- single flat file (multi-restart)
+-- SQLite (package ori-web-session-sqlite + ori-sqlite):
+-- web_session_sqlite.use_sqlite_sessions("var/sessions.db")
+-- Custom: web.use_custom_sessions(load, save, remove)
 ```
 
 ## Upload sketch (C8)
@@ -124,6 +127,6 @@ Optional package **`ori-web-auth`** (TOTP via `ori.crypto.totp_*`).
 
 ## Not yet
 
-Redis/SQLite session drivers (use external `ori-sqlite` / Redis clients),
-in-process TLS (edge proxy recommended), true socket read deadlines (B7 —
-soft-cap only today). Password hashing is in **`ori.crypto`** (argon2id).
+Redis session driver, in-process TLS (edge proxy recommended), true socket
+read deadlines (B7 — soft-cap only today). SQLite sessions:
+`packages/ori-web-session-sqlite`. Password hashing is in **`ori.crypto`**.

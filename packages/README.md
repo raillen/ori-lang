@@ -8,6 +8,7 @@ External to the language FREEZE-1 core. Path-depend from apps with `ori.proj`.
 | **ori-web** | HTTP, session, CSRF, phase B/C | Library |
 | **ori-web-app** | Rails-like App layer + generators | App |
 | **ori-web-auth** | Optional 2FA (TOTP + recovery codes) | Library |
+| **ori-web-session-sqlite** | SQLite session store (B3 adapter) | Library (+ `ori-sqlite`) |
 | **ori-web-demo** | HTML-first notes (htmx) | :3457 |
 | **ori-web-demo-api** | JSON API | :3458 |
 | **ori-web-demo-auth** | Login + argon2id + lockout | :3459 `demo`/`demo` |

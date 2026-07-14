@@ -1,0 +1,93 @@
+module app.main
+
+-- SQLite session adapter smoke (no network).
+-- Requires ori-sqlite native libs built: ~/Documentos/Projetos/ori-sqlite/tools/build_linux.sh
+
+import web = web
+import web_session_sqlite = ssql
+import ori.io = io
+import ori.string = str
+import ori.fs = fs
+
+var FAILS: int = 0
+
+assert_true(cond: bool, label: string) -> void
+    if cond
+        io.println(str.concat("ok  ", label))
+    else
+        io.println(str.concat("FAIL ", label))
+        FAILS = FAILS + 1
+    end
+end
+
+main()
+    const path: string = "/tmp/ori-web-session-sqlite-smoke.db"
+    match fs.remove_file(path)
+    case ok(_):
+    case err(_):
+    end
+
+    match ssql.use_sqlite_sessions(path)
+    case err(e):
+        io.println(str.concat("open failed: ", e))
+        FAILS = FAILS + 1
+        io.println(str.concat("SQLITE_SMOKE FAILURES=", string(FAILS)))
+        return
+    case ok(_):
+        assert_true(ssql.is_open(), "sqlite open")
+        assert_true(web.session_backend() == "custom", "backend custom")
+    end
+
+    var req: web.Request = web.make_request("GET", "/", "", "sid-sql-1")
+    web.session_set(req, "user", "alice")
+    match web.session_get(req, "user")
+    case some(u):
+        assert_true(u == "alice", "session set/get memory cache")
+    case none:
+        assert_true(false, "session set/get memory cache")
+    end
+
+    assert_true(ssql.session_count() >= 1, "row persisted")
+
+    -- force reload from SQLite
+    web.clear_session_cache()
+    match web.session_get(req, "user")
+    case some(u2):
+        assert_true(u2 == "alice", "session persists across cache clear")
+    case none:
+        assert_true(false, "session persists across cache clear")
+    end
+
+    -- regenerate + multi-key
+    web.session_set(req, "role", "admin")
+    const new_sid: string = web.session_regenerate(req)
+    assert_true(str.len(new_sid) > 0, "regenerate sid")
+    web.clear_session_cache()
+    var req2: web.Request = web.make_request("GET", "/", "", new_sid)
+    match web.session_get(req2, "user")
+    case some(u3):
+        assert_true(u3 == "alice", "data survives regenerate+reload")
+    case none:
+        assert_true(false, "data survives regenerate+reload")
+    end
+
+    ssql.clear_all()
+    assert_true(ssql.session_count() == 0, "clear_all")
+    web.clear_session_cache()
+    match web.session_get(req2, "user")
+    case some(_):
+        assert_true(false, "empty after clear")
+    case none:
+        assert_true(true, "empty after clear")
+    end
+
+    ssql.close()
+    assert_true(not ssql.is_open(), "closed")
+    assert_true(web.session_backend() == "memory", "reverts to memory")
+
+    if FAILS == 0
+        io.println("SQLITE_SESSION SMOKE PASSED")
+    else
+        io.println(str.concat("SQLITE_SMOKE FAILURES=", string(FAILS)))
+    end
+end

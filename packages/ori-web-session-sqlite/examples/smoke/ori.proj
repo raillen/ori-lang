@@ -1,0 +1,11 @@
+manifest = 1
+name = "web_session_sqlite_smoke"
+version = "0.1.0"
+kind = "app"
+entry = "main.orl"
+[source]
+root_namespace = "app"
+[dependencies]
+web = { path = "../../../ori-web", version = "0.1.0" }
+web_session_sqlite = { path = "../..", version = "0.1.0" }
+sqlite = { path = "/home/raillen/Documentos/Projetos/ori-sqlite", version = "0.3.0" }

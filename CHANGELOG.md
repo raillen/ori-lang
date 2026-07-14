@@ -37,6 +37,16 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `examples/smoke` + `tools/qa/web_auth_smoke.sh`.
 - **`ori-web` keep-alive:** `set_keep_alive(app, enabled, max)` — HTTP/1.1
   connection reuse in `serve` (default on, max 32).
+- **`ori-web` custom session hooks:** `use_custom_sessions(load, save, remove)`
+  for external stores.
+- **`packages/ori-web-session-sqlite`:** SQLite session adapter (table
+  `web_sessions`) over `ori-sqlite` native package. Smoke +
+  `tools/qa/web_session_sqlite_smoke.sh` (AOT; requires staged libsqlite).
+
+### Corrigido
+- **Package native libs on path deps:** `ori.proj` / package dependencies now
+  forward `native_libs` (and one-level nested package deps) into AOT/JIT link
+  context so `sqlite` staticlibs resolve when used from apps.
 
 ---
 

@@ -1,0 +1,125 @@
+module web_session_sqlite
+
+-- SQLite-backed session blobs for ori-web (phase B3).
+-- Requires package `sqlite` (ori-sqlite) with native libs staged under lib/<triple>/.
+
+import web = web
+import sqlite.db = sql
+import ori.string = str
+
+var DB: sql.Db = sql.Db { id: -1 }
+var OPEN: bool = false
+var DB_PATH: string = ""
+
+-- Open/create DB and register as web session backend.
+public use_sqlite_sessions(path: string) -> result[void, string]
+    if OPEN
+        sql.close(DB)
+        OPEN = false
+    end
+    DB = sql.open(path)
+    if not sql.is_open(DB)
+        return err("sqlite open failed")
+    end
+    if not sql.exec_ok(
+        DB,
+        "CREATE TABLE IF NOT EXISTS web_sessions (sid TEXT PRIMARY KEY NOT NULL, blob TEXT NOT NULL, updated_ms INTEGER NOT NULL DEFAULT 0)"
+    )
+        sql.close(DB)
+        return err(sql.last_error())
+    end
+    OPEN = true
+    DB_PATH = path
+    web.use_custom_sessions(sql_load, sql_save, sql_remove)
+    return ok()
+end
+
+public is_open() -> bool
+    return OPEN
+end
+
+public db_path() -> string
+    return DB_PATH
+end
+
+public close() -> void
+    if OPEN
+        sql.close(DB)
+        OPEN = false
+    end
+    web.use_memory_sessions()
+end
+
+-- Count rows (for tests / ops).
+public session_count() -> int
+    if not OPEN
+        return 0
+    end
+    return sql.query_int(DB, "SELECT COUNT(*) FROM web_sessions")
+end
+
+-- Delete all sessions (tests).
+public clear_all() -> void
+    if not OPEN
+        return
+    end
+    const _ok: bool = sql.exec_ok(DB, "DELETE FROM web_sessions")
+    web.clear_session_cache()
+end
+
+sql_load(sid: string) -> string
+    if not OPEN
+        return ""
+    end
+    if str.len(sid) == 0
+        return ""
+    end
+    const st: sql.Stmt = sql.prepare(DB, "SELECT blob FROM web_sessions WHERE sid = ?")
+    if not sql.is_prepared(st)
+        return ""
+    end
+    const _b: int = sql.bind_text(st, 1, sid)
+    var out: string = ""
+    if sql.step_row(st)
+        out = sql.column_text(st, 0)
+    end
+    sql.finalize(st)
+    return out
+end
+
+sql_save(sid: string, blob: string) -> void
+    if not OPEN
+        return
+    end
+    if str.len(sid) == 0
+        return
+    end
+    -- UPSERT (SQLite 3.24+)
+    const st: sql.Stmt = sql.prepare(
+        DB,
+        "INSERT INTO web_sessions(sid, blob, updated_ms) VALUES(?, ?, strftime('%s','now')*1000) ON CONFLICT(sid) DO UPDATE SET blob = excluded.blob, updated_ms = excluded.updated_ms"
+    )
+    if not sql.is_prepared(st)
+        return
+    end
+    const _b1: int = sql.bind_text(st, 1, sid)
+    const _b2: int = sql.bind_text(st, 2, blob)
+    const _step: int = sql.step(st)
+    sql.finalize(st)
+end
+
+sql_remove(sid: string) -> void
+    if not OPEN
+        return
+    end
+    if str.len(sid) == 0
+        return
+    end
+    const st: sql.Stmt = sql.prepare(DB, "DELETE FROM web_sessions WHERE sid = ?")
+    if not sql.is_prepared(st)
+        return
+    end
+    const _b: int = sql.bind_text(st, 1, sid)
+    const _step: int = sql.step(st)
+    sql.finalize(st)
+end

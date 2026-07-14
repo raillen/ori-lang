@@ -87,6 +87,25 @@ var MIDDLEWARES: list[Middleware] = []
 -- Single-file session store path (backend "kv")
 var SESSION_KV_PATH: string = ""
 
+-- Custom session blob backend (B3 plug-in; e.g. SQLite package)
+public alias SessionBlobLoad = func(string) -> string
+public alias SessionBlobSave = func(string, string) -> void
+public alias SessionBlobRemove = func(string) -> void
+
+default_session_load(_sid: string) -> string
+    return ""
+end
+
+default_session_save(_sid: string, _blob: string) -> void
+end
+
+default_session_remove(_sid: string) -> void
+end
+
+var CUSTOM_LOAD: SessionBlobLoad = default_session_load
+var CUSTOM_SAVE: SessionBlobSave = default_session_save
+var CUSTOM_REMOVE: SessionBlobRemove = default_session_remove
+
 -- - Construction -
 
 public app() -> App
@@ -252,11 +271,14 @@ public set_keep_alive(a: App, enabled: bool, max_requests: int) -> App
     return a
 end
 
--- B3: pluggable session store (memory | file directory)
+-- B3: pluggable session store (memory | file | kv | custom)
 public use_memory_sessions() -> void
     SESSION_BACKEND = "memory"
     SESSION_DIR = ""
     SESSION_KV_PATH = ""
+    CUSTOM_LOAD = default_session_load
+    CUSTOM_SAVE = default_session_save
+    CUSTOM_REMOVE = default_session_remove
 end
 
 public use_file_sessions(dir: string) -> void
@@ -275,6 +297,22 @@ public use_kv_sessions(file_path: string) -> void
     SESSION_BACKEND = "kv"
     SESSION_DIR = ""
     SESSION_KV_PATH = file_path
+end
+
+-- External store (SQLite/Redis/…): load/save/remove by sid.
+-- See packages/ori-web-session-sqlite for a ready adapter.
+public use_custom_sessions(
+    load_fn: SessionBlobLoad,
+    save_fn: SessionBlobSave,
+    remove_fn: SessionBlobRemove
+) -> void
+    SESSION_BACKEND = "custom"
+    SESSION_DIR = ""
+    SESSION_KV_PATH = ""
+    CUSTOM_LOAD = load_fn
+    CUSTOM_SAVE = save_fn
+    CUSTOM_REMOVE = remove_fn
+    clear_session_cache()
 end
 
 public session_backend() -> string
@@ -603,6 +641,11 @@ load_blob(sid: string) -> string
             end
         end
     end
+    if SESSION_BACKEND == "custom"
+        const body: string = CUSTOM_LOAD(sid)
+        maps.set(SESSIONS, sid, body)
+        return body
+    end
     return ""
 end
 
@@ -623,6 +666,9 @@ save_blob(sid: string, blob: string) -> void
             kv_save_all(all)
         end
     end
+    if SESSION_BACKEND == "custom"
+        CUSTOM_SAVE(sid, blob)
+    end
 end
 
 remove_blob(sid: string) -> void
@@ -642,6 +688,9 @@ remove_blob(sid: string) -> void
             maps.remove(all, sid)
             kv_save_all(all)
         end
+    end
+    if SESSION_BACKEND == "custom"
+        CUSTOM_REMOVE(sid)
     end
 end
 

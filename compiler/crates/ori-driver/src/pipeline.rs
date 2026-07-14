@@ -1964,12 +1964,15 @@ fn add_project_dependencies(
             let import_dependency =
                 import_dependency_from_root(&dependency.name, &root, dependency.version.as_deref())?;
             add_import_dependency(context, import_dependency);
+            // Transitive native libs (e.g. sqlite from path/git package).
+            push_package_native_libs(context, &root)?;
             continue;
         }
         if let Some(path) = &dependency.path {
             let import_dependency =
                 import_dependency_from_root(&dependency.name, path, dependency.version.as_deref())?;
             add_import_dependency(context, import_dependency);
+            push_package_native_libs(context, path)?;
             continue;
         }
         if let Some(version) = &dependency.version {
@@ -1982,6 +1985,7 @@ fn add_project_dependencies(
             let import_dependency =
                 import_dependency_from_root(&dependency.name, &root, Some(version))?;
             add_import_dependency(context, import_dependency);
+            push_package_native_libs(context, &root)?;
         }
     }
     Ok(())
@@ -2000,6 +2004,7 @@ fn add_package_manifest_dependencies(
                 let import_dependency =
                     import_dependency_from_root(&dependency.name, &root, version.as_deref())?;
                 add_import_dependency(context, import_dependency);
+                push_package_native_libs(context, &root)?;
             }
             crate::package::DependencyRequirement::Git {
                 url,
@@ -2024,6 +2029,7 @@ fn add_package_manifest_dependencies(
                 let import_dependency =
                     import_dependency_from_root(&dependency.name, &root, version.as_deref())?;
                 add_import_dependency(context, import_dependency);
+                push_package_native_libs(context, &root)?;
             }
             crate::package::DependencyRequirement::Version(version) => {
                 let cache = cache_root.clone().ok_or_else(|| {
@@ -2038,16 +2044,54 @@ fn add_package_manifest_dependencies(
                 let import_dependency =
                     import_dependency_from_root(&dependency.name, &root, Some(version))?;
                 add_import_dependency(context, import_dependency);
+                push_package_native_libs(context, &root)?;
             }
         }
     }
     for lib in manifest.native_libs {
-        context.native_libs.push(NativeLibContext {
-            name: lib,
-            package_root: manifest.root.clone(),
-        });
+        push_native_lib(context, lib, manifest.root.clone());
     }
     Ok(())
+}
+
+/// Register `native_libs` from a dependency package (and its nested package deps once).
+fn push_package_native_libs(context: &mut ImportContext, package_root: &Path) -> Result<(), String> {
+    let package_manifest = package_root.join("ori.pkg.toml");
+    if !package_manifest.is_file() {
+        return Ok(());
+    }
+    let manifest = crate::package::load_package_manifest(&package_manifest)?;
+    for lib in &manifest.native_libs {
+        push_native_lib(context, lib.clone(), manifest.root.clone());
+    }
+    // One level of nested package deps (adapter → sqlite).
+    for dependency in &manifest.dependencies {
+        if let crate::package::DependencyRequirement::Path { path, .. } = &dependency.requirement {
+            let nested = manifest.root.join(path);
+            let nested_pkg = nested.join("ori.pkg.toml");
+            if nested_pkg.is_file() {
+                let nested_manifest = crate::package::load_package_manifest(&nested_pkg)?;
+                for lib in nested_manifest.native_libs {
+                    push_native_lib(context, lib, nested_manifest.root.clone());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn push_native_lib(context: &mut ImportContext, name: String, package_root: PathBuf) {
+    if context
+        .native_libs
+        .iter()
+        .any(|existing| existing.name == name && existing.package_root == package_root)
+    {
+        return;
+    }
+    context.native_libs.push(NativeLibContext {
+        name,
+        package_root,
+    });
 }
 
 fn import_dependency_from_root(
