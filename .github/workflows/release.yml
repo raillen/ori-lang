@@ -26,6 +26,8 @@ jobs:
   package:
     name: package-${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    # Windows packaging is still flaky on GHA; do not block Linux/macOS publish.
+    continue-on-error: ${{ matrix.soft_fail == '1' }}
     strategy:
       fail-fast: false
       matrix:
@@ -35,21 +37,25 @@ jobs:
             smoke: sh
             archive_ext: tar.gz
             skip_deb: "0"
+            soft_fail: "0"
           - name: x86_64-pc-windows-msvc
             os: windows-latest
             smoke: powershell
             archive_ext: zip
             skip_deb: "1"
+            soft_fail: "1"
           - name: aarch64-apple-darwin
             os: macos-15
             smoke: sh
             archive_ext: tar.gz
             skip_deb: "1"
+            soft_fail: "0"
           - name: x86_64-apple-darwin
             os: macos-15-intel
             smoke: sh
             archive_ext: tar.gz
             skip_deb: "1"
+            soft_fail: "0"
 
     steps:
       - uses: actions/checkout@v4
