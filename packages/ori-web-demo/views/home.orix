@@ -1,0 +1,34 @@
+@{ layout "layouts/app" }
+@{ assign title = "Notes · ori-web-demo" }
+
+<section class="card">
+  <h2>New note</h2>
+  <form class="row" method="post" action="/notes"
+        hx-post="/notes"
+        hx-target="#notes-list"
+        hx-swap="outerHTML">
+    <input type="hidden" name="csrf_token" value="@{ csrf_token }">
+    <input type="text" name="text" placeholder="Write something…" required autocomplete="off">
+    <button type="submit">Add</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Notes</h2>
+  <div id="notes-panel"
+       hx-get="/notes/rows"
+       hx-trigger="every 60s"
+       hx-swap="innerHTML">
+    @{ include "notes/rows" }
+  </div>
+  <p style="margin:0.75rem 0 0">
+    <button type="button" class="ghost"
+            hx-get="/notes/rows"
+            hx-target="#notes-panel"
+            hx-swap="innerHTML">
+      Refresh list
+    </button>
+  </p>
+</section>
+
+@{ end }

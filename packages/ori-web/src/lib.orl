@@ -217,6 +217,23 @@ public csrf_token(req: Request) -> string
     return t
 end
 
+-- application/x-www-form-urlencoded body (same rules as query string)
+public form_body(req: Request) -> map[string, string]
+    return parse_query(req.body)
+end
+
+public is_htmx(req: Request) -> bool
+    if some(v) = maps.try_get(req.headers, "hx-request")
+        if v == "true"
+            return true
+        end
+        if v == "1"
+            return true
+        end
+    end
+    return false
+end
+
 ensure_session(req: Request) -> void
     if str.len(req.session_id) == 0
         -- cannot mutate req.session_id if it's not var field access
@@ -383,12 +400,50 @@ parse_query(q: string) -> map[string, string]
         const p: string = parts[i]
         const eq: int = str.index_of(p, "=")
         if eq >= 0
-            maps.set(out, str.slice(p, 0, eq), str.slice(p, eq + 1, str.len(p)))
+            maps.set(
+                out,
+                form_decode(str.slice(p, 0, eq)),
+                form_decode(str.slice(p, eq + 1, str.len(p)))
+            )
         else
-            maps.set(out, p, "")
+            maps.set(out, form_decode(p), "")
         end
         i = i + 1
     end
+    return out
+end
+
+-- application/x-www-form-urlencoded: + → space; common %XX (MVP, not full Unicode)
+form_decode(s: string) -> string
+    var out: string = str.replace_all(s, "+", " ")
+    out = str.replace_all(out, "%20", " ")
+    out = str.replace_all(out, "%21", "!")
+    out = str.replace_all(out, "%22", "\"")
+    out = str.replace_all(out, "%23", "#")
+    out = str.replace_all(out, "%24", "$")
+    out = str.replace_all(out, "%25", "%")
+    out = str.replace_all(out, "%26", "&")
+    out = str.replace_all(out, "%27", "'")
+    out = str.replace_all(out, "%28", "(")
+    out = str.replace_all(out, "%29", ")")
+    out = str.replace_all(out, "%2A", "*")
+    out = str.replace_all(out, "%2B", "+")
+    out = str.replace_all(out, "%2C", ",")
+    out = str.replace_all(out, "%2F", "/")
+    out = str.replace_all(out, "%3A", ":")
+    out = str.replace_all(out, "%3B", ";")
+    out = str.replace_all(out, "%3D", "=")
+    out = str.replace_all(out, "%3F", "?")
+    out = str.replace_all(out, "%40", "@")
+    out = str.replace_all(out, "%5B", "[")
+    out = str.replace_all(out, "%5D", "]")
+    out = str.replace_all(out, "%7B", "{")
+    out = str.replace_all(out, "%7D", "}")
+    -- lowercase hex variants used by some clients
+    out = str.replace_all(out, "%2b", "+")
+    out = str.replace_all(out, "%2f", "/")
+    out = str.replace_all(out, "%3a", ":")
+    out = str.replace_all(out, "%3d", "=")
     return out
 end
 

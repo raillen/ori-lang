@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>@{ title }</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <!-- CDN htmx for progressive enhancement; classic form works without JS -->
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "@{ csrf_token }"}'>
+  <div class="wrap">
+    <header class="app-bar">
+      <h1>ori-web-demo</h1>
+      <span>HTML-first + templates</span>
+    </header>
+    @{ if flash_notice }
+    <div class="flash" role="status">@{ flash_notice }</div>
+    @{ end }
+    @{ if flash_error }
+    <div class="flash error" role="alert">@{ flash_error }</div>
+    @{ end }
+    <main>
+      @{ content |> raw }
+    </main>
+    <footer class="meta">
+      Library: <code>web</code> + <code>templates</code> · CSRF + session · path jail
+    </footer>
+  </div>
+</body>
+</html>

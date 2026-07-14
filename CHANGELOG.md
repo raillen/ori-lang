@@ -19,8 +19,12 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`packages/ori-web` (MVP):** minimal HTTP Library layer — router
   (`get`/`post`/… + `:id`), static jail, in-memory session (`ori_sid` HttpOnly),
   CSRF synchronizer, flash, `dispatch`/`serve`, security headers baseline.
-  Public entry is **`dispatch`** (Ori reserves keyword `handle`). Design D14–D20;
-  smoke: `packages/ori-web/examples/hello_server`.
+  Public entry is **`dispatch`** (Ori reserves keyword `handle`). Helpers:
+  `form_body`, `is_htmx`, form-urlencoded decode (`+` / common `%XX`).
+  Design D14–D20; smoke: `packages/ori-web/examples/hello_server`.
+- **`packages/ori-web-demo`:** HTML-first notes app on `web` + `templates`
+  (layout, partials, CSRF form, PRG redirect, htmx partial POST, static CSS).
+  Design D19/§11; run: `packages/ori-web-demo`.
 - **Web App conventions (design closed):** APP1–APP10 + security D15–D20 + Rails-like
   future D21 — same planning doc + learning course.
 - **Runtime/DAP cooperativo (Ori IDE):** agent `debug_agent` no `ori-runtime` (`ori_debug_line` / `ori_debug_init`) ativado por `ORI_DEBUG_PORT`; codegen nativo instrumenta statements quando `ORI_DEBUG_INSTRUMENT=1` + `ORI_DEBUG_SOURCE=<path>`; adapter `ori-dap` (repo ori-ide) faz bind TCP e controla continue/step/breakpoints.

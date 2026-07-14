@@ -1,0 +1,140 @@
+/* Minimal editorial layout for ori-web-demo */
+:root {
+  color-scheme: light;
+  --ink: #1a1a1a;
+  --muted: #5c5c5c;
+  --paper: #f7f4ef;
+  --card: #ffffff;
+  --line: #e2ddd4;
+  --accent: #2f5d50;
+  --flash: #e8f0ec;
+  --danger: #8b3a3a;
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.wrap {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+header.app-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.75rem;
+}
+
+header.app-bar h1 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+header.app-bar span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.flash {
+  background: var(--flash);
+  border: 1px solid #c5d9cf;
+  border-radius: 6px;
+  padding: 0.65rem 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.flash.error {
+  background: #f7ecec;
+  border-color: #e0c4c4;
+  color: var(--danger);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1.1rem 1.15rem;
+  margin-bottom: 1.25rem;
+}
+
+.card h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+form.row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+form.row input[type="text"] {
+  flex: 1 1 12rem;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  background: #fff;
+}
+
+form.row button,
+button.ghost {
+  font: inherit;
+  padding: 0.55rem 0.95rem;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--accent);
+}
+
+ul.notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+ul.notes li {
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+ul.notes li:last-child {
+  border-bottom: 0;
+}
+
+ul.notes .empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+footer.meta {
+  margin-top: 2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+code {
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 0.9em;
+}

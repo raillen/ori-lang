@@ -1,0 +1,8 @@
+<ul class="notes" id="notes-list">
+@{ for i, note in notes }
+  <li><strong>@{ i }</strong> · @{ note }</li>
+@{ end }
+@{ if notes_empty }
+  <li class="empty">No notes yet.</li>
+@{ end }
+</ul>

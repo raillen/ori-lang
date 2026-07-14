@@ -18,6 +18,7 @@ Minimal HTTP **Library** layer for Ori.
 | Dispatch | `dispatch(app, req)` — **not** named `handle` (`handle` is a reserved keyword in Ori) |
 | Serve | `serve(host, port, app)` — HTTP/1.1 accept loop, `Connection: close` |
 | Auth helper | `require_session_key(key, next)` → wrapped `Handler` |
+| Forms / htmx | `form_body(req)`, `is_htmx(req)` |
 
 ## Use (path dependency)
 
