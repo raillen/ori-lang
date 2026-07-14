@@ -1,0 +1,25 @@
+module app.main
+
+import web_app = wa
+import web = web
+import config.app = cfg
+import config.routes = routes
+import ori.io = io
+import ori.string = str
+
+main()
+    wa.set_listen(cfg.host(), cfg.port())
+    wa.set_views_root(cfg.views_root())
+    wa.set_public_root(cfg.public_root())
+
+    var a: web.App = wa.standard_app()
+    wa.mount_assets(a)
+    routes.draw(a)
+
+    io.println(str.concat("listening on http://", str.concat(cfg.host(), str.concat(":", string(cfg.port())))))
+    match wa.run(a)
+    case ok(_):
+    case err(msg):
+        io.println(msg)
+    end
+end

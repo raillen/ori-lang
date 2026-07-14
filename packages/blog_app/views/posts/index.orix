@@ -1,0 +1,7 @@
+@{ layout "layouts/app" }
+@{ assign title = "Posts" }
+<section class="card">
+  <h1>Posts</h1>
+  <p>Generated controller <code>app/controllers/posts.orl</code>.</p>
+</section>
+@{ end }

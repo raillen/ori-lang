@@ -1,0 +1,11 @@
+module app.controllers.home
+
+import app.application = app
+import web = web
+import templates = tpl
+
+public index(req: web.Request) -> web.ActionResult
+    var d: tpl.Data = tpl.empty_data()
+    tpl.set_value(d, "title", "Home")
+    return app.render("home/index", req, d)
+end

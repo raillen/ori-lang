@@ -1,0 +1,258 @@
+#!/usr/bin/env bash
+# Scaffold a new Rails-like Ori web app (APP8).
+# Usage: new <app_name> [target_dir]
+# Example: packages/ori-web-app/bin/new myblog packages/myblog
+
+set -euo pipefail
+
+NAME="${1:-}"
+if [[ -z "$NAME" ]]; then
+  echo "usage: $0 <app_name> [target_dir]" >&2
+  exit 1
+fi
+
+SAFE="$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g')"
+TARGET="${2:-./$SAFE}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PKG_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PACKAGES_ROOT="$(cd "$PKG_ROOT/.." && pwd)"
+
+if [[ -e "$TARGET" ]]; then
+  echo "error: target already exists: $TARGET" >&2
+  exit 1
+fi
+
+mkdir -p \
+  "$TARGET/app/controllers" \
+  "$TARGET/config" \
+  "$TARGET/views/layouts" \
+  "$TARGET/views/partials" \
+  "$TARGET/views/home" \
+  "$TARGET/public"
+
+rel_to() {
+  python3 - "$1" "$2" <<'PY'
+import os, sys
+print(os.path.relpath(sys.argv[2], sys.argv[1]))
+PY
+}
+
+REL_WEB="$(rel_to "$TARGET" "$PACKAGES_ROOT/ori-web")"
+REL_TPL="$(rel_to "$TARGET" "$PACKAGES_ROOT/ori-templates")"
+REL_WA="$(rel_to "$TARGET" "$PACKAGES_ROOT/ori-web-app")"
+
+cat > "$TARGET/ori.proj" <<EOF
+manifest = 1
+name = "$SAFE"
+version = "0.1.0"
+kind = "app"
+entry = "main.orl"
+[source]
+root_namespace = "app"
+[dependencies]
+web = { path = "$REL_WEB", version = "0.1.0" }
+templates = { path = "$REL_TPL", version = "0.1.0" }
+web_app = { path = "$REL_WA", version = "0.1.0" }
+EOF
+
+cat > "$TARGET/config/app.orl" <<'EOF'
+module config.app
+
+-- App defaults (APP9). Secrets only via env (ORI_WEB_SECRET, ORI_ENV).
+
+public port() -> int
+    return 3000
+end
+
+public host() -> string
+    return "127.0.0.1"
+end
+
+public views_root() -> string
+    return "views"
+end
+
+public public_root() -> string
+    return "public"
+end
+EOF
+
+cat > "$TARGET/app/application.orl" <<'EOF'
+module app.application
+
+-- Shared helpers (no magic inheritance).
+
+import web_app = wa
+import web = web
+import templates = tpl
+
+public alias ActionResult = web.ActionResult
+public alias Request = web.Request
+
+public render(name: string, req: web.Request, data: tpl.Data) -> web.ActionResult
+    return wa.render(name, req, data)
+end
+
+public render_partial(name: string, req: web.Request, data: tpl.Data) -> web.ActionResult
+    return wa.render_partial(name, req, data)
+end
+
+public redirect(path: string) -> web.ActionResult
+    return wa.redirect(path)
+end
+
+public notice(req: web.Request, msg: string) -> void
+    wa.notice(req, msg)
+end
+
+public error_flash(req: web.Request, msg: string) -> void
+    wa.error_flash(req, msg)
+end
+EOF
+
+cat > "$TARGET/app/controllers/home.orl" <<'EOF'
+module app.controllers.home
+
+import app.application = app
+import web = web
+import templates = tpl
+
+public index(req: web.Request) -> web.ActionResult
+    var d: tpl.Data = tpl.empty_data()
+    tpl.set_value(d, "title", "Home")
+    return app.render("home/index", req, d)
+end
+EOF
+
+cat > "$TARGET/config/routes.orl" <<'EOF'
+module config.routes
+
+import web = web
+import app.controllers.home = home
+
+-- Explicit routes (APP2). First match wins.
+public draw(a: web.App) -> void
+    web.get(a, "/", home.index)
+end
+EOF
+
+cat > "$TARGET/main.orl" <<'EOF'
+module app.main
+
+import web_app = wa
+import web = web
+import config.app = cfg
+import config.routes = routes
+import ori.io = io
+import ori.string = str
+
+main()
+    wa.set_listen(cfg.host(), cfg.port())
+    wa.set_views_root(cfg.views_root())
+    wa.set_public_root(cfg.public_root())
+
+    var a: web.App = wa.standard_app()
+    wa.mount_assets(a)
+    routes.draw(a)
+
+    io.println(str.concat("listening on http://", str.concat(cfg.host(), str.concat(":", string(cfg.port())))))
+    match wa.run(a)
+    case ok(_):
+    case err(msg):
+        io.println(msg)
+    end
+end
+EOF
+
+cat > "$TARGET/views/layouts/app.orix" <<'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>@{ title }</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+  <header class="bar">
+    <strong>@{ title }</strong>
+    @{ if current_user }
+    <span class="muted">@ @{ current_user }</span>
+    @{ end }
+  </header>
+  @{ if flash_notice }
+  <div class="flash">@{ flash_notice }</div>
+  @{ end }
+  @{ if flash_error }
+  <div class="flash err">@{ flash_error }</div>
+  @{ end }
+  <main class="wrap">
+    @{ content |> raw }
+  </main>
+</body>
+</html>
+EOF
+
+cat > "$TARGET/views/home/index.orix" <<'EOF'
+@{ layout "layouts/app" }
+@{ assign title = "Home" }
+<section class="card">
+  <h1>Welcome</h1>
+  <p>Scaffolded with <code>ori-web-app</code>. Edit <code>app/controllers/home.orl</code> and <code>views/</code>.</p>
+  <p>Add a controller from the app root:</p>
+  <pre>../ori-web-app/bin/generate-controller posts</pre>
+</section>
+@{ end }
+EOF
+
+cat > "$TARGET/public/app.css" <<'EOF'
+:root { color-scheme: light; font-family: Georgia, serif; --ink:#1a1a1a; --paper:#f6f3ee; --line:#e2ddd4; --accent:#2f5d50; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); }
+.bar { display:flex; justify-content:space-between; padding:1rem 1.25rem; border-bottom:1px solid var(--line); }
+.wrap { max-width: 40rem; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+.card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:1.1rem; }
+.flash { margin:1rem; padding:.65rem .9rem; background:#e8f0ec; border:1px solid #c5d9cf; border-radius:6px; }
+.flash.err { background:#f7ecec; border-color:#e0c4c4; }
+.muted { color:#666; font-size:.9rem; }
+code, pre { font-family: ui-monospace, monospace; font-size:.9em; }
+pre { background:#fff; border:1px solid var(--line); padding:.75rem; border-radius:6px; overflow:auto; }
+EOF
+
+cat > "$TARGET/README.md" <<EOF
+# $SAFE
+
+Scaffolded by \`ori-web-app\` (Rails-like App layer for Ori).
+
+## Run
+
+\`\`\`bash
+cd $TARGET
+ori get .
+ori run main.orl
+# http://127.0.0.1:3000/
+\`\`\`
+
+## Layout
+
+| Path | Role |
+|------|------|
+| \`main.orl\` | boot |
+| \`config/app.orl\` | port, roots |
+| \`config/routes.orl\` | explicit routes |
+| \`app/controllers/\` | handlers |
+| \`app/application.orl\` | shared helpers |
+| \`views/\` | \`.orix\` templates |
+| \`public/\` | static (\`/assets/*\`) |
+
+## Generators
+
+\`\`\`bash
+# from app root
+$PKG_ROOT/bin/generate-controller posts
+\`\`\`
+EOF
+
+echo "created $TARGET"
+echo "  cd $TARGET && ori get . && ori run main.orl"

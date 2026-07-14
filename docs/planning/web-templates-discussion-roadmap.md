@@ -4,7 +4,7 @@
 > **Audience:** maintainers.  
 > **Packages alvo (externos ao monorepo language core / FREEZE-1):**  
 > `ori-templates` → `ori-web` → `ori-web-demo`.  
-> **Última atualização:** 2026-07-14 — D28–D30 Library demos; **D31 phase B + demos API/auth**.
+> **Última atualização:** 2026-07-14 — D31 phase B; **D32 ori-web-app generators**.
 
 Este arquivo é a **fonte viva** das decisões e do que ainda falta discutir.
 Atualizar status e decisões aqui a cada rodada de diálogo.
@@ -78,6 +78,7 @@ C **usa** A; não substitui A.
 | D29 | Package **`packages/ori-web`** MVP implementado | 2026-07-14 | router, session, CSRF, static, `dispatch`/`serve` (`handle` is reserved keyword) |
 | D30 | **`packages/ori-web-demo`** HTML-first notes demo | 2026-07-14 | templates+web+htmx CDN; CSRF; PRG; partials |
 | D31 | **Phase B** implemented + demos API/auth | 2026-07-14 | rate limit, CSP, file sessions, secret, regenerate; ports 3458/3459 |
+| D32 | **`packages/ori-web-app`** + generators + `blog_app` example | 2026-07-14 | APP8 `bin/new`, `generate-controller`; library boot/render |
 
 ---
 
@@ -144,7 +145,7 @@ C **usa** A; não substitui A.
 | **APP5** | Helpers de view / ctx automático | **done** | **D27** §12.11 |
 | **APP6** | `standard_app()` / boot | **done** | **D27** §12.11 |
 | **APP7** | Environments (dev/prod) | **done** | **D27** §12.11 |
-| **APP8** | Generators (`new`, `generate`) | aberto | escrevem código legível |
+| **APP8** | Generators (`new`, `generate`) | **done** | D32 `bin/new`, `bin/generate-controller` |
 | **APP9** | Config (`config/app`) | **done** | **D27** §12.11 |
 | **APP10** | Fronteira com ORM/DB | **done** | **D27** fora do web; pasta opcional |
 
@@ -1870,8 +1871,9 @@ Cada tópico: proposta → acordo → linha em **Decisões fechadas** (D22+).
 ori-lang          → linguagem + stdlib (sem framework web no core)
 ori-templates     → Library: HTML engine
 ori-web           → Library/Batteries: HTTP + session + CSRF + static
-ori-web-app       → App opinativo Rails-like (FUTURO, D21) — convenções §12
-ori-web-demo      → exemplo HTML-first; pode migrar para layout App
+ori-web-app       → App opinativo Rails-like (D21/D32) — library + bin generators
+ori-web-demo      → exemplo HTML-first (Library stack)
+blog_app          → exemplo gerado por ori-web-app
 ```
 
 ### Escopo v1 `ori-templates` (P1)

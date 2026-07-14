@@ -34,6 +34,10 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`packages/ori-web-demo-api`:** JSON notes API (port 3458) with CSRF header.
 - **`packages/ori-web-demo-auth`:** login/dashboard (port 3459, `demo`/`demo`),
   file sessions, regenerate on login.
+- **`packages/ori-web-app` (Level 3 App):** Rails-like conventions — `standard_app`,
+  `render`/`page_data`/`csrf_field`, boot `run`, generators `bin/new` and
+  `bin/generate-controller`. Example scaffold: `packages/blog_app`.
+  Design §12 / APP8–APP9.
 - **Web App conventions (design closed):** APP1–APP10 + security D15–D20 + Rails-like
   future D21 — same planning doc + learning course.
 - **Runtime/DAP cooperativo (Ori IDE):** agent `debug_agent` no `ori-runtime` (`ori_debug_line` / `ori_debug_init`) ativado por `ORI_DEBUG_PORT`; codegen nativo instrumenta statements quando `ORI_DEBUG_INSTRUMENT=1` + `ORI_DEBUG_SOURCE=<path>`; adapter `ori-dap` (repo ori-ide) faz bind TCP e controla continue/step/breakpoints.

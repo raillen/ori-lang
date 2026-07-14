@@ -1,0 +1,11 @@
+module config.routes
+
+import web = web
+import app.controllers.home = home
+import app.controllers.posts = posts
+
+-- Explicit routes (APP2). First match wins.
+public draw(a: web.App) -> void
+    web.get(a, "/", home.index)
+    web.get(a, "/posts", posts.index)
+end

@@ -1,0 +1,13 @@
+module app.controllers.posts
+
+import app.application = app
+import web = web
+import templates = tpl
+
+public index(req: web.Request) -> web.ActionResult
+    var d: tpl.Data = tpl.empty_data()
+    tpl.set_value(d, "title", "Posts")
+    return app.render("posts/index", req, d)
+end
+
+-- Add create/show/… as needed (Rails REST set is a guide, not a limit).

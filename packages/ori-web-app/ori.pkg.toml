@@ -1,0 +1,6 @@
+[package]
+name = "web_app"
+version = "0.1.0"
+entry = "src/lib.orl"
+ori_version = "0.3.0"
+description = "Rails-like App layer for Ori: boot, render helpers, conventions (generators in bin/)"

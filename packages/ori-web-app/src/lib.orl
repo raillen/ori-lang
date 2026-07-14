@@ -1,0 +1,223 @@
+module web_app
+
+-- App layer (Level 3) on top of web + templates.
+-- Conventions: docs/planning/web-templates-discussion-roadmap.md §12
+-- Generators: packages/ori-web-app/bin/
+
+import web = web
+import templates = tpl
+import ori.string = str
+import ori.map = maps
+import ori.list = lists
+import ori.os = os
+
+public alias ActionResult = web.ActionResult
+public alias Request = web.Request
+public alias Response = web.Response
+public alias Handler = web.Handler
+public alias App = web.App
+public alias Data = tpl.Data
+public alias Engine = tpl.Engine
+
+var VIEWS: tpl.Engine = tpl.open("views")
+var VIEWS_ROOT: string = "views"
+var PUBLIC_ROOT: string = "public"
+var HOST: string = "127.0.0.1"
+var PORT: int = 3000
+var RATE_LIMIT: int = 120
+
+-- - Config (APP9) -
+
+public set_views_root(root: string) -> void
+    VIEWS_ROOT = root
+    VIEWS = tpl.open(root)
+end
+
+public set_public_root(root: string) -> void
+    PUBLIC_ROOT = root
+end
+
+public set_listen(host: string, port: int) -> void
+    HOST = host
+    PORT = port
+end
+
+public set_rate_limit(n: int) -> void
+    RATE_LIMIT = n
+end
+
+public views() -> tpl.Engine
+    return VIEWS
+end
+
+public host() -> string
+    return HOST
+end
+
+public port() -> int
+    return PORT
+end
+
+-- - Batteries (APP6 / APP7) -
+
+public standard_app() -> web.App
+    var a: web.App = web.app()
+    a = web.set_rate_limit(a, RATE_LIMIT)
+    const env: string = os.env_or("ORI_ENV", os.env_or("ORI_WEB_ENV", "development"))
+    if env == "production"
+        a = web.set_cookie_secure(a, true)
+        a = web.set_trust_proxy(a, true)
+    end
+    if env == "prod"
+        a = web.set_cookie_secure(a, true)
+        a = web.set_trust_proxy(a, true)
+    end
+    -- sensible CSP for HTML-first + htmx CDN; override with web.set_csp
+    a = web.set_csp(a, "default-src 'self' https://unpkg.com; script-src 'self' https://unpkg.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'")
+    return a
+end
+
+public mount_assets(a: web.App) -> void
+    web.static(a, "/assets", PUBLIC_ROOT)
+end
+
+-- - Context merge (APP5) -
+
+public page_data(req: web.Request) -> tpl.Data
+    var d: tpl.Data = tpl.empty_data()
+    tpl.set_value(d, "csrf_token", web.csrf_token(req))
+    tpl.set_value(d, "flash_notice", "")
+    tpl.set_value(d, "flash_error", "")
+    tpl.set_value(d, "current_user", "")
+    tpl.set_value(d, "current_user_id", "")
+    match web.take_flash(req, "notice")
+    case some(msg):
+        tpl.set_value(d, "flash_notice", msg)
+    case none:
+    end
+    match web.take_flash(req, "error")
+    case some(msg):
+        tpl.set_value(d, "flash_error", msg)
+    case none:
+    end
+    match web.session_get(req, "user_id")
+    case some(uid):
+        tpl.set_value(d, "current_user_id", uid)
+        tpl.set_value(d, "current_user", uid)
+    case none:
+    end
+    match web.session_get(req, "user_name")
+    case some(name):
+        tpl.set_value(d, "current_user", name)
+    case none:
+    end
+    return d
+end
+
+public merge_data(base: tpl.Data, extra: tpl.Data) -> tpl.Data
+    const keys: list[string] = maps.keys(extra.values)
+    var i: int = 0
+    while i < lists.len(keys)
+        const k: string = keys[i]
+        if some(v) = maps.try_get(extra.values, k)
+            tpl.set_value(base, k, v)
+        end
+        i = i + 1
+    end
+    const lkeys: list[string] = maps.keys(extra.lists)
+    var j: int = 0
+    while j < lists.len(lkeys)
+        const lk: string = lkeys[j]
+        if some(items) = maps.try_get(extra.lists, lk)
+            tpl.set_list(base, lk, items)
+        end
+        j = j + 1
+    end
+    return base
+end
+
+public with_value(d: tpl.Data, key: string, value: string) -> tpl.Data
+    tpl.set_value(d, key, value)
+    return d
+end
+
+public with_list(d: tpl.Data, key: string, items: list[string]) -> tpl.Data
+    tpl.set_list(d, key, items)
+    return d
+end
+
+public csrf_field(req: web.Request) -> string
+    const t: string = web.csrf_token(req)
+    return str.concat(
+        "<input type=\"hidden\" name=\"csrf_token\" value=\"",
+        str.concat(html_attr_escape(t), "\">")
+    )
+end
+
+html_attr_escape(s: string) -> string
+    var out: string = s
+    out = str.replace_all(out, "&", "&amp;")
+    out = str.replace_all(out, "\"", "&quot;")
+    out = str.replace_all(out, "<", "&lt;")
+    out = str.replace_all(out, ">", "&gt;")
+    return out
+end
+
+-- - Render (APP5) -
+
+public render(name: string, req: web.Request, data: tpl.Data) -> web.ActionResult
+    var d: tpl.Data = page_data(req)
+    d = merge_data(d, data)
+    match tpl.render(VIEWS, name, d)
+    case ok(html):
+        return ok(web.html(200, html))
+    case err(e):
+        return ok(web.text(500, tpl.error_message(e)))
+    end
+    return ok(web.not_found())
+end
+
+public render_partial(name: string, req: web.Request, data: tpl.Data) -> web.ActionResult
+    var d: tpl.Data = page_data(req)
+    d = merge_data(d, data)
+    match tpl.render_partial(VIEWS, name, d)
+    case ok(html):
+        return ok(web.html(200, html))
+    case err(e):
+        return ok(web.text(500, tpl.error_message(e)))
+    end
+    return ok(web.not_found())
+end
+
+public redirect(location: string) -> web.ActionResult
+    return ok(web.redirect(303, location))
+end
+
+public notice(req: web.Request, message: string) -> void
+    web.flash(req, "notice", message)
+end
+
+public error_flash(req: web.Request, message: string) -> void
+    web.flash(req, "error", message)
+end
+
+-- - Boot (APP6) -
+
+public run(a: web.App) -> result[void, string]
+    const env: string = os.env_or("ORI_ENV", os.env_or("ORI_WEB_ENV", "development"))
+    if env == "production"
+        match web.require_secret(16)
+        case err(msg):
+            return err(msg)
+        case ok(_):
+        end
+    end
+    if env == "prod"
+        match web.require_secret(16)
+        case err(msg):
+            return err(msg)
+        case ok(_):
+        end
+    end
+    return web.serve(HOST, PORT, a)
+end

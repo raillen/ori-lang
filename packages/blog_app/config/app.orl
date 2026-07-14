@@ -1,0 +1,19 @@
+module config.app
+
+-- App defaults (APP9). Secrets only via env (ORI_WEB_SECRET, ORI_ENV).
+
+public port() -> int
+    return 3000
+end
+
+public host() -> string
+    return "127.0.0.1"
+end
+
+public views_root() -> string
+    return "views"
+end
+
+public public_root() -> string
+    return "public"
+end

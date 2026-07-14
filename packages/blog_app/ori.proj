@@ -1,0 +1,11 @@
+manifest = 1
+name = "blog_app"
+version = "0.1.0"
+kind = "app"
+entry = "main.orl"
+[source]
+root_namespace = "app"
+[dependencies]
+web = { path = "../ori-web", version = "0.1.0" }
+templates = { path = "../ori-templates", version = "0.1.0" }
+web_app = { path = "../ori-web-app", version = "0.1.0" }

@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# Generate a resource controller + index view + route stubs (APP8).
+# Run from the app root (directory with ori.proj).
+# Usage: generate-controller <resource_name>
+# Example: generate-controller posts
+
+set -euo pipefail
+
+NAME="${1:-}"
+if [[ -z "$NAME" ]]; then
+  echo "usage: $0 <resource_name>" >&2
+  exit 1
+fi
+
+if [[ ! -f ori.proj ]]; then
+  echo "error: run from an app root (ori.proj not found)" >&2
+  exit 1
+fi
+
+# snake_case resource, plural-ish as given
+RES="$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]//g')"
+if [[ -z "$RES" ]]; then
+  echo "error: invalid name" >&2
+  exit 1
+fi
+
+# TitleCase for display
+TITLE="$(python3 -c "s='$RES'; print(s.replace('_',' ').title())")"
+
+CTRL="app/controllers/${RES}.orl"
+VIEW_DIR="views/${RES}"
+VIEW="${VIEW_DIR}/index.orix"
+ROUTES="config/routes.orl"
+
+if [[ -e "$CTRL" ]]; then
+  echo "error: already exists: $CTRL" >&2
+  exit 1
+fi
+
+mkdir -p app/controllers "$VIEW_DIR"
+
+cat > "$CTRL" <<EOF
+module app.controllers.${RES}
+
+import app.application = app
+import web = web
+import templates = tpl
+
+public index(req: web.Request) -> web.ActionResult
+    var d: tpl.Data = tpl.empty_data()
+    tpl.set_value(d, "title", "${TITLE}")
+    return app.render("${RES}/index", req, d)
+end
+
+-- Add create/show/… as needed (Rails REST set is a guide, not a limit).
+EOF
+
+cat > "$VIEW" <<EOF
+@{ layout "layouts/app" }
+@{ assign title = "${TITLE}" }
+<section class="card">
+  <h1>${TITLE}</h1>
+  <p>Generated controller <code>app/controllers/${RES}.orl</code>.</p>
+</section>
+@{ end }
+EOF
+
+if [[ ! -f "$ROUTES" ]]; then
+  echo "error: missing $ROUTES" >&2
+  exit 1
+fi
+
+# Append import + get route if not already present
+if ! grep -q "app.controllers.${RES}" "$ROUTES"; then
+  # insert import after module line / existing imports
+  python3 - "$ROUTES" "$RES" <<'PY'
+import sys
+path, res = sys.argv[1], sys.argv[2]
+text = open(path).read().splitlines(True)
+out = []
+imports_done = False
+import_line = f"import app.controllers.{res} = {res}\n"
+route_line = f"    web.get(a, \"/{res}\", {res}.index)\n"
+for i, line in enumerate(text):
+    out.append(line)
+    if line.startswith("import ") and not imports_done:
+        # keep collecting; we'll add after last import block later
+        pass
+# better approach: rewrite file
+lines = open(path).read().splitlines()
+new_lines = []
+last_import = -1
+draw_start = -1
+for i, line in enumerate(lines):
+    if line.startswith("import "):
+        last_import = i
+    if "public draw" in line:
+        draw_start = i
+if last_import < 0:
+    # after module line
+    for i, line in enumerate(lines):
+        new_lines.append(line)
+        if line.startswith("module "):
+            new_lines.append("")
+            new_lines.append(import_line.rstrip())
+else:
+    for i, line in enumerate(lines):
+        new_lines.append(line)
+        if i == last_import:
+            new_lines.append(import_line.rstrip())
+
+# inject route before final end of draw — last 'end' after draw
+text2 = "\n".join(new_lines) + "\n"
+if f'"/{res}"' not in text2 and f"/{res}" not in text2:
+    # find `public draw` function and insert before its closing end
+    lines = text2.splitlines()
+    out = []
+    in_draw = False
+    depth_ends = 0
+    inserted = False
+    for i, line in enumerate(lines):
+        if line.strip().startswith("public draw"):
+            in_draw = True
+        if in_draw and line.strip() == "end" and not inserted:
+            # peek: if this closes draw (heuristic: previous non-empty not end of nested)
+            out.append(route_line.rstrip())
+            inserted = True
+            in_draw = False
+        out.append(line)
+    open(path, "w").write("\n".join(out) + "\n")
+else:
+    open(path, "w").write(text2)
+print(f"updated {path}")
+PY
+fi
+
+echo "created $CTRL"
+echo "created $VIEW"
+echo "route: GET /${RES} -> ${RES}.index"
+echo "run: ori check main.orl"

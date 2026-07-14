@@ -1,0 +1,9 @@
+@{ layout "layouts/app" }
+@{ assign title = "Home" }
+<section class="card">
+  <h1>Welcome</h1>
+  <p>Scaffolded with <code>ori-web-app</code>. Edit <code>app/controllers/home.orl</code> and <code>views/</code>.</p>
+  <p>Add a controller from the app root:</p>
+  <pre>../ori-web-app/bin/generate-controller posts</pre>
+</section>
+@{ end }

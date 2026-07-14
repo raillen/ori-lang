@@ -1,0 +1,30 @@
+module app.application
+
+-- Shared helpers (no magic inheritance).
+
+import web_app = wa
+import web = web
+import templates = tpl
+
+public alias ActionResult = web.ActionResult
+public alias Request = web.Request
+
+public render(name: string, req: web.Request, data: tpl.Data) -> web.ActionResult
+    return wa.render(name, req, data)
+end
+
+public render_partial(name: string, req: web.Request, data: tpl.Data) -> web.ActionResult
+    return wa.render_partial(name, req, data)
+end
+
+public redirect(path: string) -> web.ActionResult
+    return wa.redirect(path)
+end
+
+public notice(req: web.Request, msg: string) -> void
+    wa.notice(req, msg)
+end
+
+public error_flash(req: web.Request, msg: string) -> void
+    wa.error_flash(req, msg)
+end
