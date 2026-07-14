@@ -78,9 +78,19 @@ if ($SkipBuild) {
     $smokeArgs.SkipBuild = $true
 }
 
-& (Join-Path $PSScriptRoot "smoke_native_release.ps1") @smokeArgs
-if ($LASTEXITCODE -ne 0) {
+# Invoke smoke as a child script. Do not treat a null $LASTEXITCODE as failure:
+# pure PowerShell success paths may leave LASTEXITCODE unset/null, and
+# `$null -ne 0` is $true in PowerShell (which aborted packaging in ~seconds).
+$smokeScript = Join-Path $PSScriptRoot "smoke_native_release.ps1"
+if (-not (Test-Path -LiteralPath $smokeScript -PathType Leaf)) {
+    throw "missing smoke script: $smokeScript"
+}
+& $smokeScript @smokeArgs
+if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
     throw "smoke_native_release.ps1 failed with exit code $LASTEXITCODE."
+}
+if (-not (Test-Path -LiteralPath $PackageRoot -PathType Container)) {
+    throw "package root missing after smoke: $PackageRoot"
 }
 
 if ((Test-Path -LiteralPath $ArchivePath) -and -not $Overwrite) {
@@ -90,7 +100,13 @@ if (Test-Path -LiteralPath $ArchivePath) {
     Remove-Item -LiteralPath $ArchivePath -Force
 }
 
+$PackageRoot = $PackageRoot.TrimEnd('\', '/')
 Compress-Archive -LiteralPath $PackageRoot -DestinationPath $ArchivePath -Force
+
+if (-not (Test-Path -LiteralPath $ArchivePath -PathType Leaf)) {
+    throw "failed to create archive at $ArchivePath"
+}
 
 Write-Host "native release package: $PackageRoot"
 Write-Host "native release archive: $ArchivePath"
+exit 0

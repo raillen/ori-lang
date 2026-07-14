@@ -162,37 +162,48 @@ try {
             throw "packaged stdlib was not copied to $stdlibDir."
         }
 
-        $helloExe = Join-Path $packageRootPath (Get-OutputExeName "hello")
-        Invoke-Checked { & $packageOri compile (Join-Path "examples" "hello.orl") --out $helloExe } "ori compile in packaged release folder"
-        $helloOutput = & $helloExe
-        if ($LASTEXITCODE -ne 0) {
-            throw "compiled hello executable failed with exit code $LASTEXITCODE."
-        }
-        if (($helloOutput -join "`n") -notmatch "The answer is: 42") {
-            throw "compiled hello executable did not print the expected answer."
+        # Match tools/smoke_native_release.sh: CI may set ORI_PACKAGE_SMOKE_JIT_ONLY=1
+        # to skip AOT compile/test (host linker flaky on some runners).
+        $smokeJitOnly = $false
+        switch -Regex ($env:ORI_PACKAGE_SMOKE_JIT_ONLY) {
+            '^(1|true|yes|on)$' { $smokeJitOnly = $true }
         }
 
-        $asyncExe = Join-Path $packageRootPath (Get-OutputExeName "async_demo")
-        Invoke-Checked { & $packageOri compile (Join-Path "examples" "async_demo.orl") --out $asyncExe } "ori compile async_demo in packaged release folder"
-        $asyncOutput = & $asyncExe
-        if ($LASTEXITCODE -ne 0) {
-            throw "compiled async_demo executable failed with exit code $LASTEXITCODE."
-        }
-        if (($asyncOutput -join "`n") -notmatch "42") {
-            throw "compiled async_demo executable did not print the expected async answer."
-        }
+        if (-not $smokeJitOnly) {
+            $helloExe = Join-Path $packageRootPath (Get-OutputExeName "hello")
+            Invoke-Checked { & $packageOri compile (Join-Path "examples" "hello.orl") --out $helloExe } "ori compile in packaged release folder"
+            $helloOutput = & $helloExe
+            if ($LASTEXITCODE -ne 0) {
+                throw "compiled hello executable failed with exit code $LASTEXITCODE."
+            }
+            if (($helloOutput -join "`n") -notmatch "The answer is: 42") {
+                throw "compiled hello executable did not print the expected answer."
+            }
 
-        $stdlibExe = Join-Path $packageRootPath (Get-OutputExeName "stdlib_package_smoke")
-        Invoke-Checked { & $packageOri compile (Join-Path "examples" "stdlib_package_smoke.orl") --out $stdlibExe } "ori compile stdlib source module in packaged release folder"
-        $stdlibOutput = & $stdlibExe
-        if ($LASTEXITCODE -ne 0) {
-            throw "compiled stdlib_package_smoke executable failed with exit code $LASTEXITCODE."
-        }
-        if (($stdlibOutput -join "`n") -notmatch "hello packaged stdlib") {
-            throw "compiled stdlib_package_smoke executable did not use the packaged stdlib."
-        }
+            $asyncExe = Join-Path $packageRootPath (Get-OutputExeName "async_demo")
+            Invoke-Checked { & $packageOri compile (Join-Path "examples" "async_demo.orl") --out $asyncExe } "ori compile async_demo in packaged release folder"
+            $asyncOutput = & $asyncExe
+            if ($LASTEXITCODE -ne 0) {
+                throw "compiled async_demo executable failed with exit code $LASTEXITCODE."
+            }
+            if (($asyncOutput -join "`n") -notmatch "42") {
+                throw "compiled async_demo executable did not print the expected async answer."
+            }
 
-        Invoke-Checked { & $packageOri test (Join-Path "examples" "package_smoke_test.orl") } "ori test in packaged release folder"
+            $stdlibExe = Join-Path $packageRootPath (Get-OutputExeName "stdlib_package_smoke")
+            Invoke-Checked { & $packageOri compile (Join-Path "examples" "stdlib_package_smoke.orl") --out $stdlibExe } "ori compile stdlib source module in packaged release folder"
+            $stdlibOutput = & $stdlibExe
+            if ($LASTEXITCODE -ne 0) {
+                throw "compiled stdlib_package_smoke executable failed with exit code $LASTEXITCODE."
+            }
+            if (($stdlibOutput -join "`n") -notmatch "hello packaged stdlib") {
+                throw "compiled stdlib_package_smoke executable did not use the packaged stdlib."
+            }
+
+            Invoke-Checked { & $packageOri test (Join-Path "examples" "package_smoke_test.orl") } "ori test in packaged release folder"
+        } else {
+            Write-Host "ORI_PACKAGE_SMOKE_JIT_ONLY=1 — skipping AOT compile/test smoke (JIT + doctor only)"
+        }
 
         $runtimeTripleDir = Join-Path $runtimeDir $hostTriple
         $cdylibName = if ($IsWindows -or $env:OS -eq "Windows_NT") {
