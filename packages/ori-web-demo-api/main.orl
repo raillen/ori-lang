@@ -1,0 +1,85 @@
+module app.main
+
+-- JSON API demo (ori-web phase B).
+
+import web = web
+import ori.io = io
+import ori.list = lists
+import ori.map = maps
+import ori.string = str
+
+var NOTES: list[string] = []
+
+json_escape(s: string) -> string
+    var out: string = s
+    out = str.replace_all(out, "\\", "\\\\")
+    out = str.replace_all(out, "\"", "\\\"")
+    out = str.replace_all(out, "\n", "\\n")
+    out = str.replace_all(out, "\r", "\\r")
+    return out
+end
+
+notes_json() -> string
+    var out: string = "{\"notes\":["
+    var i: int = 0
+    while i < lists.len(NOTES)
+        if i > 0
+            out = str.concat(out, ",")
+        end
+        out = str.concat(out, "\"")
+        out = str.concat(out, json_escape(NOTES[i]))
+        out = str.concat(out, "\"")
+        i = i + 1
+    end
+    out = str.concat(out, "]}")
+    return out
+end
+
+health(_req: web.Request) -> web.ActionResult
+    return ok(web.json(200, "{\"ok\":true}"))
+end
+
+list_notes(_req: web.Request) -> web.ActionResult
+    return ok(web.json(200, notes_json()))
+end
+
+csrf(req: web.Request) -> web.ActionResult
+    const t: string = web.csrf_token(req)
+    return ok(web.json(200, str.concat("{\"csrf_token\":\"", str.concat(json_escape(t), "\"}"))))
+end
+
+create_note(req: web.Request) -> web.ActionResult
+    const form: map[string, string] = web.form_body(req)
+    var text: string = ""
+    if some(t) = maps.try_get(form, "text")
+        text = str.trim(t)
+    end
+    if str.len(text) == 0
+        return ok(web.json(400, "{\"error\":\"text required\"}"))
+    end
+    lists.push(NOTES, text)
+    return ok(web.json(201, notes_json()))
+end
+
+main()
+    match web.require_secret_if_prod()
+    case err(msg):
+        io.println(msg)
+        return
+    case ok(_):
+    end
+
+    var a: web.App = web.app()
+    a = web.set_rate_limit(a, 60)
+    a = web.set_csp(a, "default-src 'none'; frame-ancestors 'none'")
+    web.get(a, "/api/health", health)
+    web.get(a, "/api/notes", list_notes)
+    web.get(a, "/api/csrf", csrf)
+    web.post(a, "/api/notes", create_note)
+    io.println("ori-web-demo-api on http://127.0.0.1:3458/")
+    match web.serve("127.0.0.1", 3458, a)
+    case ok(_):
+    case err(msg):
+        io.println(msg)
+    end
+end

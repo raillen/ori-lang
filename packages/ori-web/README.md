@@ -1,70 +1,59 @@
 # web (`ori-web`)
 
-Minimal HTTP **Library** layer for Ori.
+Minimal HTTP **Library** layer for Ori (phase **A + B**).
 
-- Design: [`docs/planning/web-templates-discussion-roadmap.md`](../../docs/planning/web-templates-discussion-roadmap.md) (D14–D20)
+- Design: [`docs/planning/web-templates-discussion-roadmap.md`](../../docs/planning/web-templates-discussion-roadmap.md) (D14–D20, §5.5)
+- Phase B notes: [`docs/phase-b.md`](docs/phase-b.md)
 - Learning course: [`docs/planning/web-framework-learning-course.md`](../../docs/planning/web-framework-learning-course.md)
 
-## Features (MVP)
+## Features
 
 | Area | API |
 |------|-----|
 | Types | `Request`, `Response`, `App`, `Handler`, `ActionResult` |
-| Responses | `text`, `html`, `redirect`, `not_found`, `forbidden`, `bad_request`, `payload_too_large` |
+| Responses | `text`, `html`, `json`, `redirect`, `not_found`, `forbidden`, `bad_request`, `payload_too_large`, `too_many_requests` |
 | Router | `get` / `post` / `put` / `patch` / `delete` + path params `:id` |
 | Static | `static(app, url_prefix, dir)` with `..` path jail |
-| Session | cookie `ori_sid` (HttpOnly, SameSite=Lax); `session_get` / `session_set` / flash |
-| CSRF | synchronizer token — form `csrf_token` or header `X-CSRF-Token` on mutations |
-| Dispatch | `dispatch(app, req)` — **not** named `handle` (`handle` is a reserved keyword in Ori) |
-| Serve | `serve(host, port, app)` — HTTP/1.1 accept loop, `Connection: close` |
-| Auth helper | `require_session_key(key, next)` → wrapped `Handler` |
-| Forms / htmx | `form_body(req)`, `is_htmx(req)` |
+| Session | cookie `ori_sid` (HttpOnly, SameSite=Lax); `session_get` / `session_set` / flash / `session_regenerate` |
+| Session store (B3) | `use_memory_sessions()` · `use_file_sessions(dir)` |
+| Timeouts (A9) | `set_session_timeouts(app, idle_ms, absolute_ms)` (default 1h / 24h) |
+| CSRF | form `csrf_token` or header `X-CSRF-Token` on mutations |
+| Rate limit (B4) | `set_rate_limit(app, per_minute)` · `client_key` / `set_trust_proxy` |
+| Headers (B6) | nosniff, frame, referrer, permissions-policy · optional `set_csp` |
+| Secret (A7) | `ORI_WEB_SECRET` when `ORI_WEB_ENV=production` · `require_secret` |
+| Dispatch | **`dispatch`** (not `handle` — reserved keyword) |
+| Serve | `serve(host, port, app)` |
+| Forms / htmx | `form_body`, `is_htmx` |
+| Auth helper | `require_session_key(key, next)` |
+
+## Demos
+
+| Package | Port | Focus |
+|---------|------|--------|
+| `packages/ori-web/examples/hello_server` | 3456 | minimal |
+| `packages/ori-web-demo` | 3457 | HTML-first notes + htmx |
+| `packages/ori-web-demo-api` | 3458 | JSON API + CSRF header |
+| `packages/ori-web-demo-auth` | 3459 | login + regenerate + file sessions |
 
 ## Use (path dependency)
 
 ```toml
-# ori.proj
 [dependencies]
-web = { path = "../packages/ori-web", version = "0.1.0" }
+web = { path = "../ori-web", version = "0.1.0" }
 ```
 
 ```ori
-module app.main
-
-import web = web
-import ori.io = io
-
-home(req: web.Request) -> web.ActionResult
-    return ok(web.text(200, "hello"))
-end
-
-main()
-    var a: web.App = web.app()
-    web.get(a, "/", home)
-    match web.serve("127.0.0.1", 3456, a)
-    case ok(_):
-    case err(msg):
-        io.println(msg)
-    end
+var a: web.App = web.app()
+a = web.set_rate_limit(a, 60)
+a = web.set_cookie_secure(a, false)  -- true behind HTTPS
+web.get(a, "/", home)
+match web.serve("127.0.0.1", 3456, a)
+case ok(_):
+case err(msg):
+    io.println(msg)
 end
 ```
 
-## Smoke
+## Not yet (phase C+)
 
-```bash
-cd packages/ori-web/examples/hello_server
-ori get .
-ori run main.orl
-# other terminal:
-curl -s http://127.0.0.1:3456/hello
-curl -s -c /tmp/cj -b /tmp/cj http://127.0.0.1:3456/   # form + CSRF
-# POST with csrf_token from the form (or expect 403 without it)
-```
-
-## Not yet (roadmap §5.5 phases B–D)
-
-HTTPS in-process, Redis/session store, rate limit, full CSP, multi-connection HTTP/1.1 keep-alive, generators (`ori-web-app`).
-
-## Pair with templates
-
-Use the `templates` package (`packages/ori-templates`) for HTML views; this package only ships the HTTP app layer.
+Full CSP defaults for all apps, Redis session, argon2 passwords, keep-alive, in-process TLS, request read deadlines (B7), generators (`ori-web-app`).

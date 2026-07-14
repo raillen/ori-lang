@@ -1,7 +1,7 @@
 module web
 
--- Minimal HTTP app layer for Ori (Library).
--- Design: docs/planning/web-templates-discussion-roadmap.md D14-D20
+-- HTTP Library layer for Ori (phase A + B).
+-- Design: docs/planning/web-templates-discussion-roadmap.md D14-D20 §5.5
 
 import ori.net = net
 import ori.string = str
@@ -10,6 +10,8 @@ import ori.list = lists
 import ori.fs = fs
 import ori.random = rnd
 import ori.time = time
+import ori.os = os
+import ori.convert = conv
 
 -- - Types -
 
@@ -33,12 +35,20 @@ public struct Response
     body: string
 end
 
+-- Config lives in module globals: copying App structs that embed lists
+-- currently corrupts ARC in the runtime (malloc unaligned). Keep App lean.
 public struct App
     routes: list[Route]
     static_mounts: list[StaticMount]
-    max_body: int
-    cookie_secure: bool
 end
+
+var CFG_MAX_BODY: int = 1048576
+var CFG_COOKIE_SECURE: bool = false
+var CFG_RATE_LIMIT: int = 0
+var CFG_TRUST_PROXY: bool = false
+var CFG_CSP: string = ""
+var CFG_IDLE_MS: int = 3600000
+var CFG_ABS_MS: int = 86400000
 
 struct Route
     method: string
@@ -51,37 +61,97 @@ struct StaticMount
     dir: string
 end
 
--- Session store: sid -> "k=v\nk2=v2" flat encoding
+-- Session: memory map + optional file backend (B3)
 var SESSIONS: map[string, string] = maps.new()
-var FLASH: map[string, string] = maps.new()
+var SID_ALIAS: map[string, string] = maps.new()
+var SESSION_BACKEND: string = "memory"
+var SESSION_DIR: string = ""
+
+-- Rate limit buckets: client_key -> "window_start_ms|count" (B4)
+var RATE_BUCKETS: map[string, string] = maps.new()
 
 -- - Construction -
 
 public app() -> App
+    CFG_MAX_BODY = 1048576
+    CFG_COOKIE_SECURE = false
+    CFG_RATE_LIMIT = 0
+    CFG_TRUST_PROXY = false
+    CFG_CSP = ""
+    CFG_IDLE_MS = 3600000
+    CFG_ABS_MS = 86400000
     return App {
         routes: [],
         static_mounts: [],
-        max_body: 1048576,
-        cookie_secure: false,
     }
 end
 
 public set_max_body(a: App, n: int) -> App
-    return App {
-        routes: a.routes,
-        static_mounts: a.static_mounts,
-        max_body: n,
-        cookie_secure: a.cookie_secure,
-    }
+    CFG_MAX_BODY = n
+    return a
 end
 
 public set_cookie_secure(a: App, secure: bool) -> App
-    return App {
-        routes: a.routes,
-        static_mounts: a.static_mounts,
-        max_body: a.max_body,
-        cookie_secure: secure,
-    }
+    CFG_COOKIE_SECURE = secure
+    return a
+end
+
+public set_rate_limit(a: App, per_minute: int) -> App
+    CFG_RATE_LIMIT = per_minute
+    return a
+end
+
+public set_trust_proxy(a: App, trust: bool) -> App
+    CFG_TRUST_PROXY = trust
+    return a
+end
+
+public set_csp(a: App, policy: string) -> App
+    CFG_CSP = policy
+    return a
+end
+
+public set_session_timeouts(a: App, idle_ms: int, absolute_ms: int) -> App
+    CFG_IDLE_MS = idle_ms
+    CFG_ABS_MS = absolute_ms
+    return a
+end
+
+-- B3: pluggable session store (memory | file directory)
+public use_memory_sessions() -> void
+    SESSION_BACKEND = "memory"
+    SESSION_DIR = ""
+end
+
+public use_file_sessions(dir: string) -> void
+    SESSION_BACKEND = "file"
+    SESSION_DIR = dir
+    match fs.create_dir_all(dir)
+    case ok(_):
+    case err(_):
+    end
+end
+
+-- A7: fail boot when production secret missing/short
+public require_secret(min_len: int) -> result[void, string]
+    if some(s) = os.env("ORI_WEB_SECRET")
+        if str.len(s) >= min_len
+            return ok()
+        end
+        return err("ORI_WEB_SECRET is too short")
+    end
+    return err("ORI_WEB_SECRET is required")
+end
+
+public require_secret_if_prod() -> result[void, string]
+    const mode: string = os.env_or("ORI_WEB_ENV", "dev")
+    if mode == "production"
+        return require_secret(16)
+    end
+    if mode == "prod"
+        return require_secret(16)
+    end
+    return ok()
 end
 
 public get(a: App, pattern: string, handler: Handler) -> void
@@ -122,6 +192,12 @@ public html(status: int, body: string) -> Response
     return Response { status: status, headers: h, body: body }
 end
 
+public json(status: int, body: string) -> Response
+    var h: map[string, string] = maps.new()
+    maps.set(h, "Content-Type", "application/json; charset=utf-8")
+    return Response { status: status, headers: h, body: body }
+end
+
 public redirect(status: int, location: string) -> Response
     var h: map[string, string] = maps.new()
     maps.set(h, "Location", location)
@@ -144,47 +220,144 @@ public payload_too_large() -> Response
     return text(413, "Payload Too Large")
 end
 
+public too_many_requests() -> Response
+    return text(429, "Too Many Requests")
+end
+
+-- - Client key / proxy (B4) -
+
+public client_key(req: Request, trust_proxy: bool) -> string
+    if trust_proxy
+        if some(xff) = maps.try_get(req.headers, "x-forwarded-for")
+            const parts: list[string] = str.split(xff, ",")
+            if lists.len(parts) > 0
+                return str.trim(parts[0])
+            end
+        end
+        if some(rip) = maps.try_get(req.headers, "x-real-ip")
+            return str.trim(rip)
+        end
+    end
+    return "direct"
+end
+
 -- - Session / flash / CSRF -
 
+effective_sid(sid: string) -> string
+    var cur: string = sid
+    var guard: int = 0
+    while guard < 8
+        if some(next) = maps.try_get(SID_ALIAS, cur)
+            cur = next
+            guard = guard + 1
+        else
+            return cur
+        end
+    end
+    return cur
+end
+
+session_file_path(sid: string) -> string
+    var base: string = SESSION_DIR
+    if not str.ends_with(base, "/")
+        base = str.concat(base, "/")
+    end
+    return str.concat(base, str.concat(sid, ".sess"))
+end
+
+load_blob(sid: string) -> string
+    if some(b) = maps.try_get(SESSIONS, sid)
+        return b
+    end
+    if SESSION_BACKEND == "file"
+        if str.len(SESSION_DIR) > 0
+            match fs.read_text(session_file_path(sid))
+            case ok(body):
+                maps.set(SESSIONS, sid, body)
+                return body
+            case err(_):
+                return ""
+            end
+        end
+    end
+    return ""
+end
+
+save_blob(sid: string, blob: string) -> void
+    maps.set(SESSIONS, sid, blob)
+    if SESSION_BACKEND == "file"
+        if str.len(SESSION_DIR) > 0
+            match fs.write_text(session_file_path(sid), blob)
+            case ok(_):
+            case err(_):
+            end
+        end
+    end
+end
+
+remove_blob(sid: string) -> void
+    maps.remove(SESSIONS, sid)
+    if SESSION_BACKEND == "file"
+        if str.len(SESSION_DIR) > 0
+            -- best-effort: overwrite empty (no delete API required)
+            match fs.write_text(session_file_path(sid), "")
+            case ok(_):
+            case err(_):
+            end
+        end
+    end
+end
+
 public session_get(req: Request, key: string) -> optional[string]
-    if str.len(req.session_id) == 0
+    const sid: string = effective_sid(req.session_id)
+    if str.len(sid) == 0
         return none
     end
-    if some(blob) = maps.try_get(SESSIONS, req.session_id)
-        return flat_get(blob, key)
+    const blob: string = load_blob(sid)
+    if str.len(blob) == 0
+        return none
     end
-    return none
+    return flat_get(blob, key)
 end
 
 public session_set(req: Request, key: string, value: string) -> void
-    ensure_session(req)
-    var blob: string = ""
-    if some(b) = maps.try_get(SESSIONS, req.session_id)
-        blob = b
+    const sid: string = effective_sid(req.session_id)
+    if str.len(sid) == 0
+        return
     end
+    var blob: string = load_blob(sid)
     blob = flat_set(blob, key, value)
-    maps.set(SESSIONS, req.session_id, blob)
+    const now: string = string(time.instant_to_unix_ms(time.instant_now()))
+    blob = flat_set(blob, "_touch_ms", now)
+    if some(_) = flat_get(blob, "_created_ms")
+        -- keep
+    else
+        blob = flat_set(blob, "_created_ms", now)
+    end
+    save_blob(sid, blob)
 end
 
-public session_regenerate(req: Request) -> void
+-- A8 anti-fixation: rotate sid, keep data; cookie uses alias on respond
+public session_regenerate(req: Request) -> string
+    const old: string = effective_sid(req.session_id)
     var old_blob: string = ""
-    if str.len(req.session_id) > 0
-        if some(b) = maps.try_get(SESSIONS, req.session_id)
-            old_blob = b
-        end
-        maps.remove(SESSIONS, req.session_id)
+    if str.len(old) > 0
+        old_blob = load_blob(old)
+        remove_blob(old)
     end
     const sid: string = new_session_id()
-    -- mutate request session id via reassignment is not possible on const fields
-    -- callers should use the returned sid through cookie only after regenerate
-    -- For MVP: store under new sid and leave cookie update to respond path
-    maps.set(SESSIONS, sid, old_blob)
-    -- stash pending sid for response cookie
-    maps.set(FLASH, str.concat("regen:", string(time.instant_to_unix_ms(time.instant_now()))), sid)
+    if str.len(old) > 0
+        maps.set(SID_ALIAS, old, sid)
+    end
+    const now: string = string(time.instant_to_unix_ms(time.instant_now()))
+    var blob: string = old_blob
+    blob = flat_set(blob, "_created_ms", now)
+    blob = flat_set(blob, "_touch_ms", now)
+    save_blob(sid, blob)
+    return sid
 end
 
 public flash(req: Request, kind: string, message: string) -> void
-    ensure_session(req)
     session_set(req, str.concat("flash_", kind), message)
 end
 
@@ -204,7 +377,6 @@ public take_flash(req: Request, kind: string) -> optional[string]
 end
 
 public csrf_token(req: Request) -> string
-    ensure_session(req)
     match session_get(req, "csrf_token")
     case some(t):
         if str.len(t) > 0
@@ -217,7 +389,6 @@ public csrf_token(req: Request) -> string
     return t
 end
 
--- application/x-www-form-urlencoded body (same rules as query string)
 public form_body(req: Request) -> map[string, string]
     return parse_query(req.body)
 end
@@ -234,15 +405,47 @@ public is_htmx(req: Request) -> bool
     return false
 end
 
-ensure_session(req: Request) -> void
-    if str.len(req.session_id) == 0
-        -- cannot mutate req.session_id if it's not var field access
-        -- session id is set at parse time; empty means new cookie will be issued on respond
-        return
+ensure_session_meta(sid: string, idle_ms: int, absolute_ms: int) -> bool
+    -- returns false if expired (caller should mint new sid)
+    if str.len(sid) == 0
+        return false
     end
-    if not maps.contains(SESSIONS, req.session_id)
-        maps.set(SESSIONS, req.session_id, "")
+    var blob: string = load_blob(sid)
+    const now: int = time.instant_to_unix_ms(time.instant_now())
+    if str.len(blob) == 0
+        const n: string = string(now)
+        blob = flat_set("", "_created_ms", n)
+        blob = flat_set(blob, "_touch_ms", n)
+        save_blob(sid, blob)
+        return true
     end
+    var created: int = now
+    var touch: int = now
+    match flat_get(blob, "_created_ms")
+    case some(c):
+        created = conv.parse_int_or(c, now)
+    case none:
+    end
+    match flat_get(blob, "_touch_ms")
+    case some(t):
+        touch = conv.parse_int_or(t, now)
+    case none:
+    end
+    if absolute_ms > 0
+        if now - created > absolute_ms
+            remove_blob(sid)
+            return false
+        end
+    end
+    if idle_ms > 0
+        if now - touch > idle_ms
+            remove_blob(sid)
+            return false
+        end
+    end
+    blob = flat_set(blob, "_touch_ms", string(now))
+    save_blob(sid, blob)
+    return true
 end
 
 new_session_id() -> string
@@ -305,9 +508,35 @@ flat_set(blob: string, key: string, value: string) -> string
     return out
 end
 
+-- - Rate limit (B4) -
+
+rate_allow(key: string, per_minute: int) -> bool
+    if per_minute <= 0
+        return true
+    end
+    const now: int = time.instant_to_unix_ms(time.instant_now())
+    const window_ms: int = 60000
+    if some(raw) = maps.try_get(RATE_BUCKETS, key)
+        const bar: int = str.index_of(raw, "|")
+        if bar > 0
+            const start: int = conv.parse_int_or(str.slice(raw, 0, bar), now)
+            const count: int = conv.parse_int_or(str.slice(raw, bar + 1, str.len(raw)), 0)
+            if now - start < window_ms
+                if count >= per_minute
+                    return false
+                end
+                maps.set(RATE_BUCKETS, key, str.concat(string(start), str.concat("|", string(count + 1))))
+                return true
+            end
+        end
+    end
+    maps.set(RATE_BUCKETS, key, str.concat(string(now), "|1"))
+    return true
+end
+
 -- - HTTP parse / write -
 
-parse_request(raw: string, max_body: int) -> result[Request, string]
+parse_request(raw: string, max_body: int, idle_ms: int, absolute_ms: int) -> result[Request, string]
     const sep: string = "\r\n\r\n"
     const at: int = str.index_of(raw, sep)
     if at < 0
@@ -369,13 +598,21 @@ parse_request(raw: string, max_body: int) -> result[Request, string]
     if some(cookie) = maps.try_get(headers, "cookie")
         sid = cookie_get(cookie, "ori_sid")
     end
+    sid = effective_sid(sid)
     if str.len(sid) == 0
         sid = new_session_id()
-        maps.set(SESSIONS, sid, "")
+        const n: string = string(time.instant_to_unix_ms(time.instant_now()))
+        var b: string = flat_set("", "_created_ms", n)
+        b = flat_set(b, "_touch_ms", n)
+        save_blob(sid, b)
     end
     if str.len(sid) > 0
-        if not maps.contains(SESSIONS, sid)
-            maps.set(SESSIONS, sid, "")
+        if not ensure_session_meta(sid, idle_ms, absolute_ms)
+            sid = new_session_id()
+            const n2: string = string(time.instant_to_unix_ms(time.instant_now()))
+            var b2: string = flat_set("", "_created_ms", n2)
+            b2 = flat_set(b2, "_touch_ms", n2)
+            save_blob(sid, b2)
         end
     end
     return ok(Request {
@@ -413,7 +650,6 @@ parse_query(q: string) -> map[string, string]
     return out
 end
 
--- application/x-www-form-urlencoded: + → space; common %XX (MVP, not full Unicode)
 form_decode(s: string) -> string
     var out: string = str.replace_all(s, "+", " ")
     out = str.replace_all(out, "%20", " ")
@@ -439,7 +675,6 @@ form_decode(s: string) -> string
     out = str.replace_all(out, "%5D", "]")
     out = str.replace_all(out, "%7B", "{")
     out = str.replace_all(out, "%7D", "}")
-    -- lowercase hex variants used by some clients
     out = str.replace_all(out, "%2b", "+")
     out = str.replace_all(out, "%2f", "/")
     out = str.replace_all(out, "%3a", ":")
@@ -464,7 +699,8 @@ cookie_get(cookie_header: string, name: string) -> string
     return ""
 end
 
-format_response(res: Response, sid: string, cookie_secure: bool) -> string
+format_response(res: Response, sid: string) -> string
+    const cookie_sid: string = effective_sid(sid)
     var out: string = "HTTP/1.1 "
     out = str.concat(out, string(res.status))
     out = str.concat(out, " ")
@@ -474,18 +710,23 @@ format_response(res: Response, sid: string, cookie_secure: bool) -> string
     out = str.concat(out, "Content-Length: ")
     out = str.concat(out, string(str.len(res.body)))
     out = str.concat(out, "\r\n")
-    -- session cookie
-    var cookie: string = str.concat("Set-Cookie: ori_sid=", sid)
+    var cookie: string = str.concat("Set-Cookie: ori_sid=", cookie_sid)
     cookie = str.concat(cookie, "; Path=/; HttpOnly; SameSite=Lax")
-    if cookie_secure
+    if CFG_COOKIE_SECURE
         cookie = str.concat(cookie, "; Secure")
     end
     out = str.concat(out, cookie)
     out = str.concat(out, "\r\n")
-    -- security headers baseline (phase B partial)
+    -- B6 security headers baseline
     out = str.concat(out, "X-Content-Type-Options: nosniff\r\n")
     out = str.concat(out, "X-Frame-Options: SAMEORIGIN\r\n")
     out = str.concat(out, "Referrer-Policy: strict-origin-when-cross-origin\r\n")
+    out = str.concat(out, "Permissions-Policy: geolocation=(), microphone=(), camera=()\r\n")
+    if str.len(CFG_CSP) > 0
+        out = str.concat(out, "Content-Security-Policy: ")
+        out = str.concat(out, CFG_CSP)
+        out = str.concat(out, "\r\n")
+    end
     const keys: list[string] = maps.keys(res.headers)
     var i: int = 0
     while i < lists.len(keys)
@@ -507,6 +748,9 @@ status_text(code: int) -> string
     if code == 200
         return "OK"
     end
+    if code == 201
+        return "Created"
+    end
     if code == 303
         return "See Other"
     end
@@ -524,6 +768,9 @@ status_text(code: int) -> string
     end
     if code == 413
         return "Payload Too Large"
+    end
+    if code == 429
+        return "Too Many Requests"
     end
     if code == 500
         return "Internal Server Error"
@@ -656,11 +903,10 @@ guess_ctype(path: string) -> string
     return "application/octet-stream"
 end
 
--- - CSRF check -
+-- - CSRF -
 
 csrf_ok(req: Request) -> bool
     const expected: string = csrf_token(req)
-    -- form body application/x-www-form-urlencoded
     var got: string = ""
     if some(h) = maps.try_get(req.headers, "x-csrf-token")
         got = h
@@ -695,11 +941,9 @@ is_mutation(method: string) -> bool
     return false
 end
 
--- - Dispatch one request -
--- Note: `handle` is a reserved keyword in Ori (error-handling construct).
+-- - Dispatch (handle is reserved) -
 
 public dispatch(a: App, req: Request) -> Response
-    -- static first
     match try_static(a, req.path)
     case some(res):
         return res
@@ -708,6 +952,12 @@ public dispatch(a: App, req: Request) -> Response
     end
 
     if is_mutation(req.method)
+        if CFG_RATE_LIMIT > 0
+            const ck: string = client_key(req, CFG_TRUST_PROXY)
+            if not rate_allow(ck, CFG_RATE_LIMIT)
+                return too_many_requests()
+            end
+        end
         if not csrf_ok(req)
             return forbidden()
         end
@@ -715,7 +965,6 @@ public dispatch(a: App, req: Request) -> Response
 
     match match_route(a, req.method, req.path)
     case some(m):
-        -- copy params into req - Request fields may be mutable via reassignment of map
         const keys: list[string] = maps.keys(m.params)
         var i: int = 0
         while i < lists.len(keys)
@@ -740,6 +989,11 @@ end
 -- - Serve loop -
 
 public serve(host: string, port: int, a: App) -> result[void, string]
+    match require_secret_if_prod()
+    case err(msg):
+        return err(msg)
+    case ok(_):
+    end
     match net.listen(host, port)
     case err(msg):
         return err(msg)
@@ -747,7 +1001,6 @@ public serve(host: string, port: int, a: App) -> result[void, string]
         loop
             match net.accept(listener)
             case err(_):
-                -- skip failed accept
             case ok(conn):
                 handle_conn(a, conn)
             end
@@ -757,7 +1010,7 @@ public serve(host: string, port: int, a: App) -> result[void, string]
 end
 
 handle_conn(a: App, conn: net.Connection) -> void
-    match net.read_some(conn, a.max_body + 8192)
+    match net.read_some(conn, CFG_MAX_BODY + 8192)
     case err(_):
         net.close(conn)
     case ok(chunk):
@@ -765,11 +1018,11 @@ handle_conn(a: App, conn: net.Connection) -> void
         case err(_):
             net.close(conn)
         case ok(raw):
-            match parse_request(raw, a.max_body)
+            match parse_request(raw, CFG_MAX_BODY, CFG_IDLE_MS, CFG_ABS_MS)
             case err(msg):
                 if msg == "payload too large"
                     const r: Response = payload_too_large()
-                    const bytes_out: bytes = str.to_bytes(format_response(r, "x", a.cookie_secure))
+                    const bytes_out: bytes = str.to_bytes(format_response(r, "x"))
                     match net.write_all(conn, bytes_out)
                     case ok(_):
                     case err(_):
@@ -778,7 +1031,7 @@ handle_conn(a: App, conn: net.Connection) -> void
                 net.close(conn)
             case ok(req):
                 const res: Response = dispatch(a, req)
-                const wire: string = format_response(res, req.session_id, a.cookie_secure)
+                const wire: string = format_response(res, req.session_id)
                 match net.write_all(conn, str.to_bytes(wire))
                 case ok(_):
                 case err(_):
@@ -789,10 +1042,8 @@ handle_conn(a: App, conn: net.Connection) -> void
     end
 end
 
--- - Auth wrapper helper (T7-A style) -
+-- - Auth wrapper -
 
--- Auth wrapper: use in routes as web.require_session_key("user_id", users.show)
--- Implemented without multi-line lambda for parser simplicity.
 public require_session_key(key: string, next: Handler) -> Handler
     return (req: Request) => guard_session(key, next, req)
 end

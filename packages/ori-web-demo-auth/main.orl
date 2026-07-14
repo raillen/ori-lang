@@ -1,0 +1,116 @@
+module app.main
+
+-- Auth demo: login, session regenerate, protected route, file sessions.
+
+import web = web
+import templates = tpl
+import ori.io = io
+import ori.map = maps
+import ori.string = str
+
+var VIEWS: tpl.Engine = tpl.open("views")
+
+base_ctx(req: web.Request) -> tpl.Data
+    var d: tpl.Data = tpl.empty_data()
+    tpl.set_value(d, "csrf_token", web.csrf_token(req))
+    tpl.set_value(d, "flash_notice", "")
+    tpl.set_value(d, "flash_error", "")
+    match web.take_flash(req, "notice")
+    case some(msg):
+        tpl.set_value(d, "flash_notice", msg)
+    case none:
+    end
+    match web.take_flash(req, "error")
+    case some(msg):
+        tpl.set_value(d, "flash_error", msg)
+    case none:
+    end
+    return d
+end
+
+render_login(req: web.Request) -> web.ActionResult
+    match tpl.render(VIEWS, "login", base_ctx(req))
+    case ok(html):
+        return ok(web.html(200, html))
+    case err(e):
+        return ok(web.text(500, tpl.error_message(e)))
+    end
+    return ok(web.not_found())
+end
+
+render_dashboard(req: web.Request) -> web.ActionResult
+    var d: tpl.Data = base_ctx(req)
+    var user: string = ""
+    match web.session_get(req, "user_id")
+    case some(u):
+        user = u
+    case none:
+        return ok(web.redirect(303, "/login"))
+    end
+    tpl.set_value(d, "user", user)
+    match tpl.render(VIEWS, "dashboard", d)
+    case ok(html):
+        return ok(web.html(200, html))
+    case err(e):
+        return ok(web.text(500, tpl.error_message(e)))
+    end
+    return ok(web.not_found())
+end
+
+home(req: web.Request) -> web.ActionResult
+    match web.session_get(req, "user_id")
+    case some(_):
+        return ok(web.redirect(303, "/dashboard"))
+    case none:
+        return ok(web.redirect(303, "/login"))
+    end
+    return ok(web.redirect(303, "/login"))
+end
+
+do_login(req: web.Request) -> web.ActionResult
+    const form: map[string, string] = web.form_body(req)
+    var user: string = ""
+    var pass: string = ""
+    if some(u) = maps.try_get(form, "user")
+        user = str.trim(u)
+    end
+    if some(p) = maps.try_get(form, "password")
+        pass = p
+    end
+    if user == "demo"
+        if pass == "demo"
+            -- A8: rotate session id after credential success
+            const _new_sid: string = web.session_regenerate(req)
+            web.session_set(req, "user_id", user)
+            web.flash(req, "notice", "Welcome back.")
+            return ok(web.redirect(303, "/dashboard"))
+        end
+    end
+    web.flash(req, "error", "Invalid credentials.")
+    return ok(web.redirect(303, "/login"))
+end
+
+do_logout(req: web.Request) -> web.ActionResult
+    web.session_set(req, "user_id", "")
+    const _sid: string = web.session_regenerate(req)
+    web.flash(req, "notice", "Signed out.")
+    return ok(web.redirect(303, "/login"))
+end
+
+main()
+    web.use_file_sessions(".sessions")
+    var a: web.App = web.app()
+    a = web.set_rate_limit(a, 30)
+    a = web.set_csp(a, "default-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'")
+    web.get(a, "/", home)
+    web.get(a, "/login", render_login)
+    web.post(a, "/login", do_login)
+    web.get(a, "/dashboard", web.require_session_key("user_id", render_dashboard))
+    web.post(a, "/logout", do_logout)
+    io.println("ori-web-demo-auth on http://127.0.0.1:3459/  (demo/demo)")
+    match web.serve("127.0.0.1", 3459, a)
+    case ok(_):
+    case err(msg):
+        io.println(msg)
+    end
+end

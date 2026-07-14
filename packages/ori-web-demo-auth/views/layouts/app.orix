@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>@{ title }</title>
+  <style>
+    body { font-family: Georgia, serif; max-width: 28rem; margin: 2rem auto; padding: 0 1rem; background: #f6f3ee; color: #1a1a1a; }
+    .card { background: #fff; border: 1px solid #e2ddd4; border-radius: 8px; padding: 1.2rem; }
+    .flash { background: #e8f0ec; border: 1px solid #c5d9cf; padding: .6rem .8rem; border-radius: 6px; margin-bottom: 1rem; }
+    .flash.err { background: #f7ecec; border-color: #e0c4c4; }
+    input, button { font: inherit; padding: .5rem .7rem; margin: .3rem 0; width: 100%; box-sizing: border-box; }
+    button { background: #2f5d50; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
+    a { color: #2f5d50; }
+  </style>
+</head>
+<body>
+  @{ if flash_notice }
+  <div class="flash">@{ flash_notice }</div>
+  @{ end }
+  @{ if flash_error }
+  <div class="flash err">@{ flash_error }</div>
+  @{ end }
+  <div class="card">
+    @{ content |> raw }
+  </div>
+</body>
+</html>

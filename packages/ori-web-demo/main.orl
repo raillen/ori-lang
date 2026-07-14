@@ -85,6 +85,9 @@ end
 
 main()
     var a: web.App = web.app()
+    -- phase B defaults for a "real site" demo
+    a = web.set_rate_limit(a, 120)
+    a = web.set_csp(a, "default-src 'self' https://unpkg.com; script-src 'self' https://unpkg.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'")
     web.static(a, "/assets", "public")
     web.get(a, "/", render_home)
     web.get(a, "/notes/rows", render_rows)

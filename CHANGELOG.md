@@ -25,6 +25,15 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`packages/ori-web-demo`:** HTML-first notes app on `web` + `templates`
   (layout, partials, CSRF form, PRG redirect, htmx partial POST, static CSS).
   Design D19/§11; run: `packages/ori-web-demo`.
+- **`ori-web` phase B:** rate limit (`set_rate_limit`), CSP (`set_csp`),
+  trust-proxy client keys, file session store (`use_file_sessions`), session
+  idle/absolute timeouts, `session_regenerate`, `json`/`too_many_requests`,
+  `require_secret` / `ORI_WEB_ENV=production`, Permissions-Policy + edge TLS docs
+  (`packages/ori-web/docs/phase-b.md`). App config uses module globals (avoid
+  copying `App` with embedded lists — ARC crash).
+- **`packages/ori-web-demo-api`:** JSON notes API (port 3458) with CSRF header.
+- **`packages/ori-web-demo-auth`:** login/dashboard (port 3459, `demo`/`demo`),
+  file sessions, regenerate on login.
 - **Web App conventions (design closed):** APP1–APP10 + security D15–D20 + Rails-like
   future D21 — same planning doc + learning course.
 - **Runtime/DAP cooperativo (Ori IDE):** agent `debug_agent` no `ori-runtime` (`ori_debug_line` / `ori_debug_init`) ativado por `ORI_DEBUG_PORT`; codegen nativo instrumenta statements quando `ORI_DEBUG_INSTRUMENT=1` + `ORI_DEBUG_SOURCE=<path>`; adapter `ori-dap` (repo ori-ide) faz bind TCP e controla continue/step/breakpoints.

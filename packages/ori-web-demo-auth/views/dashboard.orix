@@ -1,0 +1,10 @@
+@{ layout "layouts/app" }
+@{ assign title = "Dashboard · ori-web-demo-auth" }
+<h1>Dashboard</h1>
+<p>Signed in as <strong>@{ user }</strong>.</p>
+<p>Session was regenerated at login (anti-fixation).</p>
+<form method="post" action="/logout">
+  <input type="hidden" name="csrf_token" value="@{ csrf_token }">
+  <button type="submit">Logout</button>
+</form>
+@{ end }
