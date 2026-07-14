@@ -1,0 +1,6 @@
+[package]
+name = "web"
+version = "0.1.0"
+entry = "src/lib.orl"
+ori_version = "0.3.0"
+description = "Minimal HTTP app layer for Ori: router, session, CSRF, static files (HTML-first)"

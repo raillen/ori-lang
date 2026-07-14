@@ -1,0 +1,753 @@
+module web
+
+-- Minimal HTTP app layer for Ori (Library).
+-- Design: docs/planning/web-templates-discussion-roadmap.md D14-D20
+
+import ori.net = net
+import ori.string = str
+import ori.map = maps
+import ori.list = lists
+import ori.fs = fs
+import ori.random = rnd
+import ori.time = time
+
+-- - Types -
+
+public alias WebError = string
+public alias ActionResult = result[Response, WebError]
+public alias Handler = func(Request) -> ActionResult
+
+public struct Request
+    method: string
+    path: string
+    query: map[string, string]
+    headers: map[string, string]
+    body: string
+    params: map[string, string]
+    session_id: string
+end
+
+public struct Response
+    status: int
+    headers: map[string, string]
+    body: string
+end
+
+public struct App
+    routes: list[Route]
+    static_mounts: list[StaticMount]
+    max_body: int
+    cookie_secure: bool
+end
+
+struct Route
+    method: string
+    pattern: string
+    handler: Handler
+end
+
+struct StaticMount
+    url_prefix: string
+    dir: string
+end
+
+-- Session store: sid -> "k=v\nk2=v2" flat encoding
+var SESSIONS: map[string, string] = maps.new()
+var FLASH: map[string, string] = maps.new()
+
+-- - Construction -
+
+public app() -> App
+    return App {
+        routes: [],
+        static_mounts: [],
+        max_body: 1048576,
+        cookie_secure: false,
+    }
+end
+
+public set_max_body(a: App, n: int) -> App
+    return App {
+        routes: a.routes,
+        static_mounts: a.static_mounts,
+        max_body: n,
+        cookie_secure: a.cookie_secure,
+    }
+end
+
+public set_cookie_secure(a: App, secure: bool) -> App
+    return App {
+        routes: a.routes,
+        static_mounts: a.static_mounts,
+        max_body: a.max_body,
+        cookie_secure: secure,
+    }
+end
+
+public get(a: App, pattern: string, handler: Handler) -> void
+    lists.push(a.routes, Route { method: "GET", pattern: pattern, handler: handler })
+end
+
+public post(a: App, pattern: string, handler: Handler) -> void
+    lists.push(a.routes, Route { method: "POST", pattern: pattern, handler: handler })
+end
+
+public put(a: App, pattern: string, handler: Handler) -> void
+    lists.push(a.routes, Route { method: "PUT", pattern: pattern, handler: handler })
+end
+
+public patch(a: App, pattern: string, handler: Handler) -> void
+    lists.push(a.routes, Route { method: "PATCH", pattern: pattern, handler: handler })
+end
+
+public delete(a: App, pattern: string, handler: Handler) -> void
+    lists.push(a.routes, Route { method: "DELETE", pattern: pattern, handler: handler })
+end
+
+public static(a: App, url_prefix: string, dir: string) -> void
+    lists.push(a.static_mounts, StaticMount { url_prefix: url_prefix, dir: dir })
+end
+
+-- - Response helpers -
+
+public text(status: int, body: string) -> Response
+    var h: map[string, string] = maps.new()
+    maps.set(h, "Content-Type", "text/plain; charset=utf-8")
+    return Response { status: status, headers: h, body: body }
+end
+
+public html(status: int, body: string) -> Response
+    var h: map[string, string] = maps.new()
+    maps.set(h, "Content-Type", "text/html; charset=utf-8")
+    return Response { status: status, headers: h, body: body }
+end
+
+public redirect(status: int, location: string) -> Response
+    var h: map[string, string] = maps.new()
+    maps.set(h, "Location", location)
+    return Response { status: status, headers: h, body: "" }
+end
+
+public not_found() -> Response
+    return text(404, "Not Found")
+end
+
+public forbidden() -> Response
+    return text(403, "Forbidden")
+end
+
+public bad_request(msg: string) -> Response
+    return text(400, msg)
+end
+
+public payload_too_large() -> Response
+    return text(413, "Payload Too Large")
+end
+
+-- - Session / flash / CSRF -
+
+public session_get(req: Request, key: string) -> optional[string]
+    if str.len(req.session_id) == 0
+        return none
+    end
+    if some(blob) = maps.try_get(SESSIONS, req.session_id)
+        return flat_get(blob, key)
+    end
+    return none
+end
+
+public session_set(req: Request, key: string, value: string) -> void
+    ensure_session(req)
+    var blob: string = ""
+    if some(b) = maps.try_get(SESSIONS, req.session_id)
+        blob = b
+    end
+    blob = flat_set(blob, key, value)
+    maps.set(SESSIONS, req.session_id, blob)
+end
+
+public session_regenerate(req: Request) -> void
+    var old_blob: string = ""
+    if str.len(req.session_id) > 0
+        if some(b) = maps.try_get(SESSIONS, req.session_id)
+            old_blob = b
+        end
+        maps.remove(SESSIONS, req.session_id)
+    end
+    const sid: string = new_session_id()
+    -- mutate request session id via reassignment is not possible on const fields
+    -- callers should use the returned sid through cookie only after regenerate
+    -- For MVP: store under new sid and leave cookie update to respond path
+    maps.set(SESSIONS, sid, old_blob)
+    -- stash pending sid for response cookie
+    maps.set(FLASH, str.concat("regen:", string(time.instant_to_unix_ms(time.instant_now()))), sid)
+end
+
+public flash(req: Request, kind: string, message: string) -> void
+    ensure_session(req)
+    session_set(req, str.concat("flash_", kind), message)
+end
+
+public take_flash(req: Request, kind: string) -> optional[string]
+    const key: string = str.concat("flash_", kind)
+    match session_get(req, key)
+    case some(v):
+        session_set(req, key, "")
+        if str.len(v) == 0
+            return none
+        end
+        return some(v)
+    case none:
+        return none
+    end
+    return none
+end
+
+public csrf_token(req: Request) -> string
+    ensure_session(req)
+    match session_get(req, "csrf_token")
+    case some(t):
+        if str.len(t) > 0
+            return t
+        end
+    case none:
+    end
+    const t: string = new_session_id()
+    session_set(req, "csrf_token", t)
+    return t
+end
+
+ensure_session(req: Request) -> void
+    if str.len(req.session_id) == 0
+        -- cannot mutate req.session_id if it's not var field access
+        -- session id is set at parse time; empty means new cookie will be issued on respond
+        return
+    end
+    if not maps.contains(SESSIONS, req.session_id)
+        maps.set(SESSIONS, req.session_id, "")
+    end
+end
+
+new_session_id() -> string
+    const t: int = time.instant_to_unix_ms(time.instant_now())
+    const r: int = rnd.int_range(100000, 999999999)
+    return str.concat(string(t), str.concat("-", string(r)))
+end
+
+flat_get(blob: string, key: string) -> optional[string]
+    const lines: list[string] = str.split(blob, "\n")
+    var i: int = 0
+    while i < lists.len(lines)
+        const line: string = lines[i]
+        const eq: int = str.index_of(line, "=")
+        if eq > 0
+            const k: string = str.slice(line, 0, eq)
+            if k == key
+                return some(str.slice(line, eq + 1, str.len(line)))
+            end
+        end
+        i = i + 1
+    end
+    return none
+end
+
+flat_set(blob: string, key: string, value: string) -> string
+    var out: string = ""
+    const lines: list[string] = str.split(blob, "\n")
+    var found: bool = false
+    var i: int = 0
+    while i < lists.len(lines)
+        const line: string = lines[i]
+        if str.len(line) > 0
+            const eq: int = str.index_of(line, "=")
+            if eq > 0
+                const k: string = str.slice(line, 0, eq)
+                if k == key
+                    if str.len(out) > 0
+                        out = str.concat(out, "\n")
+                    end
+                    out = str.concat(out, str.concat(key, str.concat("=", value)))
+                    found = true
+                end
+                if k != key
+                    if str.len(out) > 0
+                        out = str.concat(out, "\n")
+                    end
+                    out = str.concat(out, line)
+                end
+            end
+        end
+        i = i + 1
+    end
+    if not found
+        if str.len(out) > 0
+            out = str.concat(out, "\n")
+        end
+        out = str.concat(out, str.concat(key, str.concat("=", value)))
+    end
+    return out
+end
+
+-- - HTTP parse / write -
+
+parse_request(raw: string, max_body: int) -> result[Request, string]
+    const sep: string = "\r\n\r\n"
+    const at: int = str.index_of(raw, sep)
+    if at < 0
+        return err("incomplete HTTP request")
+    end
+    const head: string = str.slice(raw, 0, at)
+    const body: string = str.slice(raw, at + 4, str.len(raw))
+    if str.len(body) > max_body
+        return err("payload too large")
+    end
+    const lines: list[string] = str.split(head, "\r\n")
+    if lists.len(lines) == 0
+        return err("empty request")
+    end
+    const req_line: string = lines[0]
+    const sp1: int = str.index_of(req_line, " ")
+    if sp1 < 0
+        return err("bad request line")
+    end
+    const method: string = str.slice(req_line, 0, sp1)
+    const after: string = str.slice(req_line, sp1 + 1, str.len(req_line))
+    const sp2: int = str.index_of(after, " ")
+    var target: string = after
+    if sp2 >= 0
+        target = str.slice(after, 0, sp2)
+    end
+    var path: string = target
+    var query: map[string, string] = maps.new()
+    const qat: int = str.index_of(target, "?")
+    if qat >= 0
+        path = str.slice(target, 0, qat)
+        query = parse_query(str.slice(target, qat + 1, str.len(target)))
+    end
+    var headers: map[string, string] = maps.new()
+    var i: int = 1
+    while i < lists.len(lines)
+        const line: string = lines[i]
+        const c: int = str.index_of(line, ":")
+        if c > 0
+            const hk: string = str.to_lower(str.trim(str.slice(line, 0, c)))
+            const hv: string = str.trim(str.slice(line, c + 1, str.len(line)))
+            if str.contains(hk, "\r")
+                return err("invalid header")
+            end
+            if str.contains(hk, "\n")
+                return err("invalid header")
+            end
+            if str.contains(hv, "\r")
+                return err("invalid header value")
+            end
+            if str.contains(hv, "\n")
+                return err("invalid header value")
+            end
+            maps.set(headers, hk, hv)
+        end
+        i = i + 1
+    end
+    var sid: string = ""
+    if some(cookie) = maps.try_get(headers, "cookie")
+        sid = cookie_get(cookie, "ori_sid")
+    end
+    if str.len(sid) == 0
+        sid = new_session_id()
+        maps.set(SESSIONS, sid, "")
+    end
+    if str.len(sid) > 0
+        if not maps.contains(SESSIONS, sid)
+            maps.set(SESSIONS, sid, "")
+        end
+    end
+    return ok(Request {
+        method: method,
+        path: path,
+        query: query,
+        headers: headers,
+        body: body,
+        params: maps.new(),
+        session_id: sid,
+    })
+end
+
+parse_query(q: string) -> map[string, string]
+    var out: map[string, string] = maps.new()
+    if str.len(q) == 0
+        return out
+    end
+    const parts: list[string] = str.split(q, "&")
+    var i: int = 0
+    while i < lists.len(parts)
+        const p: string = parts[i]
+        const eq: int = str.index_of(p, "=")
+        if eq >= 0
+            maps.set(out, str.slice(p, 0, eq), str.slice(p, eq + 1, str.len(p)))
+        else
+            maps.set(out, p, "")
+        end
+        i = i + 1
+    end
+    return out
+end
+
+cookie_get(cookie_header: string, name: string) -> string
+    const parts: list[string] = str.split(cookie_header, ";")
+    var i: int = 0
+    while i < lists.len(parts)
+        const p: string = str.trim(parts[i])
+        const eq: int = str.index_of(p, "=")
+        if eq > 0
+            const k: string = str.slice(p, 0, eq)
+            if k == name
+                return str.slice(p, eq + 1, str.len(p))
+            end
+        end
+        i = i + 1
+    end
+    return ""
+end
+
+format_response(res: Response, sid: string, cookie_secure: bool) -> string
+    var out: string = "HTTP/1.1 "
+    out = str.concat(out, string(res.status))
+    out = str.concat(out, " ")
+    out = str.concat(out, status_text(res.status))
+    out = str.concat(out, "\r\n")
+    out = str.concat(out, "Connection: close\r\n")
+    out = str.concat(out, "Content-Length: ")
+    out = str.concat(out, string(str.len(res.body)))
+    out = str.concat(out, "\r\n")
+    -- session cookie
+    var cookie: string = str.concat("Set-Cookie: ori_sid=", sid)
+    cookie = str.concat(cookie, "; Path=/; HttpOnly; SameSite=Lax")
+    if cookie_secure
+        cookie = str.concat(cookie, "; Secure")
+    end
+    out = str.concat(out, cookie)
+    out = str.concat(out, "\r\n")
+    -- security headers baseline (phase B partial)
+    out = str.concat(out, "X-Content-Type-Options: nosniff\r\n")
+    out = str.concat(out, "X-Frame-Options: SAMEORIGIN\r\n")
+    out = str.concat(out, "Referrer-Policy: strict-origin-when-cross-origin\r\n")
+    const keys: list[string] = maps.keys(res.headers)
+    var i: int = 0
+    while i < lists.len(keys)
+        const k: string = keys[i]
+        if some(v) = maps.try_get(res.headers, k)
+            out = str.concat(out, k)
+            out = str.concat(out, ": ")
+            out = str.concat(out, v)
+            out = str.concat(out, "\r\n")
+        end
+        i = i + 1
+    end
+    out = str.concat(out, "\r\n")
+    out = str.concat(out, res.body)
+    return out
+end
+
+status_text(code: int) -> string
+    if code == 200
+        return "OK"
+    end
+    if code == 303
+        return "See Other"
+    end
+    if code == 302
+        return "Found"
+    end
+    if code == 400
+        return "Bad Request"
+    end
+    if code == 403
+        return "Forbidden"
+    end
+    if code == 404
+        return "Not Found"
+    end
+    if code == 413
+        return "Payload Too Large"
+    end
+    if code == 500
+        return "Internal Server Error"
+    end
+    return "OK"
+end
+
+-- - Router -
+
+struct Match
+    handler: Handler
+    params: map[string, string]
+end
+
+match_route(a: App, method: string, path: string) -> optional[Match]
+    var i: int = 0
+    while i < lists.len(a.routes)
+        const r: Route = a.routes[i]
+        if r.method == method
+            match match_pattern(r.pattern, path)
+            case some(params):
+                return some(Match { handler: r.handler, params: params })
+            case none:
+                const _skip: int = 0
+            end
+        end
+        i = i + 1
+    end
+    return none
+end
+
+match_pattern(pattern: string, path: string) -> optional[map[string, string]]
+    const pp: list[string] = split_path(pattern)
+    const tp: list[string] = split_path(path)
+    if lists.len(pp) != lists.len(tp)
+        return none
+    end
+    var params: map[string, string] = maps.new()
+    var i: int = 0
+    while i < lists.len(pp)
+        const a: string = pp[i]
+        const b: string = tp[i]
+        if str.starts_with(a, ":")
+            const name: string = str.slice(a, 1, str.len(a))
+            maps.set(params, name, b)
+        end
+        if not str.starts_with(a, ":")
+            if a != b
+                return none
+            end
+        end
+        i = i + 1
+    end
+    return some(params)
+end
+
+split_path(p: string) -> list[string]
+    var out: list[string] = []
+    if p == "/"
+        return out
+    end
+    var s: string = p
+    if str.starts_with(s, "/")
+        s = str.slice(s, 1, str.len(s))
+    end
+    if str.ends_with(s, "/")
+        s = str.slice(s, 0, str.len(s) - 1)
+    end
+    if str.len(s) == 0
+        return out
+    end
+    return str.split(s, "/")
+end
+
+-- - Static -
+
+try_static(a: App, path: string) -> optional[Response]
+    var i: int = 0
+    while i < lists.len(a.static_mounts)
+        const m: StaticMount = a.static_mounts[i]
+        if str.starts_with(path, m.url_prefix)
+            var rel: string = str.slice(path, str.len(m.url_prefix), str.len(path))
+            if str.starts_with(rel, "/")
+                rel = str.slice(rel, 1, str.len(rel))
+            end
+            if str.contains(rel, "..")
+                return some(forbidden())
+            end
+            if str.contains(rel, "\\")
+                return some(forbidden())
+            end
+            var dir: string = m.dir
+            if not str.ends_with(dir, "/")
+                dir = str.concat(dir, "/")
+            end
+            const file_path: string = str.concat(dir, rel)
+            match fs.read_text(file_path)
+            case ok(body):
+                var h: map[string, string] = maps.new()
+                maps.set(h, "Content-Type", guess_ctype(rel))
+                return some(Response { status: 200, headers: h, body: body })
+            case err(_):
+                return none
+            end
+        end
+        i = i + 1
+    end
+    return none
+end
+
+guess_ctype(path: string) -> string
+    if str.ends_with(path, ".css")
+        return "text/css; charset=utf-8"
+    end
+    if str.ends_with(path, ".js")
+        return "application/javascript; charset=utf-8"
+    end
+    if str.ends_with(path, ".html")
+        return "text/html; charset=utf-8"
+    end
+    if str.ends_with(path, ".orix")
+        return "text/html; charset=utf-8"
+    end
+    if str.ends_with(path, ".svg")
+        return "image/svg+xml"
+    end
+    if str.ends_with(path, ".json")
+        return "application/json"
+    end
+    return "application/octet-stream"
+end
+
+-- - CSRF check -
+
+csrf_ok(req: Request) -> bool
+    const expected: string = csrf_token(req)
+    -- form body application/x-www-form-urlencoded
+    var got: string = ""
+    if some(h) = maps.try_get(req.headers, "x-csrf-token")
+        got = h
+    end
+    if str.len(got) == 0
+        const form: map[string, string] = parse_query(req.body)
+        if some(t) = maps.try_get(form, "csrf_token")
+            got = t
+        end
+    end
+    if got == expected
+        if str.len(got) > 0
+            return true
+        end
+    end
+    return false
+end
+
+is_mutation(method: string) -> bool
+    if method == "POST"
+        return true
+    end
+    if method == "PUT"
+        return true
+    end
+    if method == "PATCH"
+        return true
+    end
+    if method == "DELETE"
+        return true
+    end
+    return false
+end
+
+-- - Dispatch one request -
+-- Note: `handle` is a reserved keyword in Ori (error-handling construct).
+
+public dispatch(a: App, req: Request) -> Response
+    -- static first
+    match try_static(a, req.path)
+    case some(res):
+        return res
+    case none:
+        const _skip_static: int = 0
+    end
+
+    if is_mutation(req.method)
+        if not csrf_ok(req)
+            return forbidden()
+        end
+    end
+
+    match match_route(a, req.method, req.path)
+    case some(m):
+        -- copy params into req - Request fields may be mutable via reassignment of map
+        const keys: list[string] = maps.keys(m.params)
+        var i: int = 0
+        while i < lists.len(keys)
+            const k: string = keys[i]
+            if some(v) = maps.try_get(m.params, k)
+                maps.set(req.params, k, v)
+            end
+            i = i + 1
+        end
+        match m.handler(req)
+        case ok(res):
+            return res
+        case err(msg):
+            return text(500, msg)
+        end
+    case none:
+        return not_found()
+    end
+    return not_found()
+end
+
+-- - Serve loop -
+
+public serve(host: string, port: int, a: App) -> result[void, string]
+    match net.listen(host, port)
+    case err(msg):
+        return err(msg)
+    case ok(listener):
+        loop
+            match net.accept(listener)
+            case err(_):
+                -- skip failed accept
+            case ok(conn):
+                handle_conn(a, conn)
+            end
+        end
+    end
+    return err("serve exited")
+end
+
+handle_conn(a: App, conn: net.Connection) -> void
+    match net.read_some(conn, a.max_body + 8192)
+    case err(_):
+        net.close(conn)
+    case ok(chunk):
+        match str.from_bytes(chunk)
+        case err(_):
+            net.close(conn)
+        case ok(raw):
+            match parse_request(raw, a.max_body)
+            case err(msg):
+                if msg == "payload too large"
+                    const r: Response = payload_too_large()
+                    const bytes_out: bytes = str.to_bytes(format_response(r, "x", a.cookie_secure))
+                    match net.write_all(conn, bytes_out)
+                    case ok(_):
+                    case err(_):
+                    end
+                end
+                net.close(conn)
+            case ok(req):
+                const res: Response = dispatch(a, req)
+                const wire: string = format_response(res, req.session_id, a.cookie_secure)
+                match net.write_all(conn, str.to_bytes(wire))
+                case ok(_):
+                case err(_):
+                end
+                net.close(conn)
+            end
+        end
+    end
+end
+
+-- - Auth wrapper helper (T7-A style) -
+
+-- Auth wrapper: use in routes as web.require_session_key("user_id", users.show)
+-- Implemented without multi-line lambda for parser simplicity.
+public require_session_key(key: string, next: Handler) -> Handler
+    return (req: Request) => guard_session(key, next, req)
+end
+
+guard_session(key: string, next: Handler, req: Request) -> ActionResult
+    match session_get(req, key)
+    case some(_):
+        return next(req)
+    case none:
+        return ok(redirect(303, "/login"))
+    end
+    return ok(forbidden())
+end

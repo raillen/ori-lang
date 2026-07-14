@@ -1,10 +1,10 @@
 # Roadmap de discussão — ori-templates / ori-web / HTML-first
 
-> **Status:** discussão de desenho (sem implementação obrigatória ainda).  
+> **Status:** design fechado (D0–D29); MVPs Library em `packages/`.  
 > **Audience:** maintainers.  
 > **Packages alvo (externos ao monorepo language core / FREEZE-1):**  
 > `ori-templates` → `ori-web` → `ori-web-demo`.  
-> **Última atualização:** 2026-07-14 — D27 APP restante fechado; D28 ori-templates MVP.
+> **Última atualização:** 2026-07-14 — D28 templates MVP; **D29 ori-web MVP**.
 
 Este arquivo é a **fonte viva** das decisões e do que ainda falta discutir.
 Atualizar status e decisões aqui a cada rodada de diálogo.
@@ -75,6 +75,7 @@ C **usa** A; não substitui A.
 | D26 | **APP4** views — V1-A, V2-A, V3-A′, V4-A, V5-A, V6-B, V7-A, V8-A | 2026-07-14 | §12.10 fechado |
 | D27 | **APP5–APP10** fechados por default (autor: decide restante) — §12.11 | 2026-07-14 | |
 | D28 | Package **`packages/ori-templates`** MVP implementado | 2026-07-14 | |
+| D29 | Package **`packages/ori-web`** MVP implementado | 2026-07-14 | router, session, CSRF, static, `dispatch`/`serve` (`handle` is reserved keyword) |
 
 ---
 
@@ -149,8 +150,8 @@ C **usa** A; não substitui A.
 
 | ID | Tópico | Status | Notas |
 |----|--------|--------|-------|
-| **P1** | Escopo `ori-templates` | **parcial** | Mini-spec S* + D12–D13 |
-| **P2** | Escopo `ori-web` | **parcial** | D14 §10 |
+| **P1** | Escopo `ori-templates` | **MVP done** | D28 `packages/ori-templates` |
+| **P2** | Escopo `ori-web` | **MVP done** | D29 `packages/ori-web` (Library; not App generators) |
 | **P3** | Escopo `ori-web-demo` | **parcial** | demo; depois vira exemplo do App layer |
 
 ---

@@ -1,0 +1,38 @@
+module app.main
+
+import web = web
+import ori.io = io
+
+home(req: web.Request) -> web.ActionResult
+    const token: string = web.csrf_token(req)
+    var html: string = "<!DOCTYPE html><html><body>"
+    html = html + "<h1>ori-web hello</h1>"
+    html = html + "<p>sid session ok</p>"
+    html = html + "<form method=\"post\" action=\"/echo\">"
+    html = html + "<input type=\"hidden\" name=\"csrf_token\" value=\"" + token + "\">"
+    html = html + "<input name=\"msg\" value=\"hi\">"
+    html = html + "<button type=\"submit\">POST</button></form>"
+    html = html + "</body></html>"
+    return ok(web.html(200, html))
+end
+
+echo(req: web.Request) -> web.ActionResult
+    return ok(web.text(200, "echo body received"))
+end
+
+hello(req: web.Request) -> web.ActionResult
+    return ok(web.text(200, "ok"))
+end
+
+main()
+    var a: web.App = web.app()
+    web.get(a, "/", home)
+    web.get(a, "/hello", hello)
+    web.post(a, "/echo", echo)
+    io.println("listening on http://127.0.0.1:3456/")
+    match web.serve("127.0.0.1", 3456, a)
+    case ok(_):
+    case err(msg):
+        io.println(msg)
+    end
+end
