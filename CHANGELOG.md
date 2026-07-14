@@ -23,10 +23,12 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   JSON, middleware, kv persistence).
 - **`ori-web-app` `generate-scaffold`:** full REST resource
   (index/new/create/show/edit/update/destroy + views + routes).
-
-### Corrigido
-- **`clear_middleware`:** use `lists.clear` instead of `MIDDLEWARES = []`
-  (empty-list reassignment type mismatch on typed `list[Middleware]`).
+- **`ori-web` high-value close-out:** catalog middleware (`mw_set_header`,
+  `mw_timing`, `mw_request_id`); C8 multipart (`parse_multipart`,
+  `save_upload` with ext allowlist + path jail); session helpers
+  `clear_session_cache` / `purge_expired_sessions`; expanded SEC8 suite +
+  `tools/qa/web_sec8.sh` (hooked in `daily_full`); `blog_app` notes full REST;
+  docs `middleware.md` + phase B/C updates (B7 soft-cap documented).
 
 ---
 

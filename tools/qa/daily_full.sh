@@ -30,6 +30,11 @@ if [ -x "$script_dir/examples_smoke.sh" ]; then
   "$script_dir/examples_smoke.sh"
 fi
 
+echo "== S6b packages web SEC8 =="
+if [ -x "$script_dir/web_sec8.sh" ]; then
+  "$script_dir/web_sec8.sh"
+fi
+
 echo "== S7 perf =="
 if [ -x "$script_dir/perf_daily.sh" ]; then
   "$script_dir/perf_daily.sh" || true

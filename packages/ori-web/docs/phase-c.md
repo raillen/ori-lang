@@ -11,7 +11,7 @@ Design: roadmap §5.5 phase C.
 | **C5 Audit** | Append-only file | `set_audit_log(path)`, `audit(event, detail)` |
 | **C6 CSRF rotate** | New token after mutation | `set_csrf_rotate(app, true)`, `rotate_csrf` |
 | **C7 `__Host-` cookie** | With Secure | `set_host_cookie(app, true)` + `set_cookie_secure(true)` |
-| **C8 Upload** | Deferred | |
+| **C8 Upload** | Multipart parse + safe save | `parse_multipart`, `form_file`, `save_upload(dir, part, max, "txt,png")` |
 | **C9 Supply chain** | Process | monorepo hygiene |
 | **C10 Password hash** | **Done** | `ori.crypto.password_hash` / `password_verify` (argon2id PHC) |
 

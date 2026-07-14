@@ -1,0 +1,14 @@
+@{ layout "layouts/app" }
+@{ assign title = "Edit Note" }
+<section class="card">
+  <h1>Edit note #@{ id }</h1>
+  <form method="post" action="/notes/@{ id }">
+    @{ csrf_field |> raw }
+    <label>Title<br>
+      <input type="text" name="title" value="@{ item }" required autocomplete="off">
+    </label>
+    <p style="margin-top:0.75rem"><button type="submit">Save</button></p>
+  </form>
+  <p><a href="/notes/@{ id }">Cancel</a></p>
+</section>
+@{ end }

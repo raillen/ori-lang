@@ -6,11 +6,11 @@ Design: [`web-templates-discussion-roadmap.md`](../../../docs/planning/web-templ
 |----|---------|----------------|
 | **B1 HTTPS** | TLS at reverse proxy (recommended) or runtime later | See Caddy/nginx snippet below. Local HTTP is for dev only. |
 | **B2 Secure cookie** | `set_cookie_secure(app, true)` behind HTTPS | Always on in production. |
-| **B3 Session store** | `use_memory_sessions()` / `use_file_sessions(dir)` / `use_kv_sessions(path)` | Memory = single process. File = one file per sid. KV = single flat file (multi-restart). Redis later. |
+| **B3 Session store** | `use_memory_sessions()` / `use_file_sessions(dir)` / `use_kv_sessions(path)` | Memory = single process. File = one file per sid. KV = single flat file (multi-restart). Helpers: `clear_session_cache`, `purge_expired_sessions`, `session_backend`. Redis/SQLite = external packages. |
 | **B4 Rate limit** | `set_rate_limit(app, per_minute)` | Applied to mutations; key = `client_key` (`X-Forwarded-For` if `set_trust_proxy`). |
 | **B5 Flash + PRG** | `flash` / `take_flash` + `redirect(303, …)` | Already in MVP demos. |
 | **B6 Security headers** | Always: nosniff, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` | Optional CSP: `set_csp(app, policy)`. |
-| **B7 Request timeout** | Deferred until `ori.net` exposes read deadlines | Documented gap. |
+| **B7 Request timeout** | Soft-cap only | First `read_some` capped at `max_body+8192`. True socket deadlines wait on `ori.net`. Use proxy idle timeouts (phase D). |
 
 ### Implementation note (App config)
 

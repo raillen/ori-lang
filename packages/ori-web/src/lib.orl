@@ -115,6 +115,81 @@ public use_middleware(a: App, mw: Middleware) -> App
     return a
 end
 
+-- Catalog middleware (composable with use_middleware)
+
+public mw_set_header(name: string, value: string) -> Middleware
+    return (next: Handler) => wrap_set_header(name, value, next)
+end
+
+wrap_set_header(name: string, value: string, next: Handler) -> Handler
+    return (req: Request) => apply_set_header(name, value, next, req)
+end
+
+apply_set_header(
+    name: string,
+    value: string,
+    next: Handler,
+    req: Request
+) -> ActionResult
+    match next(req)
+    case ok(res):
+        maps.set(res.headers, name, value)
+        return ok(res)
+    case err(e):
+        return err(e)
+    end
+    return err("middleware")
+end
+
+-- Adds X-Response-Time-Ms (milliseconds).
+public mw_timing() -> Middleware
+    return (next: Handler) => wrap_timing(next)
+end
+
+wrap_timing(next: Handler) -> Handler
+    return (req: Request) => apply_timing(next, req)
+end
+
+apply_timing(next: Handler, req: Request) -> ActionResult
+    const t0: int = time.instant_to_unix_ms(time.instant_now())
+    match next(req)
+    case ok(res):
+        const dt: int = time.instant_to_unix_ms(time.instant_now()) - t0
+        maps.set(res.headers, "X-Response-Time-Ms", string(dt))
+        return ok(res)
+    case err(e):
+        return err(e)
+    end
+    return err("middleware")
+end
+
+-- Soft request-id (new per request if missing).
+public mw_request_id() -> Middleware
+    return (next: Handler) => wrap_request_id(next)
+end
+
+wrap_request_id(next: Handler) -> Handler
+    return (req: Request) => apply_request_id(next, req)
+end
+
+apply_request_id(next: Handler, req: Request) -> ActionResult
+    var rid: string = ""
+    if some(h) = maps.try_get(req.headers, "x-request-id")
+        rid = h
+    end
+    if str.len(rid) == 0
+        rid = new_session_id()
+    end
+    match next(req)
+    case ok(res):
+        maps.set(res.headers, "X-Request-Id", rid)
+        return ok(res)
+    case err(e):
+        return err(e)
+    end
+    return err("middleware")
+end
+
 public set_max_body(a: App, n: int) -> App
     CFG_MAX_BODY = n
     return a
@@ -190,6 +265,57 @@ end
 
 public session_backend() -> string
     return SESSION_BACKEND
+end
+
+-- Drop in-process session cache (forces reload from file/kv on next get).
+public clear_session_cache() -> void
+    maps.clear(SESSIONS)
+    maps.clear(SID_ALIAS)
+end
+
+-- Drop sessions past idle/absolute timeouts (memory map + rewrite file/kv).
+public purge_expired_sessions() -> int
+    const now: int = time.instant_to_unix_ms(time.instant_now())
+    var removed: int = 0
+    const keys: list[string] = maps.keys(SESSIONS)
+    var i: int = 0
+    while i < lists.len(keys)
+        const sid: string = keys[i]
+        if some(blob) = maps.try_get(SESSIONS, sid)
+            if session_blob_expired(blob, now, CFG_IDLE_MS, CFG_ABS_MS)
+                remove_blob(sid)
+                removed = removed + 1
+            end
+        end
+        i = i + 1
+    end
+    return removed
+end
+
+session_blob_expired(blob: string, now: int, idle_ms: int, absolute_ms: int) -> bool
+    var created: int = now
+    var touch: int = now
+    match flat_get(blob, "_created_ms")
+    case some(c):
+        created = conv.parse_int_or(c, now)
+    case none:
+    end
+    match flat_get(blob, "_touch_ms")
+    case some(t):
+        touch = conv.parse_int_or(t, now)
+    case none:
+    end
+    if absolute_ms > 0
+        if now - created > absolute_ms
+            return true
+        end
+    end
+    if idle_ms > 0
+        if now - touch > idle_ms
+            return true
+        end
+    end
+    return false
 end
 
 -- A7: fail boot when production secret missing/short
@@ -680,6 +806,285 @@ end
 
 public form_body(req: Request) -> map[string, string]
     return parse_query(req.body)
+end
+
+-- C8: multipart/form-data part (file when filename non-empty).
+public struct FormPart
+    name: string
+    filename: string
+    content_type: string
+    value: string
+end
+
+public content_type(req: Request) -> string
+    if some(ct) = maps.try_get(req.headers, "content-type")
+        return ct
+    end
+    return ""
+end
+
+public multipart_boundary(content_type_hdr: string) -> string
+    const key: string = "boundary="
+    const at: int = str.index_of(content_type_hdr, key)
+    if at < 0
+        return ""
+    end
+    var b: string = str.slice(content_type_hdr, at + str.len(key), str.len(content_type_hdr))
+    b = str.trim(b)
+    if str.starts_with(b, "\"")
+        if str.ends_with(b, "\"")
+            b = str.slice(b, 1, str.len(b) - 1)
+        end
+    end
+    -- strip trailing parameters after ;
+    const sc: int = str.index_of(b, ";")
+    if sc >= 0
+        b = str.trim(str.slice(b, 0, sc))
+    end
+    return b
+end
+
+public parse_multipart(req: Request) -> result[list[FormPart], string]
+    const ct: string = content_type(req)
+    if not str.contains(str.to_lower(ct), "multipart/form-data")
+        return err("not multipart")
+    end
+    const boundary: string = multipart_boundary(ct)
+    if str.len(boundary) == 0
+        return err("missing boundary")
+    end
+    return parse_multipart_body(req.body, boundary)
+end
+
+parse_multipart_body(body: string, boundary: string) -> result[list[FormPart], string]
+    var parts: list[FormPart] = []
+    const delim: string = str.concat("--", boundary)
+    const chunks: list[string] = str.split(body, delim)
+    var i: int = 0
+    while i < lists.len(chunks)
+        var chunk: string = chunks[i]
+        i = i + 1
+        if str.len(str.trim(chunk)) == 0
+            continue
+        end
+        -- closing boundary fragment
+        if str.starts_with(str.trim(chunk), "--")
+            continue
+        end
+        if str.starts_with(chunk, "\r\n")
+            chunk = str.slice(chunk, 2, str.len(chunk))
+        elif str.starts_with(chunk, "\n")
+            chunk = str.slice(chunk, 1, str.len(chunk))
+        end
+        -- drop trailing CRLF before next boundary
+        if str.ends_with(chunk, "\r\n")
+            chunk = str.slice(chunk, 0, str.len(chunk) - 2)
+        elif str.ends_with(chunk, "\n")
+            chunk = str.slice(chunk, 0, str.len(chunk) - 1)
+        end
+        const sep: string = "\r\n\r\n"
+        var hat: int = str.index_of(chunk, sep)
+        var head: string = ""
+        var value: string = ""
+        if hat >= 0
+            head = str.slice(chunk, 0, hat)
+            value = str.slice(chunk, hat + 4, str.len(chunk))
+        else
+            const sep2: string = "\n\n"
+            hat = str.index_of(chunk, sep2)
+            if hat < 0
+                continue
+            end
+            head = str.slice(chunk, 0, hat)
+            value = str.slice(chunk, hat + 2, str.len(chunk))
+        end
+        var name: string = ""
+        var filename: string = ""
+        var pctype: string = "application/octet-stream"
+        const hlines: list[string] = str.split(str.replace_all(head, "\r\n", "\n"), "\n")
+        var hi: int = 0
+        while hi < lists.len(hlines)
+            const hl: string = hlines[hi]
+            const lower: string = str.to_lower(hl)
+            if str.starts_with(lower, "content-disposition:")
+                name = header_param(hl, "name")
+                filename = header_param(hl, "filename")
+            end
+            if str.starts_with(lower, "content-type:")
+                const cpos: int = str.index_of(hl, ":")
+                if cpos > 0
+                    pctype = str.trim(str.slice(hl, cpos + 1, str.len(hl)))
+                end
+            end
+            hi = hi + 1
+        end
+        if str.len(name) > 0
+            lists.push(parts, FormPart {
+                name: name,
+                filename: filename,
+                content_type: pctype,
+                value: value,
+            })
+        end
+    end
+    return ok(parts)
+end
+
+header_param(line: string, key: string) -> string
+    const needle: string = str.concat(key, "=\"")
+    const at: int = str.index_of(line, needle)
+    if at < 0
+        -- unquoted
+        const needle2: string = str.concat(key, "=")
+        const at2: int = str.index_of(line, needle2)
+        if at2 < 0
+            return ""
+        end
+        var rest: string = str.slice(line, at2 + str.len(needle2), str.len(line))
+        const sc: int = str.index_of(rest, ";")
+        if sc >= 0
+            rest = str.slice(rest, 0, sc)
+        end
+        return str.trim(rest)
+    end
+    const start: int = at + str.len(needle)
+    const rest: string = str.slice(line, start, str.len(line))
+    const endq: int = str.index_of(rest, "\"")
+    if endq < 0
+        return ""
+    end
+    return str.slice(rest, 0, endq)
+end
+
+public form_part_value(parts: list[FormPart], name: string) -> optional[string]
+    var i: int = 0
+    while i < lists.len(parts)
+        const p: FormPart = parts[i]
+        if p.name == name
+            if str.len(p.filename) == 0
+                return some(p.value)
+            end
+        end
+        i = i + 1
+    end
+    return none
+end
+
+public form_file(parts: list[FormPart], name: string) -> optional[FormPart]
+    var i: int = 0
+    while i < lists.len(parts)
+        const p: FormPart = parts[i]
+        if p.name == name
+            if str.len(p.filename) > 0
+                return some(p)
+            end
+        end
+        i = i + 1
+    end
+    return none
+end
+
+-- Save upload outside webroot: path jail, size cap, extension allowlist ("txt,png,pdf").
+public save_upload(
+    store_dir: string,
+    part: FormPart,
+    max_bytes: int,
+    allowed_exts: string
+) -> result[string, string]
+    if str.len(part.filename) == 0
+        return err("not a file part")
+    end
+    if str.len(part.value) > max_bytes
+        return err("file too large")
+    end
+    const safe: string = safe_upload_filename(part.filename)
+    if str.len(safe) == 0
+        return err("invalid filename")
+    end
+    if not extension_allowed(safe, allowed_exts)
+        return err("extension not allowed")
+    end
+    match fs.create_dir_all(store_dir)
+    case ok(_):
+    case err(e):
+        return err(e)
+    end
+    var dir: string = store_dir
+    if not str.ends_with(dir, "/")
+        dir = str.concat(dir, "/")
+    end
+    const dest: string = str.concat(dir, safe)
+    if str.contains(dest, "..")
+        return err("path escape")
+    end
+    match fs.write_text(dest, part.value)
+    case ok(_):
+        return ok(dest)
+    case err(e):
+        return err(e)
+    end
+    return err("write failed")
+end
+
+safe_upload_filename(name: string) -> string
+    var s: string = name
+    -- strip path components
+    const slash: int = str.last_index_of(s, "/")
+    if slash >= 0
+        s = str.slice(s, slash + 1, str.len(s))
+    end
+    const bslash: int = str.last_index_of(s, "\\")
+    if bslash >= 0
+        s = str.slice(s, bslash + 1, str.len(s))
+    end
+    if str.contains(s, "..")
+        return ""
+    end
+    if str.len(s) == 0
+        return ""
+    end
+    -- allow simple names
+    var out: string = ""
+    var i: int = 0
+    while i < str.len(s)
+        const ch: string = str.slice(s, i, i + 1)
+        const okc: bool = is_filename_char(ch)
+        if okc
+            out = str.concat(out, ch)
+        else
+            out = str.concat(out, "_")
+        end
+        i = i + 1
+    end
+    return out
+end
+
+is_filename_char(ch: string) -> bool
+    return str.contains(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-",
+        ch
+    )
+end
+
+extension_allowed(filename: string, allowed_exts: string) -> bool
+    if str.len(allowed_exts) == 0
+        return false
+    end
+    const dot: int = str.last_index_of(filename, ".")
+    if dot < 0
+        return false
+    end
+    const ext: string = str.to_lower(str.slice(filename, dot + 1, str.len(filename)))
+    const parts: list[string] = str.split(allowed_exts, ",")
+    var i: int = 0
+    while i < lists.len(parts)
+        const a: string = str.to_lower(str.trim(parts[i]))
+        if a == ext
+            return true
+        end
+        i = i + 1
+    end
+    return false
 end
 
 public is_htmx(req: Request) -> bool
@@ -1415,6 +1820,9 @@ guard_reauth(max_age_ms: int, next: Handler, req: Request) -> ActionResult
 end
 
 -- - Serve loop -
+-- B7 note: ori.net has no per-socket read deadline yet. We soft-cap the
+-- first read to CFG_MAX_BODY + 8192 bytes (header+body). Prefer reverse
+-- proxy idle timeouts in production (phase D).
 
 public serve(host: string, port: int, a: App) -> result[void, string]
     match require_secret_if_prod()

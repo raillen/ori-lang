@@ -113,7 +113,7 @@ C **usa** A; não substitui A.
 | **SEC5** | Session sid + store + secret env | **done** | **D15**; secret prod obrigatório |
 | **SEC6** | CSRF synchronizer | **done** | **D17** |
 | **SEC7** | Body size / timeouts / header validation | **done** | defaults §10.5 + §5.5 fase A |
-| **SEC8** | Suite testes (XSS, traversal, CSRF) | **parcial** | lista §5.5 + implementação |
+| **SEC8** | Suite testes (XSS, traversal, CSRF) | **done** | `packages/ori-web/examples/sec8_tests` + `tools/qa/web_sec8.sh` |
 | **SEC9** | Crypto: runtime vs package | **done** (plano) | RNG/HMAC no runtime; argon2id na fase C10 (§5.5) |
 
 ### Web (W)
@@ -121,10 +121,10 @@ C **usa** A; não substitui A.
 | ID | Tópico | Status | Notas |
 |----|--------|--------|-------|
 | **W1** | Router + Request/Response | **parcial** | **D14** esboço §10 |
-| **W2** | Middleware pipeline explícito | **done** | ordem §5.4 fechada |
-| **W3** | Static files | **parcial** | Regras path jail D13; API §10 |
-| **W4** | JSON helpers | aberto | |
-| **W5** | Integração templates | **parcial** | `web.render` / engine injetada §10 |
+| **W2** | Middleware pipeline explícito | **done** | `use_middleware` + catalog `mw_*` |
+| **W3** | Static files | **done** | path jail + `static()` |
+| **W4** | JSON helpers | **done** | `json` / `json_string_map` / `parse_json_object` |
+| **W5** | Integração templates | **done** | `web_app.render` / `page_data` (Library free of templates cycle) |
 
 ### HTML-first C (C)
 

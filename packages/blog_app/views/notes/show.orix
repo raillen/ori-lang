@@ -1,0 +1,15 @@
+@{ layout "layouts/app" }
+@{ assign title = "Note" }
+<section class="card">
+  <h1>Note #@{ id }</h1>
+  <p>@{ item }</p>
+  <p>
+    <a href="/notes/@{ id }/edit">Edit</a> ·
+    <a href="/notes">Back</a>
+  </p>
+  <form method="post" action="/notes/@{ id }/delete" style="margin-top:1rem">
+    @{ csrf_field |> raw }
+    <button type="submit">Delete</button>
+  </form>
+</section>
+@{ end }

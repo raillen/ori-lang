@@ -15,9 +15,10 @@ Minimal HTTP **Library** layer for Ori (phases **A + B + C**, plus SEC8 helpers)
 | JSON helpers | `json_string_map(status, map)` · `parse_json_object(body)` (flat string values; no `ori.json` import cycle) |
 | Router | `get` / `post` / `put` / `patch` / `delete` + path params `:id` |
 | Static | `static(app, url_prefix, dir)` with `..` path jail |
-| Middleware | `use_middleware(app, mw)` · `clear_middleware()` — onion around matched handler (`use` is reserved) |
+| Middleware | `use_middleware` · `clear_middleware` · catalog `mw_set_header` / `mw_timing` / `mw_request_id` ([docs/middleware.md](docs/middleware.md)) |
 | Session | cookie `ori_sid` (HttpOnly, SameSite=Lax); `session_get` / `session_set` / flash / `session_regenerate` |
-| Session store (B3) | `use_memory_sessions()` · `use_file_sessions(dir)` · `use_kv_sessions(path)` · `session_backend()` |
+| Session store (B3) | `use_memory_sessions` · `use_file_sessions` · `use_kv_sessions` · `clear_session_cache` · `purge_expired_sessions` · `session_backend` |
+| Upload (C8) | `parse_multipart` · `form_file` / `form_part_value` · `save_upload(dir, part, max_bytes, "txt,png")` |
 | Timeouts (A9) | `set_session_timeouts(app, idle_ms, absolute_ms)` (default 1h / 24h) |
 | CSRF | form `csrf_token` or header `X-CSRF-Token` on mutations |
 | Rate limit (B4) | `set_rate_limit(app, per_minute)` · `client_key` / `set_trust_proxy` |
@@ -83,7 +84,34 @@ web.use_file_sessions("tmp/sessions")     -- one file per sid
 web.use_kv_sessions("tmp/sessions.kv")    -- single flat file (multi-restart)
 ```
 
+## Upload sketch (C8)
+
+```ori
+match web.parse_multipart(req)
+case ok(parts):
+    match web.form_file(parts, "file")
+    case some(f):
+        match web.save_upload("var/uploads", f, 1048576, "png,jpg,pdf")
+        case ok(path):
+            -- store path outside webroot
+        case err(e):
+            return ok(web.bad_request(e))
+        end
+    case none:
+    end
+case err(e):
+    return ok(web.bad_request(e))
+end
+```
+
+## Templates (W5)
+
+HTML rendering lives in **`web_app`** (`render` / `page_data` / `csrf_field`) so the
+Library layer stays free of a templates package cycle. Path-depend both packages
+in apps.
+
 ## Not yet
 
-Redis/true external session store, keep-alive, in-process TLS, request read
-deadlines (B7), 2FA package. Password hashing is in **`ori.crypto`** (argon2id).
+Redis/SQLite session drivers (external packages), keep-alive, in-process TLS,
+true socket read deadlines (B7 — soft-cap only today), 2FA package.
+Password hashing is in **`ori.crypto`** (argon2id).

@@ -10,13 +10,15 @@
 | Piece | Role |
 |-------|------|
 | `standard_app()` | Batteries: rate limit, CSP, Secure cookie in production |
-| `page_data` / `render` / `render_partial` | CSRF + flash + optional user in template ctx |
+| `page_data` / `render` / `render_partial` | **W5** template integration: CSRF + flash + user in ctx |
 | `csrf_field(req)` | HTML hidden input |
 | `run(app)` | Listen + secret check when `ORI_ENV=production` |
 | `bin/new` | Scaffold app tree |
 | `bin/generate-controller` | Controller + index view + route stub |
 | `bin/generate-scaffold` | Full REST resource: index / new / create / show / edit / update / destroy + views |
 | `bin/generate-model` | Domain stub + optional password helpers |
+
+Template engine is owned here (not in `web`) to avoid Library↔templates cycles.
 
 ## Scaffold a site
 

@@ -1,7 +1,8 @@
 module app.main
 
--- SEC8 golden smoke: XSS/path/CSRF/cookies/JSON/middleware (no network).
--- Run: cd packages/ori-web/examples/sec8_tests && ori get . && ori run main.orl
+-- SEC8 golden suite: XSS/path/CSRF/cookies/JSON/middleware/sessions/rate/
+-- lockout/reauth/upload (no network).
+-- Run: tools/qa/web_sec8.sh  OR  ori run main.orl
 
 import web = web
 import ori.io = io
@@ -25,7 +26,6 @@ echo_ok(req: web.Request) -> web.ActionResult
 end
 
 html_echo(req: web.Request) -> web.ActionResult
-    -- XSS: response helper does not auto-escape body (templates do); ensure raw body preserved
     return ok(web.html(200, "<script>alert(1)</script>"))
 end
 
@@ -48,8 +48,11 @@ tagged(next: web.Handler, req: web.Request) -> web.ActionResult
 end
 
 main()
-    -- isolated tmp dir for static jail
     match fs.create_dir_all("/tmp/ori-web-sec8/public")
+    case ok(_):
+    case err(_):
+    end
+    match fs.create_dir_all("/tmp/ori-web-sec8/uploads")
     case ok(_):
     case err(_):
     end
@@ -89,7 +92,7 @@ main()
     assert_true(res.status == 200, "post with csrf → 200")
     assert_true(res.body == "posted", "post body")
 
-    -- 4) Path jail: traversal rejected
+    -- 4) Path jail
     req = web.make_request("GET", "/assets/../secret.txt", "", "sid-d")
     res = web.dispatch(a, req)
     assert_true(res.status == 403, "static traversal → 403")
@@ -100,7 +103,7 @@ main()
     assert_true(res.status == 200, "static 200")
     assert_true(res.body == "static-ok", "static body")
 
-    -- 6) Cookie flags on wire
+    -- 6) Cookie flags + security headers on wire
     req = web.make_request("GET", "/echo", "", "sid-cookie")
     res = web.dispatch(a, req)
     const wire: string = web.to_http(res, "sid-cookie")
@@ -108,12 +111,12 @@ main()
     assert_true(str.contains(wire, "SameSite=Lax"), "cookie SameSite")
     assert_true(str.contains(wire, "X-Content-Type-Options: nosniff"), "nosniff header")
 
-    -- 7) XSS body is not double-escaped by html() helper (escape is templates' job)
+    -- 7) XSS body not double-escaped by html()
     req = web.make_request("GET", "/xss", "", "sid-x")
     res = web.dispatch(a, req)
-    assert_true(str.contains(res.body, "<script>"), "html helper preserves tags (escape in templates)")
+    assert_true(str.contains(res.body, "<script>"), "html helper preserves tags")
 
-    -- 8) JSON string map + flat parse
+    -- 8) JSON encode + parse
     var fields: map[string, string] = maps.new()
     maps.set(fields, "msg", "hi\"there")
     res = web.json_string_map(200, fields)
@@ -137,7 +140,7 @@ main()
         assert_true(false, "parse_json object")
     end
 
-    -- 9) Middleware tags response
+    -- 9) Custom middleware onion
     a = web.app()
     web.get(a, "/echo", echo_ok)
     a = web.use_middleware(a, mw_tag)
@@ -145,7 +148,34 @@ main()
     res = web.dispatch(a, req)
     assert_true(res.body == "mw:echo-ok", "middleware wraps handler")
 
-    -- 10) KV session backend round-trip
+    -- 10) Catalog middleware: header + timing + request-id
+    a = web.app()
+    web.get(a, "/echo", echo_ok)
+    a = web.use_middleware(a, web.mw_set_header("X-App", "sec8"))
+    a = web.use_middleware(a, web.mw_timing())
+    a = web.use_middleware(a, web.mw_request_id())
+    req = web.make_request("GET", "/echo", "", "sid-mw2")
+    res = web.dispatch(a, req)
+    match maps.try_get(res.headers, "X-App")
+    case some(xv):
+        assert_true(xv == "sec8", "mw_set_header")
+    case none:
+        assert_true(false, "mw_set_header")
+    end
+    match maps.try_get(res.headers, "X-Response-Time-Ms")
+    case some(_):
+        assert_true(true, "mw_timing header")
+    case none:
+        assert_true(false, "mw_timing header")
+    end
+    match maps.try_get(res.headers, "X-Request-Id")
+    case some(rid):
+        assert_true(str.len(rid) > 0, "mw_request_id")
+    case none:
+        assert_true(false, "mw_request_id")
+    end
+
+    -- 11) KV session round-trip + clear cache
     web.use_kv_sessions("/tmp/ori-web-sec8/sessions.kv")
     req = web.make_request("GET", "/echo", "", "sid-kv1")
     web.session_set(req, "user", "alice")
@@ -155,16 +185,157 @@ main()
     case none:
         assert_true(false, "kv session set/get")
     end
-    -- reload from file (clear memory cache by using new process-less path)
-    web.use_memory_sessions()
+    web.clear_session_cache()
     web.use_kv_sessions("/tmp/ori-web-sec8/sessions.kv")
     req = web.make_request("GET", "/echo", "", "sid-kv1")
     match web.session_get(req, "user")
     case some(u2):
-        assert_true(u2 == "alice", "kv session persists")
+        assert_true(u2 == "alice", "kv session persists after clear_session_cache")
     case none:
-        assert_true(false, "kv session persists")
+        assert_true(false, "kv session persists after clear_session_cache")
     end
+    assert_true(web.session_backend() == "kv", "session_backend kv")
+
+    -- 12) File session backend
+    web.use_file_sessions("/tmp/ori-web-sec8/sess-files")
+    req = web.make_request("GET", "/echo", "", "sid-file1")
+    web.session_set(req, "role", "admin")
+    web.clear_session_cache()
+    match web.session_get(req, "role")
+    case some(role):
+        assert_true(role == "admin", "file session set/get")
+    case none:
+        assert_true(false, "file session set/get")
+    end
+
+    -- 13) Rate limit
+    a = web.app()
+    a = web.set_rate_limit(a, 2)
+    web.use_memory_sessions()
+    web.post(a, "/echo", post_echo)
+    req = web.make_request("GET", "/echo", "", "sid-rl")
+    res = web.dispatch(a, req)
+    const t_rl: string = web.csrf_token(req)
+    req = web.make_request("POST", "/echo", str.concat("csrf_token=", t_rl), "sid-rl")
+    res = web.dispatch(a, req)
+    assert_true(res.status == 200, "rate limit allow 1")
+    req = web.make_request("POST", "/echo", str.concat("csrf_token=", t_rl), "sid-rl")
+    res = web.dispatch(a, req)
+    assert_true(res.status == 200, "rate limit allow 2")
+    req = web.make_request("POST", "/echo", str.concat("csrf_token=", t_rl), "sid-rl")
+    res = web.dispatch(a, req)
+    assert_true(res.status == 429, "rate limit block 3rd")
+
+    -- 14) Lockout
+    web.login_success("lock-user")
+    assert_true(web.login_allowed("lock-user"), "login allowed initially")
+    web.login_fail("lock-user", 2, 60000)
+    assert_true(web.login_allowed("lock-user"), "login allowed after 1 fail")
+    web.login_fail("lock-user", 2, 60000)
+    assert_true(not web.login_allowed("lock-user"), "login locked after max fails")
+    web.login_success("lock-user")
+    assert_true(web.login_allowed("lock-user"), "login allowed after success clear")
+
+    -- 15) Re-auth window
+    req = web.make_request("GET", "/echo", "", "sid-re")
+    assert_true(not web.reauth_ok(req, 60000), "reauth false before mark")
+    web.mark_reauth(req)
+    assert_true(web.reauth_ok(req, 60000), "reauth true after mark")
+
+    -- 16) Session regenerate
+    req = web.make_request("GET", "/echo", "", "sid-old")
+    web.session_set(req, "x", "1")
+    const new_sid: string = web.session_regenerate(req)
+    assert_true(str.len(new_sid) > 0, "regenerate returns sid")
+    assert_true(new_sid != "sid-old", "regenerate changes sid")
+
+    -- 17) CSRF rotate after mutation
+    a = web.app()
+    a = web.set_csrf_rotate(a, true)
+    web.use_memory_sessions()
+    web.get(a, "/echo", echo_ok)
+    web.post(a, "/echo", post_echo)
+    req = web.make_request("GET", "/echo", "", "sid-rot")
+    res = web.dispatch(a, req)
+    const t1: string = web.csrf_token(req)
+    req = web.make_request("POST", "/echo", str.concat("csrf_token=", t1), "sid-rot")
+    res = web.dispatch(a, req)
+    assert_true(res.status == 200, "csrf rotate post ok")
+    const t2: string = web.csrf_token(req)
+    assert_true(t1 != t2, "csrf token rotated after mutation")
+
+    -- 18) Multipart parse + safe upload
+    const boundary: string = "----OriBoundary7"
+    var mbody: string = str.concat("--", boundary)
+    mbody = str.concat(mbody, "\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nhello\r\n")
+    mbody = str.concat(mbody, str.concat("--", boundary))
+    mbody = str.concat(mbody, "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"note.txt\"\r\n")
+    mbody = str.concat(mbody, "Content-Type: text/plain\r\n\r\nfile-body\r\n")
+    mbody = str.concat(mbody, str.concat("--", boundary))
+    mbody = str.concat(mbody, "--\r\n")
+    req = web.make_request("POST", "/upload", mbody, "sid-up")
+    web.request_set_header(
+        req,
+        "Content-Type",
+        str.concat("multipart/form-data; boundary=", boundary)
+    )
+    match web.parse_multipart(req)
+    case ok(parts):
+        match web.form_part_value(parts, "title")
+        case some(title):
+            assert_true(title == "hello", "multipart field title")
+        case none:
+            assert_true(false, "multipart field title")
+        end
+        match web.form_file(parts, "file")
+        case some(fp):
+            assert_true(fp.filename == "note.txt", "multipart filename")
+            assert_true(fp.value == "file-body", "multipart file body")
+            match web.save_upload("/tmp/ori-web-sec8/uploads", fp, 1024, "txt,png")
+            case ok(path):
+                assert_true(str.contains(path, "note.txt"), "save_upload path")
+                match fs.read_text(path)
+                case ok(disk):
+                    assert_true(disk == "file-body", "save_upload content")
+                case err(_):
+                    assert_true(false, "save_upload content")
+                end
+            case err(e):
+                io.println(str.concat("save err ", e))
+                assert_true(false, "save_upload ok")
+            end
+            -- reject bad extension
+            match web.save_upload("/tmp/ori-web-sec8/uploads", fp, 1024, "png")
+            case ok(_):
+                assert_true(false, "save_upload rejects ext")
+            case err(_):
+                assert_true(true, "save_upload rejects ext")
+            end
+        case none:
+            assert_true(false, "multipart file part")
+        end
+    case err(me):
+        io.println(str.concat("multipart err ", me))
+        assert_true(false, "parse_multipart")
+    end
+
+    -- 19) Upload path traversal rejected via safe name
+    const evil: web.FormPart = web.FormPart {
+        name: "f",
+        filename: "../../etc/passwd",
+        content_type: "text/plain",
+        value: "x",
+    }
+    match web.save_upload("/tmp/ori-web-sec8/uploads", evil, 1024, "txt")
+    case ok(_):
+        assert_true(false, "upload traversal rejected")
+    case err(_):
+        assert_true(true, "upload traversal rejected")
+    end
+
+    -- 20) Session backend label memory
+    web.use_memory_sessions()
+    assert_true(web.session_backend() == "memory", "session_backend memory")
 
     if FAILS == 0
         io.println("SEC8 ALL PASSED")
