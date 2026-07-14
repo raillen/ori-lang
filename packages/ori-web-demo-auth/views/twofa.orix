@@ -1,0 +1,16 @@
+@{ layout "layouts/app" }
+@{ assign title = "2FA · ori-web-demo-auth" }
+<h1>Two-factor authentication</h1>
+<p>Enter the 6-digit code from your authenticator app.</p>
+@{ if totp_hint }
+<p class="muted">Dev hint (current code): <code>@{ totp_hint }</code></p>
+@{ end }
+<form method="post" action="/2fa">
+  <input type="hidden" name="csrf_token" value="@{ csrf_token }">
+  <label>Code<br>
+    <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="8" required>
+  </label>
+  <button type="submit">Verify</button>
+</form>
+<p><a href="/login">Back to login</a></p>
+@{ end }

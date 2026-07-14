@@ -1,23 +1,29 @@
 module app.main
 
--- Auth demo: login, session regenerate, protected route, file sessions.
+-- Auth demo: login + TOTP 2FA + optional SQLite sessions + argon2id.
 
 import web = web
+import web_auth = wa
 import templates = tpl
 import ori.io = io
 import ori.map = maps
 import ori.string = str
 import ori.crypto = crypto
+import ori.os = os
+import web_session_sqlite = ssql
 
 var VIEWS: tpl.Engine = tpl.open("views")
--- C10: argon2id PHC hash of the demo password (computed at boot)
 var DEMO_PASSWORD_HASH: string = ""
+-- Fixed demo TOTP secret (base32). Authenticator apps: OriDemo / demo
+var DEMO_TOTP_SECRET: string = ""
+var USE_SQLITE: bool = false
 
 base_ctx(req: web.Request) -> tpl.Data
     var d: tpl.Data = tpl.empty_data()
     tpl.set_value(d, "csrf_token", web.csrf_token(req))
     tpl.set_value(d, "flash_notice", "")
     tpl.set_value(d, "flash_error", "")
+    tpl.set_value(d, "totp_hint", "")
     match web.take_flash(req, "notice")
     case some(msg):
         tpl.set_value(d, "flash_notice", msg)
@@ -41,7 +47,38 @@ render_login(req: web.Request) -> web.ActionResult
     return ok(web.not_found())
 end
 
+render_2fa(req: web.Request) -> web.ActionResult
+    match wa.pending_2fa_user(req)
+    case some(_):
+    case none:
+        return ok(web.redirect(303, "/login"))
+    end
+    var d: tpl.Data = base_ctx(req)
+    -- Show current code only in development demos (never in production).
+    const env: string = os.env_or("ORI_ENV", "development")
+    if env != "production"
+        if env != "prod"
+            tpl.set_value(d, "totp_hint", wa.current_code(DEMO_TOTP_SECRET))
+        end
+    end
+    match tpl.render(VIEWS, "twofa", d)
+    case ok(html):
+        return ok(web.html(200, html))
+    case err(e):
+        return ok(web.text(500, tpl.error_message(e)))
+    end
+    return ok(web.not_found())
+end
+
 render_dashboard(req: web.Request) -> web.ActionResult
+    if not wa.is_2fa_ok(req)
+        match wa.pending_2fa_user(req)
+        case some(_):
+            return ok(web.redirect(303, "/2fa"))
+        case none:
+            return ok(web.redirect(303, "/login"))
+        end
+    end
     var d: tpl.Data = base_ctx(req)
     var user: string = ""
     match web.session_get(req, "user_id")
@@ -61,9 +98,16 @@ render_dashboard(req: web.Request) -> web.ActionResult
 end
 
 home(req: web.Request) -> web.ActionResult
-    match web.session_get(req, "user_id")
+    if wa.is_2fa_ok(req)
+        match web.session_get(req, "user_id")
+        case some(_):
+            return ok(web.redirect(303, "/dashboard"))
+        case none:
+        end
+    end
+    match wa.pending_2fa_user(req)
     case some(_):
-        return ok(web.redirect(303, "/dashboard"))
+        return ok(web.redirect(303, "/2fa"))
     case none:
         return ok(web.redirect(303, "/login"))
     end
@@ -89,20 +133,51 @@ do_login(req: web.Request) -> web.ActionResult
     if user == "demo"
         if crypto.verify_password(pass, DEMO_PASSWORD_HASH)
             web.login_success(lock_key)
-            -- A8: rotate session id after credential success
             const _new_sid: string = web.session_regenerate(req)
-            web.session_set(req, "user_id", user)
-            web.mark_reauth(req)
-            web.flash(req, "notice", "Welcome back.")
-            web.audit("login.ok", user)
-            return ok(web.redirect(303, "/dashboard"))
+            -- Step-up: password ok → pending 2FA (do not set user_id yet)
+            wa.mark_pending_2fa(req, user)
+            wa.session_set_totp_secret(req, DEMO_TOTP_SECRET)
+            web.flash(req, "notice", "Enter the 6-digit authenticator code.")
+            web.audit("login.password_ok", user)
+            return ok(web.redirect(303, "/2fa"))
         end
     end
-    -- C4: 5 fails → lock 60s
     web.login_fail(lock_key, 5, 60000)
     web.flash(req, "error", "Invalid credentials.")
     web.audit("login.fail", user)
     return ok(web.redirect(303, "/login"))
+end
+
+do_2fa(req: web.Request) -> web.ActionResult
+    var user: string = ""
+    match wa.pending_2fa_user(req)
+    case some(u):
+        user = u
+    case none:
+        return ok(web.redirect(303, "/login"))
+    end
+    const form: map[string, string] = web.form_body(req)
+    var code: string = ""
+    if some(c) = maps.try_get(form, "code")
+        code = str.trim(c)
+    end
+    var secret: string = DEMO_TOTP_SECRET
+    match wa.session_totp_secret(req)
+    case some(s):
+        secret = s
+    case none:
+    end
+    if wa.verify(secret, code)
+        wa.mark_2fa_ok(req)
+        web.session_set(req, "user_id", user)
+        web.mark_reauth(req)
+        web.flash(req, "notice", "Welcome back (2FA ok).")
+        web.audit("login.2fa_ok", user)
+        return ok(web.redirect(303, "/dashboard"))
+    end
+    web.flash(req, "error", "Invalid or expired code.")
+    web.audit("login.2fa_fail", user)
+    return ok(web.redirect(303, "/2fa"))
 end
 
 do_logout(req: web.Request) -> web.ActionResult
@@ -113,16 +188,40 @@ do_logout(req: web.Request) -> web.ActionResult
     case none:
     end
     web.session_set(req, "user_id", "")
+    wa.clear_pending_2fa(req)
+    web.session_set(req, "2fa_ok", "")
     const _sid: string = web.session_regenerate(req)
     web.flash(req, "notice", "Signed out.")
     web.audit("logout", who)
     return ok(web.redirect(303, "/login"))
 end
 
+setup_sessions() -> void
+    const backend: string = os.env_or("ORI_WEB_SESSION", "sqlite")
+    if backend == "sqlite"
+        match ssql.use_sqlite_sessions("var/sessions.db")
+        case ok(_):
+            USE_SQLITE = true
+            io.println("session backend: sqlite (var/sessions.db)")
+        case err(e):
+            io.println(str.concat("sqlite sessions failed (", str.concat(e, "); falling back to file")))
+            web.use_file_sessions(".sessions")
+        end
+    elif backend == "file"
+        web.use_file_sessions(".sessions")
+        io.println("session backend: file (.sessions)")
+    else
+        web.use_memory_sessions()
+        io.println("session backend: memory")
+    end
+end
+
 main()
     DEMO_PASSWORD_HASH = crypto.hash_password("demo")
-    web.use_file_sessions(".sessions")
+    DEMO_TOTP_SECRET = wa.generate_secret()
+    setup_sessions()
     var a: web.App = web.app()
+    a = web.set_read_timeout(a, 30000)
     web.set_audit_log("audit.log")
     a = web.set_rate_limit(a, 30)
     a = web.set_csrf_rotate(a, true)
@@ -130,9 +229,14 @@ main()
     web.get(a, "/", home)
     web.get(a, "/login", render_login)
     web.post(a, "/login", do_login)
-    web.get(a, "/dashboard", web.require_session_key("user_id", render_dashboard))
+    web.get(a, "/2fa", render_2fa)
+    web.post(a, "/2fa", do_2fa)
+    web.get(a, "/dashboard", render_dashboard)
     web.post(a, "/logout", do_logout)
-    io.println("ori-web-demo-auth on http://127.0.0.1:3459/  (demo/demo, argon2id)")
+    io.println("ori-web-demo-auth on http://127.0.0.1:3459/")
+    io.println("  user/pass: demo / demo")
+    io.println(str.concat("  TOTP secret (enroll): ", DEMO_TOTP_SECRET))
+    io.println(str.concat("  otpauth: ", wa.otpauth_url("OriDemo", "demo", DEMO_TOTP_SECRET)))
     match web.serve("127.0.0.1", 3459, a)
     case ok(_):
     case err(msg):

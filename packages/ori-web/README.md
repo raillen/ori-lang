@@ -17,7 +17,9 @@ Minimal HTTP **Library** layer for Ori (phases **A + B + C**, plus SEC8 helpers)
 | Static | `static(app, url_prefix, dir)` with `..` path jail |
 | Middleware | `use_middleware` · `clear_middleware` · catalog `mw_set_header` / `mw_timing` / `mw_request_id` ([docs/middleware.md](docs/middleware.md)) |
 | Session | cookie `ori_sid` (HttpOnly, SameSite=Lax); `session_get` / `session_set` / flash / `session_regenerate` |
-| Session store (B3) | `use_memory_sessions` · `use_file_sessions` · `use_kv_sessions` · `clear_session_cache` · `purge_expired_sessions` · `session_backend` |
+| Session store (B3) | `use_memory_sessions` · `use_file_sessions` · `use_kv_sessions` · **`use_custom_sessions`** · `clear_session_cache` · `purge_expired_sessions` · `session_backend` |
+| Read timeout (B7) | `set_read_timeout(app, ms)` — socket deadline + full Content-Length body read in `serve` |
+| Keep-alive | `set_keep_alive(app, enabled, max)` |
 | Upload (C8) | `parse_multipart` · `form_file` / `form_part_value` · `save_upload(dir, part, max_bytes, "txt,png")` |
 | Timeouts (A9) | `set_session_timeouts(app, idle_ms, absolute_ms)` (default 1h / 24h) |
 | CSRF | form `csrf_token` or header `X-CSRF-Token` on mutations |
@@ -38,7 +40,8 @@ Minimal HTTP **Library** layer for Ori (phases **A + B + C**, plus SEC8 helpers)
 | `packages/ori-web/examples/sec8_tests` | — | SEC8 smoke (XSS body, CSRF, path jail, cookies, JSON, middleware, kv sessions) — `ori run main.orl` |
 | `packages/ori-web-demo` | 3457 | HTML-first notes + htmx |
 | `packages/ori-web-demo-api` | 3458 | JSON API + CSRF header |
-| `packages/ori-web-demo-auth` | 3459 | login + regenerate + file sessions |
+| `packages/ori-web-demo-auth` | 3459 | login + argon2 + **TOTP 2FA** + SQLite sessions |
+| `packages/ori-web-demo-upload` | 3460 | C8 multipart upload |
 
 ## Use (path dependency)
 
@@ -127,6 +130,7 @@ Optional package **`ori-web-auth`** (TOTP via `ori.crypto.totp_*`).
 
 ## Not yet
 
-Redis session driver, in-process TLS (edge proxy recommended), true socket
-read deadlines (B7 — soft-cap only today). SQLite sessions:
-`packages/ori-web-session-sqlite`. Password hashing is in **`ori.crypto`**.
+Redis session driver, in-process TLS server (edge proxy recommended — phase D).
+Password hashing / TOTP: **`ori.crypto`**. SQLite sessions:
+`packages/ori-web-session-sqlite` + symlink `packages/ori-sqlite` (see
+`packages/ori-sqlite.README.md`).

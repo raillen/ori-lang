@@ -84,6 +84,15 @@ public write_bytes(conn: ori.net.Connection, payload: bytes) -> IoResult
     return ori.net.write_all(conn, payload)
 end
 
+-- B7: socket deadlines (milliseconds). Pass <= 0 to clear (block forever).
+public set_read_timeout_ms(conn: ori.net.Connection, timeout_ms: int) -> IoResult
+    return ori.net.set_read_timeout_ms(conn, timeout_ms)
+end
+
+public set_write_timeout_ms(conn: ori.net.Connection, timeout_ms: int) -> IoResult
+    return ori.net.set_write_timeout_ms(conn, timeout_ms)
+end
+
 -- Blocking TCP/TLS I/O runs on a worker thread via task.run_blocking (same = task.spawn).
 -- Join the returned job from sync code; from async code prefer spawning before await boundaries.
 

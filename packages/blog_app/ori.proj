@@ -9,3 +9,5 @@ root_namespace = "app"
 web = { path = "../ori-web", version = "0.1.0" }
 templates = { path = "../ori-templates", version = "0.1.0" }
 web_app = { path = "../ori-web-app", version = "0.1.0" }
+web_session_sqlite = { path = "../ori-web-session-sqlite", version = "0.1.0" }
+sqlite = { path = "../ori-sqlite", version = "0.3.0" }

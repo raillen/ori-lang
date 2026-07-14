@@ -1,25 +1,28 @@
 # ori-web-demo-auth
 
-Login demo: session regenerate (A8), protected dashboard, flash + PRG, rate limit (B4), file sessions (B3).
-
-**Demo credentials:** `demo` / `demo` (not for production).
+Login demo with **argon2id**, **TOTP 2FA**, lockout, audit log, and **SQLite sessions** (fallback file).
 
 ## Run
 
 ```bash
+# ensure packages/ori-sqlite symlink + native libs
+ln -sfn ~/Documentos/Projetos/ori-sqlite ../ori-sqlite   # if missing
+( cd ../ori-sqlite && ./tools/build_linux.sh )
+
 cd packages/ori-web-demo-auth
-ori get .
-ori run main.orl
+ORI_USE_AOT=1 ori run main.orl
 # http://127.0.0.1:3459/
 ```
 
-Sessions persist under `./.sessions/` (file store).
+Credentials: **`demo` / `demo`**, then the 6-digit TOTP code.
 
-## Smoke
+On boot the server prints the base32 secret and `otpauth://` URI for authenticator enrollment. In development the `/2fa` page also shows a live code hint.
 
-```bash
-# login form
-curl -s -c /tmp/au -b /tmp/au http://127.0.0.1:3459/login
-# dashboard without login → redirect
-curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" -c /tmp/au -b /tmp/au http://127.0.0.1:3459/dashboard
-```
+## Env
+
+| Variable | Meaning |
+|----------|---------|
+| `ORI_WEB_SESSION` | `sqlite` (default) · `file` · `memory` |
+| `ORI_ENV` | `production` hides TOTP hint |
+
+SQLite DB: `var/sessions.db` (created next to cwd).

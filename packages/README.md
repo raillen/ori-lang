@@ -11,8 +11,9 @@ External to the language FREEZE-1 core. Path-depend from apps with `ori.proj`.
 | **ori-web-session-sqlite** | SQLite session store (B3 adapter) | Library (+ `ori-sqlite`) |
 | **ori-web-demo** | HTML-first notes (htmx) | :3457 |
 | **ori-web-demo-api** | JSON API | :3458 |
-| **ori-web-demo-auth** | Login + argon2id + lockout | :3459 `demo`/`demo` |
-| **blog_app** | Scaffolded App example | :3000 |
+| **ori-web-demo-auth** | Login + argon2id + TOTP 2FA + SQLite sessions | :3459 `demo`/`demo` + TOTP |
+| **ori-web-demo-upload** | Multipart upload (C8) | :3460 |
+| **blog_app** | Scaffolded App + SQLite sessions | :3000 |
 
 ## Generators (`ori-web-app/bin`)
 
@@ -31,3 +32,5 @@ ori get . && ori run main.orl
 - Phase B/C/D: `ori-web/docs/phase-*.md`
 - Password hashing: `ori.crypto` (argon2id) — needs Ori build with staged runtime
 - 2FA: `ori-web-auth` + `ori.crypto.totp_*` — smoke: `packages/ori-web-auth/examples/smoke`
+- SQLite link: [`ori-sqlite.README.md`](ori-sqlite.README.md) (`ln -sfn` checkout → `packages/ori-sqlite`)
+- Sessions: `ORI_WEB_SESSION=sqlite|file|memory` on blog_app / demo-auth

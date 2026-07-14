@@ -21,10 +21,21 @@ if [ -f "$repo/runtime/x86_64-unknown-linux-gnu/libori_runtime.a" ]; then
   export ORI_RUNTIME_LIB="${ORI_RUNTIME_LIB:-$repo/runtime/x86_64-unknown-linux-gnu/libori_runtime.a}"
 fi
 
-SQLITE_ROOT="${ORI_SQLITE_ROOT:-$HOME/Documentos/Projetos/ori-sqlite}"
+# Prefer monorepo symlink packages/ori-sqlite, then ORI_SQLITE_ROOT, then Documentos default.
+if [ -n "${ORI_SQLITE_ROOT:-}" ]; then
+  SQLITE_ROOT="$ORI_SQLITE_ROOT"
+elif [ -d "$repo/packages/ori-sqlite" ]; then
+  SQLITE_ROOT="$repo/packages/ori-sqlite"
+else
+  SQLITE_ROOT="$HOME/Documentos/Projetos/ori-sqlite"
+fi
+# Ensure packages/ori-sqlite exists for relative path deps in ori.pkg.toml
+if [ ! -e "$repo/packages/ori-sqlite" ] && [ -d "$SQLITE_ROOT" ]; then
+  ln -sfn "$SQLITE_ROOT" "$repo/packages/ori-sqlite"
+fi
 if [ ! -f "$SQLITE_ROOT/lib/x86_64-unknown-linux-gnu/libsqlite3.a" ]; then
   if [ -x "$SQLITE_ROOT/tools/build_linux.sh" ]; then
-    echo "== build ori-sqlite native =="
+    echo "== build ori-sqlite native ($SQLITE_ROOT) =="
     "$SQLITE_ROOT/tools/build_linux.sh"
   else
     echo "web_session_sqlite_smoke: SKIP (ori-sqlite not built at $SQLITE_ROOT)" >&2

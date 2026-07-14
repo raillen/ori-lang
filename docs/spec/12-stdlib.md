@@ -953,6 +953,13 @@ const totp_ok: bool = crypto.totp_verify(secret, code, 1_700_000_000, 1)
 | `totp_code(secret, unix_secs)` | `string, int → string` | 6-digit code; empty on failure |
 | `totp_verify(secret, code, unix_secs, window)` | `… → bool` | ±`window` steps (max 10) |
 
+### Net timeouts (B7)
+
+| Function | Type | Notes |
+|----------|------|--------|
+| `set_read_timeout_ms(conn, ms)` | `Connection, int → result[void,string]` | `ms <= 0` clears |
+| `set_write_timeout_ms(conn, ms)` | same | used by `web.set_read_timeout` |
+
 Layer 2 wrappers in `stdlib/crypto.orl`: `hash_password` / `verify_password` /
 `totp_generate_secret` / `totp_code` / `totp_verify`.
 

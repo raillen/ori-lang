@@ -1,5 +1,5 @@
 manifest = 1
-name = "web_demo_auth"
+name = "web_demo_upload"
 version = "0.1.0"
 kind = "app"
 entry = "main.orl"
@@ -8,6 +8,3 @@ root_namespace = "app"
 [dependencies]
 web = { path = "../ori-web", version = "0.1.0" }
 templates = { path = "../ori-templates", version = "0.1.0" }
-web_auth = { path = "../ori-web-auth", version = "0.1.0" }
-web_session_sqlite = { path = "../ori-web-session-sqlite", version = "0.1.0" }
-sqlite = { path = "../ori-sqlite", version = "0.3.0" }

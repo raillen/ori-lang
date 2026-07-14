@@ -42,3 +42,21 @@ a = web.set_host_cookie(a, true)  -- optional __Host- prefix
 ## Password hashes (C10)
 
 Use `ori.crypto.password_hash` / `password_verify` (argon2id). Never store plain passwords.
+
+## TLS (in-process vs edge)
+
+**Recommended:** terminate TLS at Caddy/nginx/Traefik (this doc). Ori `serve` is
+plain HTTP on localhost.
+
+**Not in core v1:** in-process TLS listener (rustls server) — client
+`connect_tls` already exists for outbound HTTPS. Prefer the reverse proxy for
+certificates, HTTP/2, and HSTS.
+
+## B7 + keep-alive
+
+```ori
+a = web.set_read_timeout(a, 30000)   -- socket read/write deadline
+a = web.set_keep_alive(a, true, 32)
+```
+
+Proxy idle timeouts should still be shorter or equal than app deadlines.

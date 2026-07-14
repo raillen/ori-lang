@@ -1,0 +1,94 @@
+module app.main
+
+-- C8 upload demo: multipart form + path jail + extension allowlist.
+
+import web = web
+import templates = tpl
+import ori.io = io
+import ori.string = str
+import ori.fs = fs
+
+var VIEWS: tpl.Engine = tpl.open("views")
+var LAST_PATH: string = ""
+var LAST_NAME: string = ""
+
+base(req: web.Request) -> tpl.Data
+    var d: tpl.Data = tpl.empty_data()
+    tpl.set_value(d, "csrf_token", web.csrf_token(req))
+    tpl.set_value(d, "flash_notice", "")
+    tpl.set_value(d, "flash_error", "")
+    tpl.set_value(d, "last_path", LAST_PATH)
+    tpl.set_value(d, "last_name", LAST_NAME)
+    match web.take_flash(req, "notice")
+    case some(m):
+        tpl.set_value(d, "flash_notice", m)
+    case none:
+    end
+    match web.take_flash(req, "error")
+    case some(m):
+        tpl.set_value(d, "flash_error", m)
+    case none:
+    end
+    return d
+end
+
+home(req: web.Request) -> web.ActionResult
+    match tpl.render(VIEWS, "home", base(req))
+    case ok(html):
+        return ok(web.html(200, html))
+    case err(e):
+        return ok(web.text(500, tpl.error_message(e)))
+    end
+    return ok(web.not_found())
+end
+
+do_upload(req: web.Request) -> web.ActionResult
+    match web.parse_multipart(req)
+    case err(e):
+        web.flash(req, "error", str.concat("multipart: ", e))
+        return ok(web.redirect(303, "/"))
+    case ok(parts):
+        match web.form_file(parts, "file")
+        case none:
+            web.flash(req, "error", "No file field.")
+            return ok(web.redirect(303, "/"))
+        case some(f):
+            -- store outside any static webroot
+            match web.save_upload("var/uploads", f, 1048576, "txt,md,png,jpg,jpeg,pdf")
+            case ok(path):
+                LAST_PATH = path
+                LAST_NAME = f.filename
+                web.flash(req, "notice", str.concat("Saved ", path))
+                web.audit("upload.ok", path)
+                return ok(web.redirect(303, "/"))
+            case err(se):
+                web.flash(req, "error", se)
+                web.audit("upload.fail", se)
+                return ok(web.redirect(303, "/"))
+            end
+        end
+    end
+    return ok(web.redirect(303, "/"))
+end
+
+main()
+    match fs.create_dir_all("var/uploads")
+    case ok(_):
+    case err(_):
+    end
+    web.use_memory_sessions()
+    var a: web.App = web.app()
+    a = web.set_read_timeout(a, 60000)
+    a = web.set_max_body(a, 2 * 1048576)
+    a = web.set_csp(a, "default-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'")
+    web.set_audit_log("var/upload-audit.log")
+    web.get(a, "/", home)
+    web.post(a, "/upload", do_upload)
+    io.println("ori-web-demo-upload on http://127.0.0.1:3460/")
+    io.println("  multipart → var/uploads (txt,md,png,jpg,pdf; max 1MiB)")
+    match web.serve("127.0.0.1", 3460, a)
+    case ok(_):
+    case err(msg):
+        io.println(msg)
+    end
+end

@@ -48,6 +48,16 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   forward `native_libs` (and one-level nested package deps) into AOT/JIT link
   context so `sqlite` staticlibs resolve when used from apps.
 
+### Adicionado (web A+B close-out)
+- **B7 socket deadlines:** `ori.net.set_read_timeout_ms` /
+  `set_write_timeout_ms` + `web.set_read_timeout`; `serve` assembles full
+  HTTP request (headers + Content-Length body) under the deadline.
+- **Demos:** `ori-web-demo-auth` with TOTP 2FA + SQLite sessions;
+  `ori-web-demo-upload` (C8); `blog_app` SQLite sessions via
+  `ORI_WEB_SESSION`.
+- **ori-sqlite path:** relative `packages/ori-sqlite` symlink (gitignored) +
+  `packages/ori-sqlite.README.md` + `ORI_SQLITE_ROOT` in QA smoke.
+
 ---
 
 ## [0.3.5] — 2026-07-14

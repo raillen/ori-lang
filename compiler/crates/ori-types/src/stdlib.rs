@@ -737,6 +737,14 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
         "ori.net.read_some_async",
         ["net.read_some_async"] => "ori_net_read_some_async"
     ),
+    stdlib!(
+        "ori.net.set_read_timeout_ms",
+        ["net.set_read_timeout_ms"] => "ori_net_set_read_timeout_ms"
+    ),
+    stdlib!(
+        "ori.net.set_write_timeout_ms",
+        ["net.set_write_timeout_ms"] => "ori_net_set_write_timeout_ms"
+    ),
     stdlib!("ori.net.write_all", ["net.write_all"] => "ori_net_write_all"),
     stdlib!(
         "ori.net.write_all_async",
@@ -1747,6 +1755,10 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
                 Box::new(Ty::String),
             ))),
         ),
+        "ori.net.set_read_timeout_ms" | "ori.net.set_write_timeout_ms" => (
+            vec![connection_ty(), Ty::Int],
+            Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
+        ),
         "ori.net.write_all" => (
             vec![connection_ty(), Ty::Bytes],
             Ty::Result(Box::new(Ty::Void), Box::new(Ty::String)),
@@ -2117,6 +2129,9 @@ pub fn stdlib_native_abi(
         "ori_net_udp_send_to" | "ori_net_udp_send_to_async" => (vec![Ptr, Ptr, I64, Ptr], Some(Ptr)),
         "ori_net_udp_recv_from" | "ori_net_udp_recv_from_async" => (vec![Ptr, I64], Some(Ptr)),
         "ori_net_read_some" | "ori_net_read_some_async" => (vec![Ptr, I64], Some(Ptr)),
+        "ori_net_set_read_timeout_ms" | "ori_net_set_write_timeout_ms" => {
+            (vec![Ptr, I64], Some(Ptr))
+        }
         "ori_net_write_all" | "ori_net_write_all_async" => (vec![Ptr, Ptr], Some(Ptr)),
         "ori_net_close" => (vec![Ptr], None),
         "ori_net_is_closed" => (vec![Ptr], Some(I8)),

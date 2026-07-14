@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>@{ title }</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 36rem; margin: 2rem auto; padding: 0 1rem; }
+    .flash { padding: 0.5rem 0.75rem; margin-bottom: 1rem; border-radius: 4px; }
+    .notice { background: #e8f5e9; }
+    .error { background: #ffebee; }
+    code { font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  @{ if flash_notice }
+  <p class="flash notice">@{ flash_notice }</p>
+  @{ end }
+  @{ if flash_error }
+  <p class="flash error">@{ flash_error }</p>
+  @{ end }
+  @{ yield }
+</body>
+</html>

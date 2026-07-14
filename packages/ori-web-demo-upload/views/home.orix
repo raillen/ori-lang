@@ -1,0 +1,13 @@
+@{ layout "layouts/app" }
+@{ assign title = "Upload · ori-web" }
+<h1>Secure upload (C8)</h1>
+<p>Multipart file → <code>var/uploads/</code> (outside webroot). Extensions: txt, md, png, jpg, pdf.</p>
+<form method="post" action="/upload" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="@{ csrf_token }">
+  <label>File<br><input type="file" name="file" required></label>
+  <p style="margin-top:0.75rem"><button type="submit">Upload</button></p>
+</form>
+@{ if last_path }
+<p>Last save: <code>@{ last_path }</code> (name <code>@{ last_name }</code>)</p>
+@{ end }
+@{ end }

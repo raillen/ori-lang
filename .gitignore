@@ -1,57 +1,51 @@
-# Rust / Cargo
-target/
-*.pdb
 
+build/
+.cargo/
+!Cargo.lock
+dist/
+.DS_Store
+/hello.*
+# IDE
+.idea/
+*.lock
+*.log
+# Logs
+lsp.log
+node_modules/
 # Ori compiler output
 *.orl.c
 *.orl.o
-dist/
-build/
-runtime/**/ori_runtime.lib
+# OS
+packages/ori-sqlite
+*.pdb
+.playwright-mcp/
+*.pyc
+__pycache__/
+.pytest_cache/
+# Python cache (tools)
 runtime/**/libori_runtime.a
-runtime/**/ori_runtime.dll
-runtime/**/libori_runtime.so
 runtime/**/libori_runtime.dylib
+runtime/**/libori_runtime.so
+runtime/**/ori_runtime.dll
+runtime/**/ori_runtime.lib
 runtime/**/rust-lld
 runtime/**/rust-lld.exe
-
+# Rust / Cargo
 # Scratch test files at repo root
-/t*.orl
-/t*.exe
-/t*.o
-/t*.txt
-/hello.*
-/test*.*
-
-# IDE
-.idea/
-.cargo/
-.vscode/
-.windsurf/
-.vscode/settings.json
-*.swp
+.sessions/
 *.swo
-.DS_Store
-
-# Logs
-*.log
-lsp.log
-
+*.swp
+target/
+/test*.*
 # Test artifacts
 tests/snapshots/tmp/
-tmp/
-.ztc-tmp/
-.playwright-mcp/
-
-# Python cache (tools)
-__pycache__/
-*.pyc
-.pytest_cache/
-
-# OS
+/t*.exe
 Thumbs.db
-
-node_modules/
-*.lock
-!Cargo.lock
-.sessions/
+tmp/
+/t*.o
+/t*.orl
+/t*.txt
+.vscode/
+.vscode/settings.json
+.windsurf/
+.ztc-tmp/

@@ -57,6 +57,8 @@ var CFG_AUDIT_PATH: string = ""
 -- HTTP/1.1 keep-alive (same connection, multiple requests until close/max)
 var CFG_KEEP_ALIVE: bool = true
 var CFG_KEEP_ALIVE_MAX: int = 32
+-- B7: per-socket read deadline (ms). 0 = OS default / blocking.
+var CFG_READ_TIMEOUT_MS: int = 30000
 
 -- C4 lockout buckets: key -> "fails|lock_until_ms"
 var LOCKOUT: map[string, string] = maps.new()
@@ -120,6 +122,7 @@ public app() -> App
     CFG_HOST_COOKIE = false
     CFG_KEEP_ALIVE = true
     CFG_KEEP_ALIVE_MAX = 32
+    CFG_READ_TIMEOUT_MS = 30000
     -- sticky: audit path, session backend
     clear_middleware()
     return App {
@@ -267,6 +270,16 @@ public set_keep_alive(a: App, enabled: bool, max_requests: int) -> App
     CFG_KEEP_ALIVE = enabled
     if max_requests > 0
         CFG_KEEP_ALIVE_MAX = max_requests
+    end
+    return a
+end
+
+-- B7: request read deadline in milliseconds (applied per accepted connection).
+public set_read_timeout(a: App, timeout_ms: int) -> App
+    if timeout_ms > 0
+        CFG_READ_TIMEOUT_MS = timeout_ms
+    else
+        CFG_READ_TIMEOUT_MS = 0
     end
     return a
 end
@@ -1894,9 +1907,9 @@ guard_reauth(max_age_ms: int, next: Handler, req: Request) -> ActionResult
 end
 
 -- - Serve loop -
--- B7 note: ori.net has no per-socket read deadline yet. We soft-cap the
--- first read to CFG_MAX_BODY + 8192 bytes (header+body). Prefer reverse
--- proxy idle timeouts in production (phase D).
+-- B7: set_read_timeout applies socket deadlines via ori.net.set_read_timeout_ms.
+-- Full request assembly: read until headers, then Content-Length body (cap max_body).
+-- Prefer reverse-proxy idle timeouts in production (phase D).
 
 public serve(host: string, port: int, a: App) -> result[void, string]
     match require_secret_if_prod()
@@ -1920,6 +1933,16 @@ public serve(host: string, port: int, a: App) -> result[void, string]
 end
 
 handle_conn(a: App, conn: net.Connection) -> void
+    if CFG_READ_TIMEOUT_MS > 0
+        match net.set_read_timeout_ms(conn, CFG_READ_TIMEOUT_MS)
+        case ok(_):
+        case err(_):
+        end
+        match net.set_write_timeout_ms(conn, CFG_READ_TIMEOUT_MS)
+        case ok(_):
+        case err(_):
+        end
+    end
     var n: int = 0
     var open: bool = true
     while open
@@ -1930,58 +1953,151 @@ handle_conn(a: App, conn: net.Connection) -> void
             net.close(conn)
             return
         end
-        match net.read_some(conn, CFG_MAX_BODY + 8192)
-        case err(_):
+        match read_full_http_request(conn, CFG_MAX_BODY)
+        case err(msg):
+            if msg == "payload too large"
+                const r: Response = payload_too_large()
+                const bytes_out: bytes = str.to_bytes(format_response_conn(r, "x", false))
+                match net.write_all(conn, bytes_out)
+                case ok(_):
+                case err(_):
+                end
+            end
             net.close(conn)
             return
-        case ok(chunk):
-            match str.from_bytes(chunk)
-            case err(_):
+        case ok(raw):
+            if str.len(raw) == 0
                 net.close(conn)
                 return
-            case ok(raw):
-                if str.len(raw) == 0
+            end
+            match parse_request(raw, CFG_MAX_BODY, CFG_IDLE_MS, CFG_ABS_MS)
+            case err(msg):
+                if msg == "payload too large"
+                    const r2: Response = payload_too_large()
+                    match net.write_all(conn, str.to_bytes(format_response_conn(r2, "x", false)))
+                    case ok(_):
+                    case err(_):
+                    end
+                end
+                net.close(conn)
+                return
+            case ok(req):
+                const res: Response = dispatch(a, req)
+                var ka: bool = CFG_KEEP_ALIVE
+                if not client_wants_keep_alive(req)
+                    ka = false
+                end
+                if n + 1 >= CFG_KEEP_ALIVE_MAX
+                    ka = false
+                end
+                const wire: string = format_response_conn(res, req.session_id, ka)
+                match net.write_all(conn, str.to_bytes(wire))
+                case ok(_):
+                case err(_):
                     net.close(conn)
                     return
                 end
-                match parse_request(raw, CFG_MAX_BODY, CFG_IDLE_MS, CFG_ABS_MS)
-                case err(msg):
-                    if msg == "payload too large"
-                        const r: Response = payload_too_large()
-                        const bytes_out: bytes = str.to_bytes(format_response_conn(r, "x", false))
-                        match net.write_all(conn, bytes_out)
-                        case ok(_):
-                        case err(_):
-                        end
-                    end
+                n = n + 1
+                if not ka
                     net.close(conn)
                     return
-                case ok(req):
-                    const res: Response = dispatch(a, req)
-                    var ka: bool = CFG_KEEP_ALIVE
-                    if not client_wants_keep_alive(req)
-                        ka = false
-                    end
-                    if n + 1 >= CFG_KEEP_ALIVE_MAX
-                        ka = false
-                    end
-                    const wire: string = format_response_conn(res, req.session_id, ka)
-                    match net.write_all(conn, str.to_bytes(wire))
-                    case ok(_):
-                    case err(_):
-                        net.close(conn)
-                        return
-                    end
-                    n = n + 1
-                    if not ka
-                        net.close(conn)
-                        return
-                    end
                 end
             end
         end
     end
     net.close(conn)
+end
+
+-- Assemble one HTTP/1.1 request: headers + body by Content-Length.
+read_full_http_request(conn: net.Connection, max_body: int) -> result[string, string]
+    var raw: string = ""
+    var rounds: int = 0
+    while rounds < 64
+        rounds = rounds + 1
+        match net.read_some(conn, 8192)
+        case err(e):
+            if str.len(raw) == 0
+                return err(e)
+            end
+            -- timeout/partial after some data
+            return err(e)
+        case ok(chunk):
+            match str.from_bytes(chunk)
+            case err(em):
+                return err(em)
+            case ok(piece):
+                if str.len(piece) == 0
+                    if str.len(raw) == 0
+                        return ok("")
+                    end
+                    return err("connection closed mid-request")
+                end
+                raw = str.concat(raw, piece)
+            end
+        end
+        const sep: string = "\r\n\r\n"
+        const at: int = str.index_of(raw, sep)
+        if at < 0
+            if str.len(raw) > max_body + 8192
+                return err("payload too large")
+            end
+        else
+            const head: string = str.slice(raw, 0, at)
+            var body: string = str.slice(raw, at + 4, str.len(raw))
+            const need: int = content_length_of(head)
+            if need < 0
+                -- no Content-Length: treat what we have as full (GET/etc.)
+                return ok(raw)
+            end
+            if need > max_body
+                return err("payload too large")
+            end
+            while str.len(body) < need
+                const missing: int = need - str.len(body)
+                var chunk_sz: int = 8192
+                if missing < chunk_sz
+                    chunk_sz = missing
+                end
+                match net.read_some(conn, chunk_sz)
+                case err(e2):
+                    return err(e2)
+                case ok(more):
+                    match str.from_bytes(more)
+                    case err(em2):
+                        return err(em2)
+                    case ok(p2):
+                        if str.len(p2) == 0
+                            return err("connection closed mid-body")
+                        end
+                        body = str.concat(body, p2)
+                        raw = str.concat(str.slice(raw, 0, at + 4), body)
+                    end
+                end
+            end
+            if str.len(body) > need
+                body = str.slice(body, 0, need)
+            end
+            return ok(str.concat(str.slice(raw, 0, at + 4), body))
+        end
+    end
+    return err("incomplete HTTP request")
+end
+
+content_length_of(head: string) -> int
+    const lines: list[string] = str.split(str.replace_all(head, "\r\n", "\n"), "\n")
+    var i: int = 0
+    while i < lists.len(lines)
+        const line: string = lines[i]
+        const lower: string = str.to_lower(line)
+        if str.starts_with(lower, "content-length:")
+            const c: int = str.index_of(line, ":")
+            if c > 0
+                return conv.parse_int_or(str.trim(str.slice(line, c + 1, str.len(line))), -1)
+            end
+        end
+        i = i + 1
+    end
+    return -1
 end
 
 client_wants_keep_alive(req: Request) -> bool

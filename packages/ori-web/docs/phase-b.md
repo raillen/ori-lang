@@ -10,7 +10,7 @@ Design: [`web-templates-discussion-roadmap.md`](../../../docs/planning/web-templ
 | **B4 Rate limit** | `set_rate_limit(app, per_minute)` | Applied to mutations; key = `client_key` (`X-Forwarded-For` if `set_trust_proxy`). |
 | **B5 Flash + PRG** | `flash` / `take_flash` + `redirect(303, …)` | Already in MVP demos. |
 | **B6 Security headers** | Always: nosniff, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` | Optional CSP: `set_csp(app, policy)`. |
-| **B7 Request timeout** | Soft-cap only | First `read_some` capped at `max_body+8192`. True socket deadlines wait on `ori.net`. Use proxy idle timeouts (phase D). |
+| **B7 Request timeout** | Socket + body assembly | `set_read_timeout(app, ms)` → `ori.net.set_read_timeout_ms` / write timeout; `serve` reads headers then full `Content-Length` body (capped by `max_body`). Still pair with proxy idle timeouts (phase D). |
 
 ### Implementation note (App config)
 

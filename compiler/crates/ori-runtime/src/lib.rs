@@ -8050,6 +8050,21 @@ impl ConnectionTransport {
             ConnectionTransport::Tls(stream) => stream.get_ref().shutdown(how),
         }
     }
+
+    /// B7: socket read deadline. `None` clears the timeout (blocking).
+    fn set_read_timeout(&self, timeout: Option<std::time::Duration>) -> std::io::Result<()> {
+        match self {
+            ConnectionTransport::Plain(stream) => stream.set_read_timeout(timeout),
+            ConnectionTransport::Tls(stream) => stream.get_ref().set_read_timeout(timeout),
+        }
+    }
+
+    fn set_write_timeout(&self, timeout: Option<std::time::Duration>) -> std::io::Result<()> {
+        match self {
+            ConnectionTransport::Plain(stream) => stream.set_write_timeout(timeout),
+            ConnectionTransport::Tls(stream) => stream.get_ref().set_write_timeout(timeout),
+        }
+    }
 }
 
 struct RuntimeListener {
@@ -8861,6 +8876,49 @@ pub unsafe extern "C" fn ori_net_udp_local_port(sock_ptr: *mut u8) -> i64 {
         .unwrap_or(-1)
 }
 
+/// Set TCP read timeout in milliseconds. `timeout_ms <= 0` clears the deadline.
+/// Returns `result[void, string]` (ok/err pointer pair).
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_set_read_timeout_ms(conn: *mut u8, timeout_ms: i64) -> *mut u8 {
+    if conn.is_null() {
+        return new_result(false, cstring_from_str("invalid connection"));
+    }
+    let connection = &*(conn as *mut RuntimeConnection);
+    let Some(stream) = connection.stream.as_ref() else {
+        return new_result(false, cstring_from_str("connection closed"));
+    };
+    let dur = if timeout_ms <= 0 {
+        None
+    } else {
+        Some(std::time::Duration::from_millis(timeout_ms as u64))
+    };
+    match stream.set_read_timeout(dur) {
+        Ok(()) => new_result(true, std::ptr::null_mut()),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
+/// Set TCP write timeout in milliseconds. `timeout_ms <= 0` clears the deadline.
+#[no_mangle]
+pub unsafe extern "C" fn ori_net_set_write_timeout_ms(conn: *mut u8, timeout_ms: i64) -> *mut u8 {
+    if conn.is_null() {
+        return new_result(false, cstring_from_str("invalid connection"));
+    }
+    let connection = &*(conn as *mut RuntimeConnection);
+    let Some(stream) = connection.stream.as_ref() else {
+        return new_result(false, cstring_from_str("connection closed"));
+    };
+    let dur = if timeout_ms <= 0 {
+        None
+    } else {
+        Some(std::time::Duration::from_millis(timeout_ms as u64))
+    };
+    match stream.set_write_timeout(dur) {
+        Ok(()) => new_result(true, std::ptr::null_mut()),
+        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn ori_net_read_some(conn: *mut u8, max_bytes: i64) -> *mut u8 {
     if conn.is_null() {
@@ -8877,7 +8935,10 @@ pub unsafe extern "C" fn ori_net_read_some(conn: *mut u8, max_bytes: i64) -> *mu
             buf.truncate(n);
             new_result(true, cstring_from_bytes(buf))
         }
-        Err(e) => new_result(false, cstring_from_str(&e.to_string())),
+        Err(e) => {
+            // TimedOut surfaces as a normal error string so Ori can retry/close.
+            new_result(false, cstring_from_str(&e.to_string()))
+        }
     }
 }
 
