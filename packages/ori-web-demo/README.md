@@ -12,10 +12,11 @@ HTML-first smoke app on top of **`web`** + **`templates`** (path **C** in the we
 
 ```bash
 cd packages/ori-web-demo
-ori get .
 ori run main.orl
 # open http://127.0.0.1:3457/
 ```
+
+Stack index / freeze: [`../README.md`](../README.md) · [`../FREEZE-WEB.md`](../FREEZE-WEB.md).
 
 ## Smoke
 

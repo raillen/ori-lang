@@ -2,9 +2,11 @@
 
 Minimal HTTP **Library** layer for Ori (phases **A + B + C**, plus SEC8 helpers).
 
+**Status:** web stack **feature freeze v1** — see [`../FREEZE-WEB.md`](../FREEZE-WEB.md).
+
 - Design: [`docs/planning/web-templates-discussion-roadmap.md`](../../docs/planning/web-templates-discussion-roadmap.md) (D14–D20, §5.5)
-- Phase B notes: [`docs/phase-b.md`](docs/phase-b.md)
-- Learning course: [`docs/planning/web-framework-learning-course.md`](../../docs/planning/web-framework-learning-course.md)
+- Phase B/C/D: [`docs/phase-b.md`](docs/phase-b.md) · [`phase-c.md`](docs/phase-c.md) · [`phase-d.md`](docs/phase-d.md)
+- Stack index: [`../README.md`](../README.md)
 
 ## Features
 

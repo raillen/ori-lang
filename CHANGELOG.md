@@ -12,59 +12,26 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Notas
 - Working tree after **v0.3.5**.
+- **Web stack feature freeze v1** documented in
+  [`packages/FREEZE-WEB.md`](packages/FREEZE-WEB.md) and
+  [`packages/README.md`](packages/README.md). Ready for polish + official
+  language release packaging (runtime symbols for crypto/TOTP/net timeouts).
 
 ### Adicionado
-- **`ori-web` SEC8 + middleware + JSON + kv sessions:** composable
-  `use_middleware` / `clear_middleware` (onion around route handlers);
-  flat `json_string_map` / `parse_json_object` (no `ori.json` import cycle);
-  `use_kv_sessions(path)` single-file session store; test hooks
-  `make_request` / `to_http`. Golden smoke:
-  `packages/ori-web/examples/sec8_tests` (CSRF, path jail, cookies, XSS body,
-  JSON, middleware, kv persistence).
-- **`ori-web-app` `generate-scaffold`:** full REST resource
-  (index/new/create/show/edit/update/destroy + views + routes).
-- **`ori-web` high-value close-out:** catalog middleware (`mw_set_header`,
-  `mw_timing`, `mw_request_id`); C8 multipart (`parse_multipart`,
-  `save_upload` with ext allowlist + path jail); session helpers
-  `clear_session_cache` / `purge_expired_sessions`; expanded SEC8 suite +
-  `tools/qa/web_sec8.sh` (hooked in `daily_full`); `blog_app` notes full REST;
-  docs `middleware.md` + phase B/C updates (B7 soft-cap documented).
-- **`ori.crypto` TOTP (C3):** `totp_generate_secret` / `totp_code` /
-  `totp_verify` (RFC 6238 HMAC-SHA1, 30s, 6 digits) in `ori-runtime` +
-  stdlib wrappers.
-- **`packages/ori-web-auth`:** optional 2FA helpers (enrollment URI, session
-  pending/ok flags, recovery codes, `require_2fa` guard). Smoke:
-  `examples/smoke` + `tools/qa/web_auth_smoke.sh`.
-- **`ori-web` keep-alive:** `set_keep_alive(app, enabled, max)` — HTTP/1.1
-  connection reuse in `serve` (default on, max 32).
-- **`ori-web` custom session hooks:** `use_custom_sessions(load, save, remove)`
-  for external stores.
-- **`packages/ori-web-session-sqlite`:** SQLite session adapter (table
-  `web_sessions`) over `ori-sqlite` native package. Smoke +
-  `tools/qa/web_session_sqlite_smoke.sh` (AOT; requires staged libsqlite).
+- **Web stack (packages):** templates (S8 trim), `ori-web` (A/B/C + SEC8 +
+  nested JSON + middleware + upload + keep-alive + B7 + custom sessions),
+  `ori-web-app` generators, `ori-web-auth` (TOTP), `ori-web-session-sqlite`,
+  demos (hello, notes, API, auth+2FA, upload, `blog_app`).
+- **Runtime/stdlib for web:** `ori.crypto` argon2id + TOTP; `ori.net`
+  `set_read_timeout_ms` / `set_write_timeout_ms`; package `native_libs`
+  forwarded from path deps.
+- **QA:** `tools/qa/web_sec8.sh`, `web_auth_smoke.sh`,
+  `web_session_sqlite_smoke.sh` (daily_full S6b–S6d).
 
-### Corrigido
-- **Package native libs on path deps:** `ori.proj` / package dependencies now
-  forward `native_libs` (and one-level nested package deps) into AOT/JIT link
-  context so `sqlite` staticlibs resolve when used from apps.
-
-### Adicionado (templates S8 + JSON aninhado — freeze prep)
-- **Templates S8:** whitespace control markers `@{ - … -}` (trim before/after
-  tag), documented in `ori-templates` README; smoke `s8-trim-ok`.
-- **`ori-web` nested JSON:** builders `json_string` / `json_int` / `json_bool` /
-  `json_null` / `json_pair` / `json_object` / `json_array` and
-  `parse_json_nested` (flatten to dotted paths). SEC8 covers encode+parse.
-  Still no `import ori.json` from web (cycle-safe).
-
-### Adicionado (web A+B close-out)
-- **B7 socket deadlines:** `ori.net.set_read_timeout_ms` /
-  `set_write_timeout_ms` + `web.set_read_timeout`; `serve` assembles full
-  HTTP request (headers + Content-Length body) under the deadline.
-- **Demos:** `ori-web-demo-auth` with TOTP 2FA + SQLite sessions;
-  `ori-web-demo-upload` (C8); `blog_app` SQLite sessions via
-  `ORI_WEB_SESSION`.
-- **ori-sqlite path:** relative `packages/ori-sqlite` symlink (gitignored) +
-  `packages/ori-sqlite.README.md` + `ORI_SQLITE_ROOT` in QA smoke.
+### Documentação
+- Stack index + packaging note: `packages/README.md`.
+- Freeze policy: `packages/FREEZE-WEB.md`.
+- Phase B/C/D, middleware, ori-sqlite symlink README.
 
 ---
 

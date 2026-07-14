@@ -1,31 +1,21 @@
 # blog_app
 
-Scaffolded by `ori-web-app` (Rails-like App layer for Ori).
+Scaffolded **ori-web-app** example: home, posts, notes + tasks REST, optional **SQLite sessions**.
 
 ## Run
 
 ```bash
+# optional SQLite sessions (default ORI_WEB_SESSION=sqlite)
+ln -sfn "$HOME/Documentos/Projetos/ori-sqlite" ../ori-sqlite
+( cd ../ori-sqlite && ./tools/build_linux.sh )
+
 cd packages/blog_app
-ori get .
-ori run main.orl
+ORI_USE_AOT=1 ori run main.orl
 # http://127.0.0.1:3000/
 ```
 
-## Layout
+| Env | Meaning |
+|-----|---------|
+| `ORI_WEB_SESSION` | `sqlite` (default) · `file` · `memory` |
 
-| Path | Role |
-|------|------|
-| `main.orl` | boot |
-| `config/app.orl` | port, roots |
-| `config/routes.orl` | explicit routes |
-| `app/controllers/` | handlers |
-| `app/application.orl` | shared helpers |
-| `views/` | `.orix` templates |
-| `public/` | static (`/assets/*`) |
-
-## Generators
-
-```bash
-# from app root
-/home/raillen/.grok/worktrees/projetos-ori-lang/analise-e-avaliao/packages/ori-web-app/bin/generate-controller posts
-```
+DB file: `var/sessions.db` when using sqlite.

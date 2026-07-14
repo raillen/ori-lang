@@ -10,15 +10,14 @@ Uses `web.use_custom_sessions` so the Library layer stays free of native deps.
 [dependencies]
 web = { path = "../ori-web", version = "0.1.0" }
 web_session_sqlite = { path = "../ori-web-session-sqlite", version = "0.1.0" }
-# ori-sqlite (sibling or absolute path) — provides native libsqlite3 + shim
-sqlite = { path = "/home/raillen/Documentos/Projetos/ori-sqlite", version = "0.3.0" }
+sqlite = { path = "../ori-sqlite", version = "0.3.0" }
 ```
 
-Build/stage sqlite first:
+Link and build **ori-sqlite** first (see [`../ori-sqlite.README.md`](../ori-sqlite.README.md)):
 
 ```bash
-cd ~/Documentos/Projetos/ori-sqlite
-./tools/build_linux.sh
+ln -sfn "$HOME/Documentos/Projetos/ori-sqlite" ../ori-sqlite
+( cd ../ori-sqlite && ./tools/build_linux.sh )
 ```
 
 ## Use

@@ -13,10 +13,12 @@ JSON notes API on **`web`** (phase B: rate limit, security headers, CSRF header)
 
 ```bash
 cd packages/ori-web-demo-api
-ori get .
 ori run main.orl
 # http://127.0.0.1:3458/
 ```
+
+For nested JSON builders, see `web.json_object` / `parse_json_nested` in **ori-web**.  
+Stack: [`../README.md`](../README.md).
 
 ## Smoke
 
