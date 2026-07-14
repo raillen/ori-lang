@@ -4,7 +4,7 @@ Local language support for **Ori** (`.orl`): LSP, grammar, snippets, doctor.
 
 **Install:** local `.vsix` only — **no Marketplace** (TOOL-MP cancelled).
 
-Surface: **S3** + inference B · extension version matches package (**0.3.4**).
+Surface: **S3** + inference B · extension version matches package (**0.3.5**).
 
 ## Features
 

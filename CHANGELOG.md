@@ -10,11 +10,21 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Notas
+- Working tree after **v0.3.5**.
+
+---
+
+## [0.3.5] — 2026-07-14
+
 ### Adicionado
 - **Multi-OS release packages (DIST):** GitHub Actions `release.yml` builds
   Linux (tar.gz + deb), Windows MSVC (zip), macOS Apple Silicon + Intel
   (tar.gz). `native-route` smoke-no-rust enabled for Windows and macOS.
   Docs: `docs/install.md` / `install.pt-BR.md`.
+- **`ori.crypto` (C10):** argon2id password hash/verify in runtime + stdlib.
+- **Web stack packages:** `ori-templates`, `ori-web` (A+B+C), `ori-web-app`
+  generators, demos (`ori-web-demo*`, `blog_app`).
 - **`packages/ori-templates` (MVP):** server-side HTML templates for Ori —
   delimiters `@{ }`, comments `@{-- --}`, escape default, `|> raw` last-stage only,
   `if`/`elif`/`else`/`for`/`include`/`layout`/`assign`, path jail, `.orix` files.
