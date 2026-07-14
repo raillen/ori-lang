@@ -1,5 +1,9 @@
 # Ori
 
+<p align="center">
+  <img src="branding/logo-with-text.svg" alt="Ori" width="420" />
+</p>
+
 **Superfície S3 (`0.3.0`):** sintaxe inspirada na Auk9 sobre o motor Ori. Propósito (estudo, IA, legibilidade ND — **não** competição de mercado): [manifesto](docs/spec/00-manifesto.md). Auk9 lab **aposentada como produto**.
 
 Ori é uma linguagem de programação compilada para código nativo, com tipagem

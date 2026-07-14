@@ -1,5 +1,9 @@
 # Ori
 
+<p align="center">
+  <img src="branding/logo-with-text.svg" alt="Ori" width="420" />
+</p>
+
 **Surface S3 (`0.3.0`)** — Auk9-inspired syntax on the Ori engine. Purpose: study / AI / ND readability ([manifesto](docs/spec/00-manifesto.md)). Auk9 lab retired as a product.
 
 Ori は、読みやすさを最優先にした、明示的な型を持つネイティブコンパイル言語です。
