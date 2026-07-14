@@ -94,7 +94,7 @@ Do **not** pull these into “what’s next” until the user re-opens them:
 
 | ID | Item | Notes |
 |----|------|-------|
-| DIST-1…4 | Multi-OS packages (Win/macOS), smoke matrix | Linux ship + deb **done**; rest shelved |
+| DIST-1…4 | Multi-OS packages (Win/macOS), smoke matrix | **CI multi-OS packaging** in `release.yml` + smoke-no-rust Win/mac (2026-07-14); publish on `v*` tags |
 | ECO-1 / ECO-2 | External demos / community extras | Covered by ECO-* plan rows below |
 | **ECO-GAME** | Adapt **ori-game** to S3 + raylib 2D + smoke | Plan §3 |
 | **ECO-GAME-O** | Camada Ori: tween, scene, assets, save JSON | **Done** 2026-07-13 — plan §9 |

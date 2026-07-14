@@ -39,22 +39,29 @@ sudo apt update && sudo apt install build-essential
 
 ## Download e instalação
 
-> **Política de distribuição (2026-07-13):** packages oficiais de **release são
-> só Linux** (`x86_64-unknown-linux-gnu`). Windows/macOS ficam para depois
-> (BACKLOG DIST-1/2). Nesses OSes, use **build a partir do código-fonte**.
+> **Política de distribuição (2026-07-14):** packages oficiais de **release** para
+> **Linux, Windows (MSVC) e macOS** (Apple Silicon + Intel) via GitHub Actions
+> (`.github/workflows/release.yml`). Assets no tag `v*` em
+> [GitHub Releases](https://github.com/raillen/ori-lang/releases).
 
 1. Baixe em [GitHub Releases](https://github.com/raillen/ori-lang/releases)
-   (ex. **v0.3.4**):
-   - **Linux tarball:** `ori-v0.3.4-x86_64-unknown-linux-gnu.tar.gz`
-   - **Linux .deb:** `ori_0.3.4_amd64.deb`
-   - Windows / macOS: compile do fonte (packages de release ainda não publicados)
+   (ex. **v0.3.5**):
 
-**Tarball:** extraia (ex. `~/ori`), layout `ori` + `ori-lsp` + `stdlib/` + `runtime/<triple>/`, coloque no `PATH`.
+   | Plataforma | Arquivo |
+   |------------|---------|
+   | Linux x86_64 | `ori-v0.3.5-x86_64-unknown-linux-gnu.tar.gz` |
+   | Linux deb | `ori_0.3.5_amd64.deb` |
+   | Windows MSVC x86_64 | `ori-v0.3.5-x86_64-pc-windows-msvc.zip` |
+   | macOS Apple Silicon | `ori-v0.3.5-aarch64-apple-darwin.tar.gz` |
+   | macOS Intel | `ori-v0.3.5-x86_64-apple-darwin.tar.gz` |
+
+**Tarball / zip:** extraia (ex. `~/ori` ou `C:\ori`), layout `ori`/`ori.exe` +
+`ori-lsp` + `stdlib/` + `runtime/<triple>/`, coloque no `PATH`.
 
 **Debian/Ubuntu:**
 
 ```bash
-sudo dpkg -i ori_0.3.4_amd64.deb
+sudo dpkg -i ori_0.3.5_amd64.deb
 # AOT: sudo apt install build-essential
 ```
 

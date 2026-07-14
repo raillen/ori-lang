@@ -1,7 +1,7 @@
 name: release
 
-# Builds the **Linux** native package (.tar.gz + .deb) and publishes a GitHub
-# Release on tag `v*`. Windows/macOS packages deferred (DIST multi-OS).
+# Builds native packages for Linux, Windows, and macOS and publishes a GitHub
+# Release on tag `v*`. Also runnable via workflow_dispatch for dry packaging.
 
 on:
   push:
@@ -10,17 +10,47 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (must already exist on the branch tip, e.g. v0.3.3)"
-        required: true
+        description: "Tag to release (must already exist on the branch tip, e.g. v0.3.5)"
+        required: false
         type: string
+      publish:
+        description: "Create/update GitHub Release (needs a tag)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
-  package-linux:
-    name: package-x86_64-unknown-linux-gnu
-    runs-on: ubuntu-latest
+  package:
+    name: package-${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            smoke: sh
+            archive_ext: tar.gz
+            skip_deb: "0"
+          - name: x86_64-pc-windows-msvc
+            os: windows-latest
+            smoke: powershell
+            archive_ext: zip
+            skip_deb: "1"
+          - name: aarch64-apple-darwin
+            os: macos-15
+            smoke: sh
+            archive_ext: tar.gz
+            skip_deb: "1"
+          - name: x86_64-apple-darwin
+            os: macos-15-intel
+            smoke: sh
+            archive_ext: tar.gz
+            skip_deb: "1"
+
     steps:
       - uses: actions/checkout@v4
 
@@ -30,131 +60,190 @@ jobs:
           toolchain: "1.95.0"
 
       - name: Show toolchain
+        shell: bash
         run: |
           rustc -Vv
           cargo -V
-          which rustc ld cc
-          ld --version | head -1 || true
+          uname -a || true
 
-      - name: Package (Linux tar.gz + deb)
+      - name: Install Linux packaging deps
+        if: matrix.smoke == 'sh' && runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential dpkg-dev binutils libc6-dev gcc g++
+
+      - name: Package (Windows)
+        if: matrix.smoke == 'powershell'
+        shell: pwsh
         env:
-          # CI package smoke is JIT-only: GitHub-hosted runners still fail
-          # SystemLinker AOT with `cannot find -lc` despite multiarch -L and
-          # libc6-dev (reproduced across 0.3.3–0.3.4). Local/dev AOT smoke
-          # with SystemLinker remains the full gate (`tools/smoke_native_release.sh`
-          # without ORI_PACKAGE_SMOKE_JIT_ONLY). Package still ships runtime for
-          # end-user AOT when their toolchain can link.
+          ORI_PACKAGE_SMOKE_JIT_ONLY: "1"
+          ORI_USE_SYSTEM_LINKER: "1"
+          CARGO_TERM_COLOR: always
+        run: |
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.tag }}" -ne "") {
+            "${{ inputs.tag }}"
+          } else {
+            "${{ github.ref_name }}"
+          }
+          if ($tag -notmatch '^v') { $tag = "v$tag" }
+          $version = $tag.TrimStart('v')
+          New-Item -ItemType Directory -Force -Path compiler\target\dist | Out-Null
+          $root = "compiler\target\dist\ori-${{ matrix.name }}"
+          $archive = "compiler\target\dist\ori-$tag-${{ matrix.name }}.zip"
+          .\tools\package_native_release.ps1 `
+            -PackageRoot $root `
+            -ArchivePath $archive `
+            -Overwrite
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Test-Path -LiteralPath $archive | ForEach-Object { if (-not $_) { throw "missing $archive" } }
+          Get-ChildItem compiler\target\dist | Format-Table Name, Length
+
+      - name: Package (Unix)
+        if: matrix.smoke == 'sh'
+        shell: bash
+        env:
+          # CI package smoke is JIT-only on some runners (see Linux note in history).
           ORI_PACKAGE_SMOKE_JIT_ONLY: "1"
           ORI_USE_SYSTEM_LINKER: "1"
           CARGO_TERM_COLOR: always
         run: |
           set -eu
           set -o pipefail
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-            build-essential dpkg-dev binutils libc6-dev gcc g++
           unset LIBRARY_PATH || true
           unset LIBPATH || true
           tag="${{ github.ref_name }}"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
             tag="${{ inputs.tag }}"
           fi
+          case "$tag" in v*) ;; *) tag="v$tag" ;; esac
           version=$(printf '%s' "$tag" | sed 's/^v//')
-          echo "tag=$tag version=$version smoke=JIT_ONLY"
+          echo "tag=$tag version=$version target=${{ matrix.name }}"
           mkdir -p compiler/target/dist
+          root="compiler/target/dist/ori-${{ matrix.name }}"
+          archive="compiler/target/dist/ori-${tag}-${{ matrix.name }}.tar.gz"
+          deb_args=""
+          if [ "${{ matrix.skip_deb }}" = "0" ]; then
+            deb_args="--deb compiler/target/dist/ori_${version}_amd64.deb"
+          else
+            deb_args="--skip-deb"
+          fi
           if ! env -u LIBRARY_PATH -u LIBPATH \
             ORI_PACKAGE_SMOKE_JIT_ONLY=1 ORI_USE_SYSTEM_LINKER=1 \
             bash tools/package_native_release.sh \
-            --package-root "compiler/target/dist/ori-x86_64-unknown-linux-gnu" \
-            --archive "compiler/target/dist/ori-${tag}-x86_64-unknown-linux-gnu.tar.gz" \
-            --deb "compiler/target/dist/ori_${version}_amd64.deb" \
-            --force 2>&1 | tee compiler/target/dist/package.log
+            --package-root "$root" \
+            --archive "$archive" \
+            $deb_args \
+            --force 2>&1 | tee "compiler/target/dist/package-${{ matrix.name }}.log"
           then
-            echo "package_native_release failed; last 100 log lines:" >&2
-            tail -n 100 compiler/target/dist/package.log >&2 || true
+            echo "package failed; last 100 log lines:" >&2
+            tail -n 100 "compiler/target/dist/package-${{ matrix.name }}.log" >&2 || true
             exit 1
           fi
           ls -la compiler/target/dist/ || true
-          test -f "compiler/target/dist/ori-${tag}-x86_64-unknown-linux-gnu.tar.gz"
-          test -f "compiler/target/dist/ori_${version}_amd64.deb"
+          test -f "$archive"
+          if [ "${{ matrix.skip_deb }}" = "0" ]; then
+            test -f "compiler/target/dist/ori_${version}_amd64.deb"
+          fi
 
       - name: Upload package log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: package-log
-          path: compiler/target/dist/package.log
+          name: package-log-${{ matrix.name }}
+          path: compiler/target/dist/package-*.log
           if-no-files-found: ignore
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ori-x86_64-unknown-linux-gnu
+          name: ori-${{ matrix.name }}
           path: |
-            compiler/target/dist/ori-*-x86_64-unknown-linux-gnu.tar.gz
+            compiler/target/dist/ori-*-${{ matrix.name }}.tar.gz
+            compiler/target/dist/ori-*-${{ matrix.name }}.zip
             compiler/target/dist/ori_*_amd64.deb
           if-no-files-found: error
 
   publish:
     name: publish-release
-    needs: package-linux
+    needs: package
     runs-on: ubuntu-latest
-    if: always() && startsWith(github.ref, 'refs/tags/') && needs.package-linux.result == 'success'
+    if: >-
+      always()
+      && needs.package.result == 'success'
+      && (
+        startsWith(github.ref, 'refs/tags/')
+        || (github.event_name == 'workflow_dispatch' && inputs.publish == true && inputs.tag != '')
+      )
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Linux package
+      - name: Download all package artifacts
         uses: actions/download-artifact@v4
         with:
-          name: ori-x86_64-unknown-linux-gnu
           path: dist
+          pattern: ori-*
+          merge-multiple: true
 
       - name: List assets
         run: find dist -type f -ls || true
 
-      - name: Require Linux package assets
+      - name: Require multi-OS assets
         run: |
+          set -eu
           tar_count=$(find dist -type f -name '*.tar.gz' | wc -l)
+          zip_count=$(find dist -type f -name '*.zip' | wc -l)
           deb_count=$(find dist -type f -name '*.deb' | wc -l)
-          echo "tar_count=$tar_count deb_count=$deb_count"
-          test "$tar_count" -ge 1
+          echo "tar_count=$tar_count zip_count=$zip_count deb_count=$deb_count"
+          # Linux + macOS tarballs (at least 2), Windows zip (1), deb (1)
+          test "$tar_count" -ge 2
+          test "$zip_count" -ge 1
           test "$deb_count" -ge 1
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${{ github.ref_name }}"
+          fi
+          case "$tag" in v*) ;; *) tag="v$tag" ;; esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Ori ${{ github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Ori ${{ steps.tag.outputs.tag }}
           body: |
-            Ori **${{ github.ref_name }}** native package (**Linux only**).
+            Ori **${{ steps.tag.outputs.tag }}** native packages.
 
             ### Assets
-            - Portable: `ori-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz`
-            - Debian/Ubuntu: `ori_*_amd64.deb`
+            | Platform | File |
+            |----------|------|
+            | Linux x86_64 | `ori-${{ steps.tag.outputs.tag }}-x86_64-unknown-linux-gnu.tar.gz` |
+            | Linux deb | `ori_*_amd64.deb` |
+            | Windows MSVC x86_64 | `ori-${{ steps.tag.outputs.tag }}-x86_64-pc-windows-msvc.zip` |
+            | macOS Apple Silicon | `ori-${{ steps.tag.outputs.tag }}-aarch64-apple-darwin.tar.gz` |
+            | macOS Intel | `ori-${{ steps.tag.outputs.tag }}-x86_64-apple-darwin.tar.gz` |
 
             ### Install
-            ```bash
-            # tarball
-            tar -xzf ori-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz
-            export PATH="$PWD/ori-x86_64-unknown-linux-gnu:$PATH"
+            See [`docs/install.md`](https://github.com/raillen/ori-lang/blob/master/docs/install.md).
 
-            # or deb
-            sudo dpkg -i ori_*_amd64.deb
-            ori doctor
-            ```
+            - **AOT** needs the OS linker (VS Build Tools / build-essential / Xcode CLT).
+            - **JIT** (`ori run`) needs only the packaged runtime cdylib.
 
-            AOT needs `build-essential`. JIT (`ori run`) does not.
-
-            Windows/macOS packages deferred. See `docs/install.md`.
-
-            ABI: `ori-native-abi-1` · FREEZE-1 in force on 0.3.x.
+            ABI: `ori-native-abi-1` · FREEZE-1 on 0.3.x.
           prerelease: true
           fail_on_unmatched_files: false
           make_latest: true
           files: |
             dist/**/*.tar.gz
+            dist/**/*.zip
             dist/**/*.deb
             dist/*.tar.gz
+            dist/*.zip
             dist/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

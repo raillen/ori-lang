@@ -59,26 +59,32 @@ xcode-select --install
 
 ### Release package (recommended)
 
-> **Shipping policy (2026-07-13):** official **release packages are Linux-only**
-> (`x86_64-unknown-linux-gnu`). Windows/macOS packages are deferred (BACKLOG
-> DIST-1/2). On those OSes, use **build from source** below.
+> **Shipping policy (2026-07-14):** official **release packages** for **Linux,
+> Windows (MSVC), and macOS** (Apple Silicon + Intel) via GitHub Actions
+> (`.github/workflows/release.yml`). Assets appear on
+> [GitHub Releases](https://github.com/raillen/ori-lang/releases) after a `v*` tag.
 
 1. Download from [GitHub Releases](https://github.com/raillen/ori-lang/releases).
-   Example **v0.3.4**:
-   - **Linux tarball:** `ori-v0.3.4-x86_64-unknown-linux-gnu.tar.gz`
-   - **Linux Debian/Ubuntu:** `ori_0.3.4_amd64.deb`
-   - Windows / macOS: build from source (release packages not published yet)
+   Example names for **v0.3.5** (version matches the tag):
 
-#### Option A — tarball
+   | Platform | Asset |
+   |----------|--------|
+   | Linux x86_64 | `ori-v0.3.5-x86_64-unknown-linux-gnu.tar.gz` |
+   | Linux deb | `ori_0.3.5_amd64.deb` |
+   | Windows MSVC x86_64 | `ori-v0.3.5-x86_64-pc-windows-msvc.zip` |
+   | macOS Apple Silicon | `ori-v0.3.5-aarch64-apple-darwin.tar.gz` |
+   | macOS Intel | `ori-v0.3.5-x86_64-apple-darwin.tar.gz` |
 
-2. Extract to a directory (e.g. `~/ori`).
+#### Option A — tarball / zip
+
+2. Extract to a directory (e.g. `~/ori` or `C:\ori`).
 
 3. Expected layout:
 
    | Path | Role |
    |------|------|
-   | `ori` | CLI |
-   | `ori-lsp` | LSP server |
+   | `ori` / `ori.exe` | CLI |
+   | `ori-lsp` / `ori-lsp.exe` | LSP server |
    | `stdlib/` | Layer 2/3 `.orl` modules |
    | `runtime/<triple>/` | staticlib + cdylib + `runtime-link.json` |
 
@@ -87,7 +93,7 @@ xcode-select --install
 #### Option B — `.deb` (Debian / Ubuntu)
 
 ```bash
-sudo dpkg -i ori_0.3.4_amd64.deb
+sudo dpkg -i ori_0.3.5_amd64.deb
 # installs /usr/lib/ori + /usr/bin/ori + /usr/bin/ori-lsp
 # AOT still needs: sudo apt install build-essential
 ```

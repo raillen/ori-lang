@@ -11,6 +11,10 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Adicionado
+- **Multi-OS release packages (DIST):** GitHub Actions `release.yml` builds
+  Linux (tar.gz + deb), Windows MSVC (zip), macOS Apple Silicon + Intel
+  (tar.gz). `native-route` smoke-no-rust enabled for Windows and macOS.
+  Docs: `docs/install.md` / `install.pt-BR.md`.
 - **`packages/ori-templates` (MVP):** server-side HTML templates for Ori —
   delimiters `@{ }`, comments `@{-- --}`, escape default, `|> raw` last-stage only,
   `if`/`elif`/`else`/`for`/`include`/`layout`/`assign`, path jail, `.orix` files.

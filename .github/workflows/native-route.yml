@@ -3,6 +3,7 @@ name: native-route
 on:
   push:
     branches:
+      - master
       - main
   pull_request:
   workflow_dispatch:
@@ -79,7 +80,7 @@ jobs:
           .\tools\package_native_release.ps1 `
             -PackageRoot "compiler\target\dist\ori-${{ matrix.name }}" `
             -ArchivePath "compiler\target\dist\ori-${{ matrix.name }}.zip" `
-            -Force
+            -Overwrite
 
       - name: Native release package (Unix)
         if: matrix.smoke == 'sh'
@@ -139,10 +140,8 @@ jobs:
         run: |
           sh tools/smoke_no_rust.sh --package-root ~/ori-smoke
 
-  # Deferred under Linux-only package policy (BACKLOG DIST-1).
   smoke-no-rust-windows:
     name: smoke-no-rust (windows-msvc)
-    if: false
     needs: native-route
     runs-on: windows-latest
     steps:
@@ -221,10 +220,8 @@ jobs:
           $env:ORI_REQUIRE_PACKAGED_RUNTIME = "1"
           & "$pkg\ori.exe" test $env:TEMP\test.orl
 
-  # Deferred under Linux-only package policy (BACKLOG DIST-2).
   smoke-no-rust-macos:
     name: smoke-no-rust (macos-x86_64)
-    if: false
     needs: native-route
     runs-on: macos-15-intel
     steps:
@@ -251,6 +248,40 @@ jobs:
         run: |
           mkdir -p ~/ori-smoke
           tar -xzf dist/ori-macos-x86_64.tar.gz -C ~/ori-smoke --strip-components=1
+          ls -la ~/ori-smoke/
+
+      - name: Smoke — package without Rust
+        run: |
+          sh tools/smoke_no_rust.sh --package-root ~/ori-smoke
+
+  smoke-no-rust-macos-arm:
+    name: smoke-no-rust (macos-aarch64)
+    needs: native-route
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure Rust is not present
+        run: |
+          if command -v rustc >/dev/null 2>&1; then
+            echo "ERROR: rustc is present on this runner — smoke would be invalid"
+            exit 1
+          fi
+          if command -v cargo >/dev/null 2>&1; then
+            echo "ERROR: cargo is present on this runner — smoke would be invalid"
+            exit 1
+          fi
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ori-macos-aarch64
+          path: dist
+
+      - name: Extract release package
+        run: |
+          mkdir -p ~/ori-smoke
+          tar -xzf dist/ori-macos-aarch64.tar.gz -C ~/ori-smoke --strip-components=1
           ls -la ~/ori-smoke/
 
       - name: Smoke — package without Rust
