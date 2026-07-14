@@ -152,7 +152,7 @@ end
     );
     assert!(success, "{stdout}");
     let lines = stdout.lines().collect::<Vec<_>>();
-    assert_eq!(lines.first(), Some {&"size:2"});
+    assert_eq!(lines.first(), Some(&"size:2"));
     let leaks_line = lines
         .iter()
         .find(|l| l.starts_with("leaks:"))
@@ -244,7 +244,7 @@ make_branch(n: int) -> Branch
         lists.push(xs, i * i)
         i = i + 1
     end
-    return Branch {leaf: Leaf(data: xs)}
+    return Branch { leaf: Leaf { data: xs } }
 end
 
 measure_branch(n: int) -> int
@@ -407,7 +407,7 @@ end
     );
     assert!(success, "{stdout}");
     let lines = stdout.lines().collect::<Vec<_>>();
-    assert_eq!(lines.first(), Some {&"size:2"});
+    assert_eq!(lines.first(), Some(&"size:2"));
     assert!(
         lines.iter().any(|l| l.starts_with("collected:")),
         "missing collected line: {stdout}"

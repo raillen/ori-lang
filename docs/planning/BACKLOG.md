@@ -13,7 +13,9 @@
 - Multi-OS packages / marketplace / registry marketing (DIST-*, TOOL marketplace, ECO demos)
 - Self-host (M4)
 
-**Language-first queue is empty.** Ongoing work is **living maintenance** only:
+**Active language-first reopening:** **LANG-PERF-2** (runtime mid-end / loops) —
+see [`perf-runtime-midend-plan.md`](perf-runtime-midend-plan.md). Otherwise
+ongoing work is **living maintenance**:
 
 1. Bugs / diagnostics from real programs  
 2. Docs + examples drift  
@@ -22,7 +24,7 @@
 
 **Do not prioritize unless reopened:** multi-OS DIST, ECO demos, M4 self-host.
 
-**Discontinued forever in product conversations:** `ori-game`, `ori-imgui` (removed; do not re-open).  
+**Not in monorepo product tree:** `ori-game` / `ori-imgui` remain **external packages** (sibling repos). Revival work follows `docs/planning/eco-game-imgui-raylib3d-plan.md` — do **not** re-vendor into `ori-lang` unless a new explicit decision says so.  
 **Cancelled (editor distribution):** **TOOL-MP** (VS Code Marketplace / Open VSX) — install only via repo script `tools/install_vscode_extension.sh` (local `.vsix`).
 
 ---
@@ -51,7 +53,7 @@
 | DONE-LANG-DOC | User docs + examples aligned to S3 / current stdlib / editors local |
 | DONE-LANG-PERF | AOT/JIT, stage release, mold/lld PATH, microbench + ARC bench; living JIT lower only |
 | DONE-LANG-RES | Native residual inventory Spec 14; product surface gate test; reopen only on concrete blocker |
-| CANC-GAME / CANC-IMGUI | **Cancelled** — never product again |
+| CANC-GAME / CANC-IMGUI | **Cancelled as monorepo product** — external plan: `eco-game-imgui-raylib3d-plan.md` |
 | CANC-AUK9 | Archived |
 | WONT-HM / WONT-LANG-3 | Global HM; C async v1 |
 
@@ -61,15 +63,25 @@
 
 | ID | Item | P | D | Status | Notes |
 |----|------|---|---|--------|-------|
-| *(none)* | Language-first implementation queue empty | — | — | — | Living maintenance only. |
+| **LANG-PERF-2** | Runtime/mid-end performance (loops, not just compile/link) | 1 | L | **partial** | Plan: [`perf-runtime-midend-plan.md`](perf-runtime-midend-plan.md). **0–2 landed** (cycle collect fix is the main win). |
+| **LANG-PERF-2-0** | Instrument: CLIF dump + polyglot smoke | 1 | S | **done** | `ORI_DUMP_CLIF`; `tools/qa/perf_polyglot_smoke.sh` |
+| **LANG-PERF-2-1** | Mid-end: const fold + DCE | 1 | M | **done** | `ori_hir::optimize`; `ORI_OPT` |
+| **LANG-PERF-2-2** | Loop hygiene (no per-iter cycle collect) | 1 | L | **done** | Native: collect only outside loops at root cleanup |
+| **LANG-PERF-2-3** | Pure-loop strength reduction | 2 | M | **todo** | Deferred — fib already ~2× Rust after 2-2 |
+| **LANG-PERF-2-4** | Monomorphic leaf inlining | 2 | M | **todo** | Deferred — measure after real apps |
+| **LANG-PERF-2-5** | List reserve path (optional) | 3 | S | **todo** | Wave 5 · optional |
+| **LANG-PERF-2-6** | Docs/README polyglot snapshot refresh | 2 | S | **todo** | Update after remeasure polyglot full suite |
 | **LIVE-LINK** | Package smoke uses **SystemLinker only** (not RustcDriver) | 2 | S | **done** | RustcDriver double-links libstd vs `ori-runtime` staticlib (`rust_eh_personality`). |
+| **LIVE-QA** | Daily QA stages + test matrix + skill `ori-lang-qa` | 2 | M | **done** | `tools/qa/*`, `.grok/skills/ori-lang-qa`, agents, Spec 13 quality section |
+| **LIVE-RES** | Residual product surface clean under FREEZE-1 | 1 | S | **done** | Policy + `residual_audit.sh`; intentional residuals remain Spec 14 |
 
 ### Done this focus wave (DX + docs + perf + residual)
 
 | ID | Notes |
 |----|-------|
 | **LANG-DOC** | User docs EN/PT + root READMEs + examples catalog; living maintenance only after this |
-| **LANG-PERF** | Closed — waves 1–3; see `perf-baseline-2026-07-13.md` |
+| **LANG-PERF** | Closed — waves 1–3 (compile/link/JIT flags); see `perf-baseline-2026-07-13.md` |
+| **LANG-PERF-2** | Open — runtime mid-end; see `perf-runtime-midend-plan.md` |
 | **LANG-RES** | Closed — Spec 14 inventory + `compile_runs_lang_res_product_surface_native`; see `lang-res-closure.md` |
 | **DX-VSCODE** | v0.3.2 local `.vsix` |
 | **DX-ZED** | `extensions/zed-ori` dev install |
@@ -80,11 +92,21 @@
 
 Do **not** pull these into “what’s next” until the user re-opens them:
 
-| ID | Item |
-|----|------|
-| DIST-1 / DIST-2 / DIST-3 / DIST-4 | Multi-OS packages (Win/macOS), smoke matrix, extra triples — Linux ship + deb **done** |
-| ECO-1 / ECO-2 | External demos (raylib/sqlite community packages) — discuss before any port |
-| M4 | Self-hosting |
+| ID | Item | Notes |
+|----|------|-------|
+| DIST-1…4 | Multi-OS packages (Win/macOS), smoke matrix | Linux ship + deb **done**; rest shelved |
+| ECO-1 / ECO-2 | External demos / community extras | Covered by ECO-* plan rows below |
+| **ECO-GAME** | Adapt **ori-game** to S3 + raylib 2D + smoke | Plan §3 |
+| **ECO-GAME-O** | Camada Ori: tween, scene, assets, save JSON | **Done** 2026-07-13 — plan §9 |
+| **ECO-IMGUI** | Adapt **ori-imgui** (Dear ImGui GLFW+GL3) | **Done** MVP 2026-07-13 |
+| **ECO-RL3D** | Raylib 3D **draw** + R3 raycast | **Done** 2026-07-13 — plan §5 (R0–R3 pick) |
+| **ECO-RAYGUI** | Translate **raygui** → `ori-raygui` | **Done** 2026-07-13 — plan §6 |
+| **ECO-BOX2D** | Translate **Box2D** → `ori-box2d` | **Done** MVP 2026-07-13 — plan §7 (milli-unit int FFI) |
+| **ECO-JOLT** | Translate **Jolt** → `ori-jolt` | **Done** MVP 2026-07-13 — plan §8 (`ori_jolt_*`, stub/real) |
+| **ECO-RRES** | Translate **rres** → `ori-rres` | **Done** MVP 2026-07-13 — ORPK + CRC32 |
+| **ECO-SQLITE** | Translate **SQLite** → `ori-sqlite` | **Done** MVP 2026-07-13 — amalgamation + shim |
+| **ECO-FUTURE** | Spine, net, compressão avançada, … | Plan §17 only — **not** current scope |
+| M4 | Self-hosting | Last language discussion |
 
 ### Cancelled this wave
 
@@ -101,6 +123,7 @@ Do **not** pull these into “what’s next” until the user re-opens them:
 | This file | Only open-work list |
 | `docs/spec/` | Normative language |
 | `docs/install.md` + guides + examples | User docs |
+| `docs/planning/eco-game-imgui-raylib3d-plan.md` | External ori-game / imgui / raylib 3D / raygui |
 | `extensions/vscode-orl` | VS Code DX |
 | `extensions/zed-ori` | Zed DX |
 

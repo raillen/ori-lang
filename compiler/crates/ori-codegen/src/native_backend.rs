@@ -4502,10 +4502,8 @@ let mut bctx = FunctionBuilderContext::new();
                 }
                 .emit_user_func(f)?;
             }
-            // Dump CLIF for debugging when ORI_DUMP_CLIF is set
-            if std::env::var("ORI_DUMP_CLIF").is_ok() {
-                eprintln!("--- CLIF for `{}` ---\n{}", f.name, ctx.func.display());
-            }
+            // LANG-PERF-2-0: dump CLIF when ORI_DUMP_CLIF=1 or a file path.
+            maybe_dump_clif(f.name.as_str(), &ctx);
             self.module
                 .define_function(func_id, &mut ctx)
                 .map_err(|e| format!("define '{}': {e}", f.name))?;
@@ -6650,7 +6648,12 @@ impl<'a> FuncCodegen<'a> {
     ) -> Result<(), String> {
         self.emit_using_cleanup_calls_from(using_start)?;
         self.emit_managed_cleanup_calls_from(managed_start)?;
-        if managed_start == 0 {
+        // LANG-PERF-2: only run the cycle collector at function-root cleanups
+        // outside of loops. Previously `managed_start == 0` alone fired on
+        // every while/for body (empty managed stack at entry) — each iteration
+        // called `ori_arc_collect_cycles`, making tight integer loops ~50×
+        // slower than equivalent Rust/C.
+        if managed_start == 0 && self.loop_stack.is_empty() {
             self.emit_arc_collect_cycles()?;
         }
         Ok(())
@@ -13412,6 +13415,32 @@ impl<'a> FuncCodegen<'a> {
 }
 
 // == Public entry points ==
+
+/// When `ORI_DUMP_CLIF=1` (or a path in `ORI_DUMP_CLIF`), append the CLIF text
+/// for `func_name` to stderr or the given file (LANG-PERF-2-0).
+fn maybe_dump_clif(func_name: &str, ctx: &cranelift_codegen::Context) {
+    let Ok(spec) = std::env::var("ORI_DUMP_CLIF") else {
+        return;
+    };
+    if spec.is_empty() || spec == "0" {
+        return;
+    }
+    let text = format!(";; ---- {func_name} ----\n{}\n", ctx.func.display());
+    if spec == "1" {
+        eprint!("{text}");
+        return;
+    }
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&spec)
+    {
+        let _ = write!(f, "{text}");
+    } else {
+        eprint!("{text}");
+    }
+}
 
 /// Cranelift flags for product codegen (LANG-PERF).
 ///

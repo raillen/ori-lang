@@ -19,6 +19,19 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   + [performance.pt-BR.md](docs/guides/performance.pt-BR.md); snapshot section on
   root [README.md](README.md) / [README.pt-BR.md](README.pt-BR.md); planning note
   in [docs/planning/perf-baseline-2026-07-13.md](docs/planning/perf-baseline-2026-07-13.md).
+- **LANG-PERF-2 plan:** [docs/planning/perf-runtime-midend-plan.md](docs/planning/perf-runtime-midend-plan.md)
+  — mid-end HIR opts, loop hygiene, strength reduction, inlining; ORC/LLVM deferred.
+- **LANG-PERF-2-0/1/2 (partial land):**
+  - HIR mid-end `ori_hir::optimize` (const fold + DCE; `ORI_OPT=none|default|aggressive`)
+  - `ORI_DUMP_CLIF=1` / path dumps Cranelift IR for defined functions
+  - `tools/qa/perf_polyglot_smoke.sh` for fib+list smoke
+
+### Corrigido
+- **Native loops no longer call `ori_arc_collect_cycles` every iteration**
+  (was triggered whenever a block entered with empty managed stack, including
+  `while`/`for` bodies). Cycle collection now only runs at function-root
+  cleanups outside loops. Tight integer loops drop from ~50× Rust to ~2× on
+  `fib_iter` (20M steps) on the benchmark host.
 
 ### Notas
 - Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package line **`[0.3.4]`**.

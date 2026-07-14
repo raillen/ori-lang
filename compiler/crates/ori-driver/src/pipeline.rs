@@ -305,7 +305,9 @@ pub fn run_compile_with_options(
     }
 
     if !sink.has_errors() {
-        let hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
+        let mut hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
+        // LANG-PERF-2: HIR mid-end before native lower (ORI_OPT=none|default|aggressive).
+        ori_hir::optimize_module(&mut hir, ori_hir::OptLevel::from_env());
         let obj_path = output.with_extension("o");
         let mut runtime_link = find_native_runtime_link()?;
         let target = native_target_triple();
@@ -376,8 +378,9 @@ pub fn run_jit(source_path: &Path) -> Result<JitRunOutput, String> {
 
     let mut exit_code = 0;
     if !sink.has_errors() {
-        let hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
+        let mut hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
         if !sink.has_errors() {
+            ori_hir::optimize_module(&mut hir, ori_hir::OptLevel::from_env());
             let cdylib = find_native_runtime_cdylib()?;
 
             let target = native_target_triple();
@@ -1400,10 +1403,11 @@ pub fn run_test_with_options(path: &Path, options: TestOptions) -> Result<TestOu
     let selected = selected_tests.len();
 
     let results = if !sink.has_errors() && !selected_tests.is_empty() {
-        let hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
+        let mut hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
         if sink.has_errors() {
             Vec::new()
         } else {
+            ori_hir::optimize_module(&mut hir, ori_hir::OptLevel::from_env());
             run_native_tests(&hir, &selected_tests)?
         }
     } else {
@@ -1449,7 +1453,8 @@ pub fn run_emit_c(path: &Path) -> Result<BuildOutput, String> {
     }
 
     let c_source = if !sink.has_errors() {
-        let hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
+        let mut hir = lower_loaded_sources(&loaded, &resolved, &mut sink);
+        ori_hir::optimize_module(&mut hir, ori_hir::OptLevel::from_env());
         match ori_codegen::emit_c(&hir) {
             Ok(source) => source,
             Err(error) => {

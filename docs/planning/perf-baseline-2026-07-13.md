@@ -171,3 +171,33 @@ Cross-language **runtime** microbench (not compiler `check`/`run` latency):
 ```bash
 SAMPLES=3 ./tools/bench/polyglot/run_polyglot_bench.sh
 ```
+
+## Wave 5 (2026-07-14) — LANG-PERF-2-0/1/2 land
+
+### Changes
+
+1. **Cycle collector placement:** `emit_scope_cleanup_calls_from` no longer
+   calls `ori_arc_collect_cycles` on every block that entered with an empty
+   managed stack (including `while`/`for` bodies). Collect only when
+   `managed_start == 0` **and** `loop_stack` is empty.
+2. **HIR mid-end:** `ori_hir::optimize` — const fold + DCE; env `ORI_OPT`.
+3. **Instrument:** `ORI_DUMP_CLIF=1` or path; `tools/qa/perf_polyglot_smoke.sh`.
+
+### Fib_iter (20M steps, same host class)
+
+| Binary | Median wall (≈5 samples) |
+|--------|---------------------------|
+| Ori **before** | ~0.50–0.65 s |
+| Ori **after** | **~0.018 s** |
+| Rust release | ~0.009 s |
+
+≈ **2×** Rust (was ~50×). **G1 essentially met** for fib; strength reduction
+(2-3) / inlining (2-4) deferred unless real apps still show a cliff.
+
+### Other kernels (single sample after fix)
+
+| Kernel | Ori wall (approx) |
+|--------|-------------------|
+| sum_loop 10⁷ | ~0.011 s |
+| list_sum 10⁶ | ~0.016 s |
+| nested 2000² | ~0.006 s |
