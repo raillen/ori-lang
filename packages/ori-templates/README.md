@@ -5,6 +5,8 @@ Server-side HTML template engine for Ori.
 - Delimiters: `@{ … }`, comments `@{-- … --}`
 - Escape HTML by default; raw only as **last** pipe stage: `@{ html |> raw }`
 - Directives: `if` / `elif` / `else` / `for` / `include` / `layout` / `assign` / `end`
+- **S8 whitespace:** leading/trailing `-` trims adjacent whitespace  
+  `@{ - if x -}` … `@{ - end -}` (Jinja/ERB-style)
 - Path jail under a views root; logical names → `.orix` files
 - Design: `docs/planning/web-templates-discussion-roadmap.md` (D3–D28)
 

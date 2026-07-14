@@ -449,9 +449,352 @@ public json(status: int, body: string) -> Response
     return Response { status: status, headers: h, body: body }
 end
 
--- Flat string map → JSON object body (no nested values; no ori.json import).
+-- Flat string map → JSON object body (string values only; no ori.json import).
 public json_string_map(status: int, fields: map[string, string]) -> Response
     return json(status, encode_string_map(fields))
+end
+
+-- Nested JSON builders (fragments are already-encoded JSON text).
+-- Example:
+--   web.json(200, web.json_object([
+--     web.json_pair("user", web.json_object([
+--       web.json_pair("name", web.json_string("Ada")),
+--       web.json_pair("id", web.json_int(1))
+--     ])),
+--     web.json_pair("tags", web.json_array([
+--       web.json_string("web"),
+--       web.json_string("ori")
+--     ]))
+--   ]))
+
+public json_string(s: string) -> string
+    return str.concat("\"", str.concat(json_escape_str(s), "\""))
+end
+
+public json_int(n: int) -> string
+    return string(n)
+end
+
+public json_bool(b: bool) -> string
+    if b
+        return "true"
+    end
+    return "false"
+end
+
+public json_null() -> string
+    return "null"
+end
+
+-- `encoded_value` must already be valid JSON (string/number/object/array/…).
+public json_pair(key: string, encoded_value: string) -> string
+    return str.concat(
+        "\"",
+        str.concat(json_escape_str(key), str.concat("\":", encoded_value))
+    )
+end
+
+public json_object(pairs: list[string]) -> string
+    var out: string = "{"
+    var i: int = 0
+    while i < lists.len(pairs)
+        if i > 0
+            out = str.concat(out, ",")
+        end
+        out = str.concat(out, pairs[i])
+        i = i + 1
+    end
+    out = str.concat(out, "}")
+    return out
+end
+
+public json_array(items: list[string]) -> string
+    var out: string = "["
+    var i: int = 0
+    while i < lists.len(items)
+        if i > 0
+            out = str.concat(out, ",")
+        end
+        out = str.concat(out, items[i])
+        i = i + 1
+    end
+    out = str.concat(out, "]")
+    return out
+end
+
+-- Nested parse → flat map with dotted paths:
+--   {"user":{"name":"Ada"},"tags":["a","b"]}
+--   → user.name=Ada, tags.0=a, tags.1=b
+public parse_json_nested(body: string) -> result[map[string, string], string]
+    const t: string = str.trim(body)
+    match parse_json_to_map(t, 0, "")
+    case err(e):
+        return err(e)
+    case ok(pr):
+        if pr.next != str.len(t)
+            if str.len(str.trim(str.slice(t, pr.next, str.len(t)))) > 0
+                return err("trailing junk after json")
+            end
+        end
+        return ok(pr.fields)
+    end
+    return err("invalid json")
+end
+
+struct ParseMapResult
+    fields: map[string, string]
+    next: int
+end
+
+-- Recursively parse one JSON value into dotted `prefix` paths.
+parse_json_to_map(s: string, start: int, prefix: string) -> result[ParseMapResult, string]
+    var i: int = skip_ws(s, start)
+    const n: int = str.len(s)
+    if i >= n
+        return err("unexpected end of json")
+    end
+    const ch: string = str.slice(s, i, i + 1)
+    if ch == "\""
+        match read_json_string(s, i)
+        case err(e):
+            return err(e)
+        case ok(sr):
+            var m: map[string, string] = maps.new()
+            if str.len(prefix) > 0
+                maps.set(m, prefix, sr.text)
+            end
+            return ok(ParseMapResult { fields: m, next: sr.next })
+        end
+    end
+    if ch == "{"
+        return parse_json_object_to_map(s, i, prefix)
+    end
+    if ch == "["
+        return parse_json_array_to_map(s, i, prefix)
+    end
+    if ch == "t"
+        if i + 4 <= n
+            if str.slice(s, i, i + 4) == "true"
+                var m: map[string, string] = maps.new()
+                if str.len(prefix) > 0
+                    maps.set(m, prefix, "true")
+                end
+                return ok(ParseMapResult { fields: m, next: i + 4 })
+            end
+        end
+    end
+    if ch == "f"
+        if i + 5 <= n
+            if str.slice(s, i, i + 5) == "false"
+                var m: map[string, string] = maps.new()
+                if str.len(prefix) > 0
+                    maps.set(m, prefix, "false")
+                end
+                return ok(ParseMapResult { fields: m, next: i + 5 })
+            end
+        end
+    end
+    if ch == "n"
+        if i + 4 <= n
+            if str.slice(s, i, i + 4) == "null"
+                var m: map[string, string] = maps.new()
+                if str.len(prefix) > 0
+                    maps.set(m, prefix, "null")
+                end
+                return ok(ParseMapResult { fields: m, next: i + 4 })
+            end
+        end
+    end
+    if ch == "-" or is_digit_char(ch)
+        match read_json_number(s, i)
+        case err(e):
+            return err(e)
+        case ok(nr):
+            var m: map[string, string] = maps.new()
+            if str.len(prefix) > 0
+                maps.set(m, prefix, nr.text)
+            end
+            return ok(ParseMapResult { fields: m, next: nr.next })
+        end
+    end
+    return err("invalid json value")
+end
+
+struct StrRead
+    text: string
+    next: int
+end
+
+read_json_string(s: string, start: int) -> result[StrRead, string]
+    var i: int = start + 1
+    const n: int = str.len(s)
+    var out: string = ""
+    var esc: bool = false
+    while i < n
+        const ch: string = str.slice(s, i, i + 1)
+        if esc
+            out = str.concat(out, ch)
+            esc = false
+            i = i + 1
+        elif ch == "\\"
+            esc = true
+            i = i + 1
+        elif ch == "\""
+            return ok(StrRead { text: out, next: i + 1 })
+        else
+            out = str.concat(out, ch)
+            i = i + 1
+        end
+    end
+    return err("unclosed string")
+end
+
+read_json_number(s: string, start: int) -> result[StrRead, string]
+    var i: int = start
+    const n: int = str.len(s)
+    while i < n
+        const ch: string = str.slice(s, i, i + 1)
+        if is_digit_char(ch) or ch == "-" or ch == "+" or ch == "." or ch == "e" or ch == "E"
+            i = i + 1
+        else
+            break
+        end
+    end
+    if i == start
+        return err("invalid number")
+    end
+    return ok(StrRead { text: str.slice(s, start, i), next: i })
+end
+
+parse_json_object_to_map(s: string, start: int, prefix: string) -> result[ParseMapResult, string]
+    var i: int = start + 1
+    const n: int = str.len(s)
+    var fields: map[string, string] = maps.new()
+    i = skip_ws(s, i)
+    if i < n
+        if str.slice(s, i, i + 1) == "}"
+            return ok(ParseMapResult { fields: fields, next: i + 1 })
+        end
+    end
+    while i < n
+        i = skip_ws(s, i)
+        match read_json_string(s, i)
+        case err(e):
+            return err(e)
+        case ok(ks):
+            i = skip_ws(s, ks.next)
+            if i >= n
+                return err("expected :")
+            end
+            if str.slice(s, i, i + 1) != ":"
+                return err("expected :")
+            end
+            i = skip_ws(s, i + 1)
+            var path: string = ks.text
+            if str.len(prefix) > 0
+                path = str.concat(prefix, str.concat(".", ks.text))
+            end
+            match parse_json_to_map(s, i, path)
+            case err(e2):
+                return err(e2)
+            case ok(child):
+                fields = map_merge(fields, child.fields)
+                i = skip_ws(s, child.next)
+                if i >= n
+                    return err("unclosed object")
+                end
+                const ch: string = str.slice(s, i, i + 1)
+                if ch == ","
+                    i = i + 1
+                elif ch == "}"
+                    return ok(ParseMapResult { fields: fields, next: i + 1 })
+                else
+                    return err("expected , or }")
+                end
+            end
+        end
+    end
+    return err("unclosed object")
+end
+
+parse_json_array_to_map(s: string, start: int, prefix: string) -> result[ParseMapResult, string]
+    var i: int = start + 1
+    const n: int = str.len(s)
+    var fields: map[string, string] = maps.new()
+    var idx: int = 0
+    i = skip_ws(s, i)
+    if i < n
+        if str.slice(s, i, i + 1) == "]"
+            return ok(ParseMapResult { fields: fields, next: i + 1 })
+        end
+    end
+    while i < n
+        var path: string = string(idx)
+        if str.len(prefix) > 0
+            path = str.concat(prefix, str.concat(".", string(idx)))
+        end
+        match parse_json_to_map(s, i, path)
+        case err(e):
+            return err(e)
+        case ok(child):
+            fields = map_merge(fields, child.fields)
+            i = skip_ws(s, child.next)
+            idx = idx + 1
+            if i >= n
+                return err("unclosed array")
+            end
+            const ch: string = str.slice(s, i, i + 1)
+            if ch == ","
+                i = i + 1
+            elif ch == "]"
+                return ok(ParseMapResult { fields: fields, next: i + 1 })
+            else
+                return err("expected , or ]")
+            end
+        end
+    end
+    return err("unclosed array")
+end
+
+map_merge(a: map[string, string], b: map[string, string]) -> map[string, string]
+    var out: map[string, string] = maps.new()
+    const ka: list[string] = maps.keys(a)
+    var i: int = 0
+    while i < lists.len(ka)
+        const k: string = ka[i]
+        if some(v) = maps.try_get(a, k)
+            maps.set(out, k, v)
+        end
+        i = i + 1
+    end
+    const kb: list[string] = maps.keys(b)
+    i = 0
+    while i < lists.len(kb)
+        const k2: string = kb[i]
+        if some(v2) = maps.try_get(b, k2)
+            maps.set(out, k2, v2)
+        end
+        i = i + 1
+    end
+    return out
+end
+
+skip_ws(s: string, start: int) -> int
+    var i: int = start
+    const n: int = str.len(s)
+    while i < n
+        const ch: string = str.slice(s, i, i + 1)
+        if ch == " " or ch == "\t" or ch == "\n" or ch == "\r"
+            i = i + 1
+        else
+            break
+        end
+    end
+    return i
+end
+
+is_digit_char(ch: string) -> bool
+    return str.contains("0123456789", ch)
 end
 
 -- Best-effort flat JSON object parse: {"k":"v", ...} → map (string values only).

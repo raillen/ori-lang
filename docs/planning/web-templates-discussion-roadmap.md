@@ -97,7 +97,7 @@ C **usa** A; não substitui A.
 | **S5** | Missing key | **done** | **D7** strict: missing path → erro de render |
 | **S6** | Helpers allowlist | **done** | **D12** §4.8 |
 | **S7** | Extensão de arquivo | **done** | **D23** `.orix` |
-| **S8** | Comentários e whitespace (`-`) | **parcial** | Comentário D4. Trim `-` → v1.1 opcional |
+| **S8** | Comentários e whitespace (`-`) | **done** | Comentário D4; trim `@{ - … -}` em tags |
 | **S9** | Pipe em print (`\|>`) | **done** | Parte de D6 + helpers |
 | **S10** | `match` em template | aberto | Provável v2 |
 | **S11** | Tags HTML `<Ori:If>` | **shelved** | Não preferida |
@@ -123,7 +123,7 @@ C **usa** A; não substitui A.
 | **W1** | Router + Request/Response | **parcial** | **D14** esboço §10 |
 | **W2** | Middleware pipeline explícito | **done** | `use_middleware` + catalog `mw_*` |
 | **W3** | Static files | **done** | path jail + `static()` |
-| **W4** | JSON helpers | **done** | `json` / `json_string_map` / `parse_json_object` |
+| **W4** | JSON helpers | **done** | flat + nested builders (`json_object`/`json_array`/`parse_json_nested`) |
 | **W5** | Integração templates | **done** | `web_app.render` / `page_data` (Library free of templates cycle) |
 
 ### HTML-first C (C)

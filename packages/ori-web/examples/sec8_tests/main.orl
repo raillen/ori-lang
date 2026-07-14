@@ -8,6 +8,7 @@ import web = web
 import ori.io = io
 import ori.string = str
 import ori.map = maps
+import ori.list = lists
 import ori.fs = fs
 
 var FAILS: int = 0
@@ -138,6 +139,35 @@ main()
         end
     case err(_):
         assert_true(false, "parse_json object")
+    end
+    var pairs: list[string] = []
+    lists.push(pairs, web.json_pair("name", web.json_string("Ada")))
+    lists.push(pairs, web.json_pair("id", web.json_int(7)))
+    var tags: list[string] = []
+    lists.push(tags, web.json_string("web"))
+    lists.push(tags, web.json_string("ori"))
+    lists.push(pairs, web.json_pair("tags", web.json_array(tags)))
+    var outer: list[string] = []
+    lists.push(outer, web.json_pair("user", web.json_object(pairs)))
+    const nested: string = web.json_object(outer)
+    assert_true(str.contains(nested, "\"user\""), "nested has user")
+    assert_true(str.contains(nested, "Ada"), "nested has Ada")
+    match web.parse_json_nested(nested)
+    case ok(tree):
+        match maps.try_get(tree, "user.name")
+        case some(nm):
+            assert_true(nm == "Ada", "nested path user.name")
+        case none:
+            assert_true(false, "nested path user.name")
+        end
+        match maps.try_get(tree, "user.tags.0")
+        case some(t0):
+            assert_true(t0 == "web", "nested path tags.0")
+        case none:
+            assert_true(false, "nested path tags.0")
+        end
+    case err(_):
+        assert_true(false, "parse_json_nested")
     end
 
     -- 9) Custom middleware onion

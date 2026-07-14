@@ -48,6 +48,14 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   forward `native_libs` (and one-level nested package deps) into AOT/JIT link
   context so `sqlite` staticlibs resolve when used from apps.
 
+### Adicionado (templates S8 + JSON aninhado — freeze prep)
+- **Templates S8:** whitespace control markers `@{ - … -}` (trim before/after
+  tag), documented in `ori-templates` README; smoke `s8-trim-ok`.
+- **`ori-web` nested JSON:** builders `json_string` / `json_int` / `json_bool` /
+  `json_null` / `json_pair` / `json_object` / `json_array` and
+  `parse_json_nested` (flatten to dotted paths). SEC8 covers encode+parse.
+  Still no `import ori.json` from web (cycle-safe).
+
 ### Adicionado (web A+B close-out)
 - **B7 socket deadlines:** `ori.net.set_read_timeout_ms` /
   `set_write_timeout_ms` + `web.set_read_timeout`; `serve` assembles full

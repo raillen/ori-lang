@@ -187,11 +187,17 @@ render_source(
     var body_buf: string = ""
     var in_layout: bool = false
     var layout_depth: int = 0
+    -- S8: trailing `-` on a tag trims leading whitespace of the next text chunk
+    var strip_next_leading: bool = false
 
     while pos < n
         const open_at: int = str.index_of(str.slice(source, pos, n), "@{")
         if open_at < 0
-            const tail: string = str.slice(source, pos, n)
+            var tail: string = str.slice(source, pos, n)
+            if strip_next_leading
+                tail = ltrim_ws(tail)
+                strip_next_leading = false
+            end
             if in_layout
                 body_buf = str.concat(body_buf, tail)
             else
@@ -200,16 +206,20 @@ render_source(
             break
         end
         const abs_open: int = pos + open_at
-        const before: string = str.slice(source, pos, abs_open)
-        if in_layout
-            body_buf = str.concat(body_buf, before)
-        else
-            out = str.concat(out, before)
+        var before: string = str.slice(source, pos, abs_open)
+        if strip_next_leading
+            before = ltrim_ws(before)
+            strip_next_leading = false
         end
 
-        -- comment @{-- ... --}
+        -- comment @{-- ... --} (no S8 markers)
         if abs_open + 4 <= n
             if str.slice(source, abs_open, abs_open + 4) == "@{--"
+                if in_layout
+                    body_buf = str.concat(body_buf, before)
+                else
+                    out = str.concat(out, before)
+                end
                 const rest: string = str.slice(source, abs_open + 4, n)
                 const close_rel: int = str.index_of(rest, "--}")
                 if close_rel < 0
@@ -220,7 +230,7 @@ render_source(
             end
         end
 
-        -- tag @{ ... }
+        -- tag @{ ... }  with optional S8 whitespace markers: @{ - expr - }
         if abs_open + 2 > n
             return err(TemplateError.Parse(message: "truncated tag open"))
         end
@@ -230,7 +240,19 @@ render_source(
             return err(TemplateError.Parse(message: "unclosed tag"))
         end
         const raw_inner: string = str.slice(after_open, 0, close_rel)
-        const inner: string = str.trim(raw_inner)
+        const markers: WsMarkers = parse_ws_markers(raw_inner)
+        const inner: string = markers.inner
+        if markers.left
+            before = rtrim_ws(before)
+        end
+        if in_layout
+            body_buf = str.concat(body_buf, before)
+        else
+            out = str.concat(out, before)
+        end
+        if markers.right
+            strip_next_leading = true
+        end
         pos = abs_open + 2 + close_rel + 1
 
         -- layout open
@@ -383,7 +405,7 @@ take_block(source: string, start: int, open_inner: string) -> result[BlockChunk,
         if cr2 < 0
             return err(TemplateError.Parse(message: "unclosed tag in block"))
         end
-        const inn: string = str.trim(str.slice(after, 0, cr2))
+        const inn: string = parse_ws_markers(str.slice(after, 0, cr2)).inner
         const after_tag: int = abs_open + 2 + cr2 + 1
         if starts_with_word(inn, "if") or starts_with_word(inn, "for") or starts_with_word(inn, "layout")
             depth = depth + 1
@@ -486,7 +508,7 @@ split_if_parts(header: string, body: string) -> result[list[IfPart], TemplateErr
         if cr2 < 0
             return err(TemplateError.Parse(message: "unclosed tag"))
         end
-        const inn: string = str.trim(str.slice(after, 0, cr2))
+        const inn: string = parse_ws_markers(str.slice(after, 0, cr2)).inner
         const after_tag: int = abs_open + 2 + cr2 + 1
         if starts_with_word(inn, "if") or starts_with_word(inn, "for")
             depth = depth + 1
@@ -703,6 +725,70 @@ apply_assign(inner: string, data: Data) -> result[bool, TemplateError]
 end
 
 -- ─── Helpers / utils ─────────────────────────────────────
+
+-- S8: optional whitespace control on tags (Jinja/ERB-style `-`).
+--   @{ - expr }   trim whitespace before the tag
+--   @{ expr - }   trim whitespace after the tag
+--   @{ - expr - } both sides
+struct WsMarkers
+    inner: string
+    left: bool
+    right: bool
+end
+
+parse_ws_markers(raw: string) -> WsMarkers
+    var s: string = str.trim(raw)
+    var left: bool = false
+    var right: bool = false
+    if str.starts_with(s, "-")
+        left = true
+        s = str.trim(str.slice(s, 1, str.len(s)))
+    end
+    if str.ends_with(s, "-")
+        right = true
+        s = str.trim(str.slice(s, 0, str.len(s) - 1))
+    end
+    return WsMarkers { inner: s, left: left, right: right }
+end
+
+is_ws_char(ch: string) -> bool
+    if ch == " "
+        return true
+    end
+    if ch == "\t"
+        return true
+    end
+    if ch == "\n"
+        return true
+    end
+    if ch == "\r"
+        return true
+    end
+    return false
+end
+
+ltrim_ws(s: string) -> string
+    var i: int = 0
+    const n: int = str.len(s)
+    while i < n
+        if not is_ws_char(str.slice(s, i, i + 1))
+            break
+        end
+        i = i + 1
+    end
+    return str.slice(s, i, n)
+end
+
+rtrim_ws(s: string) -> string
+    var n: int = str.len(s)
+    while n > 0
+        if not is_ws_char(str.slice(s, n - 1, n))
+            break
+        end
+        n = n - 1
+    end
+    return str.slice(s, 0, n)
+end
 
 truthy_key(data: Data, key: string) -> bool
     if some(v) = maps.try_get(data.values, key)

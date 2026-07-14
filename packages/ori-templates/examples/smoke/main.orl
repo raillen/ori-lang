@@ -46,6 +46,19 @@ main()
         io.println(tpl.error_message(e))
     end
 
+    -- S8 whitespace trim
+    match tpl.render_string("A\n@{ - if admin -}\nX\n@{ - end -}\nB", d)
+    case ok(html):
+        -- no blank lines around X when markers trim newlines
+        if str.contains(html, "A\nX\nB")
+            io.println("s8-trim-ok")
+        else
+            io.println(str.concat("s8-trim-fail:", html))
+        end
+    case err(e):
+        io.println(tpl.error_message(e))
+    end
+
     -- path jail
     const eng: tpl.Engine = tpl.open("views")
     match tpl.render(eng, "../secret", tpl.empty_data())

@@ -12,7 +12,7 @@ Minimal HTTP **Library** layer for Ori (phases **A + B + C**, plus SEC8 helpers)
 |------|-----|
 | Types | `Request`, `Response`, `App`, `Handler`, `ActionResult`, `Middleware` |
 | Responses | `text`, `html`, `json`, `json_string_map`, `redirect`, `not_found`, `forbidden`, `bad_request`, `payload_too_large`, `too_many_requests` |
-| JSON helpers | `json_string_map(status, map)` · `parse_json_object(body)` (flat string values; no `ori.json` import cycle) |
+| JSON helpers | flat: `json_string_map` · `parse_json_object` · nested: `json_string`/`json_int`/`json_object`/`json_array`/`json_pair` · `parse_json_nested` (dotted paths; no `ori.json` import) |
 | Router | `get` / `post` / `put` / `patch` / `delete` + path params `:id` |
 | Static | `static(app, url_prefix, dir)` with `..` path jail |
 | Middleware | `use_middleware` · `clear_middleware` · catalog `mw_set_header` / `mw_timing` / `mw_request_id` ([docs/middleware.md](docs/middleware.md)) |
