@@ -4,6 +4,7 @@ import web = web
 import app.controllers.home = home
 import app.controllers.posts = posts
 import app.controllers.notes = notes
+import app.controllers.tasks = tasks
 
 -- Explicit routes (APP2). First match wins.
 public draw(a: web.App) -> void
@@ -12,4 +13,11 @@ public draw(a: web.App) -> void
     web.get(a, "/notes", notes.index)
     web.get(a, "/notes/new", notes.new_form)
     web.post(a, "/notes", notes.create)
+    web.get(a, "/tasks", tasks.index)
+    web.get(a, "/tasks/new", tasks.new_form)
+    web.post(a, "/tasks", tasks.create)
+    web.get(a, "/tasks/:id", tasks.show)
+    web.get(a, "/tasks/:id/edit", tasks.edit_form)
+    web.post(a, "/tasks/:id", tasks.update)
+    web.post(a, "/tasks/:id/delete", tasks.destroy)
 end

@@ -15,7 +15,7 @@
 | `run(app)` | Listen + secret check when `ORI_ENV=production` |
 | `bin/new` | Scaffold app tree |
 | `bin/generate-controller` | Controller + index view + route stub |
-| `bin/generate-scaffold` | Resource: index / new / create + form |
+| `bin/generate-scaffold` | Full REST resource: index / new / create / show / edit / update / destroy + views |
 | `bin/generate-model` | Domain stub + optional password helpers |
 
 ## Scaffold a site
@@ -34,9 +34,23 @@ Add a resource:
 ```bash
 cd myapp
 ../ori-web-app/bin/generate-controller posts   # index only
-../ori-web-app/bin/generate-scaffold notes     # index + new + create
+../ori-web-app/bin/generate-scaffold notes     # full REST (CRUD + views)
 ori check main.orl
 ```
+
+### REST routes from `generate-scaffold <res>`
+
+| Method | Path | Action |
+|--------|------|--------|
+| GET | `/{res}` | index |
+| GET | `/{res}/new` | new_form |
+| POST | `/{res}` | create |
+| GET | `/{res}/:id` | show |
+| GET | `/{res}/:id/edit` | edit_form |
+| POST | `/{res}/:id` | update |
+| POST | `/{res}/:id/delete` | destroy |
+
+In-memory list store (IDs are 0-based string indices). Replace with domain/DB later.
 
 ## Convention tree
 

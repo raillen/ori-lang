@@ -2216,6 +2216,12 @@ fn load_source_recursive(
             StdlibImportStatus::Implemented => continue,
             StdlibImportStatus::StdlibSources(sources) => {
                 for (source_path, expected_namespace) in sources {
+                    // Hybrid stdlib pattern: `module ori.net` + `import ori.net = net`
+                    // re-exports Layer 1 symbols. The import resolves to the same
+                    // `.orl` file already being loaded — not a real cycle.
+                    if source_path == *path {
+                        continue;
+                    }
                     if active.contains(&source_path) {
                         let cycle = import_cycle_description(active, loaded, &source_path, &import);
                         sink.emit(
@@ -2457,46 +2463,63 @@ fn find_stdlib_source_module(import: &str) -> Option<PathBuf> {
 ///
 /// Order:
 /// 1. `ORI_STDLIB_ROOT`
-/// 2. When `ORI_REQUIRE_PACKAGED_RUNTIME=1` (release smoke): `<ori exe dir>/stdlib` first
-/// 3. Dev layout from `CARGO_MANIFEST_DIR` (only if that tree still exists)
-/// 4. `<ori exe dir>/stdlib` (end-user package)
-/// 5. Walk cwd parents for a `stdlib/` directory
+/// 2. End-user / local package next to the binary:
+///    - `<exe_dir>/stdlib` (flat package)
+///    - `<exe_dir>/../stdlib` (`…/bin/ori` + `…/stdlib`, e.g. `~/.local/share/ori`)
+/// 3. Dev layout from `CARGO_MANIFEST_DIR` (only when still present; never preferred
+///    over a package layout next to the running binary)
+/// 4. Walk cwd parents for a `stdlib/` directory
 pub fn find_stdlib_root() -> Option<PathBuf> {
-    if let Ok(path) = std::env::var("ORI_STDLIB_ROOT") {
-        let path = PathBuf::from(path);
+    let dir_if_stdlib = |path: PathBuf| -> Option<PathBuf> {
         if path.is_dir() {
-            return Some(path);
+            Some(std::fs::canonicalize(&path).unwrap_or(path))
+        } else {
+            None
         }
+    };
+
+    if let Ok(path) = std::env::var("ORI_STDLIB_ROOT") {
+        if let Some(root) = dir_if_stdlib(PathBuf::from(path)) {
+            return Some(root);
+        }
+    }
+
+    let package_near_exe = || -> Option<PathBuf> {
+        let exe = std::env::current_exe().ok()?;
+        let exe_dir = exe.parent()?;
+        // Layout A: stdlib beside the binary
+        if let Some(root) = dir_if_stdlib(exe_dir.join("stdlib")) {
+            return Some(root);
+        }
+        // Layout B: `…/bin/ori` + `…/stdlib` (user install under ~/.local/share/ori)
+        if let Some(prefix) = exe_dir.parent() {
+            if let Some(root) = dir_if_stdlib(prefix.join("stdlib")) {
+                return Some(root);
+            }
+        }
+        None
+    };
+
+    // Always prefer a real install next to the running binary over the
+    // compile-time worktree path baked into `CARGO_MANIFEST_DIR`.
+    if let Some(path) = package_near_exe() {
+        return Some(path);
     }
 
     let packaged_only = std::env::var_os("ORI_REQUIRE_PACKAGED_RUNTIME").is_some_and(|v| {
         let s = v.to_string_lossy();
         s == "1" || s.eq_ignore_ascii_case("true") || s.eq_ignore_ascii_case("yes")
     });
-
-    let next_to_exe = || -> Option<PathBuf> {
-        let exe = std::env::current_exe().ok()?;
-        let exe_dir = exe.parent()?;
-        let release_candidate = exe_dir.join("stdlib");
-        release_candidate.is_dir().then_some(release_candidate)
-    };
-
-    // M1: packaged smoke / release gate must not leak into the build-tree stdlib
-    // via the compile-time `CARGO_MANIFEST_DIR` path when a sibling stdlib exists.
     if packaged_only {
-        if let Some(path) = next_to_exe() {
-            return Some(path);
-        }
+        return None;
     }
 
     let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let dev_candidate = manifest_root.join("../../../stdlib");
-    if dev_candidate.is_dir() {
-        return Some(dev_candidate);
+    if let Some(root) = dir_if_stdlib(dev_candidate) {
+        return Some(root);
     }
-    if let Some(path) = next_to_exe() {
-        return Some(path);
-    }
+
     if let Ok(cwd) = std::env::current_dir() {
         let mut dir = cwd;
         for _ in 0..8 {
@@ -2508,7 +2531,7 @@ pub fn find_stdlib_root() -> Option<PathBuf> {
                     || candidate.join("list.orl").is_file()
                     || candidate.join("list").is_dir())
             {
-                return Some(candidate);
+                return dir_if_stdlib(candidate);
             }
             if let Some(parent) = dir.parent() {
                 dir = parent.to_owned();

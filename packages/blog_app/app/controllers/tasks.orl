@@ -1,0 +1,156 @@
+module app.controllers.tasks
+
+-- Full REST scaffold (in-memory). IDs are 0-based indices as strings.
+
+import app.application = app
+import web = web
+import web_app = wa
+import templates = tpl
+import ori.list = lists
+import ori.map = maps
+import ori.string = str
+import ori.convert = conv
+
+var ITEMS: list[string] = []
+
+parse_id(id: string) -> int
+    return conv.parse_int_or(id, -1)
+end
+
+public index(req: web.Request) -> web.ActionResult
+    var d: tpl.Data = tpl.empty_data()
+    tpl.set_value(d, "title", "Tasks")
+    tpl.set_list(d, "items", ITEMS)
+    if lists.len(ITEMS) == 0
+        tpl.set_value(d, "items_empty", "true")
+    else
+        tpl.set_value(d, "items_empty", "false")
+    end
+    return app.render("tasks/index", req, d)
+end
+
+public new_form(req: web.Request) -> web.ActionResult
+    var d: tpl.Data = tpl.empty_data()
+    tpl.set_value(d, "title", "New Tasks")
+    tpl.set_value(d, "csrf_field", wa.csrf_field(req))
+    return app.render("tasks/new", req, d)
+end
+
+public create(req: web.Request) -> web.ActionResult
+    const form: map[string, string] = web.form_body(req)
+    var text: string = ""
+    if some(t) = maps.try_get(form, "title")
+        text = str.trim(t)
+    end
+    if str.len(text) == 0
+        app.error_flash(req, "Title is required.")
+        return app.redirect("/tasks/new")
+    end
+    lists.push(ITEMS, text)
+    app.notice(req, "Tasks created.")
+    web.audit("tasks.create", text)
+    return app.redirect("/tasks")
+end
+
+public show(req: web.Request) -> web.ActionResult
+    var id: string = ""
+    if some(v) = maps.try_get(req.params, "id")
+        id = v
+    end
+    const idx: int = parse_id(id)
+    if idx < 0
+        return ok(web.not_found())
+    end
+    if idx >= lists.len(ITEMS)
+        return ok(web.not_found())
+    end
+    var d: tpl.Data = tpl.empty_data()
+    tpl.set_value(d, "title", "task")
+    tpl.set_value(d, "id", id)
+    tpl.set_value(d, "item", ITEMS[idx])
+    tpl.set_value(d, "csrf_field", wa.csrf_field(req))
+    return app.render("tasks/show", req, d)
+end
+
+public edit_form(req: web.Request) -> web.ActionResult
+    var id: string = ""
+    if some(v) = maps.try_get(req.params, "id")
+        id = v
+    end
+    const idx: int = parse_id(id)
+    if idx < 0
+        return ok(web.not_found())
+    end
+    if idx >= lists.len(ITEMS)
+        return ok(web.not_found())
+    end
+    var d: tpl.Data = tpl.empty_data()
+    tpl.set_value(d, "title", "Edit task")
+    tpl.set_value(d, "id", id)
+    tpl.set_value(d, "item", ITEMS[idx])
+    tpl.set_value(d, "csrf_field", wa.csrf_field(req))
+    return app.render("tasks/edit", req, d)
+end
+
+public update(req: web.Request) -> web.ActionResult
+    var id: string = ""
+    if some(v) = maps.try_get(req.params, "id")
+        id = v
+    end
+    const idx: int = parse_id(id)
+    if idx < 0
+        return ok(web.not_found())
+    end
+    if idx >= lists.len(ITEMS)
+        return ok(web.not_found())
+    end
+    const form: map[string, string] = web.form_body(req)
+    var text: string = ""
+    if some(t) = maps.try_get(form, "title")
+        text = str.trim(t)
+    end
+    if str.len(text) == 0
+        app.error_flash(req, "Title is required.")
+        return app.redirect(str.concat("/tasks/", str.concat(id, "/edit")))
+    end
+    var next: list[string] = []
+    var i: int = 0
+    while i < lists.len(ITEMS)
+        if i == idx
+            lists.push(next, text)
+        else
+            lists.push(next, ITEMS[i])
+        end
+        i = i + 1
+    end
+    ITEMS = next
+    app.notice(req, "task updated.")
+    web.audit("tasks.update", id)
+    return app.redirect(str.concat("/tasks/", id))
+end
+
+public destroy(req: web.Request) -> web.ActionResult
+    var id: string = ""
+    if some(v) = maps.try_get(req.params, "id")
+        id = v
+    end
+    const idx: int = parse_id(id)
+    if idx < 0
+        return ok(web.not_found())
+    end
+    if idx >= lists.len(ITEMS)
+        return ok(web.not_found())
+    end
+    var next: list[string] = []
+    var i: int = 0
+    while i < lists.len(ITEMS)
+        if i != idx
+            lists.push(next, ITEMS[i])
+        end
+        i = i + 1
+    end
+    ITEMS = next
+    app.notice(req, "task deleted.")
+    web.audit("tasks.destroy", id)
+    return app.redirect("/tasks")
+end

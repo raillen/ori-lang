@@ -1,0 +1,15 @@
+@{ layout "layouts/app" }
+@{ assign title = "Tasks" }
+<section class="card">
+  <h1>Tasks</h1>
+  <p><a href="/tasks/new">New task</a></p>
+  <ul>
+  @{ for i, item in items }
+    <li><a href="/tasks/@{ i }">@{ item }</a></li>
+  @{ end }
+  @{ if items_empty }
+    <li class="muted">No items yet.</li>
+  @{ end }
+  </ul>
+</section>
+@{ end }

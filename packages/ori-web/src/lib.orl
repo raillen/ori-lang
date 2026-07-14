@@ -18,6 +18,8 @@ import ori.convert = conv
 public alias WebError = string
 public alias ActionResult = result[Response, WebError]
 public alias Handler = func(Request) -> ActionResult
+-- Middleware wraps the next Handler (onion). Applied outermost-last (push order).
+public alias Middleware = func(Handler) -> Handler
 
 public struct Request
     method: string
@@ -76,6 +78,12 @@ var SESSION_DIR: string = ""
 -- Rate limit buckets: client_key -> "window_start_ms|count" (B4)
 var RATE_BUCKETS: map[string, string] = maps.new()
 
+-- User middleware stack (around route handler only; after CSRF/rate-limit)
+var MIDDLEWARES: list[Middleware] = []
+
+-- Single-file session store path (backend "kv")
+var SESSION_KV_PATH: string = ""
+
 -- - Construction -
 
 public app() -> App
@@ -88,11 +96,23 @@ public app() -> App
     CFG_ABS_MS = 86400000
     CFG_CSRF_ROTATE = false
     CFG_HOST_COOKIE = false
-    -- CFG_AUDIT_PATH / session backend are sticky (configure anytime)
+    -- sticky: audit path, session backend
+    clear_middleware()
     return App {
         routes: [],
         static_mounts: [],
     }
+end
+
+public clear_middleware() -> void
+    lists.clear(MIDDLEWARES)
+end
+
+-- Register middleware (applied in reverse push order around the matched handler).
+-- Note: `use` is reserved in Ori (trait syntax); public name is `use_middleware`.
+public use_middleware(a: App, mw: Middleware) -> App
+    lists.push(MIDDLEWARES, mw)
+    return a
 end
 
 public set_max_body(a: App, n: int) -> App
@@ -147,15 +167,29 @@ end
 public use_memory_sessions() -> void
     SESSION_BACKEND = "memory"
     SESSION_DIR = ""
+    SESSION_KV_PATH = ""
 end
 
 public use_file_sessions(dir: string) -> void
     SESSION_BACKEND = "file"
     SESSION_DIR = dir
+    SESSION_KV_PATH = ""
     match fs.create_dir_all(dir)
     case ok(_):
     case err(_):
     end
+end
+
+-- Single flat-file session store (multi-process friendly on shared FS).
+-- Format: one line per session: sid\\tblob (blob uses \\\\ and \\n escapes).
+public use_kv_sessions(file_path: string) -> void
+    SESSION_BACKEND = "kv"
+    SESSION_DIR = ""
+    SESSION_KV_PATH = file_path
+end
+
+public session_backend() -> string
+    return SESSION_BACKEND
 end
 
 -- A7: fail boot when production secret missing/short
@@ -222,6 +256,120 @@ public json(status: int, body: string) -> Response
     var h: map[string, string] = maps.new()
     maps.set(h, "Content-Type", "application/json; charset=utf-8")
     return Response { status: status, headers: h, body: body }
+end
+
+-- Flat string map → JSON object body (no nested values; no ori.json import).
+public json_string_map(status: int, fields: map[string, string]) -> Response
+    return json(status, encode_string_map(fields))
+end
+
+-- Best-effort flat JSON object parse: {"k":"v", ...} → map (string values only).
+public parse_json_object(body: string) -> result[map[string, string], string]
+    var out: map[string, string] = maps.new()
+    const t: string = str.trim(body)
+    if str.len(t) < 2
+        return err("invalid json object")
+    end
+    if not str.starts_with(t, "{")
+        return err("invalid json object")
+    end
+    if not str.ends_with(t, "}")
+        return err("invalid json object")
+    end
+    const inner: string = str.slice(t, 1, str.len(t) - 1)
+    if str.len(str.trim(inner)) == 0
+        return ok(out)
+    end
+    -- split on "," not inside quotes (simple scanner)
+    var part: string = ""
+    var in_str: bool = false
+    var esc: bool = false
+    var parts: list[string] = []
+    var i: int = 0
+    const n: int = str.len(inner)
+    while i < n
+        const ch: string = str.slice(inner, i, i + 1)
+        if esc
+            -- previous char was backslash inside a string; keep raw + escaped char
+            part = str.concat(part, ch)
+            esc = false
+        elif ch == "\\"
+            if in_str
+                part = str.concat(part, ch)
+                esc = true
+            end
+        elif ch == "\""
+            in_str = not in_str
+            part = str.concat(part, ch)
+        elif ch == ","
+            if in_str
+                part = str.concat(part, ch)
+            else
+                lists.push(parts, part)
+                part = ""
+            end
+        else
+            part = str.concat(part, ch)
+        end
+        i = i + 1
+    end
+    if str.len(str.trim(part)) > 0
+        lists.push(parts, part)
+    end
+    var pi: int = 0
+    while pi < lists.len(parts)
+        const p: string = str.trim(parts[pi])
+        const colon: int = str.index_of(p, ":")
+        if colon > 0
+            const ks: string = str.trim(str.slice(p, 0, colon))
+            const vs: string = str.trim(str.slice(p, colon + 1, str.len(p)))
+            if str.starts_with(ks, "\"")
+                if str.ends_with(ks, "\"")
+                    if str.starts_with(vs, "\"")
+                        if str.ends_with(vs, "\"")
+                            const k: string = str.slice(ks, 1, str.len(ks) - 1)
+                            const v: string = str.slice(vs, 1, str.len(vs) - 1)
+                            maps.set(out, k, v)
+                        end
+                    end
+                end
+            end
+        end
+        pi = pi + 1
+    end
+    return ok(out)
+end
+
+encode_string_map(fields: map[string, string]) -> string
+    var out: string = "{"
+    const keys: list[string] = maps.keys(fields)
+    var i: int = 0
+    while i < lists.len(keys)
+        const k: string = keys[i]
+        if i > 0
+            out = str.concat(out, ",")
+        end
+        out = str.concat(out, "\"")
+        out = str.concat(out, json_escape_str(k))
+        out = str.concat(out, "\":\"")
+        if some(v) = maps.try_get(fields, k)
+            out = str.concat(out, json_escape_str(v))
+        end
+        out = str.concat(out, "\"")
+        i = i + 1
+    end
+    out = str.concat(out, "}")
+    return out
+end
+
+json_escape_str(s: string) -> string
+    var out: string = s
+    out = str.replace_all(out, "\\", "\\\\")
+    out = str.replace_all(out, "\"", "\\\"")
+    out = str.replace_all(out, "\n", "\\n")
+    out = str.replace_all(out, "\r", "\\r")
+    out = str.replace_all(out, "\t", "\\t")
+    return out
 end
 
 public redirect(status: int, location: string) -> Response
@@ -306,6 +454,15 @@ load_blob(sid: string) -> string
             end
         end
     end
+    if SESSION_BACKEND == "kv"
+        if str.len(SESSION_KV_PATH) > 0
+            const all: map[string, string] = kv_load_all()
+            if some(body) = maps.try_get(all, sid)
+                maps.set(SESSIONS, sid, body)
+                return body
+            end
+        end
+    end
     return ""
 end
 
@@ -317,6 +474,13 @@ save_blob(sid: string, blob: string) -> void
             case ok(_):
             case err(_):
             end
+        end
+    end
+    if SESSION_BACKEND == "kv"
+        if str.len(SESSION_KV_PATH) > 0
+            var all: map[string, string] = kv_load_all()
+            maps.set(all, sid, blob)
+            kv_save_all(all)
         end
     end
 end
@@ -332,6 +496,99 @@ remove_blob(sid: string) -> void
             end
         end
     end
+    if SESSION_BACKEND == "kv"
+        if str.len(SESSION_KV_PATH) > 0
+            var all: map[string, string] = kv_load_all()
+            maps.remove(all, sid)
+            kv_save_all(all)
+        end
+    end
+end
+
+kv_load_all() -> map[string, string]
+    var out: map[string, string] = maps.new()
+    if str.len(SESSION_KV_PATH) == 0
+        return out
+    end
+    match fs.read_text(SESSION_KV_PATH)
+    case err(_):
+        return out
+    case ok(raw):
+        const lines: list[string] = str.split(raw, "\n")
+        var i: int = 0
+        while i < lists.len(lines)
+            const line: string = lines[i]
+            const tab: int = str.index_of(line, "\t")
+            if tab > 0
+                const sid: string = str.slice(line, 0, tab)
+                const blob: string = kv_unescape(str.slice(line, tab + 1, str.len(line)))
+                maps.set(out, sid, blob)
+            end
+            i = i + 1
+        end
+    end
+    return out
+end
+
+kv_save_all(all: map[string, string]) -> void
+    var out: string = ""
+    const keys: list[string] = maps.keys(all)
+    var i: int = 0
+    while i < lists.len(keys)
+        const sid: string = keys[i]
+        if some(blob) = maps.try_get(all, sid)
+            if str.len(out) > 0
+                out = str.concat(out, "\n")
+            end
+            out = str.concat(out, sid)
+            out = str.concat(out, "\t")
+            out = str.concat(out, kv_escape(blob))
+        end
+        i = i + 1
+    end
+    match fs.write_text(SESSION_KV_PATH, out)
+    case ok(_):
+    case err(_):
+    end
+end
+
+kv_escape(s: string) -> string
+    var out: string = s
+    out = str.replace_all(out, "\\", "\\\\")
+    out = str.replace_all(out, "\n", "\\n")
+    out = str.replace_all(out, "\t", "\\t")
+    return out
+end
+
+kv_unescape(s: string) -> string
+    var out: string = ""
+    var i: int = 0
+    const n: int = str.len(s)
+    while i < n
+        const ch: string = str.slice(s, i, i + 1)
+        if ch == "\\"
+            if i + 1 < n
+                const nx: string = str.slice(s, i + 1, i + 2)
+                if nx == "n"
+                    out = str.concat(out, "\n")
+                elif nx == "t"
+                    out = str.concat(out, "\t")
+                elif nx == "\\"
+                    out = str.concat(out, "\\")
+                else
+                    out = str.concat(out, nx)
+                end
+                i = i + 2
+            else
+                out = str.concat(out, ch)
+                i = i + 1
+            end
+        else
+            out = str.concat(out, ch)
+            i = i + 1
+        end
+    end
+    return out
 end
 
 public session_get(req: Request, key: string) -> optional[string]
@@ -435,6 +692,33 @@ public is_htmx(req: Request) -> bool
         end
     end
     return false
+end
+
+-- Build a Request for tests / unit dispatch (SEC8).
+public make_request(
+    method: string,
+    path: string,
+    body: string,
+    session_id: string
+) -> Request
+    return Request {
+        method: method,
+        path: path,
+        query: maps.new(),
+        headers: maps.new(),
+        body: body,
+        params: maps.new(),
+        session_id: session_id,
+    }
+end
+
+public request_set_header(req: Request, key: string, value: string) -> void
+    maps.set(req.headers, str.to_lower(key), value)
+end
+
+-- Wire HTTP/1.1 response (includes Set-Cookie + security headers). For tests.
+public to_http(res: Response, session_id: string) -> string
+    return format_response(res, session_id)
 end
 
 ensure_session_meta(sid: string, idle_ms: int, absolute_ms: int) -> bool
@@ -1015,7 +1299,14 @@ public dispatch(a: App, req: Request) -> Response
             end
             i = i + 1
         end
-        match m.handler(req)
+        -- Apply user middleware onion (last `use` is outermost)
+        var h: Handler = m.handler
+        var mi: int = lists.len(MIDDLEWARES)
+        while mi > 0
+            mi = mi - 1
+            h = MIDDLEWARES[mi](h)
+        end
+        match h(req)
         case ok(res):
             if is_mutation(req.method)
                 if CFG_CSRF_ROTATE

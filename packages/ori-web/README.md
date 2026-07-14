@@ -1,6 +1,6 @@
 # web (`ori-web`)
 
-Minimal HTTP **Library** layer for Ori (phase **A + B**).
+Minimal HTTP **Library** layer for Ori (phases **A + B + C**, plus SEC8 helpers).
 
 - Design: [`docs/planning/web-templates-discussion-roadmap.md`](../../docs/planning/web-templates-discussion-roadmap.md) (D14–D20, §5.5)
 - Phase B notes: [`docs/phase-b.md`](docs/phase-b.md)
@@ -10,27 +10,31 @@ Minimal HTTP **Library** layer for Ori (phase **A + B**).
 
 | Area | API |
 |------|-----|
-| Types | `Request`, `Response`, `App`, `Handler`, `ActionResult` |
-| Responses | `text`, `html`, `json`, `redirect`, `not_found`, `forbidden`, `bad_request`, `payload_too_large`, `too_many_requests` |
+| Types | `Request`, `Response`, `App`, `Handler`, `ActionResult`, `Middleware` |
+| Responses | `text`, `html`, `json`, `json_string_map`, `redirect`, `not_found`, `forbidden`, `bad_request`, `payload_too_large`, `too_many_requests` |
+| JSON helpers | `json_string_map(status, map)` · `parse_json_object(body)` (flat string values; no `ori.json` import cycle) |
 | Router | `get` / `post` / `put` / `patch` / `delete` + path params `:id` |
 | Static | `static(app, url_prefix, dir)` with `..` path jail |
+| Middleware | `use_middleware(app, mw)` · `clear_middleware()` — onion around matched handler (`use` is reserved) |
 | Session | cookie `ori_sid` (HttpOnly, SameSite=Lax); `session_get` / `session_set` / flash / `session_regenerate` |
-| Session store (B3) | `use_memory_sessions()` · `use_file_sessions(dir)` |
+| Session store (B3) | `use_memory_sessions()` · `use_file_sessions(dir)` · `use_kv_sessions(path)` · `session_backend()` |
 | Timeouts (A9) | `set_session_timeouts(app, idle_ms, absolute_ms)` (default 1h / 24h) |
 | CSRF | form `csrf_token` or header `X-CSRF-Token` on mutations |
 | Rate limit (B4) | `set_rate_limit(app, per_minute)` · `client_key` / `set_trust_proxy` |
 | Headers (B6) | nosniff, frame, referrer, permissions-policy · optional `set_csp` |
 | Secret (A7) | `ORI_WEB_SECRET` when `ORI_WEB_ENV=production` · `require_secret` |
 | Dispatch | **`dispatch`** (not `handle` — reserved keyword) |
+| Test hooks | `make_request` · `request_set_header` · `to_http` (wire cookies + security headers) |
 | Serve | `serve(host, port, app)` |
 | Forms / htmx | `form_body`, `is_htmx` |
 | Auth helper | `require_session_key(key, next)` |
 
-## Demos
+## Demos & tests
 
 | Package | Port | Focus |
 |---------|------|--------|
 | `packages/ori-web/examples/hello_server` | 3456 | minimal |
+| `packages/ori-web/examples/sec8_tests` | — | SEC8 smoke (XSS body, CSRF, path jail, cookies, JSON, middleware, kv sessions) — `ori run main.orl` |
 | `packages/ori-web-demo` | 3457 | HTML-first notes + htmx |
 | `packages/ori-web-demo-api` | 3458 | JSON API + CSRF header |
 | `packages/ori-web-demo-auth` | 3459 | login + regenerate + file sessions |
@@ -58,6 +62,28 @@ end
 
 See [`docs/phase-c.md`](docs/phase-c.md): lockout, audit, re-auth, CSRF rotate, `__Host-` cookie.
 
+## Middleware sketch
+
+```ori
+mw_log(next: web.Handler) -> web.Handler
+    return (req: web.Request) => next(req)
+end
+
+a = web.use_middleware(a, mw_log)
+```
+
+Middleware runs after static/CSRF/rate-limit, around the matched route handler only.
+Last registered is outermost.
+
+## Session backends
+
+```ori
+web.use_memory_sessions()                 -- default, process-local
+web.use_file_sessions("tmp/sessions")     -- one file per sid
+web.use_kv_sessions("tmp/sessions.kv")    -- single flat file (multi-restart)
+```
+
 ## Not yet
 
-Redis session, argon2 (C10), keep-alive, in-process TLS, request read deadlines (B7), 2FA package.
+Redis/true external session store, keep-alive, in-process TLS, request read
+deadlines (B7), 2FA package. Password hashing is in **`ori.crypto`** (argon2id).

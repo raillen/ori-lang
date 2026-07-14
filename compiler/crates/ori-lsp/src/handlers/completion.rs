@@ -9,8 +9,53 @@ pub fn stdlib_completion_items() -> Vec<CompletionItem> {
 }
 
 /// Completion items when the cursor is inside an `import` statement.
+///
+/// `prefix` is the path typed after `import ` (e.g. `ori.` or `ori.st`).
+/// `insert_text` is only the remaining suffix so `import ori.` + accept `io`
+/// becomes `import ori.io`, not `import ori.ori.io`.
+///
+/// **Product surface (M2 / STDLIB-1):** only canonical `ori.X` modules.
+/// Nested `ori.X.utils` / `ori.X.algorithms` stay importable as silent compat
+/// but are **not** offered in autocomplete (`stdlib-merge-policy.md`).
 pub fn stdlib_import_completion_items(prefix: &str) -> Vec<CompletionItem> {
-    stdlib_catalog().module_completion_items(prefix)
+    stdlib_catalog()
+        .modules()
+        .filter(|m| !is_compat_nested_module(m))
+        .filter(|m| prefix.is_empty() || m.starts_with(prefix) || m.contains(prefix))
+        .map(|m| {
+            let insert = import_insert_suffix(prefix, m);
+            CompletionItem {
+                label: m.clone(),
+                kind: Some(CompletionItemKind::MODULE),
+                detail: Some("Ori stdlib module".into()),
+                filter_text: Some(m.clone()),
+                insert_text: Some(insert),
+                ..CompletionItem::default()
+            }
+        })
+        .collect()
+}
+
+/// Legacy nested paths kept for compile compat — hide from teachable UI.
+fn is_compat_nested_module(module: &str) -> bool {
+    module.ends_with(".utils") || module.ends_with(".algorithms")
+}
+
+/// Keywords valid on an import line after the path (`= alias` S3).
+pub fn import_keyword_completion_items() -> Vec<CompletionItem> {
+    // S3: `import ori.io = io` — only `=` is punctuation; no `as`/`only` clause keywords.
+    // Keep empty for path position; alias names come from the user.
+    Vec::new()
+}
+
+fn import_insert_suffix(prefix: &str, module: &str) -> String {
+    if prefix.is_empty() {
+        return module.to_string();
+    }
+    if let Some(suffix) = module.strip_prefix(prefix) {
+        return suffix.to_string();
+    }
+    module.to_string()
 }
 
 /// Dot-completion items for a stdlib import alias or module prefix.

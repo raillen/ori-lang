@@ -1,0 +1,14 @@
+@{ layout "layouts/app" }
+@{ assign title = "Edit task" }
+<section class="card">
+  <h1>Edit task #@{ id }</h1>
+  <form method="post" action="/tasks/@{ id }">
+    @{ csrf_field |> raw }
+    <label>Title<br>
+      <input type="text" name="title" value="@{ item }" required autocomplete="off">
+    </label>
+    <p style="margin-top:0.75rem"><button type="submit">Save</button></p>
+  </form>
+  <p><a href="/tasks/@{ id }">Cancel</a></p>
+</section>
+@{ end }

@@ -1,0 +1,174 @@
+module app.main
+
+-- SEC8 golden smoke: XSS/path/CSRF/cookies/JSON/middleware (no network).
+-- Run: cd packages/ori-web/examples/sec8_tests && ori get . && ori run main.orl
+
+import web = web
+import ori.io = io
+import ori.string = str
+import ori.map = maps
+import ori.fs = fs
+
+var FAILS: int = 0
+
+assert_true(cond: bool, label: string) -> void
+    if cond
+        io.println(str.concat("ok  ", label))
+    else
+        io.println(str.concat("FAIL ", label))
+        FAILS = FAILS + 1
+    end
+end
+
+echo_ok(req: web.Request) -> web.ActionResult
+    return ok(web.text(200, "echo-ok"))
+end
+
+html_echo(req: web.Request) -> web.ActionResult
+    -- XSS: response helper does not auto-escape body (templates do); ensure raw body preserved
+    return ok(web.html(200, "<script>alert(1)</script>"))
+end
+
+post_echo(req: web.Request) -> web.ActionResult
+    return ok(web.text(200, "posted"))
+end
+
+mw_tag(next: web.Handler) -> web.Handler
+    return (req: web.Request) => tagged(next, req)
+end
+
+tagged(next: web.Handler, req: web.Request) -> web.ActionResult
+    match next(req)
+    case ok(res):
+        return ok(web.text(res.status, str.concat("mw:", res.body)))
+    case err(e):
+        return err(e)
+    end
+    return ok(web.text(500, "mw"))
+end
+
+main()
+    -- isolated tmp dir for static jail
+    match fs.create_dir_all("/tmp/ori-web-sec8/public")
+    case ok(_):
+    case err(_):
+    end
+    match fs.write_text("/tmp/ori-web-sec8/public/ok.txt", "static-ok")
+    case ok(_):
+    case err(_):
+    end
+    match fs.write_text("/tmp/ori-web-sec8/secret.txt", "nope")
+    case ok(_):
+    case err(_):
+    end
+
+    var a: web.App = web.app()
+    web.use_memory_sessions()
+    web.get(a, "/echo", echo_ok)
+    web.get(a, "/xss", html_echo)
+    web.post(a, "/echo", post_echo)
+    web.static(a, "/assets", "/tmp/ori-web-sec8/public")
+
+    -- 1) GET ok
+    var req: web.Request = web.make_request("GET", "/echo", "", "sid-a")
+    var res: web.Response = web.dispatch(a, req)
+    assert_true(res.status == 200, "get echo 200")
+    assert_true(res.body == "echo-ok", "get echo body")
+
+    -- 2) CSRF: POST without token → 403
+    req = web.make_request("POST", "/echo", "x=1", "sid-b")
+    res = web.dispatch(a, req)
+    assert_true(res.status == 403, "post without csrf → 403")
+
+    -- 3) CSRF: token from session works
+    req = web.make_request("GET", "/echo", "", "sid-c")
+    res = web.dispatch(a, req)
+    const token: string = web.csrf_token(req)
+    req = web.make_request("POST", "/echo", str.concat("csrf_token=", token), "sid-c")
+    res = web.dispatch(a, req)
+    assert_true(res.status == 200, "post with csrf → 200")
+    assert_true(res.body == "posted", "post body")
+
+    -- 4) Path jail: traversal rejected
+    req = web.make_request("GET", "/assets/../secret.txt", "", "sid-d")
+    res = web.dispatch(a, req)
+    assert_true(res.status == 403, "static traversal → 403")
+
+    -- 5) Static ok
+    req = web.make_request("GET", "/assets/ok.txt", "", "sid-e")
+    res = web.dispatch(a, req)
+    assert_true(res.status == 200, "static 200")
+    assert_true(res.body == "static-ok", "static body")
+
+    -- 6) Cookie flags on wire
+    req = web.make_request("GET", "/echo", "", "sid-cookie")
+    res = web.dispatch(a, req)
+    const wire: string = web.to_http(res, "sid-cookie")
+    assert_true(str.contains(wire, "HttpOnly"), "cookie HttpOnly")
+    assert_true(str.contains(wire, "SameSite=Lax"), "cookie SameSite")
+    assert_true(str.contains(wire, "X-Content-Type-Options: nosniff"), "nosniff header")
+
+    -- 7) XSS body is not double-escaped by html() helper (escape is templates' job)
+    req = web.make_request("GET", "/xss", "", "sid-x")
+    res = web.dispatch(a, req)
+    assert_true(str.contains(res.body, "<script>"), "html helper preserves tags (escape in templates)")
+
+    -- 8) JSON string map + flat parse
+    var fields: map[string, string] = maps.new()
+    maps.set(fields, "msg", "hi\"there")
+    res = web.json_string_map(200, fields)
+    assert_true(str.contains(res.body, "\\\""), "json escapes quotes")
+    assert_true(str.contains(res.body, "msg"), "json has key")
+    match web.parse_json_object("{\"a\":\"1\",\"b\":\"two\"}")
+    case ok(parsed):
+        match maps.try_get(parsed, "a")
+        case some(av):
+            assert_true(av == "1", "parse_json key a")
+        case none:
+            assert_true(false, "parse_json key a")
+        end
+        match maps.try_get(parsed, "b")
+        case some(bv):
+            assert_true(bv == "two", "parse_json key b")
+        case none:
+            assert_true(false, "parse_json key b")
+        end
+    case err(_):
+        assert_true(false, "parse_json object")
+    end
+
+    -- 9) Middleware tags response
+    a = web.app()
+    web.get(a, "/echo", echo_ok)
+    a = web.use_middleware(a, mw_tag)
+    req = web.make_request("GET", "/echo", "", "sid-mw")
+    res = web.dispatch(a, req)
+    assert_true(res.body == "mw:echo-ok", "middleware wraps handler")
+
+    -- 10) KV session backend round-trip
+    web.use_kv_sessions("/tmp/ori-web-sec8/sessions.kv")
+    req = web.make_request("GET", "/echo", "", "sid-kv1")
+    web.session_set(req, "user", "alice")
+    match web.session_get(req, "user")
+    case some(u):
+        assert_true(u == "alice", "kv session set/get")
+    case none:
+        assert_true(false, "kv session set/get")
+    end
+    -- reload from file (clear memory cache by using new process-less path)
+    web.use_memory_sessions()
+    web.use_kv_sessions("/tmp/ori-web-sec8/sessions.kv")
+    req = web.make_request("GET", "/echo", "", "sid-kv1")
+    match web.session_get(req, "user")
+    case some(u2):
+        assert_true(u2 == "alice", "kv session persists")
+    case none:
+        assert_true(false, "kv session persists")
+    end
+
+    if FAILS == 0
+        io.println("SEC8 ALL PASSED")
+    else
+        io.println(str.concat("SEC8 FAILURES=", string(FAILS)))
+    end
+end

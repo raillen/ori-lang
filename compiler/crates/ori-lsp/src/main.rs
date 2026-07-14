@@ -458,22 +458,34 @@ impl LanguageServer for Backend {
 
         match context {
             CompletionContext::AfterDot { receiver } => {
-                items.extend(handlers::completion::stdlib_dot_completion_items(
-                    &receiver,
-                    &source_for_stdlib,
-                ));
-                if let Some((source, _)) = self.get_source_and_index(&uri).await {
-                    if let Some(psi) = self.get_semantic_index(&uri).await {
-                        items.extend(psi.complete_after_dot(&receiver, &source));
+                // `ori.` as a path prefix (often mis-detected when buffer is
+                // mid-edit) → list stdlib modules, not a phantom `ori.ori` member.
+                if receiver == "ori" {
+                    items.extend(handlers::completion::stdlib_import_completion_items("ori."));
+                } else {
+                    items.extend(handlers::completion::stdlib_dot_completion_items(
+                        &receiver,
+                        &source_for_stdlib,
+                    ));
+                    if let Some((source, _)) = self.get_source_and_index(&uri).await {
+                        if let Some(psi) = self.get_semantic_index(&uri).await {
+                            items.extend(psi.complete_after_dot(&receiver, &source));
+                        }
                     }
                 }
             }
             CompletionContext::Import => {
                 let prefix = import_prefix_at_position(&source_for_stdlib, position);
+                // Modules only — do not mix keywords here. Keywords pollute the
+                // client fuzzy list (shorter names rank above `ori.io`) and hide
+                // the stdlib under `max_suggestions`.
                 items.extend(handlers::completion::stdlib_import_completion_items(
                     &prefix,
                 ));
-                items.extend(handlers::completion::keyword_completion_items());
+                // Import-clause keywords only when the path is empty / after space.
+                if prefix.is_empty() || prefix.ends_with(' ') {
+                    items.extend(handlers::completion::import_keyword_completion_items());
+                }
             }
             CompletionContext::Default => {
                 items.extend(handlers::completion::stdlib_completion_items());

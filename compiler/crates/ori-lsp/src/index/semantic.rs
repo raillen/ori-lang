@@ -139,37 +139,42 @@ impl SemanticIndex {
     }
 
     /// Determine completion context based on cursor position.
+    ///
+    /// Import lines take priority over after-dot so `import ori.` completes
+    /// modules instead of treating `ori` as a value receiver (S3 IDE UX).
     pub fn completion_context(&self, source: &str, pos: Position) -> CompletionContext {
         let offset = position::byte_offset_for_position(source, pos);
         let before = &source[..offset.min(source.len())];
 
-        // Check if we're after a dot (field/method access)
-        if let Some(dot_pos) = before.rfind('.') {
-            // Check that the dot is part of an identifier chain, not a number
-            let after_dot = &before[dot_pos + 1..];
-            if !after_dot.contains(|c: char| c.is_whitespace() || c == '\n')
-                && !after_dot.contains(')')
+        // Restrict to the current line so dots/import from earlier lines
+        // do not leak into the context.
+        let line_start = before.rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let line = &before[line_start..];
+        let trimmed = line.trim_start();
+
+        // `import ...` (including path dots) → module completion
+        if trimmed.starts_with("import ") || trimmed == "import" {
+            return CompletionContext::Import;
+        }
+
+        // After a dot: `receiver.` or `receiver.partial`
+        if let Some(rel_dot) = line.rfind('.') {
+            let after_dot = &line[rel_dot + 1..];
+            if after_dot
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_')
             {
-                // Find the receiver name before the dot
-                let before_dot = &before[..dot_pos];
+                let before_dot = &line[..rel_dot];
                 if let Some(receiver) = before_dot
                     .rsplit(|c: char| !c.is_alphanumeric() && c != '_')
                     .next()
                 {
-                    if !receiver.is_empty() {
+                    if !receiver.is_empty() && !receiver.chars().all(|c| c.is_ascii_digit()) {
                         return CompletionContext::AfterDot {
                             receiver: receiver.to_string(),
                         };
                     }
                 }
-            }
-        }
-
-        // Check if we're in an import path
-        if let Some(import_pos) = before.rfind("import ") {
-            let after_import = &before[import_pos + 7..];
-            if !after_import.contains('\n') {
-                return CompletionContext::Import;
             }
         }
 

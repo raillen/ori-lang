@@ -13,6 +13,21 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Notas
 - Working tree after **v0.3.5**.
 
+### Adicionado
+- **`ori-web` SEC8 + middleware + JSON + kv sessions:** composable
+  `use_middleware` / `clear_middleware` (onion around route handlers);
+  flat `json_string_map` / `parse_json_object` (no `ori.json` import cycle);
+  `use_kv_sessions(path)` single-file session store; test hooks
+  `make_request` / `to_http`. Golden smoke:
+  `packages/ori-web/examples/sec8_tests` (CSRF, path jail, cookies, XSS body,
+  JSON, middleware, kv persistence).
+- **`ori-web-app` `generate-scaffold`:** full REST resource
+  (index/new/create/show/edit/update/destroy + views + routes).
+
+### Corrigido
+- **`clear_middleware`:** use `lists.clear` instead of `MIDDLEWARES = []`
+  (empty-list reassignment type mismatch on typed `list[Middleware]`).
+
 ---
 
 ## [0.3.5] — 2026-07-14

@@ -1,0 +1,9 @@
+manifest = 1
+name = "sec8_tests"
+version = "0.1.0"
+kind = "app"
+entry = "main.orl"
+[source]
+root_namespace = "app"
+[dependencies]
+web = { path = "../..", version = "0.1.0" }
