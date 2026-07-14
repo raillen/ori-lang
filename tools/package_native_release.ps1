@@ -13,7 +13,7 @@ $PSNativeCommandUseErrorActionPreference = $false
 
 function Get-HostTriple {
     $text = (& rustc -Vv | Out-String)
-    if ($LASTEXITCODE -ne 0) {
+    if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
         throw "rustc -Vv failed; install Rust before packaging Ori. Output: $text"
     }
     foreach ($line in ($text -split "`r?`n")) {
@@ -86,7 +86,7 @@ if (-not (Test-Path -LiteralPath $smokeScript -PathType Leaf)) {
     throw "missing smoke script: $smokeScript"
 }
 & $smokeScript @smokeArgs
-if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
     throw "smoke_native_release.ps1 failed with exit code $LASTEXITCODE."
 }
 if (-not (Test-Path -LiteralPath $PackageRoot -PathType Container)) {

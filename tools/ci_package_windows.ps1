@@ -31,9 +31,9 @@ try {
 
     Write-Step "rustc / cargo"
     & rustc -Vv
-    if ($LASTEXITCODE -ne 0) { throw "rustc -Vv failed ($LASTEXITCODE)" }
+    if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) { throw "rustc -Vv failed ($LASTEXITCODE)" }
     & cargo -V
-    if ($LASTEXITCODE -ne 0) { throw "cargo -V failed ($LASTEXITCODE)" }
+    if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) { throw "cargo -V failed ($LASTEXITCODE)" }
     Write-StepEnd
 
     $dist = Join-Path $repoRoot "compiler\target\dist"

@@ -10,7 +10,7 @@ $PSNativeCommandUseErrorActionPreference = $false
 
 function Get-HostTriple {
     $text = (& rustc -Vv | Out-String)
-    if ($LASTEXITCODE -ne 0) {
+    if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
         throw "rustc -Vv failed; install Rust before running the native release smoke test. Output: $text"
     }
     foreach ($line in ($text -split "`r?`n")) {
@@ -47,7 +47,7 @@ function Get-OutputExeName([string]$Name) {
 
 function Invoke-Checked([scriptblock]$Command, [string]$Description) {
     & $Command
-    if ($LASTEXITCODE -ne 0) {
+    if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
         throw "$Description failed with exit code $LASTEXITCODE."
     }
 }
@@ -171,7 +171,7 @@ try {
             $helloExe = Join-Path $packageRootPath (Get-OutputExeName "hello")
             Invoke-Checked { & $packageOri compile (Join-Path "examples" "hello.orl") --out $helloExe } "ori compile in packaged release folder"
             $helloOutput = & $helloExe
-            if ($LASTEXITCODE -ne 0) {
+            if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
                 throw "compiled hello executable failed with exit code $LASTEXITCODE."
             }
             if (($helloOutput -join "`n") -notmatch "The answer is: 42") {
@@ -181,7 +181,7 @@ try {
             $asyncExe = Join-Path $packageRootPath (Get-OutputExeName "async_demo")
             Invoke-Checked { & $packageOri compile (Join-Path "examples" "async_demo.orl") --out $asyncExe } "ori compile async_demo in packaged release folder"
             $asyncOutput = & $asyncExe
-            if ($LASTEXITCODE -ne 0) {
+            if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
                 throw "compiled async_demo executable failed with exit code $LASTEXITCODE."
             }
             if (($asyncOutput -join "`n") -notmatch "42") {
@@ -191,7 +191,7 @@ try {
             $stdlibExe = Join-Path $packageRootPath (Get-OutputExeName "stdlib_package_smoke")
             Invoke-Checked { & $packageOri compile (Join-Path "examples" "stdlib_package_smoke.orl") --out $stdlibExe } "ori compile stdlib source module in packaged release folder"
             $stdlibOutput = & $stdlibExe
-            if ($LASTEXITCODE -ne 0) {
+            if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
                 throw "compiled stdlib_package_smoke executable failed with exit code $LASTEXITCODE."
             }
             if (($stdlibOutput -join "`n") -notmatch "hello packaged stdlib") {
@@ -217,7 +217,7 @@ try {
         }
 
         $jitOutput = & $packageOri run (Join-Path "examples" "hello.orl")
-        if ($LASTEXITCODE -ne 0) {
+        if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
             throw "ori run (JIT default) failed with exit code $LASTEXITCODE."
         }
         if (($jitOutput -join "`n") -notmatch "The answer is: 42") {
@@ -231,7 +231,7 @@ try {
         } finally {
             $ErrorActionPreference = $previousEap
         }
-        if ($LASTEXITCODE -ne 0) {
+        if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
             throw "ori doctor failed with exit code $LASTEXITCODE."
         }
         $doctorOutputRaw = ($doctorOutput | Out-String)

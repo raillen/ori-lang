@@ -81,13 +81,32 @@ jobs:
           ORI_USE_SYSTEM_LINKER: "1"
           CARGO_TERM_COLOR: always
         run: |
+          $ErrorActionPreference = "Continue"
+          $PSNativeCommandUseErrorActionPreference = $false
+          New-Item -ItemType Directory -Force -Path compiler/target/dist | Out-Null
+          $log = "compiler/target/dist/package-windows.log"
           $tag = "${{ github.ref_name }}"
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
             $inputTag = "${{ inputs.tag }}"
             if ($inputTag -and $inputTag.Trim().Length -gt 0) { $tag = $inputTag.Trim() }
           }
-          pwsh -NoProfile -File tools/ci_package_windows.ps1 -Tag $tag -TargetName "${{ matrix.name }}"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($tag -notmatch '^v') { $tag = "v$tag" }
+          Write-Host "tag=$tag"
+          Start-Transcript -Path $log -Force
+          try {
+            Write-Host "PATH=$env:PATH"
+            rustc -Vv
+            cargo -V
+            $root = Join-Path $pwd "compiler\target\dist\ori-${{ matrix.name }}"
+            $archive = Join-Path $pwd "compiler\target\dist\ori-$tag-${{ matrix.name }}.zip"
+            Write-Host "root=$root archive=$archive"
+            & "$pwd\tools\package_native_release.ps1" -PackageRoot $root -ArchivePath $archive -Force
+            Write-Host "pack exit LASTEXITCODE=$LASTEXITCODE"
+            if (-not (Test-Path $archive)) { throw "archive missing: $archive" }
+            Get-ChildItem (Join-Path $pwd "compiler\target\dist") | Format-Table Name, Length
+          } finally {
+            Stop-Transcript
+          }
 
       - name: Package (Unix)
         if: matrix.smoke == 'sh'
@@ -141,9 +160,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: package-log-${{ matrix.name }}
-          path: compiler/target/dist/package-*.log
+          path: |
+            compiler/target/dist/package-*.log
+            compiler/target/dist/**
           if-no-files-found: ignore
-
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
