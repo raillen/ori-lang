@@ -2,6 +2,8 @@ param(
     [string]$PackageRoot = "",
     [string]$ArchivePath = "",
     [switch]$SkipBuild,
+    # Accept -Force as alias (common in CI / docs)
+    [Alias("Force")]
     [switch]$Overwrite
 )
 

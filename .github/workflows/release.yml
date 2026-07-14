@@ -81,23 +81,24 @@ jobs:
           ORI_USE_SYSTEM_LINKER: "1"
           CARGO_TERM_COLOR: always
         run: |
-          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.tag }}" -ne "") {
-            "${{ inputs.tag }}"
-          } else {
-            "${{ github.ref_name }}"
+          $ErrorActionPreference = "Stop"
+          Set-Location $env:GITHUB_WORKSPACE
+          $tag = "${{ github.ref_name }}"
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $inputTag = "${{ inputs.tag }}"
+            if ($inputTag -and $inputTag.Trim().Length -gt 0) { $tag = $inputTag.Trim() }
           }
           if ($tag -notmatch '^v') { $tag = "v$tag" }
-          $version = $tag.TrimStart('v')
-          New-Item -ItemType Directory -Force -Path compiler\target\dist | Out-Null
-          $root = "compiler\target\dist\ori-${{ matrix.name }}"
-          $archive = "compiler\target\dist\ori-$tag-${{ matrix.name }}.zip"
-          .\tools\package_native_release.ps1 `
-            -PackageRoot $root `
-            -ArchivePath $archive `
-            -Overwrite
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Test-Path -LiteralPath $archive | ForEach-Object { if (-not $_) { throw "missing $archive" } }
-          Get-ChildItem compiler\target\dist | Format-Table Name, Length
+          Write-Host "tag=$tag target=${{ matrix.name }}"
+          $dist = Join-Path $env:GITHUB_WORKSPACE "compiler\target\dist"
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          $root = Join-Path $dist "ori-${{ matrix.name }}"
+          $archive = Join-Path $dist "ori-$tag-${{ matrix.name }}.zip"
+          $script = Join-Path $env:GITHUB_WORKSPACE "tools\package_native_release.ps1"
+          if (-not (Test-Path -LiteralPath $script)) { throw "missing $script" }
+          & $script -PackageRoot $root -ArchivePath $archive -Force
+          if (-not (Test-Path -LiteralPath $archive)) { throw "missing archive $archive" }
+          Get-ChildItem $dist | Format-Table Name, Length
 
       - name: Package (Unix)
         if: matrix.smoke == 'sh'
