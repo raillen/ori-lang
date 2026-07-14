@@ -81,7 +81,7 @@
 |----|-------|
 | **LANG-DOC** | User docs EN/PT + root READMEs + examples catalog; living maintenance only after this |
 | **LANG-PERF** | Closed — waves 1–3 (compile/link/JIT flags); see `perf-baseline-2026-07-13.md` |
-| **LANG-PERF-2** | Closed (waves 0–6) — residual list/ARC polish only if apps regress |
+| **LANG-PERF-2** | Closed (waves 0–6 + scalar list inline) — reopen only if apps regress |
 | **LANG-RES** | Closed — Spec 14 inventory + `compile_runs_lang_res_product_surface_native`; see `lang-res-closure.md` |
 | **DX-VSCODE** | v0.3.2 local `.vsix` |
 | **DX-ZED** | `extensions/zed-ori` dev install |
