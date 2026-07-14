@@ -7,8 +7,11 @@ import templates = tpl
 import ori.io = io
 import ori.map = maps
 import ori.string = str
+import ori.crypto = crypto
 
 var VIEWS: tpl.Engine = tpl.open("views")
+-- C10: argon2id PHC hash of the demo password (computed at boot)
+var DEMO_PASSWORD_HASH: string = ""
 
 base_ctx(req: web.Request) -> tpl.Data
     var d: tpl.Data = tpl.empty_data()
@@ -84,7 +87,7 @@ do_login(req: web.Request) -> web.ActionResult
         return ok(web.redirect(303, "/login"))
     end
     if user == "demo"
-        if pass == "demo"
+        if crypto.verify_password(pass, DEMO_PASSWORD_HASH)
             web.login_success(lock_key)
             -- A8: rotate session id after credential success
             const _new_sid: string = web.session_regenerate(req)
@@ -117,6 +120,7 @@ do_logout(req: web.Request) -> web.ActionResult
 end
 
 main()
+    DEMO_PASSWORD_HASH = crypto.hash_password("demo")
     web.use_file_sessions(".sessions")
     var a: web.App = web.app()
     web.set_audit_log("audit.log")
@@ -128,7 +132,7 @@ main()
     web.post(a, "/login", do_login)
     web.get(a, "/dashboard", web.require_session_key("user_id", render_dashboard))
     web.post(a, "/logout", do_logout)
-    io.println("ori-web-demo-auth on http://127.0.0.1:3459/  (demo/demo)")
+    io.println("ori-web-demo-auth on http://127.0.0.1:3459/  (demo/demo, argon2id)")
     match web.serve("127.0.0.1", 3459, a)
     case ok(_):
     case err(msg):

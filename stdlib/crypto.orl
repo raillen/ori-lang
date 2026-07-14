@@ -1,0 +1,12 @@
+module ori.crypto
+
+-- Cryptographic helpers (Layer 1 runtime).
+-- password_hash / password_verify use argon2id (PHC string encoding).
+
+public hash_password(password: string) -> string
+    return ori.crypto.password_hash(password)
+end
+
+public verify_password(password: string, encoded: string) -> bool
+    return ori.crypto.password_verify(password, encoded)
+end

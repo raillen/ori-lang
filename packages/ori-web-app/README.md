@@ -16,6 +16,7 @@
 | `bin/new` | Scaffold app tree |
 | `bin/generate-controller` | Controller + index view + route stub |
 | `bin/generate-scaffold` | Resource: index / new / create + form |
+| `bin/generate-model` | Domain stub + optional password helpers |
 
 ## Scaffold a site
 

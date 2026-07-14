@@ -15,6 +15,10 @@ serde_json = { workspace = true }
 # (rustls 0.23 no longer auto-picks a provider without a feature).
 rustls     = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
 webpki-roots = "0.26"
+# Password hashing for stdlib ori.crypto (web C10 / SEC9)
+argon2 = { version = "0.5", default-features = false, features = ["std", "password-hash", "alloc"] }
+password-hash = { version = "0.5", default-features = false, features = ["alloc", "rand_core"] }
+rand_core = { version = "0.6", default-features = false, features = ["getrandom"] }
 
 [dev-dependencies]
 ori-types = { workspace = true }

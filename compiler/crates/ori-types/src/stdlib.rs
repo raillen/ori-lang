@@ -671,6 +671,15 @@ pub const STDLIB_RUNTIME_FUNCTIONS: &[StdlibRuntimeFunction] = &[
     stdlib!("ori.os.current_dir", ["os.current_dir"] => "ori_os_current_dir", c_backend),
     stdlib!("ori.os.change_dir", ["os.change_dir"] => "ori_os_change_dir", c_backend),
     stdlib!("ori.random.seed", ["random.seed"] => "ori_random_seed", c_backend),
+    // Password hashing (argon2id PHC) — web C10 / SEC9
+    stdlib!(
+        "ori.crypto.password_hash",
+        ["crypto.password_hash"] => "ori_password_hash"
+    ),
+    stdlib!(
+        "ori.crypto.password_verify",
+        ["crypto.password_verify"] => "ori_password_verify"
+    ),
     stdlib!("ori.test.skip", ["test.skip"] => "ori_test_skip", c_backend),
     stdlib!("ori.bytes.from_list", ["bytes.from_list"] => "ori_bytes_from_list"),
     stdlib!("ori.bytes.to_list", ["bytes.to_list"] => "ori_bytes_to_list"),
@@ -891,6 +900,8 @@ pub fn stdlib_func_sig(path: &str) -> Option<(Vec<Ty>, Ty)> {
         "ori.random.int" => (vec![Ty::Int, Ty::Int], Ty::Int),
         "ori.random.float" => (vec![Ty::Float, Ty::Float], Ty::Float),
         "ori.random.bool" => (vec![], Ty::Bool),
+        "ori.crypto.password_hash" => (vec![Ty::String], Ty::String),
+        "ori.crypto.password_verify" => (vec![Ty::String, Ty::String], Ty::Bool),
         "ori.random.choice" => (
             vec![Ty::List(Box::new(Ty::Infer(0)))],
             Ty::Optional(Box::new(Ty::Infer(0))),
@@ -2023,6 +2034,8 @@ pub fn stdlib_native_abi(
         "ori_random_bool" => (vec![], Some(I8)),
         "ori_random_choice" => (vec![Ptr], Some(Ptr)),
         "ori_random_shuffle" => (vec![Ptr], Some(Ptr)),
+        "ori_password_hash" => (vec![Ptr], Some(Ptr)),
+        "ori_password_verify" => (vec![Ptr, Ptr], Some(I8)),
         "ori_json_parse" => (vec![Ptr], Some(Ptr)),
         "ori_json_stringify" => (vec![Ptr], Some(Ptr)),
         "ori_json_stringify_pretty" => (vec![Ptr], Some(Ptr)),

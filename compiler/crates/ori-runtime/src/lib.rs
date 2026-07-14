@@ -8977,6 +8977,52 @@ pub extern "C" fn ori_math_is_finite(x: f64) -> c_uchar {
     u8::from(x.is_finite()) as c_uchar
 }
 
+
+// ── Password hashing (argon2id, PHC string) — web C10 / SEC9 ─────────────────
+
+/// Hash a password with argon2id. Returns a PHC-encoded string, or empty on failure.
+#[no_mangle]
+pub unsafe extern "C" fn ori_password_hash(password: *const u8) -> *mut u8 {
+    use argon2::{
+        password_hash::{PasswordHasher, SaltString},
+        Argon2,
+    };
+    use rand_core::OsRng;
+
+    let password = cstr_str(password);
+    if password.is_empty() {
+        return cstring_from_str("");
+    }
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    match argon2.hash_password(password.as_bytes(), &salt) {
+        Ok(hash) => cstring_from_str(&hash.to_string()),
+        Err(_) => cstring_from_str(""),
+    }
+}
+
+/// Verify password against a PHC argon2 hash. Returns 1 if ok, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn ori_password_verify(password: *const u8, encoded: *const u8) -> c_uchar {
+    use argon2::{
+        password_hash::{PasswordHash, PasswordVerifier},
+        Argon2,
+    };
+
+    let password = cstr_str(password);
+    let encoded = cstr_str(encoded);
+    if password.is_empty() || encoded.is_empty() {
+        return 0;
+    }
+    let Ok(parsed) = PasswordHash::new(encoded) else {
+        return 0;
+    };
+    match Argon2::default().verify_password(password.as_bytes(), &parsed) {
+        Ok(()) => 1,
+        Err(_) => 0,
+    }
+}
+
 mod debug_agent;
 
 #[cfg(test)]

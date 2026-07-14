@@ -1,0 +1,47 @@
+module app.domain.user
+
+-- Domain stub (no ORM). Replace in-memory store with SQLite/etc later.
+
+import ori.list = lists
+import ori.string = str
+import ori.crypto = crypto
+
+public struct User
+    id: string
+    name: string
+end
+
+var STORE: list[User] = []
+var NEXT_ID: int = 1
+
+public all() -> list[User]
+    return STORE
+end
+
+public find(id: string) -> optional[User]
+    var i: int = 0
+    while i < lists.len(STORE)
+        if STORE[i].id == id
+            return some(STORE[i])
+        end
+        i = i + 1
+    end
+    return none
+end
+
+public create(name: string) -> User
+    const id: string = string(NEXT_ID)
+    NEXT_ID = NEXT_ID + 1
+    const row: User = User { id: id, name: name }
+    lists.push(STORE, row)
+    return row
+end
+
+-- Optional password helper for auth models (argon2id via runtime).
+public hash_secret(plain: string) -> string
+    return crypto.hash_password(plain)
+end
+
+public check_secret(plain: string, encoded: string) -> bool
+    return crypto.verify_password(plain, encoded)
+end

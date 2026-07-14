@@ -141,6 +141,7 @@ Implemented and importable today:
 - `ori.log`
 - `ori.os`
 - `ori.random`
+- `ori.crypto`
 - `ori.iter`
 - `ori.lazy`
 - `ori.concurrent`
@@ -925,6 +926,30 @@ Current implementation status:
 - `random.float(min, max)` returns a value inside the normalized range.
 - Native tests cover generic `choice[T]` and `shuffle[T]` for non-`int`
   elements through the list/optional storage ABI.
+
+---
+
+## `ori.crypto` — Cryptographic Helpers
+
+Status: **password hashing** (Layer 1). Algorithm: **argon2id** with PHC string
+encoding (salted, parameters in the hash string).
+
+```ori
+import ori.crypto = crypto
+
+const hash: string = crypto.password_hash("secret")
+const ok: bool = crypto.password_verify("secret", hash)
+```
+
+| Function | Type | Notes |
+|----------|------|--------|
+| `password_hash(password)` | `string → string` | Empty string on failure |
+| `password_verify(password, encoded)` | `string, string → bool` | Constant-time verify via `argon2` crate |
+
+Layer 2 wrappers in `stdlib/crypto.orl`: `hash_password` / `verify_password`.
+
+Do **not** use plain MD5/SHA for password storage. Prefer this API for auth
+(web C10 / SEC9).
 
 ---
 

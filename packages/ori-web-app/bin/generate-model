@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# Generate a domain/model stub (APP10 — no ORM, plain Ori).
+# Run from app root.
+# Usage: generate-model <Name>
+# Example: generate-model User
+
+set -euo pipefail
+
+NAME="${1:-}"
+if [[ -z "$NAME" ]]; then
+  echo "usage: $0 <ModelName>" >&2
+  exit 1
+fi
+if [[ ! -f ori.proj ]]; then
+  echo "error: run from app root" >&2
+  exit 1
+fi
+
+# PascalCase-ish keep alnum; module snake
+MOD="$(echo "$NAME" | sed 's/\([a-z0-9]\)\([A-Z]\)/\1_\2/g' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]//g')"
+TYPE="$(echo "$NAME" | sed 's/[^A-Za-z0-9]//g')"
+if [[ -z "$MOD" || -z "$TYPE" ]]; then
+  echo "error: invalid name" >&2
+  exit 1
+fi
+
+# Capitalize first letter of TYPE if needed
+TYPE="$(python3 -c "t='$TYPE'; print(t[:1].upper()+t[1:] if t else t)")"
+
+DIR="app/domain"
+FILE="$DIR/${MOD}.orl"
+mkdir -p "$DIR"
+
+if [[ -e "$FILE" ]]; then
+  echo "error: exists $FILE" >&2
+  exit 1
+fi
+
+cat > "$FILE" <<EOF
+module app.domain.${MOD}
+
+-- Domain stub (no ORM). Replace in-memory store with SQLite/etc later.
+
+import ori.list = lists
+import ori.string = str
+import ori.crypto = crypto
+
+public struct ${TYPE}
+    id: string
+    name: string
+end
+
+var STORE: list[${TYPE}] = []
+var NEXT_ID: int = 1
+
+public all() -> list[${TYPE}]
+    return STORE
+end
+
+public find(id: string) -> optional[${TYPE}]
+    var i: int = 0
+    while i < lists.len(STORE)
+        if STORE[i].id == id
+            return some(STORE[i])
+        end
+        i = i + 1
+    end
+    return none
+end
+
+public create(name: string) -> ${TYPE}
+    const id: string = string(NEXT_ID)
+    NEXT_ID = NEXT_ID + 1
+    const row: ${TYPE} = ${TYPE} { id: id, name: name }
+    lists.push(STORE, row)
+    return row
+end
+
+-- Optional password helper for auth models (argon2id via runtime).
+public hash_secret(plain: string) -> string
+    return crypto.hash_password(plain)
+end
+
+public check_secret(plain: string, encoded: string) -> bool
+    return crypto.verify_password(plain, encoded)
+end
+EOF
+
+echo "created $FILE"
+echo "import: import app.domain.${MOD} = ${MOD}"

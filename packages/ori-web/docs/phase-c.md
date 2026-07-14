@@ -13,7 +13,7 @@ Design: roadmap §5.5 phase C.
 | **C7 `__Host-` cookie** | With Secure | `set_host_cookie(app, true)` + `set_cookie_secure(true)` |
 | **C8 Upload** | Deferred | |
 | **C9 Supply chain** | Process | monorepo hygiene |
-| **C10 Password hash** | Deferred | argon2 via runtime later — demos use plain only for smoke |
+| **C10 Password hash** | **Done** | `ori.crypto.password_hash` / `password_verify` (argon2id PHC) |
 
 ## Example (auth)
 

@@ -4,7 +4,7 @@
 > **Audience:** maintainers.  
 > **Packages alvo (externos ao monorepo language core / FREEZE-1):**  
 > `ori-templates` → `ori-web` → `ori-web-demo`.  
-> **Última atualização:** 2026-07-14 — D32 web-app; **D33 phase C helpers + scaffold**.
+> **Última atualização:** 2026-07-14 — D33 phase C; **D34 argon2 + phase D + generate-model**.
 
 Este arquivo é a **fonte viva** das decisões e do que ainda falta discutir.
 Atualizar status e decisões aqui a cada rodada de diálogo.
@@ -80,6 +80,7 @@ C **usa** A; não substitui A.
 | D31 | **Phase B** implemented + demos API/auth | 2026-07-14 | rate limit, CSP, file sessions, secret, regenerate; ports 3458/3459 |
 | D32 | **`packages/ori-web-app`** + generators + `blog_app` example | 2026-07-14 | APP8 `bin/new`, `generate-controller`; library boot/render |
 | D33 | **Phase C helpers** + `generate-scaffold` | 2026-07-14 | lockout, audit, re-auth, CSRF rotate; scaffold notes on blog_app |
+| D34 | **C10 argon2id** + phase D docs + `generate-model` | 2026-07-14 | `ori.crypto`; ops checklist; domain stubs |
 
 ---
 

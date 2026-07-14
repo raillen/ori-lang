@@ -43,6 +43,13 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   CSRF rotation (`set_csrf_rotate`), optional `__Host-` cookie. Docs:
   `packages/ori-web/docs/phase-c.md`. Auth demo uses lockout + audit.
 - **`bin/generate-scaffold`:** resource with index/new/create + form views.
+- **`ori.crypto` (C10):** `password_hash` / `password_verify` — **argon2id** PHC
+  via `ori-runtime` (`argon2` crate). Stdlib `stdlib/crypto.orl` wrappers.
+  Auth demo stores/verifies demo password with argon2id.
+- **`bin/generate-model`:** domain stub under `app/domain/` with optional
+  password helpers.
+- **Phase D docs:** `packages/ori-web/docs/phase-d.md` (proxy TLS, secrets, ops).
+- **`packages/README.md`:** index of the web stack packages.
 - **Web App conventions (design closed):** APP1–APP10 + security D15–D20 + Rails-like
   future D21 — same planning doc + learning course.
 - **Runtime/DAP cooperativo (Ori IDE):** agent `debug_agent` no `ori-runtime` (`ori_debug_line` / `ori_debug_init`) ativado por `ORI_DEBUG_PORT`; codegen nativo instrumenta statements quando `ORI_DEBUG_INSTRUMENT=1` + `ORI_DEBUG_SOURCE=<path>`; adapter `ori-dap` (repo ori-ide) faz bind TCP e controla continue/step/breakpoints.
