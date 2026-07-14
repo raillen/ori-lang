@@ -1,8 +1,8 @@
-# Ori
-
 <p align="center">
-  <img src="branding/logo-with-text.svg" alt="Ori" width="420" />
+  <img src="branding/ori-logo-w_text.svg" alt="Ori" width="280">
 </p>
+
+# Ori
 
 Ori is a reading-first, explicitly typed programming language compiled to native
 code (**AOT**), with optional JIT for `ori run`. Its compiler is written in Rust.
