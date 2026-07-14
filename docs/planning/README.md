@@ -20,7 +20,10 @@
 | [pr-plan-ori-surface-s3.md](pr-plan-ori-surface-s3.md) | PR plan (completed) |
 | [package-ecosystem-guidelines.md](package-ecosystem-guidelines.md) | Package conventions |
 | [roadtov1.md](roadtov1.md) | Long-horizon 1.0 sketch |
-| [perf-baseline-2026-07-13.md](perf-baseline-2026-07-13.md) | LANG-PERF baselines + polyglot Ori/Py/Rust snapshot |
+| [perf-baseline-2026-07-13.md](perf-baseline-2026-07-13.md) | LANG-PERF baselines + polyglot multi-lang snapshot |
+| [perf-runtime-midend-plan.md](perf-runtime-midend-plan.md) | LANG-PERF-2 mid-end / loop runtime plan (**done** 0–6) |
+| [qa/test-matrix-ori.md](qa/test-matrix-ori.md) | Product-mapped compiler test matrix |
+| [qa/residual-cleanup-2026-07-13.md](qa/residual-cleanup-2026-07-13.md) | Residual surface cleanup snapshot |
 
 ## Historical / archive
 

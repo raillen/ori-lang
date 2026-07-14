@@ -16,6 +16,7 @@ Precedência: **este `AGENTS.md` > skills globais > defaults**.
 | **`compiler-dev`** | Front-end e processo: fase correta, diagnostics no catálogo, stdlib sync. |
 | **`lang-compiled`** | AOT: IR/SSA, multi-backend (native+C), ABI/link/runtime, opts, JIT-as-run, parity. |
 | **`ori-testing`** | Feature/fix: L1 `check` → L2 `compile` → L3 run → regressão em `ori-driver` + `diagnostic_catalog`. |
+| **`ori-lang-qa`** | QA diário/matriz de testes, residuals Spec 14, qualidade de diagnostics, FREEZE-1. Stages: `tools/qa/daily_fast.sh`. Agents: `.grok/agents/ori-lang-*.md`. |
 
 ### Sob demanda
 

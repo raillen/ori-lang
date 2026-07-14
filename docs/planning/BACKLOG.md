@@ -2,7 +2,7 @@
 
 > **This file is the only active “what remains to implement” list.**  
 > Surface baseline: **S3 `0.3.0`** + inference B **`0.3.1`** + package **`0.3.4`**.  
-> Last consolidated: **2026-07-13** (language-first closed; FREEZE-1 + Linux deb; link smoke fix).
+> Last consolidated: **2026-07-14** (LANG-PERF-2 closed; living QA scripts/skill landed).
 
 ---
 

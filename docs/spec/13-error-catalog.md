@@ -1,8 +1,26 @@
 # Ori Language Specification - Chapter 13: Diagnostic Error Catalog
 
-> Status: normative for emitted diagnostics; informative for planned diagnostics
-> Audience: compiler implementers, tool authors
-> Surface: **S3** (`0.3.0`)
+> Status: normative for emitted diagnostics; informative for planned diagnostics  
+> Audience: compiler implementers, tool authors  
+> Surface: **S3** (`0.3.0`) + living **0.3.x** under FREEZE-1  
+> Quality guide: `docs/planning/qa/` + skill `ori-lang-qa` / `references/diagnostics-quality.md`
+
+---
+
+## Message quality (normative intent)
+
+Every **emitted** diagnostic should allow a reader to answer:
+
+1. **What** failed (primary message).  
+2. **Where** (primary span on the offending construct).  
+3. **What to do** when the fix is mechanical (`action` / help note).  
+
+Under **S3**, messages and actions **must not** recommend removed forms
+(`namespace`, declaration `func`, `else if`, postfix `?`, `import as`, …).
+Prefer the canonical form (`module`, `name(...)`, `elif`, `try expr`,
+`import path = alias`).
+
+Consistency gate: `cargo test -p ori-driver --test diagnostic_catalog`.
 
 ---
 

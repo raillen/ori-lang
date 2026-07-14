@@ -1,6 +1,7 @@
 # Backend support matrix
 
-Status: current as of 2026-07-13.
+Status: current as of 2026-07-13 (FREEZE-1 / 0.3.x).  
+Residual cleanup: [`../planning/qa/residual-cleanup-2026-07-13.md`](../planning/qa/residual-cleanup-2026-07-13.md) · audit `tools/qa/residual_audit.sh`.
 
 This page separates three things:
 

@@ -2,8 +2,10 @@
 
 > Status: normative  
 > Audience: language designers, compiler implementers, contributors  
-> Surface: **S3** (Auk9-inspired), cutover `0.3.0`  
-> Identity / purpose: [`00-manifesto.md`](00-manifesto.md)
+> Surface: **S3** (Auk9-inspired), cutover `0.3.0` · living package **0.3.x** (FREEZE-1)  
+> Naming: **snake_case** functions · **PascalCase** types · visibility **`public`**  
+> Identity / purpose: [`00-manifesto.md`](00-manifesto.md)  
+> Spec index / product facts: [`README.md`](README.md)
 
 ---
 
