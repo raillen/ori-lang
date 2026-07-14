@@ -1,6 +1,6 @@
 module web
 
--- HTTP Library layer for Ori (phase A + B).
+-- HTTP Library layer for Ori (phase A + B + C helpers).
 -- Design: docs/planning/web-templates-discussion-roadmap.md D14-D20 §5.5
 
 import ori.net = net
@@ -49,6 +49,12 @@ var CFG_TRUST_PROXY: bool = false
 var CFG_CSP: string = ""
 var CFG_IDLE_MS: int = 3600000
 var CFG_ABS_MS: int = 86400000
+var CFG_CSRF_ROTATE: bool = false
+var CFG_HOST_COOKIE: bool = false
+var CFG_AUDIT_PATH: string = ""
+
+-- C4 lockout buckets: key -> "fails|lock_until_ms"
+var LOCKOUT: map[string, string] = maps.new()
 
 struct Route
     method: string
@@ -80,6 +86,9 @@ public app() -> App
     CFG_CSP = ""
     CFG_IDLE_MS = 3600000
     CFG_ABS_MS = 86400000
+    CFG_CSRF_ROTATE = false
+    CFG_HOST_COOKIE = false
+    -- CFG_AUDIT_PATH / session backend are sticky (configure anytime)
     return App {
         routes: [],
         static_mounts: [],
@@ -115,6 +124,23 @@ public set_session_timeouts(a: App, idle_ms: int, absolute_ms: int) -> App
     CFG_IDLE_MS = idle_ms
     CFG_ABS_MS = absolute_ms
     return a
+end
+
+-- C6: rotate CSRF token after each successful mutation
+public set_csrf_rotate(a: App, enabled: bool) -> App
+    CFG_CSRF_ROTATE = enabled
+    return a
+end
+
+-- C7: Prefer __Host- cookie name when Secure (call after set_cookie_secure true)
+public set_host_cookie(a: App, enabled: bool) -> App
+    CFG_HOST_COOKIE = enabled
+    return a
+end
+
+-- C5: append-only audit log path (empty = off)
+public set_audit_log(path: string) -> void
+    CFG_AUDIT_PATH = path
 end
 
 -- B3: pluggable session store (memory | file directory)
@@ -389,6 +415,12 @@ public csrf_token(req: Request) -> string
     return t
 end
 
+public rotate_csrf(req: Request) -> string
+    const t: string = new_session_id()
+    session_set(req, "csrf_token", t)
+    return t
+end
+
 public form_body(req: Request) -> map[string, string]
     return parse_query(req.body)
 end
@@ -597,6 +629,9 @@ parse_request(raw: string, max_body: int, idle_ms: int, absolute_ms: int) -> res
     var sid: string = ""
     if some(cookie) = maps.try_get(headers, "cookie")
         sid = cookie_get(cookie, "ori_sid")
+        if str.len(sid) == 0
+            sid = cookie_get(cookie, "__Host-ori_sid")
+        end
     end
     sid = effective_sid(sid)
     if str.len(sid) == 0
@@ -710,7 +745,13 @@ format_response(res: Response, sid: string) -> string
     out = str.concat(out, "Content-Length: ")
     out = str.concat(out, string(str.len(res.body)))
     out = str.concat(out, "\r\n")
-    var cookie: string = str.concat("Set-Cookie: ori_sid=", cookie_sid)
+    var cookie_name: string = "ori_sid"
+    if CFG_HOST_COOKIE
+        if CFG_COOKIE_SECURE
+            cookie_name = "__Host-ori_sid"
+        end
+    end
+    var cookie: string = str.concat("Set-Cookie: ", str.concat(cookie_name, str.concat("=", cookie_sid)))
     cookie = str.concat(cookie, "; Path=/; HttpOnly; SameSite=Lax")
     if CFG_COOKIE_SECURE
         cookie = str.concat(cookie, "; Secure")
@@ -976,6 +1017,11 @@ public dispatch(a: App, req: Request) -> Response
         end
         match m.handler(req)
         case ok(res):
+            if is_mutation(req.method)
+                if CFG_CSRF_ROTATE
+                    const _t: string = rotate_csrf(req)
+                end
+            end
             return res
         case err(msg):
             return text(500, msg)
@@ -984,6 +1030,97 @@ public dispatch(a: App, req: Request) -> Response
         return not_found()
     end
     return not_found()
+end
+
+-- - Phase C helpers: lockout (C4), audit (C5), re-auth (C2) -
+
+public login_allowed(key: string) -> bool
+    if some(raw) = maps.try_get(LOCKOUT, key)
+        const bar: int = str.index_of(raw, "|")
+        if bar > 0
+            const until: int = conv.parse_int_or(str.slice(raw, bar + 1, str.len(raw)), 0)
+            const now: int = time.instant_to_unix_ms(time.instant_now())
+            if until > now
+                return false
+            end
+        end
+    end
+    return true
+end
+
+public login_fail(key: string, max_fails: int, lock_ms: int) -> void
+    var fails: int = 0
+    if some(raw) = maps.try_get(LOCKOUT, key)
+        const bar: int = str.index_of(raw, "|")
+        if bar > 0
+            fails = conv.parse_int_or(str.slice(raw, 0, bar), 0)
+        end
+    end
+    fails = fails + 1
+    var until: int = 0
+    if fails >= max_fails
+        until = time.instant_to_unix_ms(time.instant_now()) + lock_ms
+        fails = 0
+    end
+    maps.set(LOCKOUT, key, str.concat(string(fails), str.concat("|", string(until))))
+end
+
+public login_success(key: string) -> void
+    maps.remove(LOCKOUT, key)
+end
+
+public audit(event: string, detail: string) -> void
+    if str.len(CFG_AUDIT_PATH) == 0
+        return
+    end
+    const ts: string = string(time.instant_to_unix_ms(time.instant_now()))
+    var line: string = str.concat(ts, str.concat(" ", str.concat(event, str.concat(" ", detail))))
+    line = str.concat(line, "\n")
+    var prev: string = ""
+    match fs.read_text(CFG_AUDIT_PATH)
+    case ok(body):
+        prev = body
+    case err(_):
+        prev = ""
+    end
+    match fs.write_text(CFG_AUDIT_PATH, str.concat(prev, line))
+    case ok(_):
+    case err(_):
+    end
+end
+
+public mark_reauth(req: Request) -> void
+    const now: string = string(time.instant_to_unix_ms(time.instant_now()))
+    session_set(req, "reauth_at", now)
+end
+
+public reauth_ok(req: Request, max_age_ms: int) -> bool
+    match session_get(req, "reauth_at")
+    case some(raw):
+        const at: int = conv.parse_int_or(raw, 0)
+        const now: int = time.instant_to_unix_ms(time.instant_now())
+        if at <= 0
+            return false
+        end
+        if now - at <= max_age_ms
+            return true
+        end
+        return false
+    case none:
+        return false
+    end
+    return false
+end
+
+public require_reauth(max_age_ms: int, next: Handler) -> Handler
+    return (req: Request) => guard_reauth(max_age_ms, next, req)
+end
+
+guard_reauth(max_age_ms: int, next: Handler, req: Request) -> ActionResult
+    if reauth_ok(req, max_age_ms)
+        return next(req)
+    end
+    return ok(redirect(303, "/reauth"))
 end
 
 -- - Serve loop -

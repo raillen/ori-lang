@@ -3,9 +3,13 @@ module config.routes
 import web = web
 import app.controllers.home = home
 import app.controllers.posts = posts
+import app.controllers.notes = notes
 
 -- Explicit routes (APP2). First match wins.
 public draw(a: web.App) -> void
     web.get(a, "/", home.index)
     web.get(a, "/posts", posts.index)
+    web.get(a, "/notes", notes.index)
+    web.get(a, "/notes/new", notes.new_form)
+    web.post(a, "/notes", notes.create)
 end

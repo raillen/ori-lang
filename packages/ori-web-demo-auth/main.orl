@@ -77,30 +77,51 @@ do_login(req: web.Request) -> web.ActionResult
     if some(p) = maps.try_get(form, "password")
         pass = p
     end
+    const lock_key: string = str.concat("login:", user)
+    if not web.login_allowed(lock_key)
+        web.flash(req, "error", "Too many failures. Try again later.")
+        web.audit("login.lockout", user)
+        return ok(web.redirect(303, "/login"))
+    end
     if user == "demo"
         if pass == "demo"
+            web.login_success(lock_key)
             -- A8: rotate session id after credential success
             const _new_sid: string = web.session_regenerate(req)
             web.session_set(req, "user_id", user)
+            web.mark_reauth(req)
             web.flash(req, "notice", "Welcome back.")
+            web.audit("login.ok", user)
             return ok(web.redirect(303, "/dashboard"))
         end
     end
+    -- C4: 5 fails → lock 60s
+    web.login_fail(lock_key, 5, 60000)
     web.flash(req, "error", "Invalid credentials.")
+    web.audit("login.fail", user)
     return ok(web.redirect(303, "/login"))
 end
 
 do_logout(req: web.Request) -> web.ActionResult
+    var who: string = ""
+    match web.session_get(req, "user_id")
+    case some(u):
+        who = u
+    case none:
+    end
     web.session_set(req, "user_id", "")
     const _sid: string = web.session_regenerate(req)
     web.flash(req, "notice", "Signed out.")
+    web.audit("logout", who)
     return ok(web.redirect(303, "/login"))
 end
 
 main()
     web.use_file_sessions(".sessions")
     var a: web.App = web.app()
+    web.set_audit_log("audit.log")
     a = web.set_rate_limit(a, 30)
+    a = web.set_csrf_rotate(a, true)
     a = web.set_csp(a, "default-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'")
     web.get(a, "/", home)
     web.get(a, "/login", render_login)

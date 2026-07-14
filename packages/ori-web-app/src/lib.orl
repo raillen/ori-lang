@@ -154,6 +154,24 @@ public csrf_field(req: web.Request) -> string
     )
 end
 
+-- Form helpers for generators / views (APP5 sugar)
+public text_field(name: string, value: string, placeholder: string) -> string
+    return str.concat(
+        "<input type=\"text\" name=\"",
+        str.concat(html_attr_escape(name), str.concat(
+            "\" value=\"",
+            str.concat(html_attr_escape(value), str.concat(
+                "\" placeholder=\"",
+                str.concat(html_attr_escape(placeholder), "\">")
+            ))
+        ))
+    )
+end
+
+public submit_button(label: string) -> string
+    return str.concat("<button type=\"submit\">", str.concat(html_attr_escape(label), "</button>"))
+end
+
 html_attr_escape(s: string) -> string
     var out: string = s
     out = str.replace_all(out, "&", "&amp;")
