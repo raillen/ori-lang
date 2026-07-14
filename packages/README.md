@@ -7,6 +7,9 @@
 in sync for language integration; prefer the dedicated repo for framework work
 and tarball releases.
 
+**Public package registry (name):** **OriLamp** — future static `ORI_REGISTRY`
+(GitHub Pages / Vercel); not required for path-based development.
+
 Outside the language FREEZE-1 *compiler* core. Apps depend via `ori.proj` path deps.
 
 ## Libraries (use these)
