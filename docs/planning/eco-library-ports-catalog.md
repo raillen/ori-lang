@@ -1,12 +1,14 @@
 # Catálogo canônico — tradução de bibliotecas nativas para Ori (ECO)
 
-> **Status:** canônico (2026-07-15) · **alta fechada** · **médios M1–M6 done 0.1.0** · miniaudio **skipped** (gap fechado por game.audio) · Phase OS last  
+> **Status:** canônico (2026-07-15) · **alta fechada** · **médios M1–M6 done 0.1.0** · miniaudio **skipped** · **maturidade → 5 active** · Phase OS last  
 
 > **Âmbito:** packages irmãos `ori-*` (bindings / ports C·C++ → Ori S3), **não** stdlib do monorepo.  
+> **Cluster path:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-*` (model A: pasta única, N remotes).  
 > **Política:** Linux implement / mature / port **primeiro**. Multi-OS (**Phase OS**) por **último**.  
 > **Maturidade de superfície:** por **API + smoke da lib**, não por exemplos (exemplos podem vir depois).  
+> **Score 5 (Linux) gate (resumo):** G1 broad API · G2 ≥4 tests · G3 smoke ok · G4 README · G5 CHANGELOG · G6 leaf único · G7 version bump — detalhe em [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) §3.  
 > **Execute-plan (ports médios 0.1.0):** [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) — **complete**  
-> **Execute-plan (maturidade → 5 Linux):** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — DAG U1–U15 + wires + docs  
+> **Execute-plan (maturidade → 5 Linux) — active Next work:** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — DAG U1–U15 + wires + docs  
 
 > **Relacionados:**  
 > - Inventário vivo + Next work: [`eco-packages-status.md`](eco-packages-status.md)  
@@ -36,12 +38,16 @@ Só abrir um `ori-<nome>` quando:
 
 ---
 
-## 2. Já traduzidos (inventário Linux-5)
+## 2. Já traduzidos (inventário)
+
+Repos sob **`game-engine-full/ori-*`**. Maturidade **5** = gate G1–G7 (plan §3); packages **&lt; 5** sobem via U1–U15 (não re-scaffold).
+
+### 2.1 Já **5 (Linux)** — não reabrir como projeto de maturidade
 
 | Package Ori | Repo | Upstream / papel | Ver. | Maturidade |
 |-------------|------|------------------|------|------------|
 | `raylib` | `ori-raylib` | [raylib](https://www.raylib.com/) L0 + shim | 0.1.0 | **5 (Linux)** |
-| `ori_game` | `ori-game` | helpers L1 + content loaders (tiled, ldtk, aseprite, spine, …) | 0.3.0 | **5 (Linux)** |
+| `ori_game` | `ori-game` | helpers L1 + content loaders (tiled, ldtk, aseprite, spine, …) | 0.3.0 | **5 (Linux)** (wires deepen = plan PR 17) |
 | `imgui` | `ori-imgui` | [Dear ImGui](https://github.com/ocornut/imgui) / cimgui | 0.4.0 | **5 (Linux)** |
 | `raygui` | `ori-raygui` | [raygui](https://github.com/raysan5/raygui) | 0.2.0 | **5 (Linux)** |
 | `box2d` | `ori-box2d` | [Box2D](https://box2d.org/) 3.x milli-int | 0.3.0 | **5 (Linux)** |
@@ -51,26 +57,31 @@ Só abrir um `ori-<nome>` quando:
 | `enet` | `ori-enet` | [ENet](https://github.com/lsalzman/enet) | 0.3.0 | **5 (Linux)** |
 | `freetype` | `ori-freetype` | FreeType face + text + **atlas** | **0.1.0** | **5 (Linux)** |
 | `harfbuzz` | `ori-harfbuzz` | shape/layout + **AOT tests** | **0.1.0** | **5 (Linux)** |
-| `stb` | `ori-stb` | [stb](https://github.com/nothings/stb) image/perlin/rect_pack | **0.1.0** | **3–4 (Linux)** |
-| `noise` | `ori-noise` | [FastNoiseLite](https://github.com/Auburn/FastNoiseLite) | **0.1.0** | **3–4 (Linux)** |
-| `miniz` | `ori-miniz` | [miniz](https://github.com/richgel999/miniz) deflate/CRC | **0.1.0** | **3–4 (Linux)** |
-| `nfd` | `ori-nfd` | portable-file-dialogs | **0.1.0** | **3 (Linux)** |
-| `implot` | `ori-implot` | [implot](https://github.com/epezent/implot) (+ FULL draw) | **0.1.0** | **3 (Linux)** |
-| `imnodes` | `ori-imnodes` | [imnodes](https://github.com/Nelarius/imnodes) (+ FULL) | **0.1.0** | **3 (Linux)** |
-| `imguizmo` | `ori-imguizmo` | [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) (+ FULL) | **0.1.0** | **3 (Linux)** |
-| `tracy` | `ori-tracy` | [Tracy](https://github.com/wolfpld/tracy) zones/frames | **0.1.0** | **3 (Linux)** |
-| `enkits` | `ori-enkiTS` | [enkiTS](https://github.com/dougbinks/enkiTS) task scheduler | **0.1.0** | **3–4 (Linux)** |
-| `cgltf` | `ori-cgltf` | [cgltf](https://github.com/jkuhlmann/cgltf) glTF 2.0 | **0.1.0** | **3 (Linux)** |
-| `fast_obj` | `ori-fast-obj` | [fast_obj](https://github.com/thisistherk/fast_obj) OBJ | **0.1.0** | **3 (Linux)** |
-| `physfs` | `ori-physfs` | [PhysFS](https://github.com/icculus/physfs) virtual FS | **0.1.0** | **3 (Linux)** |
-| `clay` | `ori-clay` | [Clay](https://github.com/nicbarker/clay) IM layout | **0.1.0** | **3 (Linux)** |
-| `lz4` | `ori-lz4` | [lz4](https://github.com/lz4/lz4) compression | **0.1.0** | **3 (Linux)** |
-| `recast` | `ori-recast` | [Recast Navigation](https://github.com/recastnavigation/recastnavigation) navmesh | **0.1.0** | **3 (Linux)** |
 | *(module)* | `ori-game` | MC + export_obj + GPU bake path | — | **5 (Linux)** |
 
-Detalhe de superfícies ainda **4–5** dentro de `ori-game` (audio, 2D, content, 3D, mechanics): ver matriz + ROADMAP do game — **não** são packages novos.
+### 2.2 Portados 0.1.0 — **U1–U15** (need → **5 Linux**)
 
-**Do not re-queue:** `freetype`, `harfbuzz`, `stb`, `noise`, `miniz`, `nfd`, `implot`, `imnodes`, `imguizmo`, `tracy`, `enkits`, `cgltf`, `fast_obj`, `physfs`, `clay`, `lz4`, `recast` — already in §2.
+| ID | Package Ori | Repo | Upstream / papel | Ver. | Now | Plan PR |
+|----|-------------|------|------------------|------|-----|---------|
+| **U1** | `stb` | `ori-stb` | [stb](https://github.com/nothings/stb) image/perlin/rect_pack | 0.1.0 | 3–4 | PR 2 |
+| **U2** | `noise` | `ori-noise` | [FastNoiseLite](https://github.com/Auburn/FastNoiseLite) | 0.1.0 | 3–4 | PR 3 |
+| **U3** | `miniz` | `ori-miniz` | [miniz](https://github.com/richgel999/miniz) deflate/CRC | 0.1.0 | 3–4 | PR 4 |
+| **U4** | `lz4` | `ori-lz4` | [lz4](https://github.com/lz4/lz4) compression | 0.1.0 | 3 | PR 5 |
+| **U5** | `nfd` | `ori-nfd` | portable-file-dialogs | 0.1.0 | 3 | PR 6 |
+| **U6** | `implot` | `ori-implot` | [implot](https://github.com/epezent/implot) (+ FULL draw) | 0.1.0 | 3 | PR 7 |
+| **U7** | `imnodes` | `ori-imnodes` | [imnodes](https://github.com/Nelarius/imnodes) (+ FULL) | 0.1.0 | 3 | PR 8 |
+| **U8** | `imguizmo` | `ori-imguizmo` | [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) (+ FULL) | 0.1.0 | 3 | PR 9 |
+| **U9** | `tracy` | `ori-tracy` | [Tracy](https://github.com/wolfpld/tracy) zones/frames | 0.1.0 | 3 | PR 10 |
+| **U10** | `enkits` | `ori-enkiTS` | [enkiTS](https://github.com/dougbinks/enkiTS) task scheduler | 0.1.0 | 3–4 | PR 11 |
+| **U11** | `cgltf` | `ori-cgltf` | [cgltf](https://github.com/jkuhlmann/cgltf) glTF 2.0 | 0.1.0 | 3 | PR 12 |
+| **U12** | `fast_obj` | `ori-fast-obj` | [fast_obj](https://github.com/thisistherk/fast_obj) OBJ | 0.1.0 | 3 | PR 13 |
+| **U13** | `physfs` | `ori-physfs` | [PhysFS](https://github.com/icculus/physfs) virtual FS | 0.1.0 | 3 | PR 14 |
+| **U14** | `clay` | `ori-clay` | [Clay](https://github.com/nicbarker/clay) IM layout | 0.1.0 | 3 | PR 15 |
+| **U15** | `recast` | `ori-recast` | [Recast Navigation](https://github.com/recastnavigation/recastnavigation) navmesh | 0.1.0 | 3 | PR 16 |
+
+Detalhe de superfícies **5** dentro de `ori-game` (audio, 2D, content, 3D, mechanics): ver matriz + ROADMAP do game — **não** são packages novos.
+
+**Do not re-queue as new ports:** todos os repos acima já existem — deepen via [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md), não re-scaffold.
 
 ---
 
@@ -82,7 +93,8 @@ Nada em aberto. Ports de alto valor (nfd, implot, imnodes, imguizmo, stb, noise,
 |-------------|--------|
 | *(vazio)* | **Não reabrir** como fila alta — ver §2 |
 
-Próximo trabalho de port: **fila média vazia para produto** (`ori-miniaudio` **skipped** — `game.audio`+raylib fecha o gap). Plan e2e: [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) (PRs 1–10 done).
+**Next work (não é port novo):** maturidade U1–U15 → **5 (Linux)** — [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md).  
+Fila média de **novos** ports: **vazia** (`ori-miniaudio` **skipped** — `game.audio`+raylib fecha o gap). Plan e2e 0.1.0: [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) (PRs 1–10 done).
 
 ---
 
@@ -178,12 +190,14 @@ Usar stack já existente (stdlib + raylib/ori_game + opcional sqlite/enet/raygui
 ## 10. Resumo visual
 
 ```text
-ALTA     (vazia)
+ALTA     (vazia — não reabrir ports)
 MÉDIA    (vazia — miniaudio skipped)
 BAIXA    OpenAL Soft · ozz · cute_c2 · steam/discord · Lua host
 EVITAR   Yoga · cglm/HMM core · bgfx · ejson · 2º physics · flecs/EnTT default
-FEITO    raylib · ori_game · imgui · raygui · box2d · jolt · rres · sqlite · enet
-         · freetype · harfbuzz · MC · nfd · implot · imnodes · imguizmo
-         · stb · noise · miniz · tracy · enkits
-         · cgltf · fast_obj · physfs · clay · lz4 · recast
+FEITO-5  raylib · ori_game · imgui · raygui · box2d · jolt · rres · sqlite · enet
+         · freetype · harfbuzz · MC (in ori-game)
+U1–U15   stb · noise · miniz · lz4 · nfd · implot · imnodes · imguizmo
+         · tracy · enkits · cgltf · fast_obj · physfs · clay · recast
+         → plan pr-plan-eco-maturity-5.md (G1–G7)
+LAYOUT   Documentos/Projetos/game-engine-full/ori-*
 ```

@@ -1,15 +1,15 @@
 # Design + PR Plan — ECO packages to maturity **5 (Linux)**
 
-**Status:** ready for `/execute-plan`  
+**Status:** executing (`/execute-plan` plan id `5b7bfbb0`) — **PR 1 lock-in done** (2026-07-15)  
 **Date:** 2026-07-15  
 **Policy:** Linux first. Multi-OS (**Phase OS**) is **last** and does **not** block score 5.  
-**Maturity gate for this plan:** score **5 (Linux)** = product engine-grade on Linux per matrix: **broad API + tests + real-use smoke** (polished windowed demos optional, not the gate).  
+**Maturity gate for this plan:** score **5 (Linux)** = product engine-grade on Linux per matrix: **broad API + tests + real-use smoke** (polished windowed demos optional, not the gate). Full checklist: **§3 G1–G7**.  
 **Cluster path:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-*`  
 **Catalog:** [`eco-library-ports-catalog.md`](eco-library-ports-catalog.md)  
-**Status:** [`eco-packages-status.md`](eco-packages-status.md)  
+**Inventory / Next work:** [`eco-packages-status.md`](eco-packages-status.md)  
 **Matrix:** [`game-ports-maturity-matrix.md`](game-ports-maturity-matrix.md)  
 **Prior plan (ports 0.1.0):** [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) — **complete** (do not re-scaffold packages)  
-**Linked from:** [`docs/planning/README.md`](README.md) · status Next work
+**Linked from:** [`docs/planning/README.md`](README.md) · status Next work · catalog header · matrix W10
 
 **Execute:**
 
@@ -128,13 +128,15 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 ## 6. PR Plan (DAG for `/execute-plan`)
 
-### PR 1: Maturity-5 plan lock-in + inventory refresh
+### PR 1: Maturity-5 plan lock-in + inventory refresh — **done** (2026-07-15)
 
 **Description:** Point catalog/status/matrix **Next work** at this plan. Document score-5 gate (§3). List packages already 5 vs U1–U15. Layout note: `game-engine-full/`. Do not implement package code.
 
 **Files/components affected:** `docs/planning/pr-plan-eco-maturity-5.md`, `docs/planning/eco-packages-status.md`, `docs/planning/eco-library-ports-catalog.md`, `docs/planning/game-ports-maturity-matrix.md`, `docs/planning/README.md`
 
 **Dependencies:** None
+
+**Done notes:** Inventory refresh + score-5 G1–G7 pointer + U1–U15 list in status/matrix/catalog; execute-plan entrypoint in status; cluster path `game-engine-full/`.
 
 ---
 
