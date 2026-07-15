@@ -18,7 +18,7 @@
 Deliver the **remaining product-relevant ECO ports** as sibling packages under:
 
 ```text
-/home/raillen/Documentos/Projetos/ori-<name>/
+/home/raillen/Documentos/Projetos/game-engine-full/ori-<name>/
 ```
 
 so that a single invocation:
@@ -119,7 +119,7 @@ can implement **all medium-priority ports**, optional deepen wires into `ori-gam
 Each package **must** live at:
 
 ```text
-/home/raillen/Documentos/Projetos/ori-<name>/
+/home/raillen/Documentos/Projetos/game-engine-full/ori-<name>/
 ```
 
 ### 4.1 Files
@@ -277,7 +277,7 @@ Default CI remains FULL=0. Document flags in each README (already started).
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Location | Sibling repos under `Documentos/Projetos/ori-*`, not monorepo `packages/` | Matches ECO layout; path deps; independent versioning |
+| Location | Sibling repos under `Documentos/Projetos/game-engine-full/ori-*`, not monorepo `packages/` | Matches ECO layout; path deps; independent versioning |
 | OS order | Linux only in this plan; Phase OS last | User policy 2026-07-15 |
 | Maturity | API + smoke + tests | Demos do not gate maturity |
 | Package shape | Template §4 + copy from `ori-stb` / `ori-enkiTS` | Proven green smoke pattern |
@@ -319,7 +319,7 @@ When executing each PR, implementers **must**:
 **Cross-cutting user instruction string for `/execute-plan`:**
 
 ```text
---instructions "Linux only. Sibling packages at /home/raillen/Documentos/Projetos/ori-*. Copy smoke pattern from ori-stb/ori-enkiTS. Use int64_t ABI. Smoke must print ok; ori test 0 failed. Update eco-library-ports-catalog.md and eco-packages-status.md when adding a package. Phase OS last. No flecs/EnTT. Do not re-implement packages already marked done in §2 of this design doc."
+--instructions "Linux only. Sibling packages at /home/raillen/Documentos/Projetos/game-engine-full/ori-*. Copy smoke pattern from ori-stb/ori-enkiTS. Use int64_t ABI. Smoke must print ok; ori test 0 failed. Update eco-library-ports-catalog.md and eco-packages-status.md when adding a package. Phase OS last. No flecs/EnTT. Do not re-implement packages already marked done in §2 of this design doc."
 ```
 
 ---
@@ -329,15 +329,15 @@ When executing each PR, implementers **must**:
 ### Full remaining medium stack
 
 ```bash
-/execute-plan /home/raillen/Documentos/Projetos/ori-lang/docs/planning/pr-plan-eco-ports-e2e.md \
+/execute-plan /home/raillen/Documentos/Projetos/game-engine-full/ori-lang/docs/planning/pr-plan-eco-ports-e2e.md \
   --concurrency 3 \
-  --instructions "Linux only. Sibling packages at /home/raillen/Documentos/Projetos/ori-*. Copy smoke pattern from ori-stb/ori-enkiTS. Use int64_t ABI. Smoke must print ok; ori test 0 failed. Update eco-library-ports-catalog.md and eco-packages-status.md when adding a package. Phase OS last. No flecs/EnTT. Do not re-implement packages already marked done in §2 of this design doc."
+  --instructions "Linux only. Sibling packages at /home/raillen/Documentos/Projetos/game-engine-full/ori-*. Copy smoke pattern from ori-stb/ori-enkiTS. Use int64_t ABI. Smoke must print ok; ori test 0 failed. Update eco-library-ports-catalog.md and eco-packages-status.md when adding a package. Phase OS last. No flecs/EnTT. Do not re-implement packages already marked done in §2 of this design doc."
 ```
 
 ### Dry-run (validate DAG only)
 
 ```bash
-/execute-plan /home/raillen/Documentos/Projetos/ori-lang/docs/planning/pr-plan-eco-ports-e2e.md --dry-run
+/execute-plan /home/raillen/Documentos/Projetos/game-engine-full/ori-lang/docs/planning/pr-plan-eco-ports-e2e.md --dry-run
 ```
 
 ### Resume after failure
@@ -364,9 +364,9 @@ When executing each PR, implementers **must**:
 
 ### PR 2: ori-cgltf package 0.1.0
 
-**Description:** Create `/home/raillen/Documentos/Projetos/ori-cgltf` from template §4. Vendor `cgltf.h`. Shim: load/free, mesh/node/material/animation counts, minimal vertex count for mesh 0. Fixture glTF under `tests/fixtures/`. Smoke + tests green.
+**Description:** Create `/home/raillen/Documentos/Projetos/game-engine-full/ori-cgltf` from template §4. Vendor `cgltf.h`. Shim: load/free, mesh/node/material/animation counts, minimal vertex count for mesh 0. Fixture glTF under `tests/fixtures/`. Smoke + tests green.
 
-**Files/components affected:** `/home/raillen/Documentos/Projetos/ori-cgltf/**` (new), optional catalog mention
+**Files/components affected:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-cgltf/**` (new), optional catalog mention
 
 **Dependencies:** None
 
@@ -376,7 +376,7 @@ When executing each PR, implementers **must**:
 
 **Description:** Create `ori-fast-obj` with `fast_obj` single-header. Load path → position count / face count; free. Fixture `.obj`. Smoke + tests.
 
-**Files/components affected:** `/home/raillen/Documentos/Projetos/ori-fast-obj/**` (new)
+**Files/components affected:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-fast-obj/**` (new)
 
 **Dependencies:** None
 
@@ -386,7 +386,7 @@ When executing each PR, implementers **must**:
 
 **Description:** Create `ori-physfs`. Build/link PhysFS (system dev package preferred: `libphysfs-dev`, else vendor+cmake). Shim init/mount/exists/read. Smoke mounts a temp directory written by the smoke script. Tests.
 
-**Files/components affected:** `/home/raillen/Documentos/Projetos/ori-physfs/**` (new)
+**Files/components affected:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-physfs/**` (new)
 
 **Dependencies:** None
 
@@ -396,7 +396,7 @@ When executing each PR, implementers **must**:
 
 **Description:** Create `ori-clay`. Vendor Clay. Shim: simple layout compute → element count + bounds milli for root/children. Headless tests (no window). Smoke.
 
-**Files/components affected:** `/home/raillen/Documentos/Projetos/ori-clay/**` (new)
+**Files/components affected:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-clay/**` (new)
 
 **Dependencies:** None
 
@@ -406,7 +406,7 @@ When executing each PR, implementers **must**:
 
 **Description:** Create `ori-lz4` using lz4 block or frame API (prefer single amalgamation or system liblz4). Round-trip compress/decompress length tests; smoke.
 
-**Files/components affected:** `/home/raillen/Documentos/Projetos/ori-lz4/**` (new)
+**Files/components affected:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-lz4/**` (new)
 
 **Dependencies:** None
 
@@ -416,7 +416,7 @@ When executing each PR, implementers **must**:
 
 **Description:** Create `ori-recast`. Vendor Recast+Detour (or subset). C++ shim: build navmesh from simple plane mesh; path query returns ≥2 waypoints. Milli-int Ori API. Build may be longer; keep MVP tight. Smoke + tests.
 
-**Files/components affected:** `/home/raillen/Documentos/Projetos/ori-recast/**` (new)
+**Files/components affected:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-recast/**` (new)
 
 **Dependencies:** None
 
@@ -432,7 +432,7 @@ When executing each PR, implementers **must**:
 
 Keep modules optional (compile when path dep present). Add unit tests that skip gracefully or use fixtures. Do **not** force all games to link every native lib.
 
-**Files/components affected:** `/home/raillen/Documentos/Projetos/ori-game/ori.pkg.toml`, `/home/raillen/Documentos/Projetos/ori-game/game/**`, `/home/raillen/Documentos/Projetos/ori-game/tests/**`, `/home/raillen/Documentos/Projetos/ori-game/CHANGELOG.md`
+**Files/components affected:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-game/ori.pkg.toml`, `/home/raillen/Documentos/Projetos/game-engine-full/ori-game/game/**`, `/home/raillen/Documentos/Projetos/game-engine-full/ori-game/tests/**`, `/home/raillen/Documentos/Projetos/game-engine-full/ori-game/CHANGELOG.md`
 
 **Dependencies:** PR 2, PR 3
 
@@ -442,7 +442,7 @@ Keep modules optional (compile when path dep present). Add unit tests that skip 
 
 **Description:** Mark all implemented medium ports as **done 0.1.0** in catalog §2/§4, status table, matrix B2.18 (medium done). Extend `ori-game/tools/smoke_eco_linux.sh` (or sibling `smoke_ports_linux.sh`) to call each package `smoke_linux.sh` if directory exists. Update this plan’s status line if needed.
 
-**Files/components affected:** `docs/planning/eco-library-ports-catalog.md`, `docs/planning/eco-packages-status.md`, `docs/planning/game-ports-maturity-matrix.md`, `docs/planning/pr-plan-eco-ports-e2e.md`, `/home/raillen/Documentos/Projetos/ori-game/tools/smoke_eco_linux.sh` or new smoke script
+**Files/components affected:** `docs/planning/eco-library-ports-catalog.md`, `docs/planning/eco-packages-status.md`, `docs/planning/game-ports-maturity-matrix.md`, `docs/planning/pr-plan-eco-ports-e2e.md`, `/home/raillen/Documentos/Projetos/game-engine-full/ori-game/tools/smoke_eco_linux.sh` or new smoke script
 
 **Dependencies:** PR 2, PR 3, PR 4, PR 5, PR 6, PR 7
 
@@ -503,7 +503,7 @@ Linearized stack order for Graphite/plain-git:
 
 ```bash
 NAME=cgltf   # example
-ROOT=/home/raillen/Documentos/Projetos/ori-$NAME
+ROOT=/home/raillen/Documentos/Projetos/game-engine-full/ori-$NAME
 mkdir -p "$ROOT"/{native,vendor,tools,examples,tests,$NAME,lib/x86_64-unknown-linux-gnu}
 # then write ori.pkg.toml, shim, modules, build_linux.sh, smoke_linux.sh
 # vendor upstream

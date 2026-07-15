@@ -4,7 +4,7 @@
 > **Linux-5 program:** **complete** for the game-stack packages below.  
 > **Policy (2026-07-15):** **implement / mature / port libs on Linux first.**  
 > Multi-OS validation (Windows/mac) is **last** — scripts may exist, but execution is deferred.  
-> **Canonical paths:** `/home/raillen/Documentos/Projetos/ori-*`  
+> **Canonical paths:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-*`  
 > **Matrix:** [`game-ports-maturity-matrix.md`](game-ports-maturity-matrix.md) ·  
 > **Catálogo de ports (canônico):** [`eco-library-ports-catalog.md`](eco-library-ports-catalog.md) ·  
 > **Roadmap:** `ori-game/docs/planning/ROADMAP-GAME-ECO.md`
@@ -50,34 +50,21 @@ Content modules in **`ori-game`:** `game.tiled`, `game.ldtk`, `game.aseprite`, `
 
 ```
 Documentos/Projetos/
-  ori-lang/
-  ori-raylib/
-  ori-game/          # path-dep → ori-raylib
-  ori-imgui/
-  ori-raygui/
-  ori-box2d/
-  ori-jolt/
-  ori-rres/
-  ori-sqlite/
-  ori-enet/
-  ori-freetype/
-  ori-harfbuzz/
-  ori-stb/
-  ori-noise/
-  ori-miniz/
-  ori-nfd/
-  ori-implot/
-  ori-imnodes/
-  ori-imguizmo/
-  ori-tracy/
-  ori-enkiTS/
-  ori-cgltf/
-  ori-fast-obj/
-  ori-physfs/
-  ori-clay/
-  ori-lz4/
-  ori-recast/
+  ori-lang/                    # compiler (outside cluster)
+  ori-game-studio/             # Tauri app (outside cluster)
+  game-engine-full/            # ECO game libs — each keeps own git remote
+    ori-raylib/                # L0
+    ori-game/                  # L1 hub (path-dep → siblings)
+    ori-box2d/  ori-jolt/  ori-recast/
+    ori-imgui/  ori-raygui/  ori-clay/
+    ori-implot/ ori-imnodes/ ori-imguizmo/
+    ori-freetype/ ori-harfbuzz/
+    ori-rres/ ori-cgltf/ ori-fast-obj/ ori-physfs/
+    ori-stb/ ori-noise/ ori-miniz/ ori-lz4/
+    ori-enet/ ori-sqlite/ ori-enkiTS/ ori-tracy/ ori-nfd/
 ```
+
+Path deps between packages stay sibling-relative (`../ori-raylib`, …) inside `game-engine-full/`.
 
 ```toml
 [dependencies]
@@ -94,7 +81,7 @@ enet     = { path = "../ori-enet", version = "0.3.0" }
 
 ```bash
 export ORI_BIN=$(command -v ori) ORI_USE_SYSTEM_LINKER=1
-~/Documentos/Projetos/ori-game/tools/smoke_eco_linux.sh
+~/Documentos/Projetos/game-engine-full/ori-game/tools/smoke_eco_linux.sh
 ```
 
 ---
@@ -111,6 +98,10 @@ export ORI_BIN=$(command -v ori) ORI_USE_SYSTEM_LINKER=1
 Canonical write-up: [`PHASE-OS.md`](PHASE-OS.md). Umbrella: `ori-game/tools/smoke_eco_windows.ps1` (core only).
 
 ---
+
+## Layout (2026-07-15)
+
+ECO game packages live under **`Documentos/Projetos/game-engine-full/`** (model A: one folder, N git remotes). `ori-lang` and `ori-game-studio` stay siblings of that folder under `Projetos/`.
 
 ## Next work (Linux-only)
 
