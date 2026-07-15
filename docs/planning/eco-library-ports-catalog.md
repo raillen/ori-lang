@@ -1,6 +1,6 @@
 # Catálogo canônico — tradução de bibliotecas nativas para Ori (ECO)
 
-> **Status:** canônico (2026-07-15) · **alta fechada** · **médios M1–M6 done 0.1.0** (só miniaudio condicional aberto) · Phase OS last  
+> **Status:** canônico (2026-07-15) · **alta fechada** · **médios M1–M6 done 0.1.0** · miniaudio **skipped** (gap fechado por game.audio) · Phase OS last  
 
 > **Âmbito:** packages irmãos `ori-*` (bindings / ports C·C++ → Ori S3), **não** stdlib do monorepo.  
 > **Política:** Linux implement / mature / port **primeiro**. Multi-OS (**Phase OS**) por **último**.  
@@ -80,7 +80,7 @@ Nada em aberto. Ports de alto valor (nfd, implot, imnodes, imguizmo, stb, noise,
 |-------------|--------|
 | *(vazio)* | **Não reabrir** como fila alta — ver §2 |
 
-Próximo trabalho de port = **§4 média residual** (`ori-miniaudio` só com gap). Plan e2e: [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) (PRs 1–9 done).
+Próximo trabalho de port: **fila média vazia para produto** (`ori-miniaudio` **skipped** — `game.audio`+raylib fecha o gap). Plan e2e: [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) (PRs 1–10 done).
 
 ---
 
@@ -88,13 +88,13 @@ Próximo trabalho de port = **§4 média residual** (`ori-miniaudio` só com gap
 
 | Package Ori (proposto) | Upstream canônico | Papel / condição |
 |------------------------|-------------------|------------------|
-| **`ori-miniaudio`** | [miniaudio](https://github.com/mackron/miniaudio) | Condicional — só se `game.audio` + raylib não fecharem gap medido |
+| **`ori-miniaudio`** | [miniaudio](https://github.com/mackron/miniaudio) | **Skipped (2026-07-15)** — gap medido: `game.audio` (raylib) cobre SFX/music/buses/pool; reabrir só sem raylib ou 3D espacial (§5 OpenAL) |
 
 **Done 0.1.0 (moved to §2):** `ori-cgltf`, `ori-fast-obj`, `ori-physfs`, `ori-clay`, `ori-lz4`, `ori-recast` — execute-plan medium M1–M6 (2026-07-15).
 
 **Não listar de novo:** FreeType, HarfBuzz, Marching Cubes, medium M1–M6 above — **done** em §2 / §8.1.
 
-**Ordem sugerida (médio, open only):** miniaudio *(só com gap)*.
+**Ordem sugerida (médio):** *vazio* — miniaudio skipped. Baixa = §5.
 
 ---
 
@@ -177,7 +177,7 @@ Usar stack já existente (stdlib + raylib/ori_game + opcional sqlite/enet/raygui
 
 ```text
 ALTA     (vazia)
-MÉDIA    miniaudio? (condicional)
+MÉDIA    (vazia — miniaudio skipped)
 BAIXA    OpenAL Soft · ozz · cute_c2 · steam/discord · Lua host
 EVITAR   Yoga · cglm/HMM core · bgfx · ejson · 2º physics · flecs/EnTT default
 FEITO    raylib · ori_game · imgui · raygui · box2d · jolt · rres · sqlite · enet
