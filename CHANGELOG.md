@@ -35,6 +35,9 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `tools/update_global.ps1` now packages then installs.
 - **Windows Scoop-style bootstrap:** `tools/windows/get.ps1` for
   `irm …/get.ps1 | iex` (env: `ORI_VERSION`, `ORI_FORCE`, `ORI_SYSTEM`, …).
+- **Editor extension release packages:** `tools/package_editor_extensions.sh`
+  builds `ori-vscode-orl-<ver>.vsix` and `ori-zed-<ver>.zip` for GitHub
+  Releases (VS Code/Cursor VSIX + Zed dev-extension zip with prebuilt wasm).
 - **CI Windows packaging:** PowerShell scripts pass `--manifest-path` *after*
   the cargo subcommand (required by Cargo 1.95+), unblocking the MSVC zip.
 

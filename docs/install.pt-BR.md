@@ -103,6 +103,17 @@ ori run hello.orl
 ori new my_app && cd my_app && ori run main.orl
 ```
 
+### Extensões de editor (VS Code / Zed)
+
+Na mesma [Release](https://github.com/raillen/ori-lang/releases) da linguagem:
+
+| Editor | Asset | Instalação |
+|--------|--------|------------|
+| VS Code / Cursor | `ori-vscode-orl-0.3.5.vsix` | `code --install-extension ori-vscode-orl-0.3.5.vsix` |
+| Zed | `ori-zed-0.3.5.zip` | extrair → **zed: install dev extension** |
+
+Requer `ori-lsp` no `PATH`. Detalhes: [`extensions/README.md`](../extensions/README.md).
+
 Próximo: [Tour da linguagem](language/tour.pt-BR.md) ·
 [Primeiro projeto](guides/first-project.pt-BR.md) ·
 [Exemplos](../examples/) · Editores: [VS Code](../extensions/vscode-orl/) ·

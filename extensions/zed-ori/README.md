@@ -1,62 +1,52 @@
 # Ori — Zed extension
 
-Local language support for **Ori** (`.orl`) in [Zed](https://zed.dev).
+Language support for **Ori** (`.orl`) in [Zed](https://zed.dev).
 
 - Language config (`.orl`, `--` comments, brackets)
-- **LSP** via `ori-lsp` on `PATH` (no download, no store publish)
+- **LSP** via `ori-lsp` on `PATH`
 
-**Not published** to the Zed extension store yet — install as a **dev extension**.
+Version **0.3.5** (matches language package).
 
-## Prerequisites
+## Install
 
-1. Build or install Ori so `ori-lsp` is on your `PATH`:
+### From GitHub Release (recommended)
 
-```bash
-cd compiler
-cargo build -p ori-lsp -p ori-driver
-export PATH="$PWD/target/debug:$PATH"
-```
+1. Install Ori so `ori-lsp` is on your `PATH`  
+   ([docs/install.md](../../docs/install.md)).
+2. Download **`ori-zed-0.3.5.zip`** from  
+   [GitHub Releases](https://github.com/raillen/ori-lang/releases) and extract it.
+3. In Zed: command palette → **zed: install dev extension** → select the extracted folder  
+   (`ori-zed-0.3.5/`).
 
-2. Zed with extension host support.
+Not published to the Zed extension store yet — **dev extension** / release zip only.
 
-## Install (dev)
-
-From Zed: **zed: install dev extension** and select this directory:
+### From this monorepo
 
 ```text
 extensions/zed-ori
 ```
 
-Or symlink into Zed’s extensions path (varies by OS):
+Zed: **zed: install dev extension** → select that directory.
+
+Or symlink (Linux):
 
 ```bash
-# Linux example
 mkdir -p ~/.local/share/zed/extensions/installed
 ln -sfn /path/to/ori-lang/extensions/zed-ori ~/.local/share/zed/extensions/installed/ori
 ```
 
-Rebuild after Rust changes:
+## Prerequisites
 
 ```bash
-# Zed recompiles wasm for dev extensions on reload
+# Build language tools (if not using a release package)
+cd compiler
+cargo build -p ori-lsp -p ori-driver
+export PATH="$PWD/target/debug:$PATH"
 ```
 
 ## Settings
 
-Optional: force stdlib if auto-detect fails:
-
-```json
-// settings.json — only if you set env globally for Zed
-{
-  "lsp": {
-    "ori-lsp": {
-      // binary path overrides are extension-driven via PATH
-    }
-  }
-}
-```
-
-The extension sets `ORI_STDLIB_ROOT` when it finds `stdlib/` in the worktree.
+Optional: force stdlib if auto-detect fails (extension sets `ORI_STDLIB_ROOT` when it finds `stdlib/` in the worktree).
 
 ## Features / limits
 
@@ -64,9 +54,12 @@ The extension sets `ORI_STDLIB_ROOT` when it finds `stdlib/` in the worktree.
 |---------|--------|
 | Open `.orl` as language Ori | yes |
 | `ori-lsp` diagnostics / hover / complete | yes (if on PATH) |
-| Tree-sitter syntax colors | **not yet** (no grammar crate) |
-| Marketplace / extension store | **out of scope** |
+| Tree-sitter syntax colors | **not yet** |
+| Zed extension store | **not yet** (GitHub zip + dev install) |
 
-## Version
+## Package for release
 
-Matches Ori package line **0.3.3** (S3 + inference B + FREEZE-1).
+```bash
+sh tools/package_editor_extensions.sh --force
+# → compiler/target/dist/ori-zed-<ver>.zip
+```

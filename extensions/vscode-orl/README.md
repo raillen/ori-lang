@@ -1,10 +1,36 @@
 # Ori — VS Code / Cursor extension
 
-Local language support for **Ori** (`.orl`): LSP, grammar, snippets, doctor.
+Language support for **Ori** (`.orl`): LSP, grammar, snippets, doctor.
 
-**Install:** local `.vsix` only — **no Marketplace** (TOOL-MP cancelled).
+**Surface:** S3 + inference B · version **0.3.5** (matches language package).
 
-Surface: **S3** + inference B · extension version matches package (**0.3.5**).
+## Install
+
+### From GitHub Release (recommended)
+
+1. Install Ori so `ori` / `ori-lsp` are on your `PATH`  
+   ([docs/install.md](../../docs/install.md) — Windows one-liner: `irm …/get.ps1 | iex`).
+2. Download **`ori-vscode-orl-0.3.5.vsix`** from  
+   [GitHub Releases](https://github.com/raillen/ori-lang/releases).
+3. Install:
+
+```bash
+code --install-extension ori-vscode-orl-0.3.5.vsix
+# Cursor:
+cursor --install-extension ori-vscode-orl-0.3.5.vsix
+```
+
+Or: VS Code → **Extensions: Install from VSIX…**
+
+Not published to the VS Marketplace yet (local / GitHub release only).
+
+### From this monorepo
+
+```bash
+./tools/install_vscode_extension.sh
+# or:
+cd extensions/vscode-orl && npm install && npm run package:vsix && npm run install:local
+```
 
 ## Features
 
@@ -32,9 +58,7 @@ Binary discovery (when paths empty): `PATH`, then monorepo
 ## Development
 
 ```bash
-# Language server + CLI (from repo root)
 cd compiler && cargo build -p ori-lsp -p ori-driver
-
 cd ../extensions/vscode-orl
 npm install
 npm run compile
@@ -42,34 +66,11 @@ npm run compile
 
 F5 in VS Code → Extension Development Host.
 
-### Local install (no Marketplace)
+Repo smoke: `./tools/smoke_vscode_extension.sh`
 
-From the monorepo root (recommended):
-
-```bash
-# detects code | cursor | Flatpak com.visualstudio.code
-./tools/install_vscode_extension.sh
-
-# or force Flatpak VS Code:
-./tools/install_vscode_extension.sh --editor flatpak
-```
-
-From the extension directory:
+## Package for release
 
 ```bash
-npm install
-npm run package:vsix
-npm run install:local    # needs `code` on PATH
-# or: npm run install:cursor
+sh tools/package_editor_extensions.sh --force
+# → compiler/target/dist/ori-vscode-orl-<ver>.vsix
 ```
-
-Repo smoke:
-
-```bash
-./tools/smoke_vscode_extension.sh
-# or PowerShell: tools/smoke_vscode_extension.ps1
-```
-
-## Doctor
-
-**Ori: Run Doctor** or `ori doctor` — stdlib, runtime, linker, JIT readiness.
