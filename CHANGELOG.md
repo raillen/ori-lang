@@ -10,6 +10,18 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Notas
+- **ECO W10 maturity-5 complete (2026-07-15):** U1–U15 packages at **0.2.0 / 5 (Linux)**
+  (stb, noise, miniz, lz4, nfd, implot, imnodes, imguizmo, tracy, enkiTS, cgltf,
+  fast_obj, physfs, clay, recast) + ori-game wires (PR 17). Catalog/status/matrix
+  updated (plan PR 18). Residual: Phase OS note (PR 19). See
+  `docs/planning/pr-plan-eco-maturity-5.md` and `game-ports-maturity-matrix.md`.
+- **ECO Linux-5 program (2026-07-14):** sibling packages reached product maturity **5 (Linux)**:
+  `ori-game` 0.3.0, `ori-box2d` 0.3.0, `ori-jolt` 0.2.0, `ori-imgui` 0.3.0,
+  `ori-raygui` 0.2.0, `ori-rres` 0.3.0, `ori-sqlite` 0.3.0. See
+  `docs/planning/game-ports-maturity-matrix.md`. Phase OS (Win/mac) deferred.
+
+
 ### Adicionado
 - **Runtime/DAP cooperativo (Ori IDE):** agent `debug_agent` no `ori-runtime` (`ori_debug_line` / `ori_debug_init`) ativado por `ORI_DEBUG_PORT`; codegen nativo instrumenta statements quando `ORI_DEBUG_INSTRUMENT=1` + `ORI_DEBUG_SOURCE=<path>`; adapter `ori-dap` (repo ori-ide) faz bind TCP e controla continue/step/breakpoints.
 - **Polyglot performance harness** `tools/bench/polyglot/`: Ori AOT vs **Python,
@@ -19,6 +31,22 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   + [performance.pt-BR.md](docs/guides/performance.pt-BR.md); snapshot section on
   root [README.md](README.md) / [README.pt-BR.md](README.pt-BR.md); planning note
   in [docs/planning/perf-baseline-2026-07-13.md](docs/planning/perf-baseline-2026-07-13.md).
+
+- **ECO packages inventory:** [`docs/planning/eco-packages-status.md`](docs/planning/eco-packages-status.md)
+  — status vivo dos ports sibling (`ori-game`+raylib, `ori-imgui`, `ori-raygui`,
+  `ori-box2d`, `ori-jolt`, `ori-rres`, `ori-sqlite`).
+
+### Corrigido
+- **`ori test` + package `native_libs`:** the AOT test harness now links staged
+  package static libs (same as `ori compile` / `ori run` JIT). Fixes
+  `undefined reference` for ECO shims (e.g. FreeType) under `ori test`.
+- **Path-dep `native_libs` merge:** dependency packages contribute their
+  staged native libs (transitive path deps included), so `harfbuzz` JIT/AOT
+  resolves `ori-freetype` symbols without manual `LD_LIBRARY_PATH` hacks.
+- **Docs de planejamento:** `ori-game` / `ori-imgui` / ports ECO **não estão
+  cancelados**. A remoção de `packages/` no monorepo foi só split de repositório;
+  trabalho continua a todo vapor nos repos irmãos. BACKLOG, AGENTS, ADRs e
+  roadmaps que diziam “cancelled forever” foram atualizados (2026-07-14).
 
 ### Notas
 - Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package line **`[0.3.4]`**.
@@ -218,12 +246,15 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.3.2] — 2026-07-13
 
 > **Package release** Win/Linux. M2 residual + M3 ABI + M1 Rust-indep fechados.
-> `ori-game`/`ori-imgui` **fora do produto**. Auk9 arquivada. Ordem restante: **M4 self-host**.
+> Auk9 arquivada. Ordem restante: **M4 self-host**.
+> *(Nota 2026-07-14: `packages/ori-game`/`ori-imgui` saíram do monorepo neste
+> release, mas os produtos **não** foram cancelados — repos irmãos ativos; ver
+> `docs/planning/eco-packages-status.md`.)*
 
 ### Removido
-- **`packages/ori-game` e `packages/ori-imgui`:** fora do produto; removidos do
-  repositório e dos planos de migração. `ori migrate-syntax` deixa de ter skip
-  especial para esses paths.
+- **`packages/ori-game` e `packages/ori-imgui` (in-tree):** removidos do monorepo
+  da linguagem (split para repos irmãos). `ori migrate-syntax` deixa de ter skip
+  especial para esses paths. **Não** significa cancelamento de produto.
 
 ### Adicionado
 - **Release pipeline:** `.github/workflows/release.yml` — package Linux + Windows

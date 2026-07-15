@@ -19,12 +19,12 @@
 | [adr-ori-surface-s3-auk9.md](adr-ori-surface-s3-auk9.md) | ADR accepted for S3 |
 | [pr-plan-ori-surface-s3.md](pr-plan-ori-surface-s3.md) | PR plan (completed) |
 | [package-ecosystem-guidelines.md](package-ecosystem-guidelines.md) | Package conventions |
-| [eco-packages-status.md](eco-packages-status.md) | **Active** ECO inventory (`game-engine-full/`) + **Next work** maturity-5 `/execute-plan` |
-| [eco-library-ports-catalog.md](eco-library-ports-catalog.md) | **Canonical** — ports done; already-5 vs **U1–U15**; alta/média **fechadas** |
+| [eco-packages-status.md](eco-packages-status.md) | ECO inventory (`game-engine-full/`) — all packages **5 (Linux)**; residual Phase OS note |
+| [eco-library-ports-catalog.md](eco-library-ports-catalog.md) | **Canonical** — all ports **5 (Linux)** incl. U1–U15 @ 0.2.0; alta/média **fechadas** |
 | [pr-plan-eco-ports-e2e.md](pr-plan-eco-ports-e2e.md) | Execute-plan DAG — medium ports 0.1.0 (**complete**) |
-| [pr-plan-eco-maturity-5.md](pr-plan-eco-maturity-5.md) | **Active execute-plan** — ECO packages **→ maturity 5 (Linux)** (U1–U15 + wires + docs; G1–G7) |
+| [pr-plan-eco-maturity-5.md](pr-plan-eco-maturity-5.md) | Maturity-5 plan — **PRs 1–18 / W10 done**; residual **PR 19** Phase OS note |
 | [PHASE-OS.md](PHASE-OS.md) | **Phase OS** Windows/mac ECO staging (**last**) |
-| [game-ports-maturity-matrix.md](game-ports-maturity-matrix.md) | **Consult** — Table A (5) · Table A2 (U1–U15) · waves · backlog |
+| [game-ports-maturity-matrix.md](game-ports-maturity-matrix.md) | **Consult** — Table A (all **5 Linux**) · A2 historical U-ids · W10 **done** |
 | [roadtov1.md](roadtov1.md) | Long-horizon 1.0 sketch |
 | [perf-baseline-2026-07-13.md](perf-baseline-2026-07-13.md) | LANG-PERF baselines + polyglot Ori/Py/Rust snapshot |
 

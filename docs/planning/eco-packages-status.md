@@ -2,8 +2,8 @@
 
 > **Status:** active (2026-07-15)  
 > **Linux-5 core stack:** **complete** (raylib…harfbuzz).  
-> **Active program:** raise remaining ports **3–4 → 5 (Linux)** —  
-> [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) (`/execute-plan`, plan id `5b7bfbb0`).  
+> **W10 maturity-5 (U1–U15):** **done** — all packages **5 (Linux)** at **0.2.0**.  
+> **Plan:** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — **PRs 1–18 done**; residual **PR 19** Phase OS note (last, non-blocking).  
 > **Policy (2026-07-15):** **implement / mature / port libs on Linux first.**  
 > Multi-OS validation (Windows/mac) is **last** — scripts may exist, but execution is deferred.  
 > **Canonical paths:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-*`  
@@ -36,7 +36,7 @@ A package is **5 (Linux)** when plan §3 **G1–G7** hold on Linux:
 | Repo | Package | Ver. | Role |
 |------|---------|------|------|
 | **`ori-raylib`** | `raylib` | **0.1.0** | L0 raylib bindings (`ori_rl_*` shim) |
-| **`ori-game`** | `ori_game` | **0.3.0** | L1 `game.*` (2D/3D, audio, content loaders) — wires deepen only |
+| **`ori-game`** | `ori_game` | **0.3.0** | L1 `game.*` + wires (`gltf`/`obj`/`physfs_assets`/`noise`/`compress`/`navmesh`) — PR 17 done |
 | **`ori-imgui`** | `imgui` | **0.4.0** | Dear ImGui + Tier0/1 + optional raylib embed |
 | **`ori-raygui`** | `raygui` | **0.2.0** | Immediate UI on raylib |
 | **`ori-box2d`** | `box2d` | **0.3.0** | Box2D 3.x milli-unit physics |
@@ -46,34 +46,49 @@ A package is **5 (Linux)** when plan §3 **G1–G7** hold on Linux:
 | **`ori-enet`** | `enet` | **0.3.0** | ENet multiplayer (channels/protocol) |
 | **`ori-freetype`** | `freetype` | **0.1.0** | FreeType face + text + gray atlas |
 | **`ori-harfbuzz`** | `harfbuzz` | **0.1.0** | shape/layout + AOT tests (needs FreeType) |
+| **`ori-stb`** | `stb` | **0.2.0** | image / perlin / rect_pack (U1) |
+| **`ori-noise`** | `noise` | **0.2.0** | FastNoiseLite (U2) |
+| **`ori-miniz`** | `miniz` | **0.2.0** | deflate / CRC / zip one-entry (U3) |
+| **`ori-lz4`** | `lz4` | **0.2.0** | block + stream compress (U4) |
+| **`ori-nfd`** | `nfd` | **0.2.0** | portable file dialogs (U5) |
+| **`ori-implot`** | `implot` | **0.2.0** | ImPlot series + FULL (U6) |
+| **`ori-imnodes`** | `imnodes` | **0.2.0** | node graph + FULL (U7) |
+| **`ori-imguizmo`** | `imguizmo` | **0.2.0** | gizmo TRS + FULL (U8) |
+| **`ori-tracy`** | `tracy` | **0.2.0** | zones/frames/plot/message (U9) |
+| **`ori-enkiTS`** | `enkits` | **0.2.0** | task scheduler (U10) |
+| **`ori-cgltf`** | `cgltf` | **0.2.0** | glTF 2.0 + mesh export (U11) |
+| **`ori-fast-obj`** | `fast_obj` | **0.2.0** | Wavefront OBJ + flatten (U12) |
+| **`ori-physfs`** | `physfs` | **0.2.0** | virtual FS write/multi-mount (U13) |
+| **`ori-clay`** | `clay` | **0.2.0** | IM layout + command export (U14) |
+| **`ori-recast`** | `recast` | **0.2.0** | navmesh triangle soup (U15) |
 
 Bugfix-only touch-ups allowed if a dependent PR needs them.
 
 ---
 
-## U1–U15 — need work → **5 (Linux)**
+## U1–U15 — **done** → **5 (Linux)** at **0.2.0**
 
-Canonical API targets: plan §4. Paths under `game-engine-full/`.
+All rows below met plan §3 G1–G7 (PRs 2–16). Listed for historical ID mapping only — do **not** re-open as maturity work.
 
-| ID | Repo | Package | Ver. | Now | Plan PR |
-|----|------|---------|------|-----|---------|
-| **U1** | `ori-stb` | `stb` | 0.1.0 | 3–4 | PR 2 |
-| **U2** | `ori-noise` | `noise` | 0.1.0 | 3–4 | PR 3 |
-| **U3** | `ori-miniz` | `miniz` | 0.1.0 | 3–4 | PR 4 |
-| **U4** | `ori-lz4` | `lz4` | 0.1.0 | 3 | PR 5 |
-| **U5** | `ori-nfd` | `nfd` | 0.1.0 | 3 | PR 6 |
-| **U6** | `ori-implot` | `implot` | 0.1.0 | 3 | PR 7 |
-| **U7** | `ori-imnodes` | `imnodes` | 0.1.0 | 3 | PR 8 |
-| **U8** | `ori-imguizmo` | `imguizmo` | 0.1.0 | 3 | PR 9 |
-| **U9** | `ori-tracy` | `tracy` | 0.1.0 | 3 | PR 10 |
-| **U10** | `ori-enkiTS` | `enkits` | 0.1.0 | 3–4 | PR 11 |
-| **U11** | `ori-cgltf` | `cgltf` | 0.1.0 | 3 | PR 12 |
-| **U12** | `ori-fast-obj` | `fast_obj` | 0.1.0 | 3 | PR 13 |
-| **U13** | `ori-physfs` | `physfs` | 0.1.0 | 3 | PR 14 |
-| **U14** | `ori-clay` | `clay` | 0.1.0 | 3 | PR 15 |
-| **U15** | `ori-recast` | `recast` | 0.1.0 | 3 | PR 16 |
+| ID | Repo | Package | Ver. | Maturity | Plan PR |
+|----|------|---------|------|----------|---------|
+| **U1** | `ori-stb` | `stb` | **0.2.0** | **5 (Linux)** | PR 2 |
+| **U2** | `ori-noise` | `noise` | **0.2.0** | **5 (Linux)** | PR 3 |
+| **U3** | `ori-miniz` | `miniz` | **0.2.0** | **5 (Linux)** | PR 4 |
+| **U4** | `ori-lz4` | `lz4` | **0.2.0** | **5 (Linux)** | PR 5 |
+| **U5** | `ori-nfd` | `nfd` | **0.2.0** | **5 (Linux)** | PR 6 |
+| **U6** | `ori-implot` | `implot` | **0.2.0** | **5 (Linux)** | PR 7 |
+| **U7** | `ori-imnodes` | `imnodes` | **0.2.0** | **5 (Linux)** | PR 8 |
+| **U8** | `ori-imguizmo` | `imguizmo` | **0.2.0** | **5 (Linux)** | PR 9 |
+| **U9** | `ori-tracy` | `tracy` | **0.2.0** | **5 (Linux)** | PR 10 |
+| **U10** | `ori-enkiTS` | `enkits` | **0.2.0** | **5 (Linux)** | PR 11 |
+| **U11** | `ori-cgltf` | `cgltf` | **0.2.0** | **5 (Linux)** | PR 12 |
+| **U12** | `ori-fast-obj` | `fast_obj` | **0.2.0** | **5 (Linux)** | PR 13 |
+| **U13** | `ori-physfs` | `physfs` | **0.2.0** | **5 (Linux)** | PR 14 |
+| **U14** | `ori-clay` | `clay` | **0.2.0** | **5 (Linux)** | PR 15 |
+| **U15** | `ori-recast` | `recast` | **0.2.0** | **5 (Linux)** | PR 16 |
 
-Content modules in **`ori-game`:** `game.tiled`, `game.ldtk`, `game.aseprite`, `game.spine`, `game.rres_assets`, `game.marching_cubes` (+ `marching_cubes_draw`), `game.gltf` / `game.obj` / `game.physfs_assets` (deepen in plan PR 17).
+Content modules in **`ori-game`:** `game.tiled`, `game.ldtk`, `game.aseprite`, `game.spine`, `game.rres_assets`, `game.marching_cubes` (+ `marching_cubes_draw`), `game.gltf` / `game.obj` / `game.physfs_assets` / `game.noise` / `game.compress` / `game.navmesh` (**PR 17 wires done**).
 
 ---
 
@@ -113,9 +128,33 @@ enet     = { path = "../ori-enet", version = "0.3.0" }
 
 ## Smoke (Linux)
 
+Umbrella script lives in **ori-game** and treats `proj_root` as the **parent of ori-game** (= `game-engine-full/`):
+
 ```bash
 export ORI_BIN=$(command -v ori) ORI_USE_SYSTEM_LINKER=1
 ~/Documentos/Projetos/game-engine-full/ori-game/tools/smoke_eco_linux.sh
+```
+
+Packages listed (each `run_pkg_smoke` under `$proj_root/ori-*`):
+
+- **Core:** raylib, game, box2d, jolt, imgui, raygui, rres, sqlite, enet  
+- **High / U-ports:** freetype, harfbuzz, stb, noise, miniz, nfd, implot, imnodes, imguizmo, tracy, enkiTS  
+- **Medium / U-ports:** cgltf, fast-obj, physfs, clay, **lz4**, recast  
+
+Missing package dirs or smoke scripts are **auto-SKIP** (count as skip, not fail).
+
+### `ECO_SMOKE_SKIP_*` env flags
+
+| Variable | Effect |
+|----------|--------|
+| `ECO_SMOKE_SKIP_GAME=1` | Skip full `ori-game` smoke (ports-only run) |
+| `ECO_SMOKE_SKIP_DEMOS=1` | Skip integration demos (`box2d_visual`, `jolt_boxes_3d`, …) |
+
+Example (ports only, no demos):
+
+```bash
+ECO_SMOKE_SKIP_GAME=1 ECO_SMOKE_SKIP_DEMOS=1 \
+  ~/Documentos/Projetos/game-engine-full/ori-game/tools/smoke_eco_linux.sh
 ```
 
 ---
@@ -127,35 +166,37 @@ export ORI_BIN=$(command -v ori) ORI_USE_SYSTEM_LINKER=1
 | Tier | Scripts | Status |
 |------|---------|--------|
 | Core (game, box2d, jolt, sqlite, rres, imgui, raygui, enet) | real/stub `build_windows.ps1` + smoke | scripts ready — execute on MSVC host |
-| Medium M1–M6 (cgltf, fast_obj, physfs, clay, lz4, recast) | **deferred** `tools/build_windows.ps1` (echo only) | documented Linux-only 0.1.0 |
-| U1–U15 maturity deepens | Phase OS still last | score 5 does **not** require Win/mac |
+| Medium M1–M6 (cgltf, fast_obj, physfs, clay, lz4, recast) | **deferred** `tools/build_windows.ps1` (echo only) | documented Linux-only |
+| U1–U15 (all **5 Linux** now) | Phase OS still last | score 5 does **not** require Win/mac |
 
-Canonical write-up: [`PHASE-OS.md`](PHASE-OS.md). Umbrella: `ori-game/tools/smoke_eco_windows.ps1` (core only).
+Canonical write-up: [`PHASE-OS.md`](PHASE-OS.md). Umbrella: `ori-game/tools/smoke_eco_windows.ps1` (core only).  
+**Next residual:** plan PR 19 — Phase OS note refresh only.
 
 ---
 
 ## Next work (Linux-only)
 
-### Execute-plan entrypoint (active)
+### Residual from maturity-5 plan
 
 ```bash
-/execute-plan docs/planning/pr-plan-eco-maturity-5.md --concurrency 4 \
-  --instructions "Linux only. Packages at /home/raillen/Documentos/Projetos/game-engine-full/ori-*. Each package keeps its own git repo. Path deps sibling-relative. int64_t ABI; milli-float. Smoke ok; ori test 0 failed. Version bump. Score 5 = plan §3 G1-G7. No re-port maturity-5 packages. Phase OS last. No flecs/miniaudio/dual physics."
+# PR 19 only — Phase OS note; non-blocking
+/execute-plan docs/planning/pr-plan-eco-maturity-5.md --concurrency 1 \
+  --instructions "Linux docs only for PR19. Phase OS last. Do not re-port maturity-5 packages."
 ```
 
-**Active plan:** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — U1–U15 → 5, then ori-game wires (PR 17), catalog (PR 18), Phase OS note (PR 19 last).
+**Plan status:** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — **PRs 1–18 complete** (U1–U15 + ori-game wires + catalog/matrix/status). **PR 19** Phase OS note = last.
 
 Prior ports plan [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md): **PRs 1–10 complete** (0.1.0 scaffolds; do not re-scaffold).  
 Catalog: [`eco-library-ports-catalog.md`](eco-library-ports-catalog.md)
 
 Residual / roadmap (2026-07-15):
-1. **Maturity → 5 (Linux)** for U1–U15 — **in progress** via maturity-5 plan.  
+1. **Maturity U1–U15 → 5 (Linux)** — **done** (W10).  
 2. **`ori-miniaudio` skipped** — gap measured: `game.audio` via raylib covers SFX/music/buses/pool. Revisit only for non-raylib or spatial 3D (catalog §5 OpenAL).  
-3. **`ori-game` wires** — gltf/obj/physfs landed; deepen in maturity-5 plan PR 17.  
+3. **`ori-game` wires** — **PR 17 done** (`gltf`/`obj`/`physfs_assets`/`noise`/`compress`/`navmesh`).  
 4. Studio app = separate product track (`ori-game-studio` outside `game-engine-full`)  
-5. Phase OS **execution** on real MSVC host = **last** (scaffolding done; non-blocking)  
+5. Phase OS **execution** on real MSVC host = **last** (scaffolding done; non-blocking) — plan PR 19 docs  
 
-**Do not re-queue as open alta/média ports:** packages already exist — use maturity-5 plan to deepen, not re-scaffold.
+**Do not re-queue as open alta/média ports:** packages already exist at **5 (Linux)** — bugfix only.
 
 **ECS:** no flecs/EnTT as default — see catalog §7 / roadmap § ECS.
 

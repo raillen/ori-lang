@@ -1,6 +1,6 @@
 # Design + PR Plan — ECO packages to maturity **5 (Linux)**
 
-**Status:** executing (`/execute-plan` plan id `5b7bfbb0`) — **PR 1 lock-in done** (2026-07-15)  
+**Status:** **PRs 1–18 complete / W10 done** (2026-07-15); residual **PR 19** Phase OS note only (`/execute-plan` plan id `5b7bfbb0`)  
 **Date:** 2026-07-15  
 **Policy:** Linux first. Multi-OS (**Phase OS**) is **last** and does **not** block score 5.  
 **Maturity gate for this plan:** score **5 (Linux)** = product engine-grade on Linux per matrix: **broad API + tests + real-use smoke** (polished windowed demos optional, not the gate). Full checklist: **§3 G1–G7**.  
@@ -89,23 +89,23 @@ A package reaches **5** when **all** of the following hold on Linux:
 
 Paths: `/home/raillen/Documentos/Projetos/game-engine-full/<repo>/`.
 
-| ID | Repo | Now | Target API for G1 (minimum product surface) |
-|----|------|-----|-----------------------------------------------|
-| **U1** | `ori-stb` | 3–4 | image: load path + dims + free; perlin: 2D/3D; rect_pack: init/pack/get rect; optional write_png if cheap |
-| **U2** | `ori-noise` | 3–4 | seed, set type (at least 2 noise kinds), get 2D/3D, fractal/octaves if FNL exposes easily |
-| **U3** | `ori-miniz` | 3–4 | compress/decompress buffer; CRC32; **zip** create or extract **one** entry (or documented skip with inflate stream) |
-| **U4** | `ori-lz4` | 3 | block + **frame** (or stream) compress/decompress; bound/size helpers; larger fixture test |
-| **U5** | `ori-nfd` | 3 | open/save/folder; multi-open if pfd allows; cancel path returns clear false/empty; no GUI hang in smoke (skip interactive if headless CI) |
-| **U6** | `ori-implot` | 3 | FULL default or dual path; line + scatter + bar; axis labels; clear/reset; depends on imgui path |
-| **U7** | `ori-imnodes` | 3 | create nodes/pins/links; query link count; begin/end node editor; FULL link |
-| **U8** | `ori-imguizmo` | 3 | translate **and** rotate **or** scale (at least 2 ops); manipulate matrix milli; FULL link |
-| **U9** | `ori-tracy` | 3 | zone begin/end; frame mark; plot value; message; FULL client when flag set |
-| **U10** | `ori-enkiTS` | 3–4 | add task, wait, parallel_for (or N independent tasks); shutdown clean; ≥2 cores smoke |
-| **U11** | `ori-cgltf` | 3 | meshes/primitives counts; POSITION + NORMAL accessors (or document); node TRS milli; material base color if present; **export interleaved float mesh buffer** for raylib upload helper |
-| **U12** | `ori-fast-obj` | 3 | positions + normals + texcoords + indices; material name count; **flatten to float mesh** helper |
-| **U13** | `ori-physfs` | 3 | init/mount/exists/read; **write** to write-dir or user-dir; enumerate; unmount; multi-mount read |
-| **U14** | `ori-clay` | 3 | multi-box nested layout; padding/gap; measure text hook already; **command list export** (rects) for a pure-Ori or raylib drawer (headless bounds sufficient for tests) |
-| **U15** | `ori-recast` | 3 | build from **triangle soup** (not only plane); find_path; raycast or nearest poly; destroy; optional agent radius param |
+| ID | Repo | Was → Now | Target API for G1 (minimum product surface) | Status |
+|----|------|-----------|-----------------------------------------------|--------|
+| **U1** | `ori-stb` | 3–4 → **5** @ **0.2.0** | image: load path + dims + free; perlin: 2D/3D; rect_pack: init/pack/get rect; optional write_png if cheap | **done** PR 2 |
+| **U2** | `ori-noise` | 3–4 → **5** @ **0.2.0** | seed, set type (at least 2 noise kinds), get 2D/3D, fractal/octaves if FNL exposes easily | **done** PR 3 |
+| **U3** | `ori-miniz` | 3–4 → **5** @ **0.2.0** | compress/decompress buffer; CRC32; **zip** create or extract **one** entry (or documented skip with inflate stream) | **done** PR 4 |
+| **U4** | `ori-lz4` | 3 → **5** @ **0.2.0** | block + **frame** (or stream) compress/decompress; bound/size helpers; larger fixture test | **done** PR 5 |
+| **U5** | `ori-nfd` | 3 → **5** @ **0.2.0** | open/save/folder; multi-open if pfd allows; cancel path returns clear false/empty; no GUI hang in smoke (skip interactive if headless CI) | **done** PR 6 |
+| **U6** | `ori-implot` | 3 → **5** @ **0.2.0** | FULL default or dual path; line + scatter + bar; axis labels; clear/reset; depends on imgui path | **done** PR 7 |
+| **U7** | `ori-imnodes` | 3 → **5** @ **0.2.0** | create nodes/pins/links; query link count; begin/end node editor; FULL link | **done** PR 8 |
+| **U8** | `ori-imguizmo` | 3 → **5** @ **0.2.0** | translate **and** rotate **or** scale (at least 2 ops); manipulate matrix milli; FULL link | **done** PR 9 |
+| **U9** | `ori-tracy` | 3 → **5** @ **0.2.0** | zone begin/end; frame mark; plot value; message; FULL client when flag set | **done** PR 10 |
+| **U10** | `ori-enkiTS` | 3–4 → **5** @ **0.2.0** | add task, wait, parallel_for (or N independent tasks); shutdown clean; ≥2 cores smoke | **done** PR 11 |
+| **U11** | `ori-cgltf` | 3 → **5** @ **0.2.0** | meshes/primitives counts; POSITION + NORMAL accessors (or document); node TRS milli; material base color if present; **export interleaved float mesh buffer** for raylib upload helper | **done** PR 12 |
+| **U12** | `ori-fast-obj` | 3 → **5** @ **0.2.0** | positions + normals + texcoords + indices; material name count; **flatten to float mesh** helper | **done** PR 13 |
+| **U13** | `ori-physfs` | 3 → **5** @ **0.2.0** | init/mount/exists/read; **write** to write-dir or user-dir; enumerate; unmount; multi-mount read | **done** PR 14 |
+| **U14** | `ori-clay` | 3 → **5** @ **0.2.0** | multi-box nested layout; padding/gap; measure text hook already; **command list export** (rects) for a pure-Ori or raylib drawer (headless bounds sufficient for tests) | **done** PR 15 |
+| **U15** | `ori-recast` | 3 → **5** @ **0.2.0** | build from **triangle soup** (not only plane); find_path; raycast or nearest poly; destroy; optional agent radius param | **done** PR 16 |
 
 ---
 
@@ -140,7 +140,7 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 ---
 
-### PR 2: ori-stb → 5 (Linux)
+### PR 2: ori-stb → 5 (Linux) — **done**
 
 **Description:** Expand `ori-stb` to §4 U1. ≥4 tests; smoke green; version bump; CHANGELOG; README API table. Path: `game-engine-full/ori-stb`.
 
@@ -148,9 +148,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — perlin2, image roundtrip, tests.
+
 ---
 
-### PR 3: ori-noise → 5 (Linux)
+### PR 3: ori-noise → 5 (Linux) — **done**
 
 **Description:** Expand `ori-noise` to §4 U2. Seed + multiple noise types + 2D/3D; tests; smoke; version bump.
 
@@ -158,9 +160,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — fractal/octaves, tests.
+
 ---
 
-### PR 4: ori-miniz → 5 (Linux)
+### PR 4: ori-miniz → 5 (Linux) — **done**
 
 **Description:** Expand `ori-miniz` to §4 U3 (include zip one-entry or stream inflate). Tests + smoke + version bump.
 
@@ -168,9 +172,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — buffer deflate, CRC32, zip one entry.
+
 ---
 
-### PR 5: ori-lz4 → 5 (Linux)
+### PR 5: ori-lz4 → 5 (Linux) — **done**
 
 **Description:** Expand `ori-lz4` to §4 U4 (frame/stream + bounds). Tests + smoke + version bump.
 
@@ -178,9 +184,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — block + OLZ1 stream, bounds, large fixture.
+
 ---
 
-### PR 6: ori-nfd → 5 (Linux)
+### PR 6: ori-nfd → 5 (Linux) — **done**
 
 **Description:** Expand `ori-nfd` to §4 U5. Headless smoke must not block: use cancel/default path or document `NFD_SMOKE_SKIP_UI=1` with unit tests for path marshalling. Version bump.
 
@@ -188,9 +196,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — multi-open, path marshalling, headless smoke.
+
 ---
 
-### PR 7: ori-implot → 5 (Linux)
+### PR 7: ori-implot → 5 (Linux) — **done**
 
 **Description:** Expand `ori-implot` to §4 U6. Ensure FULL draw path builds by default on Linux smoke (or dual artifact). Depends on sibling `ori-imgui` for link if required — do not break GLFW-only imgui. ≥4 tests where host allows; smoke green.
 
@@ -198,9 +208,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — line/scatter/bar + axes + dual FULL.
+
 ---
 
-### PR 8: ori-imnodes → 5 (Linux)
+### PR 8: ori-imnodes → 5 (Linux) — **done**
 
 **Description:** Expand `ori-imnodes` to §4 U7. FULL path green; tests for graph bookkeeping without requiring human click when possible.
 
@@ -208,9 +220,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — nodes/pins/links + editor API.
+
 ---
 
-### PR 9: ori-imguizmo → 5 (Linux)
+### PR 9: ori-imguizmo → 5 (Linux) — **done**
 
 **Description:** Expand `ori-imguizmo` to §4 U8 (≥2 manipulate ops). FULL path; milli matrix API; tests + smoke.
 
@@ -218,9 +232,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — TRS milli + dual FULL Manipulate.
+
 ---
 
-### PR 10: ori-tracy → 5 (Linux)
+### PR 10: ori-tracy → 5 (Linux) — **done**
 
 **Description:** Expand `ori-tracy` to §4 U9. Zone + frame + plot + message; FULL client when flag set; tests that call APIs without requiring Tracy GUI.
 
@@ -228,9 +244,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — zone/frame/plot/message + dual FULL.
+
 ---
 
-### PR 11: ori-enkiTS → 5 (Linux)
+### PR 11: ori-enkiTS → 5 (Linux) — **done**
 
 **Description:** Expand `ori-enkiTS` to §4 U10. Parallel tasks; wait; clean shutdown; stress test with N tasks; C++ link pattern preserved.
 
@@ -238,9 +256,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — add/wait, parallel_for, N tasks.
+
 ---
 
-### PR 12: ori-cgltf → 5 (Linux)
+### PR 12: ori-cgltf → 5 (Linux) — **done**
 
 **Description:** Expand `ori-cgltf` to §4 U11. Mesh export buffer for engine use; richer metadata; ≥4 tests with fixtures; smoke; version bump. Keep module leaf unique (`cgltf.loader`).
 
@@ -248,9 +268,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — mesh export, TRS milli, materials.
+
 ---
 
-### PR 13: ori-fast-obj → 5 (Linux)
+### PR 13: ori-fast-obj → 5 (Linux) — **done**
 
 **Description:** Expand `ori-fast-obj` to §4 U12. Flatten mesh; indices/normals/uvs; tests + smoke; leaf `fast_obj.mesh`.
 
@@ -258,9 +280,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — flatten mesh, normals/uvs/materials.
+
 ---
 
-### PR 14: ori-physfs → 5 (Linux)
+### PR 14: ori-physfs → 5 (Linux) — **done**
 
 **Description:** Expand `ori-physfs` to §4 U13. Write path + multi-mount + enumerate; tests with temp dirs; smoke.
 
@@ -268,9 +292,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — write-dir, multi-mount, unmount tests.
+
 ---
 
-### PR 15: ori-clay → 5 (Linux)
+### PR 15: ori-clay → 5 (Linux) — **done**
 
 **Description:** Expand `ori-clay` to §4 U14. Nested layout + command/bounds export for drawers; headless tests ≥4; smoke.
 
@@ -278,9 +304,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — nested layout, pad/gap, command export.
+
 ---
 
-### PR 16: ori-recast → 5 (Linux)
+### PR 16: ori-recast → 5 (Linux) — **done**
 
 **Description:** Expand `ori-recast` to §4 U15. Triangle-soup build; path + nearest/raycast; agent radius; destroy; ≥4 tests; smoke. Keep C++ ld-script pattern.
 
@@ -288,9 +316,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** None
 
+**Done notes:** **0.2.0** maturity 5 — triangle soup, nearest, raycast.
+
 ---
 
-### PR 17: ori-game wires deepen (Linux)
+### PR 17: ori-game wires deepen (Linux) — **done**
 
 **Description:** After U11–U15 land as needed:
 
@@ -305,9 +335,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** PR 12, PR 13, PR 14, PR 15, PR 16
 
+**Done notes:** Wires landed — `game.gltf` / `game.obj` / `game.physfs_assets` / `game.noise` / `game.compress` / `game.navmesh` (commit `2adfbe9`).
+
 ---
 
-### PR 18: Catalog + matrix + status + umbrella gate
+### PR 18: Catalog + matrix + status + umbrella gate — **done** (2026-07-15)
 
 **Description:** Mark U1–U15 as **5 (Linux)** in catalog §2, status inventory, matrix Table A. Add wave row **W10 maturity-5** done. Ensure `smoke_eco_linux.sh` still lists all packages; document `ECO_SMOKE_SKIP_*`. Update this plan status line to complete when all green. Fix any stale `Documentos/Projetos/ori-*` paths → `game-engine-full`.
 
@@ -315,9 +347,11 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 **Dependencies:** PR 2, PR 3, PR 4, PR 5, PR 6, PR 7, PR 8, PR 9, PR 10, PR 11, PR 12, PR 13, PR 14, PR 15, PR 16
 
+**Done notes:** All U1–U15 marked **5 (Linux)** @ **0.2.0** in catalog/status/matrix; W10 **done**; plan status **PRs 1–18 complete**; `smoke_eco_linux.sh` lists all packages under `proj_root` = parent of ori-game (`game-engine-full/`); `ECO_SMOKE_SKIP_GAME` / `ECO_SMOKE_SKIP_DEMOS` documented in status + smoke header. Smoke script unchanged (already complete).
+
 ---
 
-### PR 19: Phase OS note refresh (last, non-blocking)
+### PR 19: Phase OS note refresh (last, non-blocking) — **open**
 
 **Description:** Confirm each package that reached 5 still documents Phase OS deferred or has real Win stubs. **Do not** require Windows/mac CI green. Update `PHASE-OS.md` table: maturity-5 packages Linux-complete; multi-OS still last.
 
@@ -384,12 +418,12 @@ export ORI_USE_JIT=1   # for ori run; tests may AOT
 
 ## 10. Success criteria (whole plan)
 
-1. All U1–U15 packages meet §3 G1–G7 on Linux.  
-2. Status + matrix + catalog show **5 (Linux)** for every package in `game-engine-full` (core already 5 + U1–U15).  
-3. `smoke_eco_linux.sh` can run ports (with skip flags) without missing dirs.  
-4. ori-game wires PR landed or explicitly partial with documented residual.  
-5. Phase OS still last / non-blocking.  
-6. No new open alta/média port (miniaudio stays skipped).
+1. All U1–U15 packages meet §3 G1–G7 on Linux. — **met**  
+2. Status + matrix + catalog show **5 (Linux)** for every package in `game-engine-full` (core already 5 + U1–U15). — **met** (PR 18)  
+3. `smoke_eco_linux.sh` can run ports (with skip flags) without missing dirs. — **met**  
+4. ori-game wires PR landed or explicitly partial with documented residual. — **met** (PR 17)  
+5. Phase OS still last / non-blocking. — **yes**; PR 19 residual docs only  
+6. No new open alta/média port (miniaudio stays skipped). — **met**
 
 ---
 
