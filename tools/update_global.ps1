@@ -1,47 +1,72 @@
-# PowerShell script to build and install Ori globally to C:\ori-lang
+# Build a release package on this Windows machine and install it globally.
+# Prefer tools/windows/Install-Ori.ps1 for end users (no Rust required).
+#
+# Usage (developer machine with Rust + MSVC):
+#   pwsh -File tools/update_global.ps1
+#   pwsh -File tools/update_global.ps1 -InstallDir C:\Ori -Force
 
-$globalDir = "C:\ori-lang"
-$binDir = "$globalDir\bin"
-$stdlibDir = "$globalDir\stdlib"
-$runtimeDir = "$globalDir\runtime"
+param(
+    [string]$InstallDir = "",
+    [switch]$SkipBuild,
+    [switch]$Force,
+    [switch]$System
+)
 
-Write-Host "Creating global directories at $globalDir..."
-if (-not (Test-Path $binDir)) { New-Item -ItemType Directory -Force -Path $binDir | Out-Null }
-if (-not (Test-Path $stdlibDir)) { New-Item -ItemType Directory -Force -Path $stdlibDir | Out-Null }
-if (-not (Test-Path $runtimeDir)) { New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null }
+$ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $false
 
-Write-Host "Building ori-driver (release)..."
-cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") build -p ori-driver --release
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Failed to build ori-driver."
-    exit 1
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$packScript = Join-Path $PSScriptRoot "package_native_release.ps1"
+$installScript = Join-Path $PSScriptRoot "windows\Install-Ori.ps1"
+
+if (-not (Test-Path -LiteralPath $packScript)) {
+    throw "missing $packScript"
+}
+if (-not (Test-Path -LiteralPath $installScript)) {
+    throw "missing $installScript"
 }
 
-Write-Host "Building ori-runtime (release)..."
-cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") build -p ori-runtime --release --lib
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Failed to build ori-runtime."
-    exit 1
+Write-Host "Packaging Ori release (smoke + zip)..."
+$packArgs = @{ Overwrite = $true }
+if ($SkipBuild) { $packArgs.SkipBuild = $true }
+& $packScript @packArgs
+if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
+    throw "package_native_release.ps1 failed ($LASTEXITCODE)"
 }
 
-Write-Host "Copying ori.exe to $binDir..."
-Copy-Item "target\release\ori.exe" "$binDir\ori.exe" -Force
-
-Write-Host "Copying standard library to $stdlibDir..."
-Copy-Item "stdlib\*" "$stdlibDir\" -Recurse -Force
-
-Write-Host "Copying runtime artifacts to $runtimeDir..."
-# Since runtime artifacts are OS specific, we will just copy the entire runtime directory
-Copy-Item "runtime\*" "$runtimeDir\" -Recurse -Force
-
-Write-Host "Updating C:\ori-lang\runtime with freshly built release runtime..."
-$triple = "x86_64-pc-windows-msvc" # Assume Windows for this powershell script by default, though we can be smarter
-if (Test-Path "target\release\ori_runtime.dll") {
-    if (-not (Test-Path "$runtimeDir\$triple")) { New-Item -ItemType Directory -Force -Path "$runtimeDir\$triple" | Out-Null }
-    Copy-Item "target\release\ori_runtime.dll" "$runtimeDir\$triple\" -Force
-    Copy-Item "target\release\ori_runtime.lib" "$runtimeDir\$triple\" -Force
+# Discover the archive next to the default dist layout.
+$versionLine = Select-String -Path (Join-Path $repoRoot "compiler\Cargo.toml") -Pattern '^\s*version\s*=\s*"([^"]+)"' |
+    Select-Object -First 1
+if (-not $versionLine) {
+    throw "could not read workspace version from compiler/Cargo.toml"
+}
+# Prefer the newest matching zip under compiler/target/dist
+$dist = Join-Path $repoRoot "compiler\target\dist"
+$zip = Get-ChildItem -LiteralPath $dist -Filter "ori-*-x86_64-pc-windows-msvc.zip" -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+if (-not $zip) {
+    $zip = Get-ChildItem -LiteralPath $dist -Filter "ori-*.zip" -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+}
+if (-not $zip) {
+    throw "No release zip found under $dist after packaging."
 }
 
-Write-Host "Global update complete!"
-Write-Host "Please ensure that $binDir is in your system PATH environment variable."
+Write-Host "Installing from $($zip.FullName)..."
+$installArgs = @{
+    ZipPath = $zip.FullName
+}
+if (-not [string]::IsNullOrWhiteSpace($InstallDir)) {
+    $installArgs.InstallDir = $InstallDir
+}
+if ($Force) { $installArgs.Force = $true }
+if ($System) { $installArgs.System = $true }
 
+& $installScript @installArgs
+if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
+    throw "Install-Ori.ps1 failed ($LASTEXITCODE)"
+}
+
+Write-Host "Global update complete."

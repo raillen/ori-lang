@@ -107,6 +107,29 @@ try {
     Copy-Item -LiteralPath (Join-Path $repoRoot "examples/hello/main.orl") -Destination (Join-Path $examplesDir "hello.orl") -Force
     Copy-Item -LiteralPath (Join-Path $repoRoot "examples/async_demo/main.orl") -Destination (Join-Path $examplesDir "async_demo.orl") -Force
 
+    # Windows end-user installers (PATH + copy to %LOCALAPPDATA%\Programs\Ori).
+    # Included only on Windows packages so the zip is self-contained.
+    if ($IsWindows -or $env:OS -eq "Windows_NT") {
+        $winTools = Join-Path $PSScriptRoot "windows"
+        $installPairs = @(
+            @{ Src = "Install-Ori.ps1"; Dest = "Install-Ori.ps1" },
+            @{ Src = "Install-Ori.ps1"; Dest = "install.ps1" },
+            @{ Src = "Uninstall-Ori.ps1"; Dest = "Uninstall-Ori.ps1" },
+            @{ Src = "Uninstall-Ori.ps1"; Dest = "uninstall.ps1" },
+            @{ Src = "install.cmd"; Dest = "install.cmd" },
+            @{ Src = "uninstall.cmd"; Dest = "uninstall.cmd" },
+            @{ Src = "README.md"; Dest = "INSTALL-WINDOWS.md" }
+        )
+        foreach ($pair in $installPairs) {
+            $src = Join-Path $winTools $pair.Src
+            if (Test-Path -LiteralPath $src -PathType Leaf) {
+                Copy-Item -LiteralPath $src -Destination (Join-Path $packageRootPath $pair.Dest) -Force
+            } else {
+                Write-Host "warning: missing Windows install helper $src"
+            }
+        }
+    }
+
     $stageArgs = @{
         Target = $hostTriple
         Profile = "release"

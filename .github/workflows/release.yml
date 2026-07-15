@@ -260,6 +260,10 @@ jobs:
             ### Install
             See [`docs/install.md`](https://github.com/raillen/ori-lang/blob/master/docs/install.md).
 
+            **Windows:** extract the zip and run `install.cmd` (or `install.ps1`) —
+            copies Ori to `%LOCALAPPDATA%\Programs\Ori` and adds it to your User **PATH**.
+            Uninstall with `uninstall.ps1` in the same folder.
+
             - **AOT** needs the OS linker (VS Build Tools / build-essential / Xcode CLT).
             - **JIT** (`ori run`) needs only the packaged runtime cdylib.
 

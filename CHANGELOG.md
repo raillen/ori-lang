@@ -27,11 +27,19 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   forwarded from path deps.
 - **QA:** `tools/qa/web_sec8.sh`, `web_auth_smoke.sh`,
   `web_session_sqlite_smoke.sh` (daily_full S6b–S6d).
+- **Windows install + PATH:** `tools/windows/Install-Ori.ps1` /
+  `Uninstall-Ori.ps1` (+ `install.cmd` / `uninstall.cmd`). Copies the full
+  package to `%LOCALAPPDATA%\Programs\Ori` (or Program Files with `-System`)
+  and permanently updates User/Machine `PATH`. Bundled into Windows release
+  zips via `smoke_native_release.ps1`. Developer helper
+  `tools/update_global.ps1` now packages then installs.
 
 ### Documentação
 - Stack index + packaging note: `packages/README.md`.
 - Freeze policy: `packages/FREEZE-WEB.md`.
 - Phase B/C/D, middleware, ori-sqlite symlink README.
+- Windows installer flow in `docs/install.md` / `install.pt-BR.md` and
+  `tools/windows/README.md`.
 
 ---
 

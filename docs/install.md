@@ -75,7 +75,36 @@ xcode-select --install
    | macOS Apple Silicon | `ori-v0.3.5-aarch64-apple-darwin.tar.gz` |
    | macOS Intel | `ori-v0.3.5-x86_64-apple-darwin.tar.gz` |
 
-#### Option A — tarball / zip
+#### Option A — Windows zip (recommended on Windows)
+
+2. Download `ori-vX.Y.Z-x86_64-pc-windows-msvc.zip` and extract it.
+
+3. Run the installer (adds Ori to your **User PATH** permanently):
+
+```powershell
+# Double-click install.cmd, or:
+pwsh -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+Default install location: `%LOCALAPPDATA%\Programs\Ori`  
+(all-users: `pwsh -File .\install.ps1 -System` as Administrator → `%ProgramFiles%\Ori`).
+
+4. Open a **new** terminal and verify:
+
+```powershell
+ori --version
+ori doctor
+```
+
+Uninstall:
+
+```powershell
+pwsh -File "$env:LOCALAPPDATA\Programs\Ori\uninstall.ps1"
+```
+
+Full details: [`tools/windows/README.md`](../tools/windows/README.md).
+
+#### Option B — tarball / zip (manual PATH)
 
 2. Extract to a directory (e.g. `~/ori` or `C:\ori`).
 
@@ -87,10 +116,11 @@ xcode-select --install
    | `ori-lsp` / `ori-lsp.exe` | LSP server |
    | `stdlib/` | Layer 2/3 `.orl` modules |
    | `runtime/<triple>/` | staticlib + cdylib + `runtime-link.json` |
+   | `install.ps1` / `install.cmd` | Windows only — installer + PATH |
 
-4. Put the directory on your `PATH`.
+4. Put the directory on your `PATH` (on Windows prefer **Option A**).
 
-#### Option B — `.deb` (Debian / Ubuntu)
+#### Option C — `.deb` (Debian / Ubuntu)
 
 ```bash
 sudo dpkg -i ori_0.3.5_amd64.deb
@@ -98,7 +128,7 @@ sudo dpkg -i ori_0.3.5_amd64.deb
 # AOT still needs: sudo apt install build-essential
 ```
 
-5. Verify:
+### Verify
 
 ```bash
 ori --version

@@ -55,8 +55,21 @@ sudo apt update && sudo apt install build-essential
    | macOS Apple Silicon | `ori-v0.3.5-aarch64-apple-darwin.tar.gz` |
    | macOS Intel | `ori-v0.3.5-x86_64-apple-darwin.tar.gz` |
 
-**Tarball / zip:** extraia (ex. `~/ori` ou `C:\ori`), layout `ori`/`ori.exe` +
-`ori-lsp` + `stdlib/` + `runtime/<triple>/`, coloque no `PATH`.
+**Windows (recomendado):** extraia o zip MSVC e rode o instalador (PATH do
+usuário permanente):
+
+```powershell
+# Clique duplo em install.cmd, ou:
+pwsh -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+Instala em `%LOCALAPPDATA%\Programs\Ori` por padrão.  
+Sistema inteiro: `.\install.ps1 -System` (como Administrador).  
+Desinstalar: `pwsh -File "$env:LOCALAPPDATA\Programs\Ori\uninstall.ps1"`.  
+Detalhes: [`tools/windows/README.md`](../tools/windows/README.md).
+
+**Tarball / zip (manual):** extraia (ex. `~/ori` ou `C:\ori`), layout
+`ori`/`ori.exe` + `ori-lsp` + `stdlib/` + `runtime/<triple>/`, coloque no `PATH`.
 
 **Debian/Ubuntu:**
 
