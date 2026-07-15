@@ -1,18 +1,18 @@
 # Phase OS — multi-OS staging for ECO packages
 
-> **Status:** **scaffolding** (2026-07-15) — **non-blocking**  
-> Linux product surface is complete for core + medium ports.  
-> Multi-OS validation is **last**: do **not** block lib work or CI on Win/mac green.  
+> **Status:** **scaffolding** (2026-07-15) — **non-blocking / last**  
+> **Linux product surface is complete** for core + all maturity-5 (U1–U15) packages.  
+> Multi-OS validation (Windows/mac) is **last**: do **not** block lib work or CI on Win/mac green.  
 > Core packages (game stack) have real/stub Windows scripts from 2026-07-14;  
-> medium M1–M6 packages have **deferred stubs only** (echo + exit 0).
+> U1–U15 / medium packages have **deferred stubs only** (echo + exit 0) where present.
 
 ## Goal
 
 | Triple | Priority | Status |
 |--------|----------|--------|
-| `x86_64-unknown-linux-gnu` | done | **Linux** (core 5 + medium 0.1.0) |
-| `x86_64-pc-windows-msvc` | **P0** | core scripts ready; medium = **deferred stubs** |
-| `x86_64-apple-darwin` / `aarch64-apple-darwin` | P1 | not started |
+| `x86_64-unknown-linux-gnu` | done | **Linux complete** — core 5 + U1–U15 @ **0.2.0** (maturity **5 (Linux)**) |
+| `x86_64-pc-windows-msvc` | **P0** (later) | core scripts ready; U-ports = **deferred stubs** |
+| `x86_64-apple-darwin` / `aarch64-apple-darwin` | P1 (later) | not started |
 
 ## Prerequisites (Windows)
 
@@ -50,31 +50,45 @@ Package `native_libs = ["foo"]` → link looks for **`foo.lib`** under `lib/x86_
 | **ori-raygui** | `tools/build_windows.ps1` | `tools/smoke_windows.ps1` |
 | **ori-enet** | `tools/build_windows.ps1` | `tools/smoke_windows.ps1` |
 
-## Medium packages (M1–M6) — Phase OS **deferred**
+## Maturity-5 packages (U1–U15) — Linux **complete**; Phase OS **deferred**
 
-Linux **0.1.0** is the product surface. Windows stubs exist so the gap is explicit;
+All U1–U15 packages are **5 (Linux)** at **0.2.0** (plan `pr-plan-eco-maturity-5.md` PRs 2–16).  
+Score **5 (Linux)** does **not** require Win/mac. Windows stubs exist so the gap is explicit;
 they do **not** produce MSVC libs and are **not** required for CI.
 
-| Package | `tools/build_windows.ps1` | Status |
-|---------|---------------------------|--------|
-| **ori-cgltf** | deferred stub (echo + exit 0) | Linux-only 0.1.0 |
-| **ori-fast-obj** | deferred stub | Linux-only 0.1.0 |
-| **ori-physfs** | deferred stub | Linux-only 0.1.0 |
-| **ori-clay** | deferred stub | Linux-only 0.1.0 |
-| **ori-lz4** | deferred stub | Linux-only 0.1.0 |
-| **ori-recast** | deferred stub | Linux-only 0.1.0 |
+| ID | Package | `tools/build_windows.ps1` | Linux status |
+|----|---------|---------------------------|--------------|
+| **U1** | **ori-stb** | deferred stub (echo + exit 0) | **5 (Linux)** 0.2.0 |
+| **U2** | **ori-noise** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U3** | **ori-miniz** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U4** | **ori-lz4** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U5** | **ori-nfd** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U6** | **ori-implot** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U7** | **ori-imnodes** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U8** | **ori-imguizmo** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U9** | **ori-tracy** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U10** | **ori-enkiTS** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U11** | **ori-cgltf** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U12** | **ori-fast-obj** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U13** | **ori-physfs** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U14** | **ori-clay** | deferred stub | **5 (Linux)** 0.2.0 |
+| **U15** | **ori-recast** | deferred stub | **5 (Linux)** 0.2.0 |
 
 Each package README has a short **Phase OS** section pointing here.
+
+> Historical note: M1–M6 “medium” labels (cgltf, fast-obj, physfs, clay, lz4, recast)
+> were the 0.1.0 ports wave; those six are now part of U1–U15 at **0.2.0**.
 
 ### Umbrella
 
 ```powershell
 cd C:\path\to\ori-game
-.\tools\smoke_eco_windows.ps1 -Stub   # recommended first run
+.\tools\smoke_eco_windows.ps1 -Stub   # recommended first run (core stack)
 # later: without -Stub if real raylib.lib is staged
+# U-ports: run each package tools/build_windows.ps1 only when implementing real MSVC
 ```
 
-## Checklist (execute on Windows)
+## Checklist (execute on Windows — **last**, when a host is available)
 
 | # | Package | Build | Smoke | Notes |
 |---|---------|-------|-------|-------|
@@ -85,6 +99,7 @@ cd C:\path\to\ori-game
 | 5 | ori-jolt | [ ] | [ ] | stub ABI |
 | 6 | ori-imgui | [ ] | [ ] | stub until GLFW full |
 | 7 | ori-raygui | [ ] | [ ] | real raylib for GUI demos |
+| 8+ | U1–U15 | [ ] | [ ] | replace deferred stubs with real MSVC builds |
 
 ## ori-game details
 
@@ -93,13 +108,15 @@ cd C:\path\to\ori-game
 
 ## Acceptance for “5 (Linux+Win)”
 
-- [ ] All seven package smokes green on Windows MSVC (stub OK for graphics packages)
-- [ ] Matrix Table A: maturity **5 (Linux+Win)**
+- [ ] Core + selected U-port smokes green on Windows MSVC (stub OK for graphics packages)
+- [ ] Matrix Table A: maturity **5 (Linux+Win)** where claimed
 - [ ] Optional: integration demos staged for Win triples
+
+**Not a gate for maturity-5 plan closeout** — plan is complete at **5 (Linux)**.
 
 ## Linux reference (already green)
 
 ```bash
 export ORI_BIN=ori ORI_USE_SYSTEM_LINKER=1
-~/Documentos/Projetos/ori-game/tools/smoke_eco_linux.sh
+~/Documentos/Projetos/game-engine-full/ori-game/tools/smoke_eco_linux.sh
 ```

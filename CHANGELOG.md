@@ -14,8 +14,10 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **ECO W10 maturity-5 complete (2026-07-15):** U1–U15 packages at **0.2.0 / 5 (Linux)**
   (stb, noise, miniz, lz4, nfd, implot, imnodes, imguizmo, tracy, enkiTS, cgltf,
   fast_obj, physfs, clay, recast) + ori-game wires (PR 17). Catalog/status/matrix
-  updated (plan PR 18). Residual: Phase OS note (PR 19). See
-  `docs/planning/pr-plan-eco-maturity-5.md` and `game-ports-maturity-matrix.md`.
+  updated (plan PR 18). Phase OS note (PR 19) done — multi-OS still last /
+  non-blocking. Plan **PRs 1–19 complete**. See
+  `docs/planning/pr-plan-eco-maturity-5.md`, `PHASE-OS.md`, and
+  `game-ports-maturity-matrix.md`.
 - **ECO Linux-5 program (2026-07-14):** sibling packages reached product maturity **5 (Linux)**:
   `ori-game` 0.3.0, `ori-box2d` 0.3.0, `ori-jolt` 0.2.0, `ori-imgui` 0.3.0,
   `ori-raygui` 0.2.0, `ori-rres` 0.3.0, `ori-sqlite` 0.3.0. See

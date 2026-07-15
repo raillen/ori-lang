@@ -3,7 +3,7 @@
 > **Status:** active consult doc (implementation reference)  
 > **Updated:** 2026-07-15  
 > **Program:** core Linux-5 **complete**; **W10** (U1–U15 → **5 Linux**) **done**.  
-> **Next residual:** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) **PR 19** Phase OS note (last).  
+> **Maturity-5 plan:** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — **PRs 1–19 complete**. Multi-OS still last (non-blocking).  
 > **Policy:** implement / mature / port libs **on Linux first**. Multi-OS (**Phase OS**) is **last**.  
 > **Cluster path:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-*`  
 > **Related:** [`eco-packages-status.md`](eco-packages-status.md) ·  
@@ -53,7 +53,7 @@ Package reaches **5** when plan §3 **G1–G7** hold (Linux only):
 | **W8** | Integration demos + umbrella smoke | **done** (2026-07-14) |
 | **W9+** | Deepen + new ports (Linux) 0.1.0 | **done** — high+medium + ImGui T2 |
 | **W10** | All ECO packages → **5 (Linux)** (U1–U15) | **done** (2026-07-15) — PRs 2–16 packages + PR 17 wires + PR 18 catalog |
-| **Phase OS** | Win/mac stage + smoke | **last** (scripts may exist; not blocking) — plan PR 19 note |
+| **Phase OS** | Win/mac stage + smoke | **last** (scripts/docs done; not blocking) — multi-OS execution deferred |
 
 ---
 
@@ -134,10 +134,10 @@ Canonical API targets: [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) 
 
 | ID | Item | Priority | Notes |
 |----|------|----------|-------|
-| **B1.4** | Stage Win (+ mac) libs for all ECO packages | **last** | Core scripts ready; medium M1–M6 = deferred stubs only ([`PHASE-OS.md`](PHASE-OS.md)) |
+| **B1.4** | Stage Win (+ mac) libs for all ECO packages | **last** | Core scripts ready; U1–U15 = deferred stubs only ([`PHASE-OS.md`](PHASE-OS.md)) |
 | **B1.4b** | smoke_windows / CI multi-OS | **last** | **Do not** require green for product progress |
 
-Scaffolding for medium packages (README + `build_windows.ps1` echo stubs): **done** (plan PR 10 of ports-e2e). Plan PR 19 refreshes Phase OS note.
+Scaffolding: core real/stub scripts + U1–U15 README Phase OS + `build_windows.ps1` deferred stubs — **done** (ports-e2e PR 10 + maturity-5 PR 19).
 
 ### B2 — Deepen + ports (Linux)
 

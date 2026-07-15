@@ -3,7 +3,7 @@
 > **Status:** active (2026-07-15)  
 > **Linux-5 core stack:** **complete** (raylib…harfbuzz).  
 > **W10 maturity-5 (U1–U15):** **done** — all packages **5 (Linux)** at **0.2.0**.  
-> **Plan:** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — **PRs 1–18 done**; residual **PR 19** Phase OS note (last, non-blocking).  
+> **Plan:** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — **PRs 1–19 complete** (W10 + Phase OS note).  
 > **Policy (2026-07-15):** **implement / mature / port libs on Linux first.**  
 > Multi-OS validation (Windows/mac) is **last** — scripts may exist, but execution is deferred.  
 > **Canonical paths:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-*`  
@@ -166,25 +166,19 @@ ECO_SMOKE_SKIP_GAME=1 ECO_SMOKE_SKIP_DEMOS=1 \
 | Tier | Scripts | Status |
 |------|---------|--------|
 | Core (game, box2d, jolt, sqlite, rres, imgui, raygui, enet) | real/stub `build_windows.ps1` + smoke | scripts ready — execute on MSVC host |
-| Medium M1–M6 (cgltf, fast_obj, physfs, clay, lz4, recast) | **deferred** `tools/build_windows.ps1` (echo only) | documented Linux-only |
-| U1–U15 (all **5 Linux** now) | Phase OS still last | score 5 does **not** require Win/mac |
+| U1–U15 (all **5 Linux** @ 0.2.0) | **deferred** `tools/build_windows.ps1` (echo only) | Linux-complete; multi-OS last |
+| (legacy M1–M6 labels) | same as U4/U11–U15 | absorbed into maturity-5 |
 
 Canonical write-up: [`PHASE-OS.md`](PHASE-OS.md). Umbrella: `ori-game/tools/smoke_eco_windows.ps1` (core only).  
-**Next residual:** plan PR 19 — Phase OS note refresh only.
+**Maturity-5 plan residual:** **none** — PR 19 Phase OS note refresh **done**.
 
 ---
 
 ## Next work (Linux-only)
 
-### Residual from maturity-5 plan
+### Maturity-5 plan — **complete**
 
-```bash
-# PR 19 only — Phase OS note; non-blocking
-/execute-plan docs/planning/pr-plan-eco-maturity-5.md --concurrency 1 \
-  --instructions "Linux docs only for PR19. Phase OS last. Do not re-port maturity-5 packages."
-```
-
-**Plan status:** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — **PRs 1–18 complete** (U1–U15 + ori-game wires + catalog/matrix/status). **PR 19** Phase OS note = last.
+**Plan status:** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — **PRs 1–19 complete** (U1–U15 + ori-game wires + catalog/matrix/status + Phase OS note).
 
 Prior ports plan [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md): **PRs 1–10 complete** (0.1.0 scaffolds; do not re-scaffold).  
 Catalog: [`eco-library-ports-catalog.md`](eco-library-ports-catalog.md)
@@ -194,7 +188,7 @@ Residual / roadmap (2026-07-15):
 2. **`ori-miniaudio` skipped** — gap measured: `game.audio` via raylib covers SFX/music/buses/pool. Revisit only for non-raylib or spatial 3D (catalog §5 OpenAL).  
 3. **`ori-game` wires** — **PR 17 done** (`gltf`/`obj`/`physfs_assets`/`noise`/`compress`/`navmesh`).  
 4. Studio app = separate product track (`ori-game-studio` outside `game-engine-full`)  
-5. Phase OS **execution** on real MSVC host = **last** (scaffolding done; non-blocking) — plan PR 19 docs  
+5. Phase OS **execution** on real MSVC host = **last** (scaffolding + docs done; non-blocking — not a plan residual)
 
 **Do not re-queue as open alta/média ports:** packages already exist at **5 (Linux)** — bugfix only.
 

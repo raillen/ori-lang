@@ -1,6 +1,6 @@
 # Catálogo canônico — tradução de bibliotecas nativas para Ori (ECO)
 
-> **Status:** canônico (2026-07-15) · **alta fechada** · **médios M1–M6 done** · miniaudio **skipped** · **U1–U15 = 5 (Linux)** · **W10 done** · Phase OS last (PR 19)  
+> **Status:** canônico (2026-07-15) · **alta fechada** · **médios M1–M6 done** · miniaudio **skipped** · **U1–U15 = 5 (Linux)** · **W10 done** · Phase OS note **done** (multi-OS still last)  
 
 > **Âmbito:** packages irmãos `ori-*` (bindings / ports C·C++ → Ori S3), **não** stdlib do monorepo.  
 > **Cluster path:** `/home/raillen/Documentos/Projetos/game-engine-full/ori-*` (model A: pasta única, N remotes).  
@@ -8,7 +8,7 @@
 > **Maturidade de superfície:** por **API + smoke da lib**, não por exemplos (exemplos podem vir depois).  
 > **Score 5 (Linux) gate (resumo):** G1 broad API · G2 ≥4 tests · G3 smoke ok · G4 README · G5 CHANGELOG · G6 leaf único · G7 version bump — detalhe em [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) §3.  
 > **Execute-plan (ports médios 0.1.0):** [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) — **complete**  
-> **Execute-plan (maturidade → 5 Linux):** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — **PRs 1–18 done** (U1–U15 + wires + catalog); residual **PR 19** Phase OS note only
+> **Execute-plan (maturidade → 5 Linux):** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — **PRs 1–19 complete** (U1–U15 + wires + catalog + Phase OS note)
 
 > **Relacionados:**  
 > - Inventário vivo + Next work: [`eco-packages-status.md`](eco-packages-status.md)  
@@ -90,7 +90,7 @@ Nada em aberto. Ports de alto valor (nfd, implot, imnodes, imguizmo, stb, noise,
 |-------------|--------|
 | *(vazio)* | **Não reabrir** como fila alta — ver §2 |
 
-**Next work (não é port novo):** **W10 done** — U1–U15 **5 (Linux)**. Residual do plan: **PR 19** Phase OS note ([`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md)).  
+**Next work (não é port novo):** **W10 done** — U1–U15 **5 (Linux)**. Maturity-5 plan **PRs 1–19 complete** ([`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md)). Multi-OS execution remains last (non-blocking).  
 Fila média de **novos** ports: **vazia** (`ori-miniaudio` **skipped** — `game.audio`+raylib fecha o gap). Plan e2e 0.1.0: [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) (PRs 1–10 done).
 
 ---

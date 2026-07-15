@@ -1,6 +1,6 @@
 # Design + PR Plan — ECO packages to maturity **5 (Linux)**
 
-**Status:** **PRs 1–18 complete / W10 done** (2026-07-15); residual **PR 19** Phase OS note only (`/execute-plan` plan id `5b7bfbb0`)  
+**Status:** **PRs 1–19 complete** (2026-07-15) — W10 + Phase OS note (`/execute-plan` plan id `5b7bfbb0`)  
 **Date:** 2026-07-15  
 **Policy:** Linux first. Multi-OS (**Phase OS**) is **last** and does **not** block score 5.  
 **Maturity gate for this plan:** score **5 (Linux)** = product engine-grade on Linux per matrix: **broad API + tests + real-use smoke** (polished windowed demos optional, not the gate). Full checklist: **§3 G1–G7**.  
@@ -351,13 +351,15 @@ Not every wire is mandatory if a package has no natural L1 home — package-leve
 
 ---
 
-### PR 19: Phase OS note refresh (last, non-blocking) — **open**
+### PR 19: Phase OS note refresh (last, non-blocking) — **done**
 
 **Description:** Confirm each package that reached 5 still documents Phase OS deferred or has real Win stubs. **Do not** require Windows/mac CI green. Update `PHASE-OS.md` table: maturity-5 packages Linux-complete; multi-OS still last.
 
 **Files/components affected:** `docs/planning/PHASE-OS.md`, `docs/planning/eco-packages-status.md`, package READMEs under `game-engine-full/ori-*/README.md` (only if missing Phase OS section)
 
 **Dependencies:** PR 18
+
+**Done notes:** `PHASE-OS.md` lists U1–U15 as Linux-complete with deferred Win stubs; status residual cleared (**plan complete**); missing package Phase OS sections + `tools/build_windows.ps1` deferred stubs added where absent. No Win/mac CI required.
 
 ---
 
@@ -422,7 +424,7 @@ export ORI_USE_JIT=1   # for ori run; tests may AOT
 2. Status + matrix + catalog show **5 (Linux)** for every package in `game-engine-full` (core already 5 + U1–U15). — **met** (PR 18)  
 3. `smoke_eco_linux.sh` can run ports (with skip flags) without missing dirs. — **met**  
 4. ori-game wires PR landed or explicitly partial with documented residual. — **met** (PR 17)  
-5. Phase OS still last / non-blocking. — **yes**; PR 19 residual docs only  
+5. Phase OS still last / non-blocking. — **met** (PR 19 docs/stubs; multi-OS execution still deferred)  
 6. No new open alta/média port (miniaudio stays skipped). — **met**
 
 ---
