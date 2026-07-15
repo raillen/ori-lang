@@ -86,12 +86,14 @@
 
 ## Table B — Remaining (post Linux-5)
 
-### B1 — Phase OS (multi-OS) — **last**
+### B1 — Phase OS (multi-OS) — **last** (non-blocking)
 
-| ID | Item | Priority |
-|----|------|----------|
-| **B1.4** | Stage Win (+ mac) libs for all ECO packages | **last** |
-| **B1.4b** | smoke_windows / CI multi-OS | **last** |
+| ID | Item | Priority | Notes |
+|----|------|----------|-------|
+| **B1.4** | Stage Win (+ mac) libs for all ECO packages | **last** | Core scripts ready; medium M1–M6 = deferred stubs only ([`PHASE-OS.md`](PHASE-OS.md)) |
+| **B1.4b** | smoke_windows / CI multi-OS | **last** | **Do not** require green for product progress |
+
+Scaffolding for medium packages (README + `build_windows.ps1` echo stubs): **done** (plan PR 10).
 
 ### B2 — Deepen + ports (Linux — **active**)
 

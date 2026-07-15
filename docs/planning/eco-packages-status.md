@@ -99,25 +99,32 @@ export ORI_BIN=$(command -v ori) ORI_USE_SYSTEM_LINKER=1
 
 ---
 
-## Phase OS (last)
+## Phase OS (last — **non-blocking**)
 
-Scaffolding may exist (`build_windows.ps1`, `smoke_eco_windows.ps1`).  
-**Do not block lib work on multi-OS.** Run only after Linux implement/mature/port queue is satisfied.
+**Policy:** do **not** block lib work or multi-OS CI green on Windows/mac.
+
+| Tier | Scripts | Status |
+|------|---------|--------|
+| Core (game, box2d, jolt, sqlite, rres, imgui, raygui, enet) | real/stub `build_windows.ps1` + smoke | scripts ready — execute on MSVC host |
+| Medium M1–M6 (cgltf, fast_obj, physfs, clay, lz4, recast) | **deferred** `tools/build_windows.ps1` (echo only) | documented Linux-only 0.1.0 |
+
+Canonical write-up: [`PHASE-OS.md`](PHASE-OS.md). Umbrella: `ori-game/tools/smoke_eco_windows.ps1` (core only).
 
 ---
 
 ## Next work (Linux-only)
 
 **Medium ports (M1–M6):** **done 0.1.0** — `ori-cgltf`, `ori-fast-obj`, `ori-physfs`, `ori-clay`, `ori-lz4`, `ori-recast`.  
-Design + DAG (history): [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) · Catalog: [`eco-library-ports-catalog.md`](eco-library-ports-catalog.md)
+**Execute-plan** [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md): **PRs 1–10 complete** (PR 10 = Phase OS scaffolding only).  
+Catalog: [`eco-library-ports-catalog.md`](eco-library-ports-catalog.md)
 
-Done recently: high ports (stb/noise/miniz/nfd/implot/imnodes/imguizmo/tracy/enkits) + medium M1–M6 + deepen B2.15–19.
+Done recently: high ports (stb/noise/miniz/nfd/implot/imnodes/imguizmo/tracy/enkits) + medium M1–M6 + deepen B2.15–19 + Phase OS stubs for medium.
 
 Residual / roadmap:
 1. Optional `ori-miniaudio` only if `game.audio` gap measured  
 2. Optional `ori-game` wires (plan PR 8) if not already landed  
 3. Studio app = separate product track  
-4. Phase OS = **last**  
+4. Phase OS **execution** on real MSVC host = **last** (scaffolding done; non-blocking)  
 
 **Do not re-queue as open alta/média:** freetype, harfbuzz, stb, noise, miniz, nfd, implot, imnodes, imguizmo, tracy, enkits, cgltf, fast_obj, physfs, clay, lz4, recast (see inventory + catalog §2).
 

@@ -1,6 +1,6 @@
 # Design + PR Plan — ECO library ports end-to-end (Linux-first)
 
-**Status:** PRs 1–9 complete (medium M1–M6 packages **0.1.0** + catalog/status/matrix + umbrella smoke). PR 10 Phase OS deferred (last).  
+**Status:** **PRs 1–10 complete** (medium M1–M6 packages **0.1.0** + catalog/status/matrix + umbrella smoke + Phase OS scaffolding last).  
 **Date:** 2026-07-15  
  
 **Policy:** implement / mature / port on **Linux first**. Multi-OS (**Phase OS**) is **last**.  
@@ -448,13 +448,15 @@ Keep modules optional (compile when path dep present). Add unit tests that skip 
 
 ---
 
-### PR 10: Phase OS scaffolding (last)
+### PR 10: Phase OS scaffolding (last) — **done**
 
 **Description:** **Do not** block on multi-OS CI green. Ensure each new package has documented `tools/build_windows.ps1` stub **or** a single shared note in catalog that Phase OS is deferred. If scripts already exist for older packages, add one-line pointers. No requirement to run Windows/mac builds in this PR.
 
 **Files/components affected:** `docs/planning/PHASE-OS.md` (if exists in ori-lang or ori-game), package READMEs (Phase OS section), `docs/planning/eco-packages-status.md`
 
 **Dependencies:** PR 9
+
+**Landed (2026-07-15):** medium packages `ori-cgltf` / `ori-fast-obj` / `ori-physfs` / `ori-clay` / `ori-lz4` / `ori-recast` each have README **Phase OS** section + deferred `tools/build_windows.ps1` (echo + exit 0). Docs: `PHASE-OS.md` medium table, `eco-packages-status.md` residual, this plan status **1–10 complete**. Phase OS remains **non-blocking**.
 
 ---
 
@@ -493,7 +495,7 @@ Linearized stack order for Graphite/plain-git:
 3. `eco-packages-status.md` lists all new packages with maturity ≥3 Linux.  
 4. Matrix B2.18 medium portion marked done (or partial only if a PR failed).  
 5. User can re-run any package smoke without manual re-scaffolding.  
-6. Phase OS remains last and non-blocking.
+6. Phase OS remains last and non-blocking — **scaffolding done** (deferred stubs + docs); multi-OS CI green **not** required.
 
 ---
 
