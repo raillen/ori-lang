@@ -44,6 +44,8 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Phase B/C/D, middleware, ori-sqlite symlink README.
 - Windows installer flow in `docs/install.md` / `install.pt-BR.md` and
   `tools/windows/README.md`.
+- Root README / README.pt-BR Quick start: end-user Windows one-liner + Linux
+  package; website getting-started (EN/pt) updated for 0.3.5 Windows package.
 
 ---
 

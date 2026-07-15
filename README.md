@@ -140,7 +140,35 @@ SAMPLES=5 ./tools/bench/polyglot/run_polyglot_bench.sh
 
 ## Quick start
 
-Prerequisites for compiler development:
+### End users (no Rust)
+
+Full guide: [docs/install.md](docs/install.md) · [PT](docs/install.pt-BR.md).
+
+**Windows** (Scoop-style — installs to `%LOCALAPPDATA%\Programs\Ori` + User PATH):
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser   # optional, once
+irm https://raw.githubusercontent.com/raillen/ori-lang/master/tools/windows/get.ps1 | iex
+ori --version
+ori doctor
+```
+
+**Linux** — download from [Releases](https://github.com/raillen/ori-lang/releases), or:
+
+```bash
+# example with v0.3.5 tarball
+tar -xzf ori-v0.3.5-x86_64-unknown-linux-gnu.tar.gz
+export PATH="$PWD/ori-v0.3.5-x86_64-unknown-linux-gnu:$PATH"
+# or: sudo dpkg -i ori_0.3.5_amd64.deb
+ori doctor
+```
+
+AOT (`ori compile`) still needs the OS linker (VS Build Tools / `build-essential` / Xcode CLT).  
+`ori run` (JIT) only needs the packaged runtime.
+
+### Compiler development
+
+Prerequisites:
 
 - Rust `1.95.0` from `rust-toolchain.toml`
 - A platform linker or one of Ori's explicit linker strategies

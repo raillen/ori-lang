@@ -138,7 +138,33 @@ SAMPLES=5 ./tools/bench/polyglot/run_polyglot_bench.sh
 
 ## Primeiros passos
 
-Pré-requisitos para desenvolvimento do compilador:
+### Usuários finais (sem Rust)
+
+Guia completo: [docs/install.pt-BR.md](docs/install.pt-BR.md) · [EN](docs/install.md).
+
+**Windows** (estilo Scoop — instala em `%LOCALAPPDATA%\Programs\Ori` + PATH do usuário):
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser   # opcional, uma vez
+irm https://raw.githubusercontent.com/raillen/ori-lang/master/tools/windows/get.ps1 | iex
+ori --version
+ori doctor
+```
+
+**Linux** — baixe em [Releases](https://github.com/raillen/ori-lang/releases), ou:
+
+```bash
+tar -xzf ori-v0.3.5-x86_64-unknown-linux-gnu.tar.gz
+export PATH="$PWD/ori-v0.3.5-x86_64-unknown-linux-gnu:$PATH"
+# ou: sudo dpkg -i ori_0.3.5_amd64.deb
+ori doctor
+```
+
+AOT (`ori compile`) ainda precisa do linker do SO. `ori run` (JIT) só do runtime.
+
+### Desenvolvimento do compilador
+
+Pré-requisitos:
 
 - Rust `1.95.0`, definido em `rust-toolchain.toml`
 - Um linker da plataforma ou uma das estratégias explícitas de link do Ori
