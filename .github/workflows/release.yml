@@ -101,6 +101,16 @@ jobs:
             $inputTag = "${{ inputs.tag }}"
             if ($inputTag -and $inputTag.Trim().Length -gt 0) { $tag = $inputTag.Trim() }
           }
+          # Branch dispatch (e.g. master) is not a version tag — use workspace version.
+          if ($tag -notmatch '^v?\d+\.\d+') {
+            $cargoToml = Join-Path $repo "compiler\Cargo.toml"
+            $verLine = Select-String -Path $cargoToml -Pattern '^\s*version\s*=\s*"([^"]+)"' | Select-Object -First 1
+            if ($verLine -and $verLine.Matches.Count -gt 0) {
+              $tag = "v" + $verLine.Matches[0].Groups[1].Value
+            } else {
+              $tag = "v0.0.0-dev"
+            }
+          }
           if ($tag -notmatch '^v') { $tag = "v$tag" }
           Write-Host "repo=$repo tag=$tag"
           Start-Transcript -Path $log -Force

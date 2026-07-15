@@ -84,7 +84,8 @@ try {
         $manifest = Join-Path $repoRoot "compiler/Cargo.toml"
         Write-Host "Building release CLI from $manifest (target root: $targetRoot)"
         Invoke-Checked {
-            & cargo --manifest-path $manifest build -p ori-driver -p ori-lsp --release
+            # Cargo 1.95+: --manifest-path must follow the subcommand (not global).
+            & cargo build --manifest-path $manifest -p ori-driver -p ori-lsp --release
         } "cargo build -p ori-driver -p ori-lsp --release"
     }
 

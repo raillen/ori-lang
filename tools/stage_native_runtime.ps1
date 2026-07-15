@@ -138,7 +138,7 @@ function Get-NativeStaticLibs([string]$TargetTriple, [string]$ProfileName) {
     $previousPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $output = & cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") rustc -p ori-runtime --lib @targetArgs @profileArgs -- --print native-static-libs 2>&1
+        $output = & cargo rustc --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") -p ori-runtime --lib @targetArgs @profileArgs -- --print native-static-libs 2>&1
         $exitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousPreference
@@ -188,7 +188,7 @@ $targetArgs = @("--target", $Target)
 Push-Location $repoRoot
 try {
     if (-not $SkipBuild) {
-        & cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") build -p ori-runtime --lib @targetArgs @profileArgs
+        & cargo build --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") -p ori-runtime --lib @targetArgs @profileArgs
         if (($null -ne $LASTEXITCODE) -and ($LASTEXITCODE -ne 0)) {
             throw "cargo build -p ori-runtime --lib failed. failed."
         }

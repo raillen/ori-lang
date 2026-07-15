@@ -18,7 +18,7 @@ New-Item -ItemType Directory -Force -Path $BenchDir | Out-Null
 
 Push-Location $Root
 try {
-    cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") build -q -p ori-runtime
+    cargo build --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") -q -p ori-runtime
     & (Join-Path $Root "tools\stage_native_runtime.ps1") | Out-Null
 
     $cases = @(
@@ -154,7 +154,7 @@ end
         $sourcePath = Join-Path $BenchDir "$($case.Name).orl"
         $exePath = Join-Path $BenchDir "$($case.Name).exe"
         Set-Content -Path $sourcePath -Value $case.Source -Encoding UTF8
-        cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") run -q -p ori-driver --bin ori -- compile $sourcePath --out $exePath --native-raw | Out-Null
+        cargo run --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") -q -p ori-driver --bin ori -- compile $sourcePath --out $exePath --native-raw | Out-Null
         if ($LASTEXITCODE -ne 0) {
             throw "compile failed for $($case.Name)"
         }

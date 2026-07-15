@@ -64,7 +64,7 @@ $projectRoot = Join-Path $workspaceRootPath "demo"
 Push-Location $repoRoot
 try {
     if (-not $SkipCargoBuild) {
-        Invoke-Checked { cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") build -p ori-driver -p ori-lsp } "cargo build -p ori-driver -p ori-lsp"
+        Invoke-Checked { cargo build --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") -p ori-driver -p ori-lsp } "cargo build -p ori-driver -p ori-lsp"
     }
 
     if (-not (Test-Path -LiteralPath $oriExe -PathType Leaf)) {
@@ -89,7 +89,7 @@ try {
     }
 
     if (-not $SkipLspE2e) {
-        Invoke-Checked { cargo --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") test -p ori-lsp --test e2e } "cargo test -p ori-lsp --test e2e"
+        Invoke-Checked { cargo test --manifest-path (Join-Path $RepoRoot "compiler/Cargo.toml") -p ori-lsp --test e2e } "cargo test -p ori-lsp --test e2e"
     }
 
     if (Test-Path -LiteralPath $workspaceRootPath) {

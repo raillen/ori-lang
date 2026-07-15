@@ -33,6 +33,8 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and permanently updates User/Machine `PATH`. Bundled into Windows release
   zips via `smoke_native_release.ps1`. Developer helper
   `tools/update_global.ps1` now packages then installs.
+- **CI Windows packaging:** PowerShell scripts pass `--manifest-path` *after*
+  the cargo subcommand (required by Cargo 1.95+), unblocking the MSVC zip.
 
 ### Documentação
 - Stack index + packaging note: `packages/README.md`.
