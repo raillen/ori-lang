@@ -22,7 +22,8 @@
 | [eco-packages-status.md](eco-packages-status.md) | ECO inventory (`game-engine-full/`) — all packages **5 (Linux)**; maturity-5 plan complete |
 | [eco-library-ports-catalog.md](eco-library-ports-catalog.md) | **Canonical** — all ports **5 (Linux)** incl. U1–U15 @ 0.2.0; alta/média **fechadas** |
 | [pr-plan-eco-ports-e2e.md](pr-plan-eco-ports-e2e.md) | Execute-plan DAG — medium ports 0.1.0 (**complete**) |
-| [pr-plan-eco-maturity-5.md](pr-plan-eco-maturity-5.md) | Maturity-5 plan — **PRs 1–19 complete** (W10 + Phase OS note) |
+| [pr-plan-eco-maturity-5.md](pr-plan-eco-maturity-5.md) | Engine packages → 5 (Linux) — **PRs 1–19 complete** (W10) |
+| [pr-plan-imgui-tools-maturity-5.md](pr-plan-imgui-tools-maturity-5.md) | **Active** execute-plan — ImGui tools residual P0–P3 → 5 (from ROADMAP-GAME-ECO) |
 | [PHASE-OS.md](PHASE-OS.md) | **Phase OS** Windows/mac ECO staging (**last**, non-blocking) |
 | [game-ports-maturity-matrix.md](game-ports-maturity-matrix.md) | **Consult** — Table A (all **5 Linux**) · A2 historical U-ids · W10 **done** |
 | [roadtov1.md](roadtov1.md) | Long-horizon 1.0 sketch |

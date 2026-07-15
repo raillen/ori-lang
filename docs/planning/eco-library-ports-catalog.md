@@ -8,12 +8,14 @@
 > **Maturidade de superfície:** por **API + smoke da lib**, não por exemplos (exemplos podem vir depois).  
 > **Score 5 (Linux) gate (resumo):** G1 broad API · G2 ≥4 tests · G3 smoke ok · G4 README · G5 CHANGELOG · G6 leaf único · G7 version bump — detalhe em [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) §3.  
 > **Execute-plan (ports médios 0.1.0):** [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) — **complete**  
-> **Execute-plan (maturidade → 5 Linux):** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — **PRs 1–19 complete** (U1–U15 + wires + catalog + Phase OS note)
+> **Execute-plan (engine → 5 Linux):** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — **PRs 1–19 complete** (W10)  
+> **Execute-plan (ImGui tools residual → 5):** [`pr-plan-imgui-tools-maturity-5.md`](pr-plan-imgui-tools-maturity-5.md) — **active**  
+> **Product roadmap:** `game-engine-full/ori-game/docs/planning/ROADMAP-GAME-ECO.md`
 
 > **Relacionados:**  
 > - Inventário vivo + Next work: [`eco-packages-status.md`](eco-packages-status.md)  
 > - Matriz de maturidade: [`game-ports-maturity-matrix.md`](game-ports-maturity-matrix.md)  
-> - Fila de implementação game: `ori-game/docs/planning/ROADMAP-GAME-ECO.md`  
+> - Fila de implementação game: ROADMAP-GAME-ECO (acima)  
 > - Convenções de package: [`package-ecosystem-guidelines.md`](package-ecosystem-guidelines.md)
 
 **Este arquivo é a fonte de verdade** para *o que* portar, *qual* upstream usar e *com que prioridade*.  

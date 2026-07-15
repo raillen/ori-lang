@@ -185,12 +185,14 @@ Catalog: [`eco-library-ports-catalog.md`](eco-library-ports-catalog.md)
 
 Residual / roadmap (2026-07-15):
 1. **Maturity U1–U15 → 5 (Linux)** — **done** (W10).  
-2. **`ori-miniaudio` skipped** — gap measured: `game.audio` via raylib covers SFX/music/buses/pool. Revisit only for non-raylib or spatial 3D (catalog §5 OpenAL).  
-3. **`ori-game` wires** — **PR 17 done** (`gltf`/`obj`/`physfs_assets`/`noise`/`compress`/`navmesh`).  
-4. Studio app = separate product track (`ori-game-studio` outside `game-engine-full`)  
-5. Phase OS **execution** on real MSVC host = **last** (scaffolding + docs done; non-blocking — not a plan residual)
+2. **ImGui tools residual (P0–P3) → 5** — **active** · product source  
+   `game-engine-full/ori-game/docs/planning/ROADMAP-GAME-ECO.md` · execute-plan  
+   [`pr-plan-imgui-tools-maturity-5.md`](pr-plan-imgui-tools-maturity-5.md) (stages A–E).  
+3. **`ori-miniaudio` skipped** — `game.audio` covers gap.  
+4. Studio app = separate product track (`ori-game-studio`)  
+5. Phase OS **execution** on MSVC = **last** (scaffolding done; non-blocking)
 
-**Do not re-queue as open alta/média ports:** packages already exist at **5 (Linux)** — bugfix only.
+**Do not re-queue W10 engine ports.** Next stage = ImGui tools plan only.
 
 **ECS:** no flecs/EnTT as default — see catalog §7 / roadmap § ECS.
 
