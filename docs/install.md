@@ -75,21 +75,28 @@ xcode-select --install
    | macOS Apple Silicon | `ori-v0.3.5-aarch64-apple-darwin.tar.gz` |
    | macOS Intel | `ori-v0.3.5-x86_64-apple-darwin.tar.gz` |
 
-#### Option A — Windows zip (recommended on Windows)
-
-2. Download `ori-vX.Y.Z-x86_64-pc-windows-msvc.zip` and extract it.
-
-3. Run the installer (adds Ori to your **User PATH** permanently):
+#### Option A — Windows one-liner (recommended, Scoop-style)
 
 ```powershell
-# Double-click install.cmd, or:
-pwsh -ExecutionPolicy Bypass -File .\install.ps1
+# Optional once: allow local scripts (CurrentUser)
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Install latest Ori + add User PATH
+irm https://raw.githubusercontent.com/raillen/ori-lang/master/tools/windows/get.ps1 | iex
+```
+
+Pin version / reinstall:
+
+```powershell
+$env:ORI_VERSION = "0.3.5"
+$env:ORI_FORCE = "1"
+irm https://raw.githubusercontent.com/raillen/ori-lang/master/tools/windows/get.ps1 | iex
 ```
 
 Default install location: `%LOCALAPPDATA%\Programs\Ori`  
-(all-users: `pwsh -File .\install.ps1 -System` as Administrator → `%ProgramFiles%\Ori`).
+(all-users: `$env:ORI_SYSTEM = "1"` as Administrator).
 
-4. Open a **new** terminal and verify:
+Then open a **new** terminal:
 
 ```powershell
 ori --version
@@ -99,8 +106,15 @@ ori doctor
 Uninstall:
 
 ```powershell
+irm https://raw.githubusercontent.com/raillen/ori-lang/master/tools/windows/Uninstall-Ori.ps1 | iex
+# or:
 pwsh -File "$env:LOCALAPPDATA\Programs\Ori\uninstall.ps1"
 ```
+
+#### Option A2 — Windows zip (offline / manual)
+
+1. Download `ori-vX.Y.Z-x86_64-pc-windows-msvc.zip` and extract it.
+2. Run **`install.cmd`** or `pwsh -ExecutionPolicy Bypass -File .\install.ps1`.
 
 Full details: [`tools/windows/README.md`](../tools/windows/README.md).
 

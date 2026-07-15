@@ -4,9 +4,49 @@ Scripts to install a **complete Ori** release on Windows 10/11 and add it to `PA
 
 | Script | Role |
 |--------|------|
-| `Install-Ori.ps1` | Install package + User (or Machine) `PATH` |
+| **`get.ps1`** | **Scoop-style bootstrap** — `irm … \| iex` (recommended one-liner) |
+| `Install-Ori.ps1` | Full installer (zip / GitHub / extracted package + PATH) |
 | `Uninstall-Ori.ps1` | Remove install dir + `PATH` entry |
 | `install.cmd` / `uninstall.cmd` | Double-click wrappers |
+
+## One-liner (like Scoop)
+
+```powershell
+# Optional once per machine (allows local scripts; irm|iex still runs in memory):
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Install latest Windows package + User PATH
+irm https://raw.githubusercontent.com/raillen/ori-lang/master/tools/windows/get.ps1 | iex
+```
+
+Pin a version or force reinstall via **environment variables** (work with `| iex`):
+
+```powershell
+$env:ORI_VERSION = "0.3.5"
+$env:ORI_FORCE = "1"
+irm https://raw.githubusercontent.com/raillen/ori-lang/master/tools/windows/get.ps1 | iex
+```
+
+| Variable | Meaning |
+|----------|---------|
+| `ORI_VERSION` | e.g. `0.3.5` or `v0.3.5` (default: latest GitHub release) |
+| `ORI_INSTALL_DIR` | Custom install folder |
+| `ORI_FORCE` | `1` overwrite existing install |
+| `ORI_SYSTEM` | `1` → Program Files + Machine PATH (admin) |
+| `ORI_SKIP_DOCTOR` | `1` skip `ori doctor` |
+
+With parameters (download the script first, or use a scriptblock):
+
+```powershell
+irm https://raw.githubusercontent.com/raillen/ori-lang/master/tools/windows/get.ps1 -OutFile get-ori.ps1
+.\get-ori.ps1 -Version 0.3.5 -Force
+
+# or without a file:
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/raillen/ori-lang/master/tools/windows/get.ps1))) -Version 0.3.5 -Force
+```
+
+`get.ps1` downloads `Install-Ori.ps1` from the same branch and runs it (full PATH logic).  
+If raw.githubusercontent is blocked, it falls back to a minimal zip+PATH install.
 
 ## What gets installed
 

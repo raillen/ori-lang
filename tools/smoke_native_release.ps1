@@ -113,6 +113,7 @@ try {
     if ($IsWindows -or $env:OS -eq "Windows_NT") {
         $winTools = Join-Path $PSScriptRoot "windows"
         $installPairs = @(
+            @{ Src = "get.ps1"; Dest = "get.ps1" },
             @{ Src = "Install-Ori.ps1"; Dest = "Install-Ori.ps1" },
             @{ Src = "Install-Ori.ps1"; Dest = "install.ps1" },
             @{ Src = "Uninstall-Ori.ps1"; Dest = "Uninstall-Ori.ps1" },
