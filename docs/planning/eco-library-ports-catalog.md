@@ -1,6 +1,7 @@
 # Catálogo canônico — tradução de bibliotecas nativas para Ori (ECO)
 
-> **Status:** canônico (2026-07-15) · **alta fechada** (não re-enfileirar) · médios via execute-plan  
+> **Status:** canônico (2026-07-15) · **alta fechada** · **médios M1–M6 done 0.1.0** (só miniaudio condicional aberto) · Phase OS last  
+
 > **Âmbito:** packages irmãos `ori-*` (bindings / ports C·C++ → Ori S3), **não** stdlib do monorepo.  
 > **Política:** Linux implement / mature / port **primeiro**. Multi-OS (**Phase OS**) por **último**.  
 > **Maturidade de superfície:** por **API + smoke da lib**, não por exemplos (exemplos podem vir depois).  
@@ -57,11 +58,17 @@ Só abrir um `ori-<nome>` quando:
 | `imguizmo` | `ori-imguizmo` | [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo) (+ FULL) | **0.1.0** | **3 (Linux)** |
 | `tracy` | `ori-tracy` | [Tracy](https://github.com/wolfpld/tracy) zones/frames | **0.1.0** | **3 (Linux)** |
 | `enkits` | `ori-enkiTS` | [enkiTS](https://github.com/dougbinks/enkiTS) task scheduler | **0.1.0** | **3–4 (Linux)** |
+| `cgltf` | `ori-cgltf` | [cgltf](https://github.com/jkuhlmann/cgltf) glTF 2.0 | **0.1.0** | **3 (Linux)** |
+| `fast_obj` | `ori-fast-obj` | [fast_obj](https://github.com/thisistherk/fast_obj) OBJ | **0.1.0** | **3 (Linux)** |
+| `physfs` | `ori-physfs` | [PhysFS](https://github.com/icculus/physfs) virtual FS | **0.1.0** | **3 (Linux)** |
+| `clay` | `ori-clay` | [Clay](https://github.com/nicbarker/clay) IM layout | **0.1.0** | **3 (Linux)** |
+| `lz4` | `ori-lz4` | [lz4](https://github.com/lz4/lz4) compression | **0.1.0** | **3 (Linux)** |
+| `recast` | `ori-recast` | [Recast Navigation](https://github.com/recastnavigation/recastnavigation) navmesh | **0.1.0** | **3 (Linux)** |
 | *(module)* | `ori-game` | MC + export_obj + GPU bake path | — | **5 (Linux)** |
 
 Detalhe de superfícies ainda **4–5** dentro de `ori-game` (audio, 2D, content, 3D, mechanics): ver matriz + ROADMAP do game — **não** são packages novos.
 
-**Do not re-queue:** `freetype`, `harfbuzz`, `stb`, `noise`, `miniz`, `nfd`, `implot`, `imnodes`, `imguizmo`, `tracy`, `enkits` — already in §2.
+**Do not re-queue:** `freetype`, `harfbuzz`, `stb`, `noise`, `miniz`, `nfd`, `implot`, `imnodes`, `imguizmo`, `tracy`, `enkits`, `cgltf`, `fast_obj`, `physfs`, `clay`, `lz4`, `recast` — already in §2.
 
 ---
 
@@ -73,7 +80,7 @@ Nada em aberto. Ports de alto valor (nfd, implot, imnodes, imguizmo, stb, noise,
 |-------------|--------|
 | *(vazio)* | **Não reabrir** como fila alta — ver §2 |
 
-Próximo trabalho de port = **§4 média** via [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md).
+Próximo trabalho de port = **§4 média residual** (`ori-miniaudio` só com gap). Plan e2e: [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) (PRs 1–9 done).
 
 ---
 
@@ -82,16 +89,12 @@ Próximo trabalho de port = **§4 média** via [`pr-plan-eco-ports-e2e.md`](pr-p
 | Package Ori (proposto) | Upstream canônico | Papel / condição |
 |------------------------|-------------------|------------------|
 | **`ori-miniaudio`** | [miniaudio](https://github.com/mackron/miniaudio) | Condicional — só se `game.audio` + raylib não fecharem gap medido |
-| **`ori-cgltf`** | [cgltf](https://github.com/jkuhlmann/cgltf) | glTF 2.0 (cena, materiais, anim) — **execute-plan M1** |
-| **`ori-fast-obj`** | [fast_obj](https://github.com/thisistherk/fast_obj) | OBJ leve; **complementa** cgltf — **M2** |
-| **`ori-physfs`** | [PhysFS](https://github.com/icculus/physfs) | FS virtual / multi-archive; com rres/ORPK — **M3** |
-| **`ori-clay`** | [Clay](https://github.com/nicbarker/clay) | Layout immediate-mode (**preferir a Yoga**) — **M4** |
-| **`ori-recast`** | [Recast Navigation](https://github.com/recastnavigation/recastnavigation) | Navmesh 3D / IA; A\* 2D grid fica pure Ori — **M5** |
-| **`ori-lz4`** | [lz4](https://github.com/lz4/lz4) | Throughput streaming além do miniz — **M6** |
 
-**Não listar de novo:** FreeType, HarfBuzz, Marching Cubes — **done** em §2 / §8.1.
+**Done 0.1.0 (moved to §2):** `ori-cgltf`, `ori-fast-obj`, `ori-physfs`, `ori-clay`, `ori-lz4`, `ori-recast` — execute-plan medium M1–M6 (2026-07-15).
 
-**Ordem sugerida (médio, open only):** cgltf + fast_obj → PhysFS → Clay → lz4 → Recast → miniaudio *(só com gap)*.
+**Não listar de novo:** FreeType, HarfBuzz, Marching Cubes, medium M1–M6 above — **done** em §2 / §8.1.
+
+**Ordem sugerida (médio, open only):** miniaudio *(só com gap)*.
 
 ---
 
@@ -174,10 +177,11 @@ Usar stack já existente (stdlib + raylib/ori_game + opcional sqlite/enet/raygui
 
 ```text
 ALTA     (vazia)
-MÉDIA    miniaudio · cgltf · fast_obj · PhysFS · Clay · Recast · lz4?
+MÉDIA    miniaudio? (condicional)
 BAIXA    OpenAL Soft · ozz · cute_c2 · steam/discord · Lua host
 EVITAR   Yoga · cglm/HMM core · bgfx · ejson · 2º physics · flecs/EnTT default
 FEITO    raylib · ori_game · imgui · raygui · box2d · jolt · rres · sqlite · enet
          · freetype · harfbuzz · MC · nfd · implot · imnodes · imguizmo
          · stb · noise · miniz · tracy · enkits
+         · cgltf · fast_obj · physfs · clay · lz4 · recast
 ```

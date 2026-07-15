@@ -35,6 +35,12 @@
 | **`ori-imguizmo`** | `imguizmo` | **0.1.0** | gizmo translate (FULL flag) | **3 (Linux)** |
 | **`ori-tracy`** | `tracy` | **0.1.0** | zones/frames (FULL TracyClient) | **3 (Linux)** |
 | **`ori-enkiTS`** | `enkits` | **0.1.0** | task scheduler (parallel sum) | **3–4 (Linux)** |
+| **`ori-cgltf`** | `cgltf` | **0.1.0** | glTF 2.0 load (meshes/nodes/materials/anim) | **3 (Linux)** |
+| **`ori-fast-obj`** | `fast_obj` | **0.1.0** | Wavefront OBJ load | **3 (Linux)** |
+| **`ori-physfs`** | `physfs` | **0.1.0** | virtual FS / multi-archive | **3 (Linux)** |
+| **`ori-clay`** | `clay` | **0.1.0** | immediate-mode UI layout | **3 (Linux)** |
+| **`ori-lz4`** | `lz4` | **0.1.0** | LZ4 compress/decompress | **3 (Linux)** |
+| **`ori-recast`** | `recast` | **0.1.0** | Recast+Detour navmesh MVP | **3 (Linux)** |
 
 Content modules in **`ori-game`:** `game.tiled`, `game.ldtk`, `game.aseprite`, `game.spine`, `game.rres_assets`, `game.marching_cubes` (+ `marching_cubes_draw`), …
 
@@ -65,6 +71,12 @@ Documentos/Projetos/
   ori-imguizmo/
   ori-tracy/
   ori-enkiTS/
+  ori-cgltf/
+  ori-fast-obj/
+  ori-physfs/
+  ori-clay/
+  ori-lz4/
+  ori-recast/
 ```
 
 ```toml
@@ -96,24 +108,18 @@ Scaffolding may exist (`build_windows.ps1`, `smoke_eco_windows.ps1`).
 
 ## Next work (Linux-only)
 
-**Auto-implement remaining medium ports** (no need to re-prompt stages):
+**Medium ports (M1–M6):** **done 0.1.0** — `ori-cgltf`, `ori-fast-obj`, `ori-physfs`, `ori-clay`, `ori-lz4`, `ori-recast`.  
+Design + DAG (history): [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) · Catalog: [`eco-library-ports-catalog.md`](eco-library-ports-catalog.md)
 
-```bash
-/execute-plan docs/planning/pr-plan-eco-ports-e2e.md --concurrency 3 \
-  --instructions "Linux only. Sibling packages at /home/raillen/Documentos/Projetos/ori-*. Copy smoke pattern from ori-stb/ori-enkiTS. Use int64_t ABI. Smoke must print ok; ori test 0 failed. Update eco-library-ports-catalog.md and eco-packages-status.md when adding a package. Phase OS last. No flecs/EnTT. Do not re-implement packages already marked done in §2 of this design doc."
-```
-
-Design + DAG: [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) · Catalog: [`eco-library-ports-catalog.md`](eco-library-ports-catalog.md)
-
-Done recently: high ports (stb/noise/miniz/nfd/implot/imnodes/imguizmo/tracy/enkits) + deepen B2.15–19.
+Done recently: high ports (stb/noise/miniz/nfd/implot/imnodes/imguizmo/tracy/enkits) + medium M1–M6 + deepen B2.15–19.
 
 Residual / roadmap:
-1. Medium ports via execute-plan above (cgltf, fast_obj, physfs, clay, lz4, recast)  
-2. Optional `ori-game` wires (PR 8 of the plan)  
+1. Optional `ori-miniaudio` only if `game.audio` gap measured  
+2. Optional `ori-game` wires (plan PR 8) if not already landed  
 3. Studio app = separate product track  
 4. Phase OS = **last**  
 
-**Do not re-queue as open alta:** freetype, harfbuzz, stb, noise, miniz, nfd, implot, imnodes, imguizmo, tracy, enkits (see inventory + catalog §2).
+**Do not re-queue as open alta/média:** freetype, harfbuzz, stb, noise, miniz, nfd, implot, imnodes, imguizmo, tracy, enkits, cgltf, fast_obj, physfs, clay, lz4, recast (see inventory + catalog §2).
 
 **ECS:** no flecs/EnTT as default — see catalog §7 / roadmap § ECS.
 

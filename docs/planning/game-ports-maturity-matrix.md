@@ -62,6 +62,12 @@
 | `imguizmo` | `ori-imguizmo` | **0.1.0** | **3 (Linux)** | gizmo translate + FULL — **alta done** |
 | `tracy` | `ori-tracy` | **0.1.0** | **3 (Linux)** | zones/frames + FULL — **alta done** |
 | `enkits` | `ori-enkiTS` | **0.1.0** | **3–4 (Linux)** | task scheduler — **alta done** |
+| `cgltf` | `ori-cgltf` | **0.1.0** | **3 (Linux)** | glTF 2.0 — **medium done** |
+| `fast_obj` | `ori-fast-obj` | **0.1.0** | **3 (Linux)** | Wavefront OBJ — **medium done** |
+| `physfs` | `ori-physfs` | **0.1.0** | **3 (Linux)** | virtual FS — **medium done** |
+| `clay` | `ori-clay` | **0.1.0** | **3 (Linux)** | IM layout — **medium done** |
+| `lz4` | `ori-lz4` | **0.1.0** | **3 (Linux)** | LZ4 compress — **medium done** |
+| `recast` | `ori-recast` | **0.1.0** | **3 (Linux)** | navmesh MVP — **medium done** |
 | Studio | plan only | — | **0.5–1** | Separate product track |
 
 ### Detail surfaces (ori-game)
@@ -103,7 +109,7 @@
 | **B2.15** | ImGui multi-context (editor vs game) | P2 | **done** — create/set/destroy context |
 | **B2.16** | ImGui Tier 2 (style, image, curves, timeline) | P2 | **done** MVP — pure Ori curves/timeline; style/image host |
 | **B2.17** | Surface maturity 4→5 (3D/shaders, mechanics, audio edge) | P2 | **done** — buses/pool/seek; combat i-frames; fog presets; dialogue/inv |
-| **B2.18** | New sibling ports (product-driven `ori-*`) | P2 | **done (high)** — catalog ALTA **fechada** (stb/noise/miniz/nfd/implot/imnodes/imguizmo/tracy/enkits **0.1.0**). **Do not re-queue** freetype/stb/tracy/enkits as open alta. **Medium open** → [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) |
+| **B2.18** | New sibling ports (product-driven `ori-*`) | P2 | **done (high + medium)** — ALTA fechada (stb/noise/miniz/nfd/implot/imnodes/imguizmo/tracy/enkits **0.1.0**). MÉDIA M1–M6 done (cgltf/fast_obj/physfs/clay/lz4/recast **0.1.0**). Residual open: `ori-miniaudio` only if gap. **Do not re-queue** done ports. Plan: [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) |
 | **B2.19** | In-`ori-game` exploration (camera, save, A\*, actions) | P2 | **done** — camera limits/shake; slots; pathfind; actions; cutscene; net_predict |
 | **B2.20** | ECS (flecs/EnTT) | — | **declined as default** — optional only if measured need |
 

@@ -1,7 +1,8 @@
 # Design + PR Plan — ECO library ports end-to-end (Linux-first)
 
-**Status:** ready for `/execute-plan` (PR 1 docs lock-in + inventory refresh)  
+**Status:** PRs 1–9 complete (medium M1–M6 packages **0.1.0** + catalog/status/matrix + umbrella smoke). PR 10 Phase OS deferred (last).  
 **Date:** 2026-07-15  
+ 
 **Policy:** implement / mature / port on **Linux first**. Multi-OS (**Phase OS**) is **last**.  
 **Maturity gate:** **API + smoke + tests** (not polished demos).  
 **Canonical catalog:** [`eco-library-ports-catalog.md`](eco-library-ports-catalog.md)  
@@ -85,15 +86,15 @@ can implement **all medium-priority ports**, optional deepen wires into `ori-gam
 
 ### 3.1 Medium ports (implement)
 
-| # | Package | Upstream | Role |
-|---|---------|----------|------|
-| M1 | **ori-cgltf** | [cgltf](https://github.com/jkuhlmann/cgltf) | glTF 2.0 load (meshes, nodes, materials, animations metadata) |
-| M2 | **ori-fast-obj** | [fast_obj](https://github.com/thisistherk/fast_obj) | Wavefront OBJ load (complements cgltf) |
-| M3 | **ori-physfs** | [PhysFS](https://github.com/icculus/physfs) | Virtual FS / multi-archive (with rres/ORPK) |
-| M4 | **ori-clay** | [Clay](https://github.com/nicbarker/clay) | Immediate-mode UI layout (not Yoga) |
-| M5 | **ori-recast** | [Recast Navigation](https://github.com/recastnavigation/recastnavigation) | Navmesh build + path query (3D) |
-| M6 | **ori-lz4** | [lz4](https://github.com/lz4/lz4) | Fast compression (when miniz not enough) |
-| M7 | **ori-miniaudio** *(conditional)* | [miniaudio](https://github.com/mackron/miniaudio) | Only if raylib `game.audio` still fails a measured gap |
+| # | Package | Upstream | Role | Status |
+|---|---------|----------|------|--------|
+| M1 | **ori-cgltf** | [cgltf](https://github.com/jkuhlmann/cgltf) | glTF 2.0 load (meshes, nodes, materials, animations metadata) | **done 0.1.0** |
+| M2 | **ori-fast-obj** | [fast_obj](https://github.com/thisistherk/fast_obj) | Wavefront OBJ load (complements cgltf) | **done 0.1.0** |
+| M3 | **ori-physfs** | [PhysFS](https://github.com/icculus/physfs) | Virtual FS / multi-archive (with rres/ORPK) | **done 0.1.0** |
+| M4 | **ori-clay** | [Clay](https://github.com/nicbarker/clay) | Immediate-mode UI layout (not Yoga) | **done 0.1.0** |
+| M5 | **ori-recast** | [Recast Navigation](https://github.com/recastnavigation/recastnavigation) | Navmesh build + path query (3D) | **done 0.1.0** |
+| M6 | **ori-lz4** | [lz4](https://github.com/lz4/lz4) | Fast compression (when miniz not enough) | **done 0.1.0** |
+| M7 | **ori-miniaudio** *(conditional)* | [miniaudio](https://github.com/mackron/miniaudio) | Only if raylib `game.audio` still fails a measured gap | **open (skip default)** |
 
 ### 3.2 Integration + docs
 
