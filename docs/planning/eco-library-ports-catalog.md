@@ -5,7 +5,9 @@
 > **Âmbito:** packages irmãos `ori-*` (bindings / ports C·C++ → Ori S3), **não** stdlib do monorepo.  
 > **Política:** Linux implement / mature / port **primeiro**. Multi-OS (**Phase OS**) por **último**.  
 > **Maturidade de superfície:** por **API + smoke da lib**, não por exemplos (exemplos podem vir depois).  
-> **Execute-plan (ports médios e2e):** [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) — DAG + `/execute-plan` entrypoint  
+> **Execute-plan (ports médios 0.1.0):** [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) — **complete**  
+> **Execute-plan (maturidade → 5 Linux):** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) — DAG U1–U15 + wires + docs  
+
 > **Relacionados:**  
 > - Inventário vivo + Next work: [`eco-packages-status.md`](eco-packages-status.md)  
 > - Matriz de maturidade: [`game-ports-maturity-matrix.md`](game-ports-maturity-matrix.md)  

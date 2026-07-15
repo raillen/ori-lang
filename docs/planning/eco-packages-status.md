@@ -112,13 +112,13 @@ Catalog: [`eco-library-ports-catalog.md`](eco-library-ports-catalog.md)
 Done recently: high ports (stb/noise/miniz/nfd/implot/imnodes/imguizmo/tracy/enkits) + medium M1–M6 + deepen B2.15–19 + Phase OS stubs for medium.
 
 Residual / roadmap (2026-07-15 post e2e):
-1. **`ori-miniaudio` skipped** — gap measured: `game.audio` via raylib covers SFX, music streams, buses, seek/pitch/pan, sound pools. Revisit only for non-raylib backends or spatial 3D (then prefer catalog §5 OpenAL, not dual-stack).  
-2. **`ori-game` wires landed** — `game.gltf` / `game.obj` / `game.physfs_assets` + path-deps (execute-plan PR8).  
-3. **Git local** — medium packages M1–M6 have initial `master` commits (no remotes yet).  
-4. Studio app = separate product track  
+1. **Maturity → 5 (Linux)** for packages still at 3–4 — **active plan:** [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) (`/execute-plan`). U1–U15 deepens + wires + catalog; Phase OS last.  
+2. **`ori-miniaudio` skipped** — gap measured: `game.audio` via raylib covers SFX/music/buses/pool. Revisit only for non-raylib or spatial 3D (catalog §5 OpenAL).  
+3. **`ori-game` wires** — gltf/obj/physfs landed; deepen in maturity-5 plan PR 17.  
+4. Studio app = separate product track (`ori-game-studio` outside `game-engine-full`)  
 5. Phase OS **execution** on real MSVC host = **last** (scaffolding done; non-blocking)  
 
-**Do not re-queue as open alta/média:** freetype, harfbuzz, stb, noise, miniz, nfd, implot, imnodes, imguizmo, tracy, enkits, cgltf, fast_obj, physfs, clay, lz4, recast (see inventory + catalog §2).
+**Do not re-queue as open alta/média ports:** packages already exist — use maturity-5 plan to deepen, not re-scaffold.
 
 **ECS:** no flecs/EnTT as default — see catalog §7 / roadmap § ECS.
 

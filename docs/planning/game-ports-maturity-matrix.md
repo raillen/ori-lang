@@ -6,7 +6,8 @@
 > **Policy:** implement / mature / port libs **on Linux first**. Multi-OS (**Phase OS**) is **last**.  
 > **Related:** [`eco-packages-status.md`](eco-packages-status.md) ·  
 > [`eco-library-ports-catalog.md`](eco-library-ports-catalog.md) ·  
-> [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) (medium ports `/execute-plan`) ·  
+> [`pr-plan-eco-ports-e2e.md`](pr-plan-eco-ports-e2e.md) (medium ports 0.1.0 — complete) ·  
+> [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) (**active** — packages → **5 Linux** `/execute-plan`) ·  
 > `ori-game/docs/planning/ROADMAP-GAME-ECO.md`
 
 ### Maturity scale
@@ -33,7 +34,8 @@
 | **W6** | rres 0.3.0 + sqlite 0.3.0 | **done** |
 | **W7** | Matrix gate all **5 (Linux)** | **done** |
 | **W8** | Integration demos + umbrella smoke | **done** (2026-07-14) |
-| **W9+** | Deepen + new ports (Linux) | **active** — ImGui T2, surface 4→5, new `ori-*` |
+| **W9+** | Deepen + new ports (Linux) | **done** — high+medium 0.1.0 + ImGui T2 |
+| **W10** | All ECO packages → **5 (Linux)** | **active** — [`pr-plan-eco-maturity-5.md`](pr-plan-eco-maturity-5.md) |
 | **Phase OS** | Win/mac stage + smoke | **last** (scripts may exist; not blocking) |
 
 ---

@@ -21,7 +21,8 @@
 | [package-ecosystem-guidelines.md](package-ecosystem-guidelines.md) | Package conventions |
 | [eco-packages-status.md](eco-packages-status.md) | **Active** ECO/game sibling ports inventory + **Next work** `/execute-plan` |
 | [eco-library-ports-catalog.md](eco-library-ports-catalog.md) | **Canonical** — ports done/open; alta **fechada**; médios → e2e plan |
-| [pr-plan-eco-ports-e2e.md](pr-plan-eco-ports-e2e.md) | **Execute-plan DAG** — remaining medium ports (cgltf…Recast) + Phase OS last |
+| [pr-plan-eco-ports-e2e.md](pr-plan-eco-ports-e2e.md) | Execute-plan DAG — medium ports 0.1.0 (**complete**) |
+| [pr-plan-eco-maturity-5.md](pr-plan-eco-maturity-5.md) | **Execute-plan DAG** — ECO packages **→ maturity 5 (Linux)** (U1–U15 + wires + docs) |
 | [PHASE-OS.md](PHASE-OS.md) | **Phase OS** Windows/mac ECO staging (**last**) |
 | [game-ports-maturity-matrix.md](game-ports-maturity-matrix.md) | **Consult** — portados×maturidade + faltantes×prioridade (implementação) |
 | [roadtov1.md](roadtov1.md) | Long-horizon 1.0 sketch |
