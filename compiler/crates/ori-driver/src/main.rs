@@ -129,9 +129,12 @@ enum Commands {
     Compile {
         /// Path to the `.orl` source file.
         file: PathBuf,
-        /// Output executable path (default: same name as source, no extension).
+        /// Output path (default: source name; with `--lib`: `lib<name>.so` / `.dll` / `.dylib`).
         #[arg(short, long)]
         out: Option<PathBuf>,
+        /// Emit a shared library with C ABI exports (`@c_export`) for embed hosts.
+        #[arg(long)]
+        lib: bool,
         /// Print full native linker stdout/stderr when link fails.
         #[arg(long)]
         native_raw: bool,
@@ -555,15 +558,21 @@ fn main() {
         Commands::Compile {
             file,
             out,
+            lib,
             native_raw,
         } => {
-            let default_out = file.with_extension(if cfg!(windows) { "exe" } else { "" });
+            let default_out = if *lib {
+                pipeline::default_shared_lib_path(file)
+            } else {
+                file.with_extension(if cfg!(windows) { "exe" } else { "" })
+            };
             let exe = out.as_deref().unwrap_or(&default_out);
             match pipeline::run_compile_with_options(
                 file,
                 exe,
                 pipeline::CompileOptions {
                     native_raw: *native_raw,
+                    lib: *lib,
                 },
             ) {
                 Err(e) => {
@@ -576,7 +585,8 @@ fn main() {
                     emit::render_all(&out.cache, &out.diagnostics, color);
                     emit::print_summary(errors, warnings, color);
                     if !out.has_errors {
-                        eprintln!("binary: {}", out.exe_path.display());
+                        let label = if *lib { "library" } else { "binary" };
+                        eprintln!("{label}: {}", out.exe_path.display());
                     }
                     process::exit(if out.has_errors { 1 } else { 0 });
                 }
@@ -608,6 +618,7 @@ fn main() {
                 &exe,
                 pipeline::CompileOptions {
                     native_raw: *native_raw,
+                    lib: false,
                 },
             );
             match compile {
@@ -654,6 +665,7 @@ fn main() {
                 exe,
                 pipeline::CompileOptions {
                     native_raw: *native_raw,
+                    lib: false,
                 },
             ) {
                 Err(e) => {

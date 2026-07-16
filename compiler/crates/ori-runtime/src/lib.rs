@@ -9189,6 +9189,46 @@ pub unsafe extern "C" fn ori_totp_verify(
     0
 }
 
+// ── Embeddable runtime boot (cdylib / `ori compile --lib`) ─────────────────
+//
+// Hosts that load an Ori shared library must:
+//   1. `ori_rt_init()`            — once (idempotent)
+//   2. `__ori_module_init()`      — if the library defines globals (emitted by
+//                                   `ori compile --lib`; optional for pure
+//                                   scalar `@c_export` modules)
+//   3. call `@c_export` symbols
+//   4. `ori_rt_shutdown()`        — best-effort teardown
+//
+// Module init is a separate exported symbol (not a weak import) so the
+// runtime builds on stable Rust without `#[linkage]`.
+
+static RT_INIT_COUNT: AtomicU64 = AtomicU64::new(0);
+
+/// Initialize the Ori runtime for embed hosts.
+///
+/// Returns `0` on success. Idempotent: subsequent calls return `0`.
+#[no_mangle]
+pub unsafe extern "C" fn ori_rt_init() -> i32 {
+    if RT_INIT_COUNT
+        .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return 0;
+    }
+    // Ensure ARC state exists (lazy on first alloc, but touch for predictability).
+    let _ = ARC_STATE.get_or_init(|| Mutex::new(ArcState::default()));
+    0
+}
+
+/// Best-effort runtime teardown for embed hosts. The host process may continue.
+#[no_mangle]
+pub unsafe extern "C" fn ori_rt_shutdown() {
+    // Phase 1: no-op beyond a fence — managed heaps are process-lifetime for
+    // embed hosts that do not retain Ori objects across unload.
+    std::sync::atomic::fence(Ordering::SeqCst);
+    let _ = RT_INIT_COUNT.swap(0, Ordering::SeqCst);
+}
+
 mod debug_agent;
 
 #[cfg(test)]

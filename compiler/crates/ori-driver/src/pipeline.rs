@@ -269,6 +269,8 @@ pub struct CompileOutput {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CompileOptions {
     pub native_raw: bool,
+    /// Emit a shared library with C ABI `@c_export` symbols (`ori compile --lib`).
+    pub lib: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -279,16 +281,79 @@ struct NativeRuntimeLink {
 
 impl NativeRuntimeLink {
     fn link_args(&self) -> Vec<PathBuf> {
+        self.link_args_for(false)
+    }
+
+    /// Link line for executables (`shared = false`) or embeddable shared
+    /// libraries (`shared = true`). Shared mode prefers the runtime **cdylib**
+    /// (avoids rustc compiler-builtins vs libgcc clashes with `--whole-archive`
+    /// on the staticlib) and drops executable-only flags like `-no-pie`.
+    fn link_args_for(&self, shared: bool) -> Vec<PathBuf> {
         let mut args = Vec::with_capacity(1 + self.native_static_libs.len());
-        args.push(self.runtime_lib.clone());
-        args.extend(self.native_static_libs.iter().map(PathBuf::from));
+        if shared {
+            let cdylib = runtime_cdylib_beside_static(&self.runtime_lib);
+            if let Some(so) = cdylib {
+                args.push(so);
+            } else {
+                // Fallback: staticlib without whole-archive (may miss unused symbols).
+                args.push(self.runtime_lib.clone());
+                args.push(PathBuf::from("-Wl,-u,ori_rt_init"));
+                args.push(PathBuf::from("-Wl,-u,ori_rt_shutdown"));
+            }
+        } else {
+            args.push(self.runtime_lib.clone());
+        }
+        for flag in &self.native_static_libs {
+            if shared && (flag == "-no-pie" || flag == "-pie" || flag == "-lc") {
+                continue;
+            }
+            args.push(PathBuf::from(flag));
+        }
         args
     }
+}
+
+fn runtime_cdylib_beside_static(static_lib: &Path) -> Option<PathBuf> {
+    let parent = static_lib.parent()?;
+    let name = static_lib.file_name()?.to_str()?;
+    // libori_runtime.a → libori_runtime.so / ori_runtime.dll / libori_runtime.dylib
+    let so = if name.ends_with(".a") {
+        let stem = name.trim_end_matches(".a");
+        if cfg!(windows) {
+            parent.join(format!("{}.dll", stem.trim_start_matches("lib")))
+        } else if cfg!(target_os = "macos") {
+            parent.join(format!("{stem}.dylib"))
+        } else {
+            parent.join(format!("{stem}.so"))
+        }
+    } else {
+        return None;
+    };
+    so.is_file().then_some(so)
 }
 
 /// Full pipeline â†’ Cranelift object â†’ linker â†’ native binary.
 pub fn run_compile(source_path: &Path, output: &Path) -> Result<CompileOutput, String> {
     run_compile_with_options(source_path, output, CompileOptions::default())
+}
+
+/// Default shared-library output path for `ori compile --lib`.
+pub fn default_shared_lib_path(source: &Path) -> PathBuf {
+    let stem = source
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("ori_lib");
+    let file_name = if cfg!(windows) {
+        format!("{stem}.dll")
+    } else if cfg!(target_os = "macos") {
+        format!("lib{stem}.dylib")
+    } else {
+        format!("lib{stem}.so")
+    };
+    source
+        .parent()
+        .map(|p| p.join(&file_name))
+        .unwrap_or_else(|| PathBuf::from(file_name))
 }
 
 pub fn run_compile_with_options(
@@ -319,14 +384,19 @@ pub fn run_compile_with_options(
                 .push(lib_path.to_string_lossy().to_string());
         }
 
-        ori_codegen::emit_native(&hir, &obj_path)?;
-        let extra = runtime_link.link_args();
+        ori_codegen::emit_native_with_options(
+            &hir,
+            &obj_path,
+            ori_codegen::NativeEmitOptions { lib: options.lib },
+        )?;
+        let extra = runtime_link.link_args_for(options.lib);
         ori_codegen::link_with_options(
             &obj_path,
             output,
             &extra,
             ori_codegen::NativeLinkOptions {
                 raw_diagnostics: options.native_raw,
+                shared: options.lib,
             },
         )?;
         let _ = std::fs::remove_file(&obj_path);
@@ -3553,6 +3623,7 @@ fn inject_test_harness(module: &mut ori_hir::HirModule, test: &TestCase) {
         is_public: false,
         is_async: false,
         is_mut: false,
+        c_export_name: None,
         span,
     };
     module.funcs.insert(0, harness);

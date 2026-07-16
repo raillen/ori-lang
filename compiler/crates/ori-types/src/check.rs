@@ -7,7 +7,7 @@ use crate::resolve::{
 };
 use crate::ty::{expand_ty_aliases, substitute_ty_params};
 use crate::ty::{OpaqueTy, Ty};
-use ori_ast::common::{Attr, AttrArg, Name, QualifiedName, WhereConstraint};
+use ori_ast::common::{Attr, AttrArg, Name, QualifiedName, Visibility, WhereConstraint};
 use ori_ast::expr::{Arg, ArgValue, BinaryOp, ClosureBody, Expr, FStrPart, UnaryOp};
 use ori_ast::item::{
     ApplyDecl, ApplyMember, ExternBlock, FuncDecl, ImportDecl, ImportItem, Item, ItemWithAttrs,
@@ -646,7 +646,7 @@ impl<'a> Checker<'a> {
                         "unknown attribute",
                     ))
                     .with_action(
-                        "use one of `@test`, `@deprecated`, `@inline`, `@no_inline`, `@cfg`, or `@repr`",
+                        "use one of `@test`, `@deprecated`, `@inline`, `@no_inline`, `@cfg`, `@repr`, or `@c_export`",
                     ),
                 );
                 continue;
@@ -698,6 +698,98 @@ impl<'a> Checker<'a> {
                         "invalid attribute arguments",
                     ))
                     .with_action(attr_arg_action(name)),
+                );
+            }
+
+            if name == "c_export" {
+                self.check_c_export_attr(item, attr);
+            }
+        }
+    }
+
+    /// Validate `@c_export` on a free function: must be `public` with FFI-safe types.
+    fn check_c_export_attr(&mut self, item: &ItemWithAttrs, attr: &Attr) {
+        let Item::Func(func) = &item.item else {
+            return;
+        };
+        if func.visibility != Visibility::Public {
+            self.sink.emit(
+                Diagnostic::error(
+                    "attr.c_export_not_public",
+                    "`@c_export` requires a `public` function",
+                )
+                .with_label(Label::primary(
+                    self.file_id,
+                    attr.name.span,
+                    "export here",
+                ))
+                .with_action("add `public` to the function declaration"),
+            );
+        }
+        if func.is_async {
+            self.sink.emit(
+                Diagnostic::error(
+                    "attr.c_export_async",
+                    "`@c_export` cannot be used on async functions",
+                )
+                .with_label(Label::primary(
+                    self.file_id,
+                    attr.name.span,
+                    "async export",
+                ))
+                .with_action("export a synchronous wrapper instead"),
+            );
+        }
+        if !func.type_params.is_empty() {
+            self.sink.emit(
+                Diagnostic::error(
+                    "attr.c_export_generic",
+                    "`@c_export` cannot be used on generic functions",
+                )
+                .with_label(Label::primary(
+                    self.file_id,
+                    attr.name.span,
+                    "generic export",
+                )),
+            );
+        }
+        // Signature check uses resolved types from a lightweight lower of annotations.
+        for param in &func.params {
+            let ty = self.lower(&param.ty, &[]);
+            if !is_c_export_ffi_ty(&ty) {
+                self.sink.emit(
+                    Diagnostic::error(
+                        "attr.c_export_bad_type",
+                        format!(
+                            "`@c_export` parameter `{}` has non-FFI-safe type `{}`",
+                            param.name.text,
+                            ty.display()
+                        ),
+                    )
+                    .with_label(Label::primary(
+                        self.file_id,
+                        param.name.span,
+                        "parameter type",
+                    ))
+                    .with_action(
+                        "use `int`, `float`, `bool`, or `void` return; phase-2: ptr+len for strings",
+                    ),
+                );
+            }
+        }
+        if let Some(ret) = &func.return_ty {
+            let ty = self.lower(ret, &[]);
+            if !is_c_export_ffi_ty(&ty) && !matches!(ty, Ty::Void) {
+                self.sink.emit(
+                    Diagnostic::error(
+                        "attr.c_export_bad_type",
+                        format!(
+                            "`@c_export` return type `{}` is not FFI-safe",
+                            ty.display()
+                        ),
+                    )
+                    .with_label(Label::primary(self.file_id, ret.span(), "return type"))
+                    .with_action("use `int`, `float`, `bool`, or omit for void"),
                 );
             }
         }
@@ -6614,13 +6706,13 @@ fn item_target_name(item: &Item) -> &'static str {
 fn is_known_attr(name: &str) -> bool {
     matches!(
         name,
-        "test" | "deprecated" | "inline" | "no_inline" | "cfg" | "repr"
+        "test" | "deprecated" | "inline" | "no_inline" | "cfg" | "repr" | "c_export"
     )
 }
 
 fn attr_applies_to(name: &str, target: &str) -> bool {
     match name {
-        "test" | "inline" | "no_inline" => target == "func",
+        "test" | "inline" | "no_inline" | "c_export" => target == "func",
         "deprecated" | "cfg" => true,
         "repr" => target == "struct",
         _ => false,
@@ -6630,6 +6722,10 @@ fn attr_applies_to(name: &str, target: &str) -> bool {
 fn attr_args_valid(name: &str, attr: &Attr) -> bool {
     match name {
         "test" | "inline" | "no_inline" => attr.args.is_empty(),
+        "c_export" => matches!(
+            attr.args.as_slice(),
+            [] | [AttrArg::String(_, _)]
+        ),
         "deprecated" => matches!(attr.args.as_slice(), [AttrArg::String(_, _)]),
         "cfg" => matches!(
             attr.args.as_slice(),
@@ -6643,6 +6739,7 @@ fn attr_target_action(name: &str) -> &'static str {
     match name {
         "test" => "move `@test` to a function declaration",
         "inline" | "no_inline" => "use this attribute only on function declarations",
+        "c_export" => "move `@c_export` to a free `public` function",
         _ => "move the attribute to a declaration that supports it",
     }
 }
@@ -6650,10 +6747,32 @@ fn attr_target_action(name: &str) -> &'static str {
 fn attr_arg_action(name: &str) -> &'static str {
     match name {
         "test" | "inline" | "no_inline" => "remove the attribute arguments",
+        "c_export" => "use `@c_export` or `@c_export(\"symbol_name\")`",
         "deprecated" => "use `@deprecated(\"message\")` with exactly one string message",
         "cfg" => "use `@cfg(\"condition\")` or `@cfg(key: value)`",
         _ => "use the documented argument form for this attribute",
     }
+}
+
+/// Phase-1 `@c_export` surface: scalar types only (`int`/`float`/`bool`/`void`).
+fn is_c_export_ffi_ty(ty: &Ty) -> bool {
+    matches!(
+        ty,
+        Ty::Int
+            | Ty::Int8
+            | Ty::Int16
+            | Ty::Int32
+            | Ty::Int64
+            | Ty::U8
+            | Ty::U16
+            | Ty::U32
+            | Ty::U64
+            | Ty::Float
+            | Ty::Float32
+            | Ty::Float64
+            | Ty::Bool
+            | Ty::Void
+    )
 }
 
 fn stdlib_const_ty(path: &str) -> Option<Ty> {

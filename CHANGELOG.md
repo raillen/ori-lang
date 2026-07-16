@@ -18,6 +18,13 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   language release packaging (runtime symbols for crypto/TOTP/net timeouts).
 
 ### Adicionado
+- **`ori compile --lib` (cdylib embed, P1):** shared library output with C ABI
+  exports. Annotate free `public` functions with `@c_export` /
+  `@c_export("name")` (`int`/`float`/`bool`/void). Runtime boot:
+  `ori_rt_init` / `ori_rt_shutdown`; module globals via `__ori_module_init`.
+  Links against staged `libori_runtime.so` (Linux). Plan:
+  [`docs/planning/PLANO-CDYLIB-EMBED.md`](docs/planning/PLANO-CDYLIB-EMBED.md).
+  Smoke: `tools/qa/embed_smoke.sh`, example `examples/embed/`.
 - **Web stack (packages):** templates (S8 trim), `ori-web` (A/B/C + SEC8 +
   nested JSON + middleware + upload + keep-alive + B7 + custom sessions),
   `ori-web-app` generators, `ori-web-auth` (TOTP), `ori-web-session-sqlite`,

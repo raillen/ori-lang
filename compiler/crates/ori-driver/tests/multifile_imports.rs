@@ -9998,6 +9998,59 @@ end
     );
 }
 
+
+#[test]
+fn compile_lib_c_export_produces_shared_object_on_linux() {
+    if !cfg!(target_os = "linux") {
+        return;
+    }
+    let dir = TestDir::new("compile_lib_c_export");
+    dir.write(
+        "lib.orl",
+        r#"module app.lib_export
+
+@c_export
+public add_scores(a: int, b: int) -> int
+    return a + b
+end
+"#,
+    );
+    let out_so = dir.path("libexport.so");
+    let out = run_compile_with_options(
+        &dir.path("lib.orl"),
+        &out_so,
+        CompileOptions {
+            native_raw: false,
+            lib: true,
+        },
+    )
+    .expect("compile --lib");
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    assert!(out_so.is_file(), "expected shared library at {}", out_so.display());
+}
+
+#[test]
+fn check_c_export_requires_public() {
+    let dir = TestDir::new("c_export_not_public");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+@c_export
+add_scores(a: int, b: int) -> int
+    return a + b
+end
+"#,
+    );
+    let out = run_check(&dir.path("main.orl")).unwrap();
+    assert!(out.has_errors, "{:?}", out.diagnostics);
+    assert!(
+        diagnostic_codes(&out).contains(&"attr.c_export_not_public"),
+        "{:?}",
+        out.diagnostics
+    );
+}
+
 #[test]
 fn check_reports_invalid_attribute_target_and_args() {
     let dir = TestDir::new("invalid_attr_target_args");

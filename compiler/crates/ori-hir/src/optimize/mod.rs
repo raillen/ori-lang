@@ -90,6 +90,7 @@ mod tests {
                 is_public: true,
                 is_async: false,
                 is_mut: false,
+                c_export_name: None,
                 span: span(),
             }],
             consts: vec![],
@@ -191,6 +192,7 @@ mod tests {
             is_public: false,
             is_async: false,
             is_mut: false,
+            c_export_name: None,
             span: span(),
         };
         let mut module = HirModule {
@@ -232,6 +234,7 @@ mod tests {
                     is_public: true,
                     is_async: false,
                     is_mut: false,
+                    c_export_name: None,
                     span: span(),
                 },
             ],
@@ -278,6 +281,7 @@ mod tests {
             is_public: false,
             is_async: false,
             is_mut: false,
+            c_export_name: None,
             span: span(),
         };
         let mut module = HirModule {
@@ -319,6 +323,7 @@ mod tests {
                     is_public: true,
                     is_async: false,
                     is_mut: false,
+                    c_export_name: None,
                     span: span(),
                 },
             ],

@@ -49,3 +49,9 @@ tmp/
 .vscode/settings.json
 .windsurf/
 .ztc-tmp/
+
+# Embed smoke artifacts
+examples/embed/*.so
+examples/embed/*.dll
+examples/embed/*.dylib
+examples/embed/*.o
