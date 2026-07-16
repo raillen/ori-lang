@@ -231,6 +231,10 @@ when the compiler starts producing it.
 | `attr.invalid_test_signature` | error | `@test` function has parameters, type parameters, or a return value |
 | `attr.invalid_target` | error | Attribute is applied to a declaration kind that does not support it |
 | `attr.unknown` | error | Attribute name is not part of the current built-in attribute set |
+| `attr.c_export_not_public` | error | `@c_export` used on a non-`public` function |
+| `attr.c_export_async` | error | `@c_export` used on an async function |
+| `attr.c_export_generic` | error | `@c_export` used on a generic function |
+| `attr.c_export_bad_type` | error | `@c_export` parameter or return type is not FFI-safe for phase 1 |
 
 ### `doc`
 

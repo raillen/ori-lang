@@ -1,0 +1,11 @@
+module app.embed_add
+
+@c_export
+public add_scores(a: int, b: int) -> int
+    return a + b
+end
+
+@c_export("mul_scores")
+public mul(a: int, b: int) -> int
+    return a * b
+end

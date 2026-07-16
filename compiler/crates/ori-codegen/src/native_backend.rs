@@ -2965,6 +2965,11 @@ pub struct NativeBackend<M: Module> {
     /// HIR has an entry `main`. Used by the JIT backend to locate the entry
     /// function pointer after `finalize_definitions`.
     main_func_id: Option<FuncId>,
+    /// When true (`ori compile --lib`), emit C ABI `@c_export` wrappers and
+    /// `__ori_module_init` instead of requiring a process `main`.
+    lib_mode: bool,
+    /// Map from Ori function qualified name → C export `FuncId` (lib mode).
+    c_export_ids: HashMap<SmolStr, FuncId>,
     /// Cooperative line debugger (ORI_DEBUG_INSTRUMENT=1 + ORI_DEBUG_SOURCE).
     debug_source_path: Option<String>,
     debug_line_starts: Vec<u32>,
@@ -2993,6 +2998,8 @@ impl<M: Module> NativeBackend<M> {
             struct_dtors: HashMap::new(),
             enum_dtors: HashMap::new(),
             main_func_id: None,
+            lib_mode: false,
+            c_export_ids: HashMap::new(),
             debug_source_path: None,
             debug_line_starts: Vec::new(),
             debug_path_data: None,
@@ -4397,7 +4404,8 @@ impl<M: Module> NativeBackend<M> {
                 .map_err(|e| format!("declare closure wrapper '{}': {e}", f.name))?;
             self.func_wrapper_ids.insert(f.name.clone(), id);
         }
-        if hir.funcs.iter().any(|f| is_entry_main(hir, f)) {
+        // Process entry `main` only for executables (not shared libraries).
+        if !self.lib_mode && hir.funcs.iter().any(|f| is_entry_main(hir, f)) {
             let mut sig = self.module.make_signature();
             sig.params.push(AbiParam::new(types::I32));
             sig.params.push(AbiParam::new(self.ptr_ty));
@@ -4405,6 +4413,24 @@ impl<M: Module> NativeBackend<M> {
             self.module
                 .declare_function("main", Linkage::Export, &sig)
                 .map_err(|e| format!("declare main: {e}"))?;
+        }
+        // C ABI exports for embed hosts (`@c_export` / `--lib`).
+        for f in &hir.funcs {
+            if let Some(export_name) = &f.c_export_name {
+                let sig = self.make_sig(f);
+                let id = self
+                    .module
+                    .declare_function(export_name.as_str(), Linkage::Export, &sig)
+                    .map_err(|e| format!("declare c_export '{export_name}': {e}"))?;
+                self.c_export_ids.insert(f.name.clone(), id);
+            }
+        }
+        // Module global init for shared libraries (weakly called from ori_rt_init).
+        if self.lib_mode {
+            let sig = self.module.make_signature();
+            self.module
+                .declare_function("__ori_module_init", Linkage::Export, &sig)
+                .map_err(|e| format!("declare __ori_module_init: {e}"))?;
         }
         Ok(())
     }
@@ -4589,7 +4615,75 @@ let mut bctx = FunctionBuilderContext::new();
             self.define_global_initializer(hir, global_init_id)?;
         }
 
-        // Define C main wrapper
+        // C ABI export wrappers (`@c_export`) — unmangled symbols for dlopen hosts.
+        for f in &hir.funcs {
+            let Some(&export_id) = self.c_export_ids.get(&f.name) else {
+                continue;
+            };
+            let ori_id = self.func_ids[&f.name];
+            let mut ctx = self.module.make_context();
+            ctx.func.signature = self.make_sig(f);
+            let ori_ref = self.module.declare_func_in_func(ori_id, &mut ctx.func);
+            let mut bctx = FunctionBuilderContext::new();
+            {
+                let mut b = FunctionBuilder::new(&mut ctx.func, &mut bctx);
+                let block = b.create_block();
+                b.append_block_params_for_function_params(block);
+                b.switch_to_block(block);
+                b.seal_block(block);
+                let params: Vec<ir::Value> = b.block_params(block).to_vec();
+                let call = b.ins().call(ori_ref, &params);
+                let results = b.inst_results(call).to_vec();
+                if results.is_empty() {
+                    b.ins().return_(&[]);
+                } else {
+                    b.ins().return_(&results);
+                }
+                b.seal_all_blocks();
+                b.finalize();
+            }
+            self.module
+                .define_function(export_id, &mut ctx)
+                .map_err(|e| {
+                    format!(
+                        "define c_export '{}': {e}",
+                        f.c_export_name.as_deref().unwrap_or("?")
+                    )
+                })?;
+        }
+
+        // Shared-library module init (globals). Hosts call `ori_rt_init`, which
+        // weakly invokes `__ori_module_init` when present.
+        if self.lib_mode {
+            let sig = self.module.make_signature();
+            let init_id = self
+                .module
+                .declare_function("__ori_module_init", Linkage::Export, &sig)
+                .map_err(|e| format!("re-declare __ori_module_init: {e}"))?;
+            let mut ctx = self.module.make_context();
+            ctx.func.signature = sig;
+            let global_ref =
+                global_init_id.map(|id| self.module.declare_func_in_func(id, &mut ctx.func));
+            let mut bctx = FunctionBuilderContext::new();
+            {
+                let mut b = FunctionBuilder::new(&mut ctx.func, &mut bctx);
+                let blk = b.create_block();
+                b.switch_to_block(blk);
+                b.seal_block(blk);
+                if let Some(init_ref) = global_ref {
+                    b.ins().call(init_ref, &[]);
+                }
+                b.ins().return_(&[]);
+                b.seal_all_blocks();
+                b.finalize();
+            }
+            self.module
+                .define_function(init_id, &mut ctx)
+                .map_err(|e| format!("define __ori_module_init: {e}"))?;
+        }
+
+        // Define C main wrapper (executables only)
+        if !self.lib_mode {
         if let Some(entry_main) = hir.funcs.iter().find(|f| is_entry_main(hir, f)) {
             let ori_main_id = self.func_ids[&entry_main.name];
             let mut sig = self.module.make_signature();
@@ -4664,6 +4758,7 @@ let mut bctx = FunctionBuilderContext::new();
                 .define_function(main_id, &mut ctx)
                 .map_err(|e| format!("define main wrapper: {e}"))?;
         }
+        } // !lib_mode
         self.define_struct_eq_helpers(hir)?;
         self.define_struct_dtors(hir)?;
         self.define_enum_dtors(hir)?;
@@ -13668,9 +13763,24 @@ impl NativeBackend<ObjectModule> {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NativeEmitOptions {
+    /// Shared-library / embed mode (`ori compile --lib`).
+    pub lib: bool,
+}
+
 pub fn emit_native(hir: &HirModule, obj_path: &std::path::Path) -> Result<(), String> {
+    emit_native_with_options(hir, obj_path, NativeEmitOptions::default())
+}
+
+pub fn emit_native_with_options(
+    hir: &HirModule,
+    obj_path: &std::path::Path,
+    options: NativeEmitOptions,
+) -> Result<(), String> {
     let module = make_object_module()?;
-    let backend = NativeBackend::new(module)?;
+    let mut backend = NativeBackend::new(module)?;
+    backend.lib_mode = options.lib;
     let bytes = backend.compile(hir)?;
     std::fs::write(obj_path, &bytes)
         .map_err(|e| format!("write {} failed: {e}", obj_path.display()))
@@ -13689,6 +13799,8 @@ pub struct NativeLinker {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NativeLinkOptions {
     pub raw_diagnostics: bool,
+    /// When true, produce a shared library (`-shared` / `/DLL`) for embed hosts.
+    pub shared: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -15027,6 +15139,7 @@ fn link_with_system_linker(
 ) -> Result<(), String> {
     let mut cmd = std::process::Command::new(linker);
     let cc_driver = !cfg!(windows) && is_unix_cc_link_driver(linker);
+    let shared = options.shared;
 
     // Cargo/rustup often leave LIBRARY_PATH pointing at the Rust sysroot. That
     // shadows Debian multiarch paths and makes both `ld` and `cc` fail with
@@ -15035,8 +15148,20 @@ fn link_with_system_linker(
     cmd.env_remove("LIBPATH");
 
     if cfg!(windows) {
+        if shared {
+            cmd.arg("/DLL");
+        }
         cmd.arg(format!("/OUT:{}", exe_path.display()));
     } else {
+        if shared {
+            // Prefer the C driver for shared libraries (handles PIC + crt).
+            if cc_driver {
+                cmd.arg("-shared");
+                cmd.arg("-fPIC");
+            } else {
+                cmd.arg("-shared");
+            }
+        }
         cmd.arg("-o").arg(exe_path);
     }
 
@@ -15044,12 +15169,17 @@ fn link_with_system_linker(
     // have broken default search for `-lc` even for `/usr/bin/cc`), but skip
     // manual CRT objects / -dynamic-linker (the driver owns those).
     // Bare `ld`/`mold`/`ld.lld` need full CRT + -dynamic-linker.
-    if !cc_driver {
+    // Shared libraries do not use crt1.o / -dynamic-linker.
+    if !cc_driver && !shared {
         if let Some(dl) = dynamic_linker {
             cmd.arg("-dynamic-linker").arg(dl);
         }
     }
     for arg in extra_args {
+        // PIE flags are wrong for shared objects.
+        if shared && (arg == "-no-pie" || arg == "-pie") {
+            continue;
+        }
         cmd.arg(arg);
     }
     for dir in lib_dirs {
@@ -15069,30 +15199,55 @@ fn link_with_system_linker(
             cmd.arg(format!("-L{}", dir.display()));
         }
     }
-    if !cc_driver {
+    if !cc_driver && !shared {
         for crt in crt_pre {
             cmd.arg(crt);
         }
     }
     cmd.arg(obj_path);
-    // `extra_libs` mixes the runtime staticlib path with flag-like entries from
-    // runtime-link.json (`-lpthread`, `-lc`, `-no-pie`). Pass flags as raw
-    // strings; skip `-lc`/`-no-pie` when `cc` already provides them.
+    // `extra_libs` mixes the runtime staticlib/cdylib path with flag-like
+    // entries from runtime-link.json (`-lpthread`, `-lc`, `-no-pie`).
+    // Shared mode typically links the runtime **cdylib** (see pipeline).
     for lib in extra_libs {
         let s = lib.to_string_lossy();
         if s.starts_with('-') {
             if cc_driver && (s == "-lc" || s == "-no-pie") {
                 continue;
             }
+            if shared && (s == "-no-pie" || s == "-pie") {
+                continue;
+            }
             cmd.arg(s.as_ref());
         } else {
+            // When linking a .so/.dll runtime into another shared library,
+            // pass `-Ldir -lname` so the dynamic linker resolves it, and set
+            // an rpath to the runtime directory for local smoke tests.
+            if shared && !cfg!(windows) {
+                if let Some(parent) = lib.parent() {
+                    cmd.arg(format!("-L{}", parent.display()));
+                    cmd.arg(format!("-Wl,-rpath,{}", parent.display()));
+                }
+                if let Some(name) = lib.file_name().and_then(|n| n.to_str()) {
+                    if let Some(stem) = name
+                        .strip_prefix("lib")
+                        .and_then(|n| n.strip_suffix(".so"))
+                        .or_else(|| {
+                            name.strip_prefix("lib")
+                                .and_then(|n| n.strip_suffix(".dylib"))
+                        })
+                    {
+                        cmd.arg(format!("-l{stem}"));
+                        continue;
+                    }
+                }
+            }
             cmd.arg(lib);
         }
     }
     if !cfg!(windows) && !cc_driver {
         cmd.arg("-lc");
     }
-    if !cc_driver {
+    if !cc_driver && !shared {
         for crt in crt_post {
             cmd.arg(crt);
         }

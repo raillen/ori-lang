@@ -1,5 +1,5 @@
 use crate::hir::*;
-use ori_ast::common::Visibility;
+use ori_ast::common::{Attr, AttrArg, Visibility};
 use ori_ast::expr::{Arg, BinaryOp, ClosureBody, ClosureExpr, Expr, FStrPart, UnaryOp};
 use ori_ast::item::{Item, SourceFile};
 use ori_ast::stmt::{Block, MatchCase, Stmt};
@@ -1724,6 +1724,7 @@ fn lower_apply_method(
         is_public: m.visibility == Visibility::Public,
         is_async: m.is_async,
         is_mut: m.is_mut,
+        c_export_name: None,
         span: m.span,
     });
 }
@@ -1877,6 +1878,7 @@ pub fn lower(
                         is_public: m.visibility == Visibility::Public,
                         is_async: m.is_async,
                         is_mut: m.is_mut,
+                        c_export_name: None,
                         span: m.span,
                     });
                 }
@@ -2018,6 +2020,7 @@ pub fn lower(
                             is_public: func.visibility == Visibility::Public,
                             is_async: func.is_async,
                             is_mut: func.is_mut,
+                            c_export_name: None,
                             span: func.span,
                         });
                     }
@@ -2043,6 +2046,7 @@ pub fn lower(
                 l.pop();
                 let path = format!("{}.{}", namespace, f.name.text);
                 let def_id = def_map.lookup(&path).unwrap_or(ori_types::DefId(u32::MAX));
+                let c_export_name = c_export_name_from_attrs(&item.attrs, f.name.text.as_str());
                 funcs.push(HirFunc {
                     def_id,
                     name: SmolStr::new(&path),
@@ -2053,6 +2057,7 @@ pub fn lower(
                     is_public: f.visibility == Visibility::Public,
                     is_async: f.is_async,
                     is_mut: f.is_mut,
+                    c_export_name,
                     span: f.span,
                 });
             }
@@ -4111,6 +4116,7 @@ impl<'a> Lowerer<'a> {
             is_public: false,
             is_async: false,
             is_mut: false,
+            c_export_name: None,
             span,
         });
 
@@ -4655,6 +4661,21 @@ fn unwrap_ty(ty: &Ty) -> Ty {
         Ty::Result(ok, _) => *ok.clone(),
         _ => ty.clone(),
     }
+}
+
+/// Resolve `@c_export` / `@c_export("sym")` for free functions (cdylib exports).
+fn c_export_name_from_attrs(attrs: &[Attr], default_name: &str) -> Option<SmolStr> {
+    for attr in attrs {
+        if attr.name.text.as_str() != "c_export" {
+            continue;
+        }
+        match attr.args.as_slice() {
+            [] => return Some(SmolStr::new(default_name)),
+            [AttrArg::String(name, _)] if !name.is_empty() => return Some(name.clone()),
+            _ => return Some(SmolStr::new(default_name)),
+        }
+    }
+    None
 }
 
 fn async_return_ty(is_async: bool, inner: Ty) -> Ty {
