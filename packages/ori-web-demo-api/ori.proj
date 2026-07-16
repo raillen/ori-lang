@@ -1,9 +1,0 @@
-manifest = 1
-name = "web_demo_api"
-version = "0.1.0"
-kind = "app"
-entry = "main.orl"
-[source]
-root_namespace = "app"
-[dependencies]
-web = { path = "../ori-web", version = "0.1.0" }
