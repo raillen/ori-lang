@@ -22,6 +22,7 @@
 | [roadtov1.md](roadtov1.md) | Long-horizon 1.0 sketch |
 | [perf-baseline-2026-07-13.md](perf-baseline-2026-07-13.md) | LANG-PERF baselines + polyglot multi-lang snapshot |
 | [perf-runtime-midend-plan.md](perf-runtime-midend-plan.md) | LANG-PERF-2 mid-end / loop runtime plan (**done** 0–6) |
+| [issue-ffi-dispatch-large-binary-2026-07-16.md](issue-ffi-dispatch-large-binary-2026-07-16.md) | **LANG-PERF-3** — FFI ~3000× mais lento em binário grande (**corrigido 2026-07-16**: registro ARC linear → HashMap; não era dispatch) |
 | [qa/test-matrix-ori.md](qa/test-matrix-ori.md) | Product-mapped compiler test matrix |
 | [qa/residual-cleanup-2026-07-13.md](qa/residual-cleanup-2026-07-13.md) | Residual surface cleanup snapshot |
 | [web-templates-discussion-roadmap.md](web-templates-discussion-roadmap.md) | **ori-templates / ori-web / HTML-first** — discussion roadmap (syntax, SEC, packages) |

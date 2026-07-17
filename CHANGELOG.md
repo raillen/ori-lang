@@ -143,6 +143,18 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `capacity`; `examples/README` links performance guide.
 
 ### Corrigido
+- **LANG-PERF-3 — ARC registry linear scans made FFI-boundary cost grow with
+  live heap size** (`~1.5ms` per extern call in large programs vs `~0.55µs` in
+  small ones; Studio ImGui shell at ~2fps). `ori_arc_retain` / `ori_arc_release`
+  / edge (un)registration resolved payloads by scanning a `Vec` of every live
+  allocation under the global lock, so each call cost O(live allocations); frees
+  also scanned every edge. The registry now keys allocations by payload address
+  (`HashMap`) and indexes ownership edges by owner and by child, making
+  retain/release/edge ops O(1) and `ori_arc_collect_cycles` O(n + e) instead of
+  O(n²). Synthetic repro (extern call + managed temp per iteration, 10k live
+  strings): 226µs → **1.5µs per iteration**, flat up to 100k live allocations.
+  Regression guard: `performance_guard::run_ffi_boundary_cost_stays_flat_with_many_live_allocations`.
+  Issue: [`docs/planning/issue-ffi-dispatch-large-binary-2026-07-16.md`](docs/planning/issue-ffi-dispatch-large-binary-2026-07-16.md).
 - **Native loops no longer call `ori_arc_collect_cycles` every iteration**
   (was triggered whenever a block entered with empty managed stack, including
   `while`/`for` bodies). Cycle collection now only runs at function-root

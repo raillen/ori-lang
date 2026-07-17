@@ -3,7 +3,7 @@
 pub const ORI_ABI_VERSION: &str = "ori-native-abi-1";
 
 use std::cell::Cell;
-use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::CStr;
 use std::io::Write;
 use std::os::raw::{c_char, c_uchar};
@@ -28,21 +28,83 @@ pub struct OriHeapHeader {
 
 #[derive(Clone, Copy)]
 struct ArcAllocation {
-    payload: usize,
     header: usize,
     size: usize,
 }
 
-#[derive(Clone, Copy)]
-struct ArcEdge {
-    owner: usize,
-    child: usize,
+/// Ownership edges indexed both ways so edge registration/removal and the bulk
+/// lookups on free (`take_owned_edges`, `remove_incoming_edges`) cost
+/// O(degree) instead of a scan over every edge in the process.
+#[derive(Default)]
+struct ArcEdges {
+    by_owner: HashMap<usize, Vec<usize>>,
+    by_child: HashMap<usize, Vec<usize>>,
+}
+
+impl ArcEdges {
+    #[cfg(test)]
+    fn clear(&mut self) {
+        self.by_owner.clear();
+        self.by_child.clear();
+    }
+
+    fn contains(&self, owner: usize, child: usize) -> bool {
+        self.by_owner
+            .get(&owner)
+            .is_some_and(|children| children.contains(&child))
+    }
+
+    fn insert(&mut self, owner: usize, child: usize) {
+        self.by_owner.entry(owner).or_default().push(child);
+        self.by_child.entry(child).or_default().push(owner);
+    }
+
+    fn remove(&mut self, owner: usize, child: usize) -> bool {
+        if !remove_one_edge_entry(&mut self.by_owner, owner, child) {
+            return false;
+        }
+        remove_one_edge_entry(&mut self.by_child, child, owner);
+        true
+    }
+
+    /// Removes and returns every child owned by `owner`.
+    fn take_children_of(&mut self, owner: usize) -> Vec<usize> {
+        let children = self.by_owner.remove(&owner).unwrap_or_default();
+        for &child in &children {
+            remove_one_edge_entry(&mut self.by_child, child, owner);
+        }
+        children
+    }
+
+    /// Drops every edge whose child is `child` (owners keep no dangling entry).
+    fn remove_edges_to(&mut self, child: usize) {
+        for owner in self.by_child.remove(&child).unwrap_or_default() {
+            remove_one_edge_entry(&mut self.by_owner, owner, child);
+        }
+    }
+}
+
+fn remove_one_edge_entry(index: &mut HashMap<usize, Vec<usize>>, key: usize, value: usize) -> bool {
+    let Some(values) = index.get_mut(&key) else {
+        return false;
+    };
+    let Some(position) = values.iter().position(|v| *v == value) else {
+        return false;
+    };
+    values.swap_remove(position);
+    if values.is_empty() {
+        index.remove(&key);
+    }
+    true
 }
 
 #[derive(Default)]
 struct ArcState {
-    allocations: Vec<ArcAllocation>,
-    edges: Vec<ArcEdge>,
+    /// Live managed allocations keyed by payload address. Keyed lookup keeps
+    /// `ori_arc_retain`/`ori_arc_release` O(1); the previous linear registry
+    /// made every retain/release O(live allocations) (LANG-PERF-3).
+    allocations: HashMap<usize, ArcAllocation>,
+    edges: ArcEdges,
 }
 
 static ARC_STATE: OnceLock<Mutex<ArcState>> = OnceLock::new();
@@ -111,18 +173,19 @@ unsafe fn header_for_registered(ptr: *mut u8) -> Option<*mut OriHeapHeader> {
     let state = arc_state().lock().unwrap_or_else(|e| e.into_inner());
     state
         .allocations
-        .iter()
-        .find(|allocation| allocation.payload == payload)
+        .get(&payload)
         .map(|allocation| allocation.header as *mut OriHeapHeader)
 }
 
 unsafe fn register_allocation(header: *mut OriHeapHeader, payload: *mut u8, size: usize) {
     if let Ok(mut state) = arc_state().lock() {
-        state.allocations.push(ArcAllocation {
-            payload: payload as usize,
-            header: header as usize,
-            size,
-        });
+        state.allocations.insert(
+            payload as usize,
+            ArcAllocation {
+                header: header as usize,
+                size,
+            },
+        );
     }
 }
 
@@ -134,42 +197,37 @@ unsafe fn registered_payload_size(ptr: *const u8) -> Option<usize> {
     let state = arc_state().lock().ok()?;
     state
         .allocations
-        .iter()
-        .find(|allocation| allocation.payload == payload)
+        .get(&payload)
         .map(|allocation| allocation.size)
 }
 
 unsafe fn unregister_allocation(ptr: *mut u8) -> Option<*mut OriHeapHeader> {
     let payload = ptr as usize;
     let mut state = arc_state().lock().ok()?;
-    let index = state
+    state
         .allocations
-        .iter()
-        .position(|allocation| allocation.payload == payload)?;
-    Some(state.allocations.swap_remove(index).header as *mut OriHeapHeader)
+        .remove(&payload)
+        .map(|allocation| allocation.header as *mut OriHeapHeader)
 }
 
 unsafe fn remove_incoming_edges(ptr: *mut u8) {
-    let payload = ptr as usize;
     if let Ok(mut state) = arc_state().lock() {
-        state.edges.retain(|edge| edge.child != payload);
+        state.edges.remove_edges_to(ptr as usize);
     }
 }
 
 unsafe fn take_owned_edges(ptr: *mut u8) -> Vec<*mut u8> {
     let owner = ptr as usize;
-    let mut children = Vec::new();
     if let Ok(mut state) = arc_state().lock() {
-        let mut index = 0;
-        while index < state.edges.len() {
-            if state.edges[index].owner == owner {
-                children.push(state.edges.swap_remove(index).child as *mut u8);
-            } else {
-                index += 1;
-            }
-        }
+        state
+            .edges
+            .take_children_of(owner)
+            .into_iter()
+            .map(|child| child as *mut u8)
+            .collect()
+    } else {
+        Vec::new()
     }
-    children
 }
 
 unsafe fn free_registered_object(ptr: *mut u8, release_owned_edges: bool) {
@@ -288,17 +346,10 @@ pub unsafe extern "C" fn ori_arc_register_edge(owner: *mut u8, child: *mut u8) {
         return;
     }
     if let Ok(mut state) = arc_state().lock() {
-        if state
-            .edges
-            .iter()
-            .any(|edge| edge.owner == owner_key && edge.child == child_key)
-        {
+        if state.edges.contains(owner_key, child_key) {
             return;
         }
-        state.edges.push(ArcEdge {
-            owner: owner_key,
-            child: child_key,
-        });
+        state.edges.insert(owner_key, child_key);
         (*child_header).refcount.fetch_add(1, Ordering::Relaxed);
     }
 }
@@ -1452,14 +1503,7 @@ pub unsafe extern "C" fn ori_arc_unregister_edge(owner: *mut u8, child: *mut u8)
     let child_key = child as usize;
     let mut removed = false;
     if let Ok(mut state) = arc_state().lock() {
-        if let Some(index) = state
-            .edges
-            .iter()
-            .position(|edge| edge.owner == owner_key && edge.child == child_key)
-        {
-            state.edges.swap_remove(index);
-            removed = true;
-        }
+        removed = state.edges.remove(owner_key, child_key);
     }
     if removed {
         ori_arc_release(child);
@@ -1499,31 +1543,11 @@ pub unsafe extern "C" fn ori_arc_update_edge(
 /// cycle collection is running.
 #[no_mangle]
 pub unsafe extern "C" fn ori_arc_collect_cycles() -> i64 {
-    #[derive(Clone)]
     struct Mark {
         payload: usize,
         header: usize,
         trial_count: i64,
         marked: bool,
-        collect: bool,
-    }
-
-    fn mark_reachable(index: usize, marks: &mut [Mark], edges: &[ArcEdge]) {
-        if marks[index].marked {
-            return;
-        }
-        marks[index].marked = true;
-        let payload = marks[index].payload;
-        let children: Vec<usize> = edges
-            .iter()
-            .filter(|edge| edge.owner == payload)
-            .map(|edge| edge.child)
-            .collect();
-        for child in children {
-            if let Some(child_index) = marks.iter().position(|mark| mark.payload == child) {
-                mark_reachable(child_index, marks, edges);
-            }
-        }
     }
 
     let Ok(mut state) = arc_state().lock() else {
@@ -1532,71 +1556,81 @@ pub unsafe extern "C" fn ori_arc_collect_cycles() -> i64 {
     let mut marks: Vec<Mark> = state
         .allocations
         .iter()
-        .map(|allocation| {
+        .map(|(payload, allocation)| {
             let header = allocation.header as *mut OriHeapHeader;
             Mark {
-                payload: allocation.payload,
+                payload: *payload,
                 header: allocation.header,
                 trial_count: (*header).refcount.load(Ordering::Acquire),
                 marked: false,
-                collect: false,
             }
         })
         .collect();
-    for edge in &state.edges {
-        let owner_known = marks.iter().any(|mark| mark.payload == edge.owner);
-        if owner_known {
-            if let Some(child) = marks.iter_mut().find(|mark| mark.payload == edge.child) {
-                child.trial_count -= 1;
+    let index_by_payload: HashMap<usize, usize> = marks
+        .iter()
+        .enumerate()
+        .map(|(index, mark)| (mark.payload, index))
+        .collect();
+    // Trial deletion: discount references coming from registered edges so
+    // `trial_count > 0` means "externally referenced".
+    for (owner, children) in &state.edges.by_owner {
+        if !index_by_payload.contains_key(owner) {
+            continue;
+        }
+        for child in children {
+            if let Some(&child_index) = index_by_payload.get(child) {
+                marks[child_index].trial_count -= 1;
             }
         }
     }
-    let edges_clone = state.edges.clone();
-    for index in 0..marks.len() {
-        if marks[index].trial_count > 0 {
-            mark_reachable(index, &mut marks, &edges_clone);
+    // Mark everything reachable from an externally-referenced root.
+    let mut stack: Vec<usize> = (0..marks.len())
+        .filter(|&index| marks[index].trial_count > 0)
+        .collect();
+    while let Some(index) = stack.pop() {
+        if marks[index].marked {
+            continue;
+        }
+        marks[index].marked = true;
+        if let Some(children) = state.edges.by_owner.get(&marks[index].payload) {
+            for child in children {
+                if let Some(&child_index) = index_by_payload.get(child) {
+                    if !marks[child_index].marked {
+                        stack.push(child_index);
+                    }
+                }
+            }
         }
     }
 
-    let mut collected = 0;
-    for mark in &mut marks {
-        if !mark.marked {
-            mark.collect = true;
-            collected += 1;
-        }
-    }
-    if collected == 0 {
-        return 0;
-    }
-
-    let collected_payloads: Vec<usize> = marks
+    let collected_payloads: HashSet<usize> = marks
         .iter()
-        .filter(|mark| mark.collect)
+        .filter(|mark| !mark.marked)
         .map(|mark| mark.payload)
         .collect();
+    if collected_payloads.is_empty() {
+        return 0;
+    }
+    let collected = collected_payloads.len() as i64;
+
     let collected_pairs: Vec<(usize, usize)> = marks
         .iter()
-        .filter(|mark| mark.collect)
+        .filter(|mark| !mark.marked)
         .map(|mark| (mark.payload, mark.header))
         .collect();
     let mut children_to_release = Vec::new();
 
-    state
-        .allocations
-        .retain(|allocation| !collected_payloads.contains(&allocation.payload));
-    let mut index = 0;
-    while index < state.edges.len() {
-        let edge = state.edges[index];
-        let owner_collected = collected_payloads.contains(&edge.owner);
-        let child_collected = collected_payloads.contains(&edge.child);
-        if owner_collected || child_collected {
-            state.edges.swap_remove(index);
-            if owner_collected && !child_collected {
-                children_to_release.push(edge.child as *mut u8);
+    for &(payload, _) in &collected_pairs {
+        state.allocations.remove(&payload);
+        // Surviving children owned by a collected object get their edge
+        // reference released after the lock is dropped.
+        for child in state.edges.take_children_of(payload) {
+            if !collected_payloads.contains(&child) {
+                children_to_release.push(child as *mut u8);
             }
-        } else {
-            index += 1;
         }
+        // Edges from surviving owners into a collected object just disappear.
+        state.edges.remove_edges_to(payload);
     }
     drop(state);
 
