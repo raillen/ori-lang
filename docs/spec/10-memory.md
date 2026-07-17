@@ -76,19 +76,25 @@ between managed heap objects. `ori_arc_collect_cycles()` reclaims unreachable
 cycles from that registered graph using a trial-deletion algorithm. The return
 value is the number of heap objects reclaimed in the pass.
 
-**Cooperative collection points:** the native backend calls
-`ori_arc_collect_cycles()` at the following safe points:
+**Cooperative collection points:** full trial-deletion (`ori_arc_collect_cycles`)
+is **O(live managed allocations)**. Generated code therefore uses an amortized
+gate at most function-level safe points:
 
-- At the end of a sync function body (after scope cleanup, before returning
-  control to the caller), when the function is a top-level scope
-  (`managed_start == 0`).
-- After dropping dead frame values following an `await` resume, if any values
-  were released.
-- Explicitly from Ori code via `ori.test.collect_cycles()` (intended for
-  tests and diagnostic tooling).
+- At the end of a sync function body (after scope cleanup, before returning),
+  when the function is a top-level scope (`managed_start == 0` and not inside a
+  loop body), the backend calls **`ori_arc_maybe_collect_cycles()`**. That runs a
+  full pass only when the process-wide managed allocation counter has advanced
+  by `ORI_COOPERATIVE_COLLECT_THRESHOLD` (default **256**) since the last pass.
+- After dropping dead frame values following an `await` resume (if any values
+  were released): same amortized gate.
+- Async executor safe points (`ori_executor_drain`, batches inside
+  `ori_task_block_on`): same cooperative counter.
+- Explicit full scan from Ori via `ori.test.collect_cycles()` (tests /
+  diagnostics) or the native `ori_arc_collect_cycles` ABI.
 
-The runtime does **not** currently run the collector on a periodic schedule or
-after N allocations. Collection is driven by scope exits and explicit calls.
+Full scans are **not** performed on every function return (that residual kept
+large-heap interactive programs ~2fps after the LANG-PERF-3 registry fix).
+Tight loops still never collect on each iteration (LANG-PERF-2).
 
 ### Type-specific destructors
 

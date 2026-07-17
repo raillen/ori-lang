@@ -25,6 +25,7 @@ pub mod jit;
 const INTERNAL_NATIVE_RUNTIME_IMPORTS: &[&str] = &[
     "ori_abort_concurrent_modification",
     "ori_arc_collect_cycles",
+    "ori_arc_maybe_collect_cycles",
     "ori_arc_register_edge",
     "ori_arc_release",
     "ori_arc_retain",
@@ -4125,6 +4126,11 @@ impl<M: Module> NativeBackend<M> {
         let id = decl("ori_arc_collect_cycles", &[], vec![], Some(types::I64))?;
         self.stdlib_ids
             .insert(SmolStr::new("ori_arc_collect_cycles"), id);
+        // Amortized safe point: full trial-deletion only every N allocations
+        // (LANG-PERF-3 residual / LANG-MEM-3 partial — see ori-runtime).
+        let id = decl("ori_arc_maybe_collect_cycles", &[], vec![], None)?;
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_arc_maybe_collect_cycles"), id);
         // malloc / free for runtime allocation
         let id = decl("malloc", &[types::I64], vec![], Some(pt))?;
         self.stdlib_ids.insert(SmolStr::new("malloc"), id);
@@ -6928,13 +6934,16 @@ impl<'a> FuncCodegen<'a> {
     ) -> Result<(), String> {
         self.emit_using_cleanup_calls_from(using_start)?;
         self.emit_managed_cleanup_calls_from(managed_start)?;
-        // LANG-PERF-2: only run the cycle collector at function-root cleanups
-        // outside of loops. Previously `managed_start == 0` alone fired on
-        // every while/for body (empty managed stack at entry) — each iteration
-        // called `ori_arc_collect_cycles`, making tight integer loops ~50×
-        // slower than equivalent Rust/C.
+        // LANG-PERF-2: never full-scan inside loops (empty managed stack at
+        // while/for body entry used to call collect every iteration).
+        // LANG-MEM-3 partial: function-root cleanups use the amortized
+        // cooperative gate (`ori_arc_maybe_collect_cycles`) instead of an
+        // unconditional O(n) trial-deletion pass. Full scans still run when
+        // the allocation counter crosses the threshold (default 256), from
+        // the async executor, or via explicit `ori_arc_collect_cycles` /
+        // `ori.test.collect_cycles`.
         if managed_start == 0 && self.loop_stack.is_empty() {
-            self.emit_arc_collect_cycles()?;
+            self.emit_arc_maybe_collect_cycles()?;
         }
         Ok(())
     }
@@ -7220,8 +7229,8 @@ impl<'a> FuncCodegen<'a> {
         Ok(())
     }
 
-    fn emit_arc_collect_cycles(&mut self) -> Result<(), String> {
-        if let Some(&collect_ref) = self.func_refs.get("ori_arc_collect_cycles") {
+    fn emit_arc_maybe_collect_cycles(&mut self) -> Result<(), String> {
+        if let Some(&collect_ref) = self.func_refs.get("ori_arc_maybe_collect_cycles") {
             self.builder.ins().call(collect_ref, &[]);
         }
         Ok(())
@@ -7994,7 +8003,9 @@ impl<'a> FuncCodegen<'a> {
         }
 
         if dropped_any {
-            self.emit_arc_collect_cycles()?;
+            // Same amortized gate as sync function roots: do not full-scan the
+            // heap after every await resume when live allocations are large.
+            self.emit_arc_maybe_collect_cycles()?;
         }
         Ok(())
     }

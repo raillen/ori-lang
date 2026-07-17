@@ -1327,8 +1327,23 @@ typedef struct {
 } ori_arc_mark_t;
 static ori_arc_header_t* ori_arc_head = NULL;
 static ori_arc_edge_t* ori_arc_edges = NULL;
+/* Amortized full collect: match native ORI_COOPERATIVE_COLLECT_THRESHOLD default. */
+static unsigned long long ori_arc_alloc_counter = 0;
+static unsigned long long ori_arc_last_collected = 0;
+#ifndef ORI_COOPERATIVE_COLLECT_THRESHOLD
+#define ORI_COOPERATIVE_COLLECT_THRESHOLD 256ull
+#endif
 
 static inline void ori_arc_release(void* ptr);
+static inline long long ori_arc_collect_cycles(void);
+
+static inline void ori_arc_maybe_collect_cycles(void) {
+    if (ori_arc_alloc_counter - ori_arc_last_collected < ORI_COOPERATIVE_COLLECT_THRESHOLD) {
+        return;
+    }
+    ori_arc_last_collected = ori_arc_alloc_counter;
+    (void)ori_arc_collect_cycles();
+}
 
 static inline void* ori_alloc(size_t size, size_t align) {
     (void)align;
@@ -1340,6 +1355,7 @@ static inline void* ori_alloc(size_t size, size_t align) {
         ori_arc_head->prev = header;
     }
     ori_arc_head = header;
+    ori_arc_alloc_counter++;
     return (void*)(header + 1);
 }
 
@@ -2402,7 +2418,8 @@ impl CCodegen {
             }
         }
         if managed_start == 0 {
-            statements.push("ori_arc_collect_cycles();".to_string());
+            // Amortized gate (matches native ori_arc_maybe_collect_cycles).
+            statements.push("ori_arc_maybe_collect_cycles();".to_string());
         }
         statements
     }

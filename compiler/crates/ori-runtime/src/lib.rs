@@ -136,7 +136,8 @@ fn cooperative_collect_threshold() -> u64 {
 
 /// Trigger cycle collection when the allocation counter has advanced past the
 /// threshold since the last collection. Called at executor safe points (after a
-/// task batch in `ori_task_block_on` and at the end of `ori_executor_drain`).
+/// task batch in `ori_task_block_on` and at the end of `ori_executor_drain`) and
+/// from generated function-root cleanups via `ori_arc_maybe_collect_cycles`.
 /// Uses `compare_exchange` so only one thread pays the collection cost per
 /// window; `ori_arc_collect_cycles` itself is safe to call concurrently because
 /// it locks `ARC_STATE`.
@@ -155,6 +156,23 @@ fn maybe_collect_cycles_cooperative() {
             ori_arc_collect_cycles();
         }
     }
+}
+
+/// Amortized cycle-collection safe point for generated code and the executor.
+///
+/// Full trial-deletion is O(live allocations). Calling it on every function
+/// return kept large-heap apps at ~2fps (LANG-PERF-3 residual). Generated
+/// function roots now call this instead: a full pass runs only when the
+/// allocation counter has advanced by `ORI_COOPERATIVE_COLLECT_THRESHOLD`
+/// (default 256) since the last pass. Explicit `ori_arc_collect_cycles` and
+/// `ori.test.collect_cycles` still force a full scan.
+///
+/// # Safety
+///
+/// Same invariants as `ori_arc_collect_cycles` when a pass actually runs.
+#[no_mangle]
+pub unsafe extern "C" fn ori_arc_maybe_collect_cycles() {
+    maybe_collect_cycles_cooperative();
 }
 
 thread_local! {

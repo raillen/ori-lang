@@ -74,7 +74,7 @@
 | **LIVE-LINK** | Package smoke uses **SystemLinker only** (not RustcDriver) | 2 | S | **done** | RustcDriver double-links libstd vs `ori-runtime` staticlib (`rust_eh_personality`). |
 | **LIVE-QA** | Daily QA stages + test matrix + skill `ori-lang-qa` | 2 | M | **done** | `tools/qa/*`, `.grok/skills/ori-lang-qa`, agents, Spec 13 quality section |
 | **LIVE-RES** | Residual product surface clean under FREEZE-1 | 1 | S | **done** | Policy + `residual_audit.sh`; intentional residuals remain Spec 14 |
-| **LANG-PERF-3** | FFI call cost scales with binary size (~1.5ms/call large vs 0.55µs small, ~3000×) | 1 | M | **done** | Root cause: ARC registry linear scans (not dispatch). Fixed 2026-07-16: HashMap registry + indexed edges → retain/release O(1). Lab 2026-07-17: sintético 50k vivos 3800µs→**5µs**/iter; ImGui sem ballast ~90+fps; com 50k vivos ainda ~2fps → residual = full-heap `collect_cycles` em function root (**LANG-MEM-3**). Issue: [`issue-ffi-dispatch-large-binary-2026-07-16.md`](issue-ffi-dispatch-large-binary-2026-07-16.md). |
+| **LANG-PERF-3** | FFI call cost scales with binary size (~1.5ms/call large vs 0.55µs small, ~3000×) | 1 | M | **done** | Root cause: ARC registry linear scans (not dispatch). Fixed 2026-07-16: HashMap registry + indexed edges → retain/release O(1). Lab 2026-07-17: sintético 50k vivos 3800µs→**5µs**/iter; ImGui sem ballast ~90+fps; com 50k vivos era ~2fps por full-heap collect em todo return; **mitigado** com `ori_arc_maybe_collect_cycles` (~50fps lab). Residual F3: suspect buffer. Issue: [`issue-ffi-dispatch-large-binary-2026-07-16.md`](issue-ffi-dispatch-large-binary-2026-07-16.md). |
 
 ### Done this focus wave (DX + docs + perf + residual)
 

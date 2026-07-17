@@ -187,6 +187,62 @@ end
     assert_strict_budget("ORI_PERF_FFI_ARC_REGISTRY_BUDGET_MS", elapsed, 5_000);
 }
 
+#[test]
+fn run_function_root_collect_stays_cheap_with_many_live_allocations() {
+    // Regression: LANG-MEM-3 partial (LANG-PERF-3 residual) — function-root
+    // cleanup used to call full `ori_arc_collect_cycles` (O(live heap)) on
+    // every return. With 20k live strings that made even empty helper calls
+    // dominate. Roots now call `ori_arc_maybe_collect_cycles` (threshold gate).
+    let dir = TestDir::new("perf_function_root_collect");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+imports
+    ori.io = io
+    ori.list = lists
+end
+
+tick(x: int) -> int
+    return x + 1
+end
+
+main()
+    const keep_count: int = 20_000
+    const calls: int = 50_000
+    var keep: list[string] = lists.with_capacity(keep_count)
+    var k: int = 0
+    while k < keep_count
+        lists.push(keep, f"pad{k}")
+        k = k + 1
+    end
+    var acc: int = 0
+    var i: int = 0
+    while i < calls
+        acc = tick(acc)
+        i = i + 1
+    end
+    io.print(f"{lists.len(keep)}:{acc}")
+end
+"#,
+    );
+
+    let main_path = dir.path("main.orl");
+    let started = Instant::now();
+    let output = common::run_ori(&["run", main_path.to_str().unwrap()]);
+    let elapsed = started.elapsed();
+    let stdout = common::normalize_stdout(output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        output.status.success(),
+        "`ori run` failed\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert_eq!(stdout.trim(), "20000:50000");
+    // Strict budget is generous for debug JIT; the pre-fix path was multi-second.
+    assert_strict_budget("ORI_PERF_FUNCTION_ROOT_COLLECT_BUDGET_MS", elapsed, 5_000);
+}
+
 fn large_single_file_source(function_count: usize) -> String {
     let mut source = String::from(
         r#"module app.main

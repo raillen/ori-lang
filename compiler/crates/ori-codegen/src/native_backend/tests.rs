@@ -1964,8 +1964,8 @@ fn simple_async_state_machine_releases_dead_managed_frame_values_after_resume() 
         "drop logic must unregister frame ARC edges"
     );
     assert!(
-        drop_dead.contains("self.emit_arc_collect_cycles()?;"),
-        "drop logic must allow cycle collection after early frame releases"
+        drop_dead.contains("self.emit_arc_maybe_collect_cycles()?;"),
+        "drop logic must allow amortized cycle collection after early frame releases"
     );
 }
 

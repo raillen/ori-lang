@@ -8114,7 +8114,7 @@ end
     let out = run_build(&dir.path("main.orl")).unwrap();
     assert!(!out.has_errors, "{:?}", out.diagnostics);
     assert!(out.c_source.contains("ori_arc_register_edge"));
-    assert!(out.c_source.contains("ori_arc_collect_cycles();"));
+    assert!(out.c_source.contains("ori_arc_maybe_collect_cycles();"));
 
     compile_c_source(&dir, "c_backend_block_closure_arc", &out.c_source);
 }

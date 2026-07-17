@@ -155,12 +155,24 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   strings): 226µs → **1.5µs per iteration**, flat up to 100k live allocations.
   Regression guard: `performance_guard::run_ffi_boundary_cost_stays_flat_with_many_live_allocations`.
   Issue: [`docs/planning/issue-ffi-dispatch-large-binary-2026-07-16.md`](docs/planning/issue-ffi-dispatch-large-binary-2026-07-16.md).
+- **LANG-MEM-3 partial — function-root cycle collect is amortized** (residual of
+  LANG-PERF-3 lab: large live heap still ~2fps). Sync function roots and post-
+  `await` dead-frame cleanup call `ori_arc_maybe_collect_cycles` instead of
+  unconditional `ori_arc_collect_cycles`. A full trial-deletion pass runs only
+  when the managed allocation counter advances by
+  `ORI_COOPERATIVE_COLLECT_THRESHOLD` (default 256) since the last pass — same
+  gate already used by the async executor. Explicit `ori.test.collect_cycles` /
+  `ori_arc_collect_cycles` still force a full scan. C backend mirrors the gate.
+  Spec: `docs/spec/10-memory.md`. Regression:
+  `performance_guard::run_function_root_collect_stays_cheap_with_many_live_allocations`.
+  Full suspect-buffer collector remains LANG-MEM-3 F3.
 - **Native loops no longer call `ori_arc_collect_cycles` every iteration**
   (was triggered whenever a block entered with empty managed stack, including
-  `while`/`for` bodies). Cycle collection now only runs at function-root
-  cleanups outside loops. Tight integer loops drop from ~50× Rust to ~1.6× on
-  `fib_iter` (20M steps) on the benchmark host; pure sum/nested closed forms
-  via strength reduction drop further toward process-start noise.
+  `while`/`for` bodies). Cycle collection is gated at function-root cleanups
+  outside loops (see amortized `maybe` above). Tight integer loops drop from
+  ~50× Rust to ~1.6× on `fib_iter` (20M steps) on the benchmark host; pure
+  sum/nested closed forms via strength reduction drop further toward
+  process-start noise.
 
 ### Notas
 - Superfície S3 = **`[0.3.0]`**; inference B = **`[0.3.1]`**; package line **`[0.3.4]`**.

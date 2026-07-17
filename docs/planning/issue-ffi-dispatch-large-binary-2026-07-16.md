@@ -56,10 +56,12 @@ de alocações. Desligar o collect cooperativo
 (`ORI_COOPERATIVE_COLLECT_THRESHOLD` alto) **não** muda o FPS; mode `none` vs
 `frame` com 50k ballast também ~2fps → não é ImGui, é o scan no root.
 
-**Follow-up:** `LANG-MEM-3` (collector incremental / suspect roots — ver
-`plano-arc-nim-2026-07-16.md`). Shell Studio completo (`ori-studio/tools/run.sh`)
-ainda não re-medido end-to-end neste ambiente (mesmo residual esperado se o
-heap vivo for grande).
+**Mitigação 2026-07-17 (LANG-MEM-3 parcial):** function roots e post-await
+passam a chamar `ori_arc_maybe_collect_cycles` (threshold 256 alocações), não
+full scan em todo return. Residual de collector **completo** (buffer de
+suspeitos / passe O(suspeitos)) continua em F3 do plano Nim. Shell Studio
+completo (`ori-studio/tools/run.sh`) ainda não re-medido end-to-end neste
+ambiente.
 
 **Nota separada (não bloqueia):** `ori compile` de fonte com 10k funções levou
 ~4min (provável custo quadrático no front/mid-end) — candidato a novo item de
