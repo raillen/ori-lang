@@ -1,7 +1,7 @@
 # LANG-RES closure (native residuals)
 
 > Status: **closed** 2026-07-13  
-> Normative inventory: [`docs/spec/14-backend-support.md`](../spec/14-backend-support.md)
+> Normative inventory: [`docs/spec/14-backend-support.md`](../../spec/14-backend-support.md)
 
 ## Definition
 

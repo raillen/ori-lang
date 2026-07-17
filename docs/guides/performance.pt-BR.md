@@ -120,4 +120,4 @@ Fontes em `tools/bench/polyglot/{ori,python,rust_*,c,go,javascript,typescript,ru
 | [results/LATEST.md](../../tools/bench/polyglot/results/LATEST.md) | Relatório completo |
 | [language-comparison.md](language-comparison.md) | Suite PowerShell antiga (histórico) |
 | [../planning/perf-baseline-2026-07-13.md](../planning/perf-baseline-2026-07-13.md) | Baseline LANG-PERF do compilador |
-| [../planning/perf-runtime-midend-plan.md](../planning/perf-runtime-midend-plan.md) | Plano mid-end LANG-PERF-2 |
+| [../planning/historico/perf-runtime-midend-plan.md](../planning/historico/perf-runtime-midend-plan.md) | Plano mid-end LANG-PERF-2 |

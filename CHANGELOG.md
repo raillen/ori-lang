@@ -118,7 +118,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   + [performance.pt-BR.md](docs/guides/performance.pt-BR.md); snapshot section on
   root [README.md](README.md) / [README.pt-BR.md](README.pt-BR.md); planning note
   in [docs/planning/perf-baseline-2026-07-13.md](docs/planning/perf-baseline-2026-07-13.md).
-- **LANG-PERF-2 plan:** [docs/planning/perf-runtime-midend-plan.md](docs/planning/perf-runtime-midend-plan.md)
+- **LANG-PERF-2 plan:** [docs/planning/historico/perf-runtime-midend-plan.md](docs/planning/historico/perf-runtime-midend-plan.md)
   — mid-end HIR opts, loop hygiene, strength reduction, inlining; ORC/LLVM deferred.
 - **LANG-PERF-2-0/1/2/3/4 mid-end land:**
   - HIR mid-end `ori_hir::optimize` — const fold + DCE + pure-loop **strength
@@ -154,7 +154,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   O(n²). Synthetic repro (extern call + managed temp per iteration, 10k live
   strings): 226µs → **1.5µs per iteration**, flat up to 100k live allocations.
   Regression guard: `performance_guard::run_ffi_boundary_cost_stays_flat_with_many_live_allocations`.
-  Issue: [`docs/planning/issue-ffi-dispatch-large-binary-2026-07-16.md`](docs/planning/issue-ffi-dispatch-large-binary-2026-07-16.md).
+  Issue: [`docs/planning/historico/issue-ffi-dispatch-large-binary-2026-07-16.md`](docs/planning/historico/issue-ffi-dispatch-large-binary-2026-07-16.md).
 - **LANG-MEM-3 partial — function-root cycle collect is amortized** (residual of
   LANG-PERF-3 lab: large live heap still ~2fps). Sync function roots and post-
   `await` dead-frame cleanup call `ori_arc_maybe_collect_cycles` instead of
@@ -211,7 +211,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Notas
 - Language-first implementation queue **closed** (LANG-DOC/PERF/RES done).
-- **FREEZE-1** remains open on `0.3.x` (readiness: `docs/planning/freeze-1-0-readiness.md`).
+- **FREEZE-1** remains open on `0.3.x` (readiness: `docs/planning/freeze-and-abi-gates.md`).
 - Linux release assets: **`.tar.gz` + `.deb`**.
 
 ### Adicionado (distribuição Linux)
@@ -223,7 +223,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Install docs:** deb path in `docs/install.md`.
 - **Package smoke:** does not bundle non-portable `rust-lld` (needs libLLVM);
   AOT uses **SystemLinker**. BundledRustLld only if `rust-lld --version` runs.
-- **Freeze readiness:** `docs/planning/freeze-1-0-readiness.md` (FREEZE-1 process
+- **Freeze readiness:** `docs/planning/freeze-and-abi-gates.md` (FREEZE-1 process
   finalized; window remains open on 0.3.x).
 
 ### Adicionado (editor DX local)
@@ -259,7 +259,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   examples AOT-compile; regression
   `compile_runs_lang_res_product_surface_native` (for list/map/string/bytes/
   range, index assign, async await, using+dispose, spawn/join).
-- Closure: `docs/planning/lang-res-closure.md`. Reopen only with a concrete
+- Closure: `docs/planning/historico/lang-res-closure.md`. Reopen only with a concrete
   product program that hits `backend.native_unsupported`.
 
 ### Performance (LANG-PERF)
@@ -320,7 +320,7 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   C async remains **wontfix v1** (LANG-3).
 - **STDLIB-5:** closed as wontfix — no mass L1→.orl ports (Layer 1 by design).
 - **DOC-1:** `install.md` / `install.pt-BR.md` + tour links Linux-primary.
-- Design: `docs/planning/design-close-backlog-linux-2026-07-13.md`.
+- Design: `docs/planning/historico/design-close-backlog-linux-2026-07-13.md`.
 
 ### Adicionado (packages / language)
 - **PKG-1 / PKG-2 git dependencies:** declare

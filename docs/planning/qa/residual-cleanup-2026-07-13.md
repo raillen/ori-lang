@@ -2,7 +2,7 @@
 
 > **Status:** cleaned for product surface under FREEZE-1.  
 > Normative inventory remains [`docs/spec/14-backend-support.md`](../../spec/14-backend-support.md).  
-> Policy: [`lang-res-closure.md`](../lang-res-closure.md).
+> Policy: [`lang-res-closure.md`](../historico/lang-res-closure.md).
 
 ## Definition of “clean”
 

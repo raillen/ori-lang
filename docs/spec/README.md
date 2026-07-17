@@ -25,7 +25,7 @@ Product docs index: [../README.md](../README.md).
 | Execution | AOT native primary; `ori run` may JIT when cdylib staged |
 | Freeze | FREEZE-1 on **0.3.x** — additive/fix only without freeze exit |
 | ABI | `ori-native-abi-1` — [`19-abi.md`](19-abi.md) |
-| Residuals | [`14-backend-support.md`](14-backend-support.md) · [`../planning/lang-res-closure.md`](../planning/lang-res-closure.md) |
+| Residuals | [`14-backend-support.md`](14-backend-support.md) · [`../planning/historico/lang-res-closure.md`](../planning/historico/lang-res-closure.md) |
 
 Use:
 
@@ -50,7 +50,7 @@ Surface S3 product decisions and ADR:
 
 - [`docs/planning/ori-surface-s3-auk9.md`](../planning/ori-surface-s3-auk9.md)
 - [`docs/planning/adr-ori-surface-s3-auk9.md`](../planning/adr-ori-surface-s3-auk9.md)
-- [`docs/planning/pr-plan-ori-surface-s3.md`](../planning/pr-plan-ori-surface-s3.md)
+- [`docs/planning/pr-plan-ori-surface-s3.md`](../planning/historico/pr-plan-ori-surface-s3.md)
 
 Breaking list: repository root [`CHANGELOG.md`](../../CHANGELOG.md) section
 `[0.3.0]`. Migration helper: `ori migrate-syntax`.

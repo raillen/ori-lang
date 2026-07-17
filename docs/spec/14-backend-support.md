@@ -199,5 +199,5 @@ Until a v2 decision lands, do not mark C async as partial/yes in the matrix.
 - **LANG-RES (2026-07-13):** closed for product surface — no known
   product-blocking native residual. Gate test:
   `compile_runs_lang_res_product_surface_native`. Closure write-up:
-  `docs/planning/lang-res-closure.md`. Reopen only with a concrete blocker
+  `docs/planning/historico/lang-res-closure.md`. Reopen only with a concrete blocker
   program (valid language surface + `backend.native_unsupported`).

@@ -584,13 +584,13 @@ end
 | Arquivo | Papel |
 |---------|--------|
 | [`adr-ori-surface-s3-auk9.md`](adr-ori-surface-s3-auk9.md) | ADR aceito |
-| [`pr-plan-ori-surface-s3.md`](pr-plan-ori-surface-s3.md) | **DAG `## PR Plan`** para `/execute-plan` |
+| [`pr-plan-ori-surface-s3.md`](historico/pr-plan-ori-surface-s3.md) | **DAG `## PR Plan`** para `/execute-plan` |
 | Este arquivo | Registro de decisões de produto |
 
 ### Como executar
 
 ```text
-/execute-plan docs/planning/pr-plan-ori-surface-s3.md
+/execute-plan docs/planning/historico/pr-plan-ori-surface-s3.md
 ```
 
 Opcional: `--dry-run` primeiro; para só 0.3.0, instruir a parar após PR10 ou

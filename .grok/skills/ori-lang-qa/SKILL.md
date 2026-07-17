@@ -141,6 +141,6 @@ cargo test -p ori-driver --test concurrency_async compile_runs_lang_res_product_
 - `references/daily-stages.md`  
 - `references/residual-policy.md`  
 - Repo: `docs/planning/qa/test-matrix-ori.md`  
-- Repo: `docs/planning/lang-res-closure.md`  
+- Repo: `docs/planning/historico/lang-res-closure.md`  
 - Repo: `docs/spec/13-error-catalog.md`, `14-backend-support.md`  
 - Repo: `docs/planning/BACKLOG.md` (fila language = empty; maintenance only)

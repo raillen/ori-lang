@@ -14,7 +14,7 @@
 - Self-host (M4)
 
 **LANG-PERF-2 closed** (mid-end + list reserve; see
-[`perf-runtime-midend-plan.md`](perf-runtime-midend-plan.md)). Ongoing work is
+[`perf-runtime-midend-plan.md`](historico/perf-runtime-midend-plan.md)). Ongoing work is
 **living maintenance**:
 
 1. Bugs / diagnostics from real programs  
@@ -74,7 +74,7 @@
 | **LIVE-LINK** | Package smoke uses **SystemLinker only** (not RustcDriver) | 2 | S | **done** | RustcDriver double-links libstd vs `ori-runtime` staticlib (`rust_eh_personality`). |
 | **LIVE-QA** | Daily QA stages + test matrix + skill `ori-lang-qa` | 2 | M | **done** | `tools/qa/*`, `.grok/skills/ori-lang-qa`, agents, Spec 13 quality section |
 | **LIVE-RES** | Residual product surface clean under FREEZE-1 | 1 | S | **done** | Policy + `residual_audit.sh`; intentional residuals remain Spec 14 |
-| **LANG-PERF-3** | FFI call cost scales with binary size (~1.5ms/call large vs 0.55µs small, ~3000×) | 1 | M | **done** | Registry HashMap + maybe_collect. Lab 2026-07-17: sintético 5µs/iter; **studio_shell ~58fps avg** (antes ~2fps); DIAG-FFI 100k×`app.fps` = **5ms**. Issue: [`issue-ffi-dispatch-large-binary-2026-07-16.md`](issue-ffi-dispatch-large-binary-2026-07-16.md). Residual F3: suspect buffer. |
+| **LANG-PERF-3** | FFI call cost scales with binary size (~1.5ms/call large vs 0.55µs small, ~3000×) | 1 | M | **done** | Registry HashMap + maybe_collect. Lab 2026-07-17: sintético 5µs/iter; **studio_shell ~58fps avg** (antes ~2fps); DIAG-FFI 100k×`app.fps` = **5ms**. Issue: [`issue-ffi-dispatch-large-binary-2026-07-16.md`](historico/issue-ffi-dispatch-large-binary-2026-07-16.md). Residual F3: suspect buffer. |
 | **LANG-MEM-0** | ARC header: fix stale layout comment/spec + ABI layout guard test | 1 | S | todo | Plan: [`plano-arc-nim-2026-07-16.md`](plano-arc-nim-2026-07-16.md) F0 |
 | **LANG-MEM-1** | Audit dtor × edges overlap + scenario tests S1–S4 | 1 | M | todo | Plan F1. Study: [`historico/nim-study-2026-07-16-c0.md`](historico/nim-study-2026-07-16-c0.md) |
 | **LANG-MEM-2** | Edge completeness matrix for all managed types | 1 | M | todo | Plan F2. Gate: after LANG-MEM-1 |
@@ -91,7 +91,7 @@
 | **LANG-DOC** | User docs EN/PT + root READMEs + examples catalog; living maintenance only after this |
 | **LANG-PERF** | Closed — waves 1–3 (compile/link/JIT flags); see `perf-baseline-2026-07-13.md` |
 | **LANG-PERF-2** | Closed (waves 0–6 + scalar list inline) — reopen only if apps regress |
-| **LANG-RES** | Closed — Spec 14 inventory + `compile_runs_lang_res_product_surface_native`; see `lang-res-closure.md` |
+| **LANG-RES** | Closed — Spec 14 inventory + `compile_runs_lang_res_product_surface_native`; see `historico/lang-res-closure.md` |
 | **DX-VSCODE** | v0.3.2 local `.vsix` |
 | **DX-ZED** | `extensions/zed-ori` dev install |
 

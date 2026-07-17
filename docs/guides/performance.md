@@ -125,4 +125,4 @@ Sources: `tools/bench/polyglot/{ori,python,rust_*,c,go,javascript,typescript,rub
 | [results/LATEST.md](../../tools/bench/polyglot/results/LATEST.md) | Full machine report |
 | [language-comparison.md](language-comparison.md) | Older PowerShell multi-lang suite (historical) |
 | [../planning/perf-baseline-2026-07-13.md](../planning/perf-baseline-2026-07-13.md) | Compiler-side LANG-PERF baseline |
-| [../planning/perf-runtime-midend-plan.md](../planning/perf-runtime-midend-plan.md) | LANG-PERF-2 mid-end plan |
+| [../planning/historico/perf-runtime-midend-plan.md](../planning/historico/perf-runtime-midend-plan.md) | LANG-PERF-2 mid-end plan |

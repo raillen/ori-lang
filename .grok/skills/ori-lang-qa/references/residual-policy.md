@@ -1,7 +1,7 @@
 # Residual policy (native backend)
 
 Normative: `docs/spec/14-backend-support.md`  
-Closure: `docs/planning/lang-res-closure.md`
+Closure: `docs/planning/historico/lang-res-closure.md`
 
 ## Clean residuals means
 

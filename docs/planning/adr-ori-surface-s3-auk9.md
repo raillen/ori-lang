@@ -4,7 +4,7 @@
 **Data:** 2026-07-12  
 **Versão de quebra:** `0.3.0` (superfície + docs) · `0.3.1` (inferência local) · opção B (campo/index/call/pipe) pós-0.3.1  
 **Registro vivo de decisões:** [`ori-surface-s3-auk9.md`](ori-surface-s3-auk9.md)  
-**Plano de implementação /execute-plan:** [`pr-plan-ori-surface-s3.md`](pr-plan-ori-surface-s3.md)
+**Plano de implementação /execute-plan:** [`pr-plan-ori-surface-s3.md`](historico/pr-plan-ori-surface-s3.md)
 
 ---
 
@@ -91,6 +91,6 @@ A Ori **não** visa competir com linguagens de mercado. Existe para:
 ## Referências
 
 - `docs/planning/ori-surface-s3-auk9.md` — tabela completa de decisões 0–9  
-- `docs/planning/pr-plan-ori-surface-s3.md` — DAG de PRs  
+- `docs/planning/historico/pr-plan-ori-surface-s3.md` — DAG de PRs  
 - `auk9-lang` — lab de sintaxe (read-only)  
 - Spec Ori atual: `docs/spec/*` (será reescrita no 0.3.0)  
