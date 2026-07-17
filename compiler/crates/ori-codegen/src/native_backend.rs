@@ -2598,320 +2598,6 @@ fn compute_enum_layout(variants: &[ori_hir::hir::HirVariant], ptr_ty: types::Typ
     }
 }
 
-fn type_needs_destructor(
-    ty: &Ty,
-    struct_layouts: &HashMap<ori_types::DefId, StructLayout>,
-    enum_layouts: &HashMap<ori_types::DefId, EnumLayout>,
-) -> bool {
-    fn needs_dtor_inner(
-        ty: &Ty,
-        struct_layouts: &HashMap<ori_types::DefId, StructLayout>,
-        enum_layouts: &HashMap<ori_types::DefId, EnumLayout>,
-        visited: &mut HashSet<ori_types::DefId>,
-    ) -> bool {
-        match ty {
-            Ty::String
-            | Ty::Bytes
-            | Ty::List(_)
-            | Ty::Map(_, _)
-            | Ty::Set(_)
-            | Ty::Any(_)
-            | Ty::Func { .. }
-            | Ty::Lazy(_)
-            | Ty::Future(_)
-            | Ty::TaskJob(_)
-            | Ty::Channel(_)
-            | Ty::AtomicInt
-            | Ty::TaskJoinError
-            | Ty::ChannelSendError
-            | Ty::ChannelReceiveError
-            | Ty::Opaque { .. } => true,
-
-            Ty::Optional(inner) => needs_dtor_inner(inner, struct_layouts, enum_layouts, visited),
-            Ty::Result(ok, err) => {
-                needs_dtor_inner(ok, struct_layouts, enum_layouts, visited)
-                    || needs_dtor_inner(err, struct_layouts, enum_layouts, visited)
-            }
-            Ty::Tuple(elems) => elems
-                .iter()
-                .any(|e| needs_dtor_inner(e, struct_layouts, enum_layouts, visited)),
-            Ty::Named(def_id, _) => {
-                if !visited.insert(*def_id) {
-                    return false;
-                }
-                let res = if let Some(layout) = struct_layouts.get(def_id) {
-                    layout.fields.iter().any(|(_, f)| {
-                        needs_dtor_inner(&f.ty, struct_layouts, enum_layouts, visited)
-                    })
-                } else if let Some(layout) = enum_layouts.get(def_id) {
-                    layout.variants.values().any(|variant_layout| {
-                        variant_layout.fields.fields.iter().any(|(_, f)| {
-                            needs_dtor_inner(&f.ty, struct_layouts, enum_layouts, visited)
-                        })
-                    })
-                } else {
-                    false
-                };
-                visited.remove(def_id);
-                res
-            }
-            _ => false,
-        }
-    }
-
-    needs_dtor_inner(ty, struct_layouts, enum_layouts, &mut HashSet::new())
-}
-
-fn collect_all_tys(ty: &Ty, tuples: &mut HashSet<Vec<Ty>>) {
-    match ty {
-        Ty::Tuple(elems) => {
-            if tuples.insert(elems.clone()) {
-                for elem in elems {
-                    collect_all_tys(elem, tuples);
-                }
-            }
-        }
-        Ty::List(inner) => collect_all_tys(inner, tuples),
-        Ty::Map(k, v) => {
-            collect_all_tys(k, tuples);
-            collect_all_tys(v, tuples);
-        }
-        Ty::Set(inner) => collect_all_tys(inner, tuples),
-        Ty::Optional(inner) => collect_all_tys(inner, tuples),
-        Ty::Result(ok, err) => {
-            collect_all_tys(ok, tuples);
-            collect_all_tys(err, tuples);
-        }
-        Ty::Func { params, ret } => {
-            for param in params {
-                collect_all_tys(param, tuples);
-            }
-            collect_all_tys(ret, tuples);
-        }
-        Ty::Lazy(inner) => collect_all_tys(inner, tuples),
-        Ty::Future(inner) => collect_all_tys(inner, tuples),
-        Ty::Named(_, args) => {
-            for arg in args {
-                collect_all_tys(arg, tuples);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn collect_tys_from_expr(expr: &HirExpr, tuples: &mut HashSet<Vec<Ty>>) {
-    collect_all_tys(&expr.ty, tuples);
-    match &expr.kind {
-        HirExprKind::Binary { lhs, rhs, .. } => {
-            collect_tys_from_expr(lhs, tuples);
-            collect_tys_from_expr(rhs, tuples);
-        }
-        HirExprKind::Unary { operand, .. } => {
-            collect_tys_from_expr(operand, tuples);
-        }
-        HirExprKind::Field { object, .. } => {
-            collect_tys_from_expr(object, tuples);
-        }
-        HirExprKind::Index { object, index } => {
-            collect_tys_from_expr(object, tuples);
-            collect_tys_from_expr(index, tuples);
-        }
-        HirExprKind::TupleIndex { object, .. } => {
-            collect_tys_from_expr(object, tuples);
-        }
-        HirExprKind::Call { callee, args } => {
-            collect_tys_from_expr(callee, tuples);
-            for arg in args {
-                collect_tys_from_expr(&arg.value, tuples);
-            }
-        }
-        HirExprKind::MethodCall { receiver, args, .. } => {
-            collect_tys_from_expr(receiver, tuples);
-            for arg in args {
-                collect_tys_from_expr(arg, tuples);
-            }
-        }
-        HirExprKind::StructLit { fields, .. } => {
-            for (_, f) in fields {
-                collect_tys_from_expr(f, tuples);
-            }
-        }
-        HirExprKind::EnumVariant { fields, .. } => {
-            for (_, f) in fields {
-                collect_tys_from_expr(f, tuples);
-            }
-        }
-        HirExprKind::ListLit { elements, .. } => {
-            for e in elements {
-                collect_tys_from_expr(e, tuples);
-            }
-        }
-        HirExprKind::ListSpreadLit { elements, .. } => {
-            for e in elements {
-                collect_tys_from_expr(&e.value, tuples);
-            }
-        }
-        HirExprKind::TupleLit(elements) => {
-            for e in elements {
-                collect_tys_from_expr(e, tuples);
-            }
-        }
-        HirExprKind::Some_(e)
-        | HirExprKind::Ok_(e)
-        | HirExprKind::Err_(e)
-        | HirExprKind::Propagate(e)
-        | HirExprKind::Await(e) => {
-            collect_tys_from_expr(e, tuples);
-        }
-        HirExprKind::IfExpr { cond, then, else_ } => {
-            collect_tys_from_expr(cond, tuples);
-            collect_tys_from_expr(then, tuples);
-            collect_tys_from_expr(else_, tuples);
-        }
-        HirExprKind::Range { start, end } => {
-            collect_tys_from_expr(start, tuples);
-            collect_tys_from_expr(end, tuples);
-        }
-        HirExprKind::MapLit { entries, .. } => {
-            for (k, v) in entries {
-                collect_tys_from_expr(k, tuples);
-                collect_tys_from_expr(v, tuples);
-            }
-        }
-        HirExprKind::SetLit { elements, .. } => {
-            for e in elements {
-                collect_tys_from_expr(e, tuples);
-            }
-        }
-        HirExprKind::StructUpdate { base, updates, .. } => {
-            collect_tys_from_expr(base, tuples);
-            for (_, u) in updates {
-                collect_tys_from_expr(u, tuples);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn collect_tys_from_stmt(stmt: &HirStmt, tuples: &mut HashSet<Vec<Ty>>) {
-    match stmt {
-        HirStmt::Let { ty, value, .. } => {
-            collect_all_tys(ty, tuples);
-            collect_tys_from_expr(value, tuples);
-        }
-        HirStmt::Assign {
-            lvalue: _, value, ..
-        } => {
-            collect_tys_from_expr(value, tuples);
-        }
-        HirStmt::Return(val, _) => {
-            if let Some(v) = val {
-                collect_tys_from_expr(v, tuples);
-            }
-        }
-        HirStmt::Expr(e) => {
-            collect_tys_from_expr(e, tuples);
-        }
-        HirStmt::If {
-            cond,
-            then,
-            else_ifs,
-            else_,
-            ..
-        } => {
-            collect_tys_from_expr(cond, tuples);
-            collect_tys_from_block(then, tuples);
-            for (c, b) in else_ifs {
-                collect_tys_from_expr(c, tuples);
-                collect_tys_from_block(b, tuples);
-            }
-            if let Some(b) = else_ {
-                collect_tys_from_block(b, tuples);
-            }
-        }
-        HirStmt::While { cond, body, .. } => {
-            collect_tys_from_expr(cond, tuples);
-            collect_tys_from_block(body, tuples);
-        }
-        HirStmt::For { iterable, body, .. } => {
-            collect_tys_from_expr(iterable, tuples);
-            collect_tys_from_block(body, tuples);
-        }
-        HirStmt::Loop { body, .. } => {
-            collect_tys_from_block(body, tuples);
-        }
-        HirStmt::Repeat { count, body, .. } => {
-            collect_tys_from_expr(count, tuples);
-            collect_tys_from_block(body, tuples);
-        }
-        HirStmt::Match {
-            scrutinee, arms, ..
-        } => {
-            collect_tys_from_expr(scrutinee, tuples);
-            for arm in arms {
-                for s in &arm.body {
-                    collect_tys_from_stmt(s, tuples);
-                }
-            }
-        }
-        HirStmt::IfSome {
-            value, then, else_, ..
-        } => {
-            collect_tys_from_expr(value, tuples);
-            collect_tys_from_block(then, tuples);
-            if let Some(b) = else_ {
-                collect_tys_from_block(b, tuples);
-            }
-        }
-        HirStmt::WhileSome { value, body, .. } => {
-            collect_tys_from_expr(value, tuples);
-            collect_tys_from_block(body, tuples);
-        }
-        HirStmt::Using { ty, value, .. } => {
-            collect_all_tys(ty, tuples);
-            collect_tys_from_expr(value, tuples);
-        }
-        HirStmt::Check { condition, .. } => {
-            collect_tys_from_expr(condition, tuples);
-        }
-        HirStmt::Break(_) | HirStmt::Continue(_) => {}
-    }
-}
-
-fn collect_tys_from_block(block: &HirBlock, tuples: &mut HashSet<Vec<Ty>>) {
-    for s in &block.stmts {
-        collect_tys_from_stmt(s, tuples);
-    }
-}
-
-fn collect_module_tuples(hir: &HirModule) -> HashSet<Vec<Ty>> {
-    let mut tuples = HashSet::new();
-    for s in &hir.structs {
-        for f in &s.fields {
-            collect_all_tys(&f.ty, &mut tuples);
-        }
-    }
-    for e in &hir.enums {
-        for v in &e.variants {
-            for f in &v.fields {
-                collect_all_tys(&f.ty, &mut tuples);
-            }
-        }
-    }
-    for f in &hir.funcs {
-        for p in &f.params {
-            collect_all_tys(&p.ty, &mut tuples);
-        }
-        collect_all_tys(&f.return_ty, &mut tuples);
-        collect_tys_from_block(&f.body, &mut tuples);
-    }
-    for c in &hir.consts {
-        collect_all_tys(&c.ty, &mut tuples);
-        collect_tys_from_expr(&c.value, &mut tuples);
-    }
-    tuples
-}
-
 // == Module-level backend ==
 
 #[derive(Debug, Clone)]
@@ -2959,9 +2645,6 @@ pub struct NativeBackend<M: Module> {
     /// Used to distinguish user functions (which release params via scope
     /// cleanup) from stdlib FFI (which borrows args without releasing).
     user_func_names: HashSet<SmolStr>,
-    tuple_dtors: HashMap<Vec<Ty>, FuncId>,
-    struct_dtors: HashMap<ori_types::DefId, FuncId>,
-    enum_dtors: HashMap<ori_types::DefId, FuncId>,
     /// `FuncId` of the exported C `main` wrapper, set by `define_all` when the
     /// HIR has an entry `main`. Used by the JIT backend to locate the entry
     /// function pointer after `finalize_definitions`.
@@ -2995,9 +2678,6 @@ impl<M: Module> NativeBackend<M> {
             trait_impls: HashMap::new(),
             func_param_tys: HashMap::new(),
             user_func_names: HashSet::new(),
-            tuple_dtors: HashMap::new(),
-            struct_dtors: HashMap::new(),
-            enum_dtors: HashMap::new(),
             main_func_id: None,
             lib_mode: false,
             c_export_ids: HashMap::new(),
@@ -3088,7 +2768,6 @@ impl<M: Module> NativeBackend<M> {
         }
         Ok(())
     }
-
 
     /// When `ORI_DEBUG_INSTRUMENT=1`, load `ORI_DEBUG_SOURCE` and prepare line-map
     /// + rodata path for cooperative `ori_debug_line` probes.
@@ -3741,7 +3420,8 @@ impl<M: Module> NativeBackend<M> {
         self.stdlib_ids
             .insert(SmolStr::new("ori_list_with_capacity"), id);
         let id = decl("ori_list_capacity", &[pt], vec![], Some(types::I64))?;
-        self.stdlib_ids.insert(SmolStr::new("ori_list_capacity"), id);
+        self.stdlib_ids
+            .insert(SmolStr::new("ori_list_capacity"), id);
         let id = decl("ori_list_reserve", &[pt, types::I64], vec![], None)?;
         self.stdlib_ids.insert(SmolStr::new("ori_list_reserve"), id);
         let id = decl("ori_list_push", &[pt, types::I64], vec![], None)?;
@@ -4202,7 +3882,6 @@ impl<M: Module> NativeBackend<M> {
         self.stdlib_ids
             .insert(SmolStr::new("ori_graph_iterator_next"), id);
 
-
         // Cooperative DAP line probes (no-op in runtime unless ORI_DEBUG_PORT is set).
         let id = decl(
             "ori_debug_line",
@@ -4259,79 +3938,7 @@ impl<M: Module> NativeBackend<M> {
         sig
     }
 
-    fn make_dtor_sig(&self) -> ir::Signature {
-        let mut sig = self.module.make_signature();
-        sig.params.push(AbiParam::new(self.ptr_ty));
-        sig
-    }
-
     fn declare_all(&mut self, hir: &HirModule) -> Result<(), String> {
-        // Declare destructor functions for structs that need them
-        let mut declared_struct_dtors = std::collections::HashSet::new();
-        let mut struct_dtors = HashMap::new();
-        for s in &hir.structs {
-            if !declared_struct_dtors.insert(s.def_id) {
-                continue;
-            }
-            if type_needs_destructor(
-                &Ty::Named(s.def_id, Vec::new()),
-                &self.struct_layouts,
-                &self.enum_layouts,
-            ) {
-                let sig = self.make_dtor_sig();
-                let name = format!("__dtor_struct_{}", s.def_id.0);
-                let id = self
-                    .module
-                    .declare_function(&name, Linkage::Local, &sig)
-                    .map_err(|e| format!("declare struct dtor '{name}': {e}"))?;
-                self.func_ids.insert(SmolStr::new(name), id);
-                struct_dtors.insert(s.def_id, id);
-            }
-        }
-        self.struct_dtors = struct_dtors;
-
-        // Declare destructor functions for enums that need them
-        let mut declared_enum_dtors = std::collections::HashSet::new();
-        let mut enum_dtors = HashMap::new();
-        for e in &hir.enums {
-            if !declared_enum_dtors.insert(e.def_id) {
-                continue;
-            }
-            if type_needs_destructor(
-                &Ty::Named(e.def_id, Vec::new()),
-                &self.struct_layouts,
-                &self.enum_layouts,
-            ) {
-                let sig = self.make_dtor_sig();
-                let name = format!("__dtor_enum_{}", e.def_id.0);
-                let id = self
-                    .module
-                    .declare_function(&name, Linkage::Local, &sig)
-                    .map_err(|e| format!("declare enum dtor '{name}': {e}"))?;
-                self.func_ids.insert(SmolStr::new(name), id);
-                enum_dtors.insert(e.def_id, id);
-            }
-        }
-        self.enum_dtors = enum_dtors;
-
-        // Declare destructor functions for tuples that need them
-        let tuple_tys = collect_module_tuples(hir);
-        let mut tuple_dtors = HashMap::new();
-        for elems in tuple_tys {
-            let tuple_ty = Ty::Tuple(elems.clone());
-            if type_needs_destructor(&tuple_ty, &self.struct_layouts, &self.enum_layouts) {
-                let sig = self.make_dtor_sig();
-                let name = format!("__dtor_tuple_{}", tuple_dtors.len());
-                let id = self
-                    .module
-                    .declare_function(&name, Linkage::Local, &sig)
-                    .map_err(|e| format!("declare tuple dtor '{name}': {e}"))?;
-                self.func_ids.insert(SmolStr::new(name.clone()), id);
-                tuple_dtors.insert(elems, id);
-            }
-        }
-        self.tuple_dtors = tuple_dtors;
-
         // Declare equality helper functions for all structs
         let mut declared_structs = std::collections::HashSet::new();
         for s in &hir.structs {
@@ -4491,24 +4098,8 @@ impl<M: Module> NativeBackend<M> {
                 global_gvs.insert(name.clone(), gv);
             }
 
-            let mut struct_dtor_refs = HashMap::new();
-            for (&def_id, &id) in &self.struct_dtors {
-                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-                struct_dtor_refs.insert(def_id, fref);
-            }
-            let mut enum_dtor_refs = HashMap::new();
-            for (&def_id, &id) in &self.enum_dtors {
-                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-                enum_dtor_refs.insert(def_id, fref);
-            }
-            let mut tuple_dtor_refs = HashMap::new();
-            for (elems, &id) in &self.tuple_dtors {
-                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-                tuple_dtor_refs.insert(elems.clone(), fref);
-            }
-
-                        let instrument_debug = self.debug_path_data.is_some()
-                && !f.name.as_str().starts_with("ori.");
+            let instrument_debug =
+                self.debug_path_data.is_some() && !f.name.as_str().starts_with("ori.");
             let debug_file_gv = if instrument_debug {
                 self.debug_path_data
                     .map(|id| self.module.declare_data_in_func(id, &mut ctx.func))
@@ -4529,7 +4120,7 @@ impl<M: Module> NativeBackend<M> {
                 &[]
             };
 
-let mut bctx = FunctionBuilderContext::new();
+            let mut bctx = FunctionBuilderContext::new();
             {
                 let builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
                 FuncCodegen {
@@ -4546,9 +4137,6 @@ let mut bctx = FunctionBuilderContext::new();
                     trait_impls: &self.trait_impls,
                     func_param_tys: &self.func_param_tys,
                     user_func_names: &self.user_func_names,
-                    struct_dtor_refs: &struct_dtor_refs,
-                    enum_dtor_refs: &enum_dtor_refs,
-                    tuple_dtor_refs: &tuple_dtor_refs,
                     vars: vec![HashMap::new()],
                     ptr_ty: self.ptr_ty,
                     loop_stack: Vec::new(),
@@ -4690,287 +4278,82 @@ let mut bctx = FunctionBuilderContext::new();
 
         // Define C main wrapper (executables only)
         if !self.lib_mode {
-        if let Some(entry_main) = hir.funcs.iter().find(|f| is_entry_main(hir, f)) {
-            let ori_main_id = self.func_ids[&entry_main.name];
-            let mut sig = self.module.make_signature();
-            sig.params.push(AbiParam::new(types::I32));
-            sig.params.push(AbiParam::new(self.ptr_ty));
-            sig.returns.push(AbiParam::new(types::I32));
-            let main_id = self
-                .module
-                .declare_function("main", Linkage::Export, &sig)
-                .map_err(|e| format!("re-declare main: {e}"))?;
-            self.main_func_id = Some(main_id);
-            let mut ctx = self.module.make_context();
-            ctx.func.signature = sig;
-            let ori_ref = self.module.declare_func_in_func(ori_main_id, &mut ctx.func);
-            let init_ref =
-                global_init_id.map(|id| self.module.declare_func_in_func(id, &mut ctx.func));
-            let set_args_ref = self
-                .stdlib_ids
-                .get("ori_os_set_args")
-                .copied()
-                .map(|id| self.module.declare_func_in_func(id, &mut ctx.func));
-            let debug_init_ref = self
-                .stdlib_ids
-                .get("ori_debug_init")
-                .copied()
-                .map(|id| self.module.declare_func_in_func(id, &mut ctx.func));
-            let block_on_ref = if matches!(entry_main.return_ty, Ty::Future(_)) {
-                Some(
-                    self.stdlib_ids
-                        .get("ori_task_block_on")
-                        .copied()
-                        .map(|id| self.module.declare_func_in_func(id, &mut ctx.func))
-                        .ok_or_else(|| {
-                            "missing runtime function `ori_task_block_on` for async main"
-                                .to_string()
-                        })?,
-                )
-            } else {
-                None
-            };
-            let mut bctx = FunctionBuilderContext::new();
-            {
-                let mut b = FunctionBuilder::new(&mut ctx.func, &mut bctx);
-                let blk = b.create_block();
-                b.append_block_params_for_function_params(blk);
-                b.switch_to_block(blk);
-                b.seal_block(blk);
-                if let Some(init_ref) = init_ref {
-                    b.ins().call(init_ref, &[]);
+            if let Some(entry_main) = hir.funcs.iter().find(|f| is_entry_main(hir, f)) {
+                let ori_main_id = self.func_ids[&entry_main.name];
+                let mut sig = self.module.make_signature();
+                sig.params.push(AbiParam::new(types::I32));
+                sig.params.push(AbiParam::new(self.ptr_ty));
+                sig.returns.push(AbiParam::new(types::I32));
+                let main_id = self
+                    .module
+                    .declare_function("main", Linkage::Export, &sig)
+                    .map_err(|e| format!("re-declare main: {e}"))?;
+                self.main_func_id = Some(main_id);
+                let mut ctx = self.module.make_context();
+                ctx.func.signature = sig;
+                let ori_ref = self.module.declare_func_in_func(ori_main_id, &mut ctx.func);
+                let init_ref =
+                    global_init_id.map(|id| self.module.declare_func_in_func(id, &mut ctx.func));
+                let set_args_ref = self
+                    .stdlib_ids
+                    .get("ori_os_set_args")
+                    .copied()
+                    .map(|id| self.module.declare_func_in_func(id, &mut ctx.func));
+                let debug_init_ref = self
+                    .stdlib_ids
+                    .get("ori_debug_init")
+                    .copied()
+                    .map(|id| self.module.declare_func_in_func(id, &mut ctx.func));
+                let block_on_ref = if matches!(entry_main.return_ty, Ty::Future(_)) {
+                    Some(
+                        self.stdlib_ids
+                            .get("ori_task_block_on")
+                            .copied()
+                            .map(|id| self.module.declare_func_in_func(id, &mut ctx.func))
+                            .ok_or_else(|| {
+                                "missing runtime function `ori_task_block_on` for async main"
+                                    .to_string()
+                            })?,
+                    )
+                } else {
+                    None
+                };
+                let mut bctx = FunctionBuilderContext::new();
+                {
+                    let mut b = FunctionBuilder::new(&mut ctx.func, &mut bctx);
+                    let blk = b.create_block();
+                    b.append_block_params_for_function_params(blk);
+                    b.switch_to_block(blk);
+                    b.seal_block(blk);
+                    if let Some(init_ref) = init_ref {
+                        b.ins().call(init_ref, &[]);
+                    }
+                    if let Some(debug_init_ref) = debug_init_ref {
+                        b.ins().call(debug_init_ref, &[]);
+                    }
+                    if let Some(set_args_ref) = set_args_ref {
+                        let (argc, argv) = {
+                            let params = b.block_params(blk);
+                            (params[0], params[1])
+                        };
+                        b.ins().call(set_args_ref, &[argc, argv]);
+                    }
+                    let call = b.ins().call(ori_ref, &[]);
+                    if let Some(block_on_ref) = block_on_ref {
+                        let future = b.inst_results(call)[0];
+                        b.ins().call(block_on_ref, &[future]);
+                    }
+                    let zero = b.ins().iconst(types::I32, 0);
+                    b.ins().return_(&[zero]);
+                    b.seal_all_blocks();
+                    b.finalize();
                 }
-                if let Some(debug_init_ref) = debug_init_ref {
-                    b.ins().call(debug_init_ref, &[]);
-                }
-                if let Some(set_args_ref) = set_args_ref {
-                    let (argc, argv) = {
-                        let params = b.block_params(blk);
-                        (params[0], params[1])
-                    };
-                    b.ins().call(set_args_ref, &[argc, argv]);
-                }
-                let call = b.ins().call(ori_ref, &[]);
-                if let Some(block_on_ref) = block_on_ref {
-                    let future = b.inst_results(call)[0];
-                    b.ins().call(block_on_ref, &[future]);
-                }
-                let zero = b.ins().iconst(types::I32, 0);
-                b.ins().return_(&[zero]);
-                b.seal_all_blocks();
-                b.finalize();
+                self.module
+                    .define_function(main_id, &mut ctx)
+                    .map_err(|e| format!("define main wrapper: {e}"))?;
             }
-            self.module
-                .define_function(main_id, &mut ctx)
-                .map_err(|e| format!("define main wrapper: {e}"))?;
-        }
         } // !lib_mode
         self.define_struct_eq_helpers(hir)?;
-        self.define_struct_dtors(hir)?;
-        self.define_enum_dtors(hir)?;
-        self.define_tuple_dtors()?;
-        Ok(())
-    }
-
-    fn define_struct_dtors(&mut self, hir: &HirModule) -> Result<(), String> {
-        let mut defined_structs = std::collections::HashSet::new();
-        for s in &hir.structs {
-            if !defined_structs.insert(s.def_id) {
-                continue;
-            }
-            if !type_needs_destructor(
-                &Ty::Named(s.def_id, Vec::new()),
-                &self.struct_layouts,
-                &self.enum_layouts,
-            ) {
-                continue;
-            }
-            let name = format!("__dtor_struct_{}", s.def_id.0);
-            let func_id = self.func_ids[name.as_str()];
-            let mut ctx = self.module.make_context();
-            ctx.func.signature = self.make_dtor_sig();
-
-            let mut func_refs: HashMap<SmolStr, ir::FuncRef> = HashMap::new();
-            for (name, &id) in self.func_ids.iter().chain(self.stdlib_ids.iter()) {
-                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-                func_refs.insert(name.clone(), fref);
-            }
-
-            let mut bctx = FunctionBuilderContext::new();
-            {
-                let mut builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
-                let block = builder.create_block();
-                builder.append_block_params_for_function_params(block);
-                builder.switch_to_block(block);
-                builder.seal_block(block);
-
-                let params = builder.block_params(block);
-                let ptr = params[0];
-
-                let layout = self.struct_layouts.get(&s.def_id).cloned().unwrap();
-                for (_, fi) in &layout.fields {
-                    if is_managed_ty(&fi.ty) {
-                        let cl_ty = cl_type(&fi.ty, self.ptr_ty).unwrap();
-                        let val = builder
-                            .ins()
-                            .load(cl_ty, MemFlags::new(), ptr, fi.offset as i32);
-                        let release_ref = func_refs["ori_arc_release"];
-                        builder.ins().call(release_ref, &[val]);
-                    }
-                }
-
-                builder.ins().return_(&[]);
-                builder.seal_all_blocks();
-                builder.finalize();
-            }
-
-            self.module
-                .define_function(func_id, &mut ctx)
-                .map_err(|e| format!("define struct dtor '{name}': {e}"))?;
-        }
-        Ok(())
-    }
-
-    fn define_enum_dtors(&mut self, hir: &HirModule) -> Result<(), String> {
-        let mut defined_enums = std::collections::HashSet::new();
-        for e in &hir.enums {
-            if !defined_enums.insert(e.def_id) {
-                continue;
-            }
-            if !type_needs_destructor(
-                &Ty::Named(e.def_id, Vec::new()),
-                &self.struct_layouts,
-                &self.enum_layouts,
-            ) {
-                continue;
-            }
-            let name = format!("__dtor_enum_{}", e.def_id.0);
-            let func_id = self.func_ids[name.as_str()];
-            let mut ctx = self.module.make_context();
-            ctx.func.signature = self.make_dtor_sig();
-
-            let mut func_refs: HashMap<SmolStr, ir::FuncRef> = HashMap::new();
-            for (name, &id) in self.func_ids.iter().chain(self.stdlib_ids.iter()) {
-                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-                func_refs.insert(name.clone(), fref);
-            }
-
-            let mut bctx = FunctionBuilderContext::new();
-            {
-                let mut builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
-                let block = builder.create_block();
-                builder.append_block_params_for_function_params(block);
-                builder.switch_to_block(block);
-                builder.seal_block(block);
-
-                let params = builder.block_params(block);
-                let ptr = params[0];
-
-                let layout = self.enum_layouts.get(&e.def_id).cloned().unwrap();
-                let tag_val = builder.ins().load(types::I32, MemFlags::new(), ptr, 0);
-
-                let end_block = builder.create_block();
-
-                for (_v_name, v_layout) in &layout.variants {
-                    let match_block = builder.create_block();
-                    let next_block = builder.create_block();
-
-                    let expected_tag = builder.ins().iconst(types::I32, v_layout.tag as i64);
-                    let is_match =
-                        builder
-                            .ins()
-                            .icmp(ir::condcodes::IntCC::Equal, tag_val, expected_tag);
-                    builder
-                        .ins()
-                        .brif(is_match, match_block, &[], next_block, &[]);
-
-                    builder.switch_to_block(match_block);
-                    builder.seal_block(match_block);
-
-                    for (_, fi) in &v_layout.fields.fields {
-                        if is_managed_ty(&fi.ty) {
-                            let cl_ty = cl_type(&fi.ty, self.ptr_ty).unwrap();
-                            let total_offset = (layout.payload_offset + fi.offset) as i32;
-                            let val = builder
-                                .ins()
-                                .load(cl_ty, MemFlags::new(), ptr, total_offset);
-                            let release_ref = func_refs["ori_arc_release"];
-                            builder.ins().call(release_ref, &[val]);
-                        }
-                    }
-                    builder.ins().jump(end_block, &[]);
-
-                    builder.switch_to_block(next_block);
-                    builder.seal_block(next_block);
-                }
-
-                builder.ins().jump(end_block, &[]);
-                builder.switch_to_block(end_block);
-                builder.seal_block(end_block);
-
-                builder.ins().return_(&[]);
-                builder.seal_all_blocks();
-                builder.finalize();
-            }
-
-            self.module
-                .define_function(func_id, &mut ctx)
-                .map_err(|e| format!("define enum dtor '{name}': {e}"))?;
-        }
-        Ok(())
-    }
-
-    fn define_tuple_dtors(&mut self) -> Result<(), String> {
-        let tuple_dtors = self.tuple_dtors.clone();
-        for (elems, func_id) in tuple_dtors {
-            let name = self
-                .func_ids
-                .iter()
-                .find(|(_, &fid)| fid == func_id)
-                .map(|(n, _)| n.clone())
-                .unwrap_or_else(|| SmolStr::new("__dtor_tuple_unknown"));
-
-            let mut ctx = self.module.make_context();
-            ctx.func.signature = self.make_dtor_sig();
-
-            let mut func_refs: HashMap<SmolStr, ir::FuncRef> = HashMap::new();
-            for (n, &id) in self.func_ids.iter().chain(self.stdlib_ids.iter()) {
-                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-                func_refs.insert(n.clone(), fref);
-            }
-
-            let mut bctx = FunctionBuilderContext::new();
-            {
-                let mut builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
-                let block = builder.create_block();
-                builder.append_block_params_for_function_params(block);
-                builder.switch_to_block(block);
-                builder.seal_block(block);
-
-                let params = builder.block_params(block);
-                let ptr = params[0];
-
-                let (layout, _, _) = tuple_layout(&elems, self.ptr_ty);
-                for (offset, elem_ty) in layout {
-                    if is_managed_ty(&elem_ty) {
-                        let cl_ty = cl_type(&elem_ty, self.ptr_ty).unwrap();
-                        let val = builder
-                            .ins()
-                            .load(cl_ty, MemFlags::new(), ptr, offset as i32);
-                        let release_ref = func_refs["ori_arc_release"];
-                        builder.ins().call(release_ref, &[val]);
-                    }
-                }
-
-                builder.ins().return_(&[]);
-                builder.seal_all_blocks();
-                builder.finalize();
-            }
-
-            self.module
-                .define_function(func_id, &mut ctx)
-                .map_err(|e| format!("define tuple dtor '{name}': {e}"))?;
-        }
         Ok(())
     }
 
@@ -5000,22 +4383,6 @@ let mut bctx = FunctionBuilderContext::new();
                 func_refs.insert(SmolStr::new(format!("{name}.__fnptr_wrapper")), fref);
             }
 
-            let mut struct_dtor_refs = HashMap::new();
-            for (&def_id, &id) in &self.struct_dtors {
-                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-                struct_dtor_refs.insert(def_id, fref);
-            }
-            let mut enum_dtor_refs = HashMap::new();
-            for (&def_id, &id) in &self.enum_dtors {
-                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-                enum_dtor_refs.insert(def_id, fref);
-            }
-            let mut tuple_dtor_refs = HashMap::new();
-            for (elems, &id) in &self.tuple_dtors {
-                let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-                tuple_dtor_refs.insert(elems.clone(), fref);
-            }
-
             let mut bctx = FunctionBuilderContext::new();
             {
                 let mut builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
@@ -5042,9 +4409,6 @@ let mut bctx = FunctionBuilderContext::new();
                     trait_impls: &self.trait_impls,
                     func_param_tys: &self.func_param_tys,
                     user_func_names: &self.user_func_names,
-                    struct_dtor_refs: &struct_dtor_refs,
-                    enum_dtor_refs: &enum_dtor_refs,
-                    tuple_dtor_refs: &tuple_dtor_refs,
                     vars: vec![HashMap::new()],
                     ptr_ty: self.ptr_ty,
                     loop_stack: Vec::new(),
@@ -5117,24 +4481,8 @@ let mut bctx = FunctionBuilderContext::new();
             global_gvs.insert(name.clone(), gv);
         }
 
-        let mut struct_dtor_refs = HashMap::new();
-        for (&def_id, &id) in &self.struct_dtors {
-            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-            struct_dtor_refs.insert(def_id, fref);
-        }
-        let mut enum_dtor_refs = HashMap::new();
-        for (&def_id, &id) in &self.enum_dtors {
-            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-            enum_dtor_refs.insert(def_id, fref);
-        }
-        let mut tuple_dtor_refs = HashMap::new();
-        for (elems, &id) in &self.tuple_dtors {
-            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-            tuple_dtor_refs.insert(elems.clone(), fref);
-        }
-
-                let instrument_debug = self.debug_path_data.is_some()
-            && !f.name.as_str().starts_with("ori.");
+        let instrument_debug =
+            self.debug_path_data.is_some() && !f.name.as_str().starts_with("ori.");
         let debug_file_gv = if instrument_debug {
             self.debug_path_data
                 .map(|id| self.module.declare_data_in_func(id, &mut ctx.func))
@@ -5155,7 +4503,7 @@ let mut bctx = FunctionBuilderContext::new();
             &[]
         };
 
-let mut bctx = FunctionBuilderContext::new();
+        let mut bctx = FunctionBuilderContext::new();
         {
             let builder = FunctionBuilder::new(&mut ctx.func, &mut bctx);
             let codegen = FuncCodegen {
@@ -5172,9 +4520,6 @@ let mut bctx = FunctionBuilderContext::new();
                 trait_impls: &self.trait_impls,
                 func_param_tys: &self.func_param_tys,
                 user_func_names: &self.user_func_names,
-                struct_dtor_refs: &struct_dtor_refs,
-                enum_dtor_refs: &enum_dtor_refs,
-                tuple_dtor_refs: &tuple_dtor_refs,
                 vars: vec![HashMap::new()],
                 ptr_ty: self.ptr_ty,
                 loop_stack: Vec::new(),
@@ -5249,22 +4594,6 @@ let mut bctx = FunctionBuilderContext::new();
             global_gvs.insert(name.clone(), gv);
         }
 
-        let mut struct_dtor_refs = HashMap::new();
-        for (&def_id, &id) in &self.struct_dtors {
-            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-            struct_dtor_refs.insert(def_id, fref);
-        }
-        let mut enum_dtor_refs = HashMap::new();
-        for (&def_id, &id) in &self.enum_dtors {
-            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-            enum_dtor_refs.insert(def_id, fref);
-        }
-        let mut tuple_dtor_refs = HashMap::new();
-        for (elems, &id) in &self.tuple_dtors {
-            let fref = self.module.declare_func_in_func(id, &mut ctx.func);
-            tuple_dtor_refs.insert(elems.clone(), fref);
-        }
-
         let const_exprs: HashMap<SmolStr, HirExpr> = hir
             .consts
             .iter()
@@ -5286,9 +4615,6 @@ let mut bctx = FunctionBuilderContext::new();
                 trait_impls: &self.trait_impls,
                 func_param_tys: &self.func_param_tys,
                 user_func_names: &self.user_func_names,
-                struct_dtor_refs: &struct_dtor_refs,
-                enum_dtor_refs: &enum_dtor_refs,
-                tuple_dtor_refs: &tuple_dtor_refs,
                 vars: vec![HashMap::new()],
                 ptr_ty: self.ptr_ty,
                 loop_stack: Vec::new(),
@@ -5302,9 +4628,9 @@ let mut bctx = FunctionBuilderContext::new();
                 async_loop_index: 0,
                 async_poll_blocks: Vec::new(),
                 func_name: SmolStr::new(""),
-                    debug_file_gv: None,
-                    debug_file_len: 0,
-                    debug_line_starts: &[],
+                debug_file_gv: None,
+                debug_file_len: 0,
+                debug_line_starts: &[],
             };
             let block = codegen.builder.create_block();
             codegen.builder.switch_to_block(block);
@@ -5352,9 +4678,6 @@ struct FuncCodegen<'a> {
     trait_impls: &'a HashMap<(ori_types::DefId, ori_types::DefId), HirTraitImpl>,
     func_param_tys: &'a HashMap<SmolStr, Vec<Ty>>,
     user_func_names: &'a HashSet<SmolStr>,
-    struct_dtor_refs: &'a HashMap<ori_types::DefId, ir::FuncRef>,
-    enum_dtor_refs: &'a HashMap<ori_types::DefId, ir::FuncRef>,
-    tuple_dtor_refs: &'a HashMap<Vec<Ty>, ir::FuncRef>,
     vars: Vec<HashMap<SmolStr, (Variable, Ty)>>,
     ptr_ty: types::Type,
     loop_stack: Vec<LoopContext>,
@@ -5524,10 +4847,10 @@ impl<'a> FuncCodegen<'a> {
                     .expect("async frame local offset");
                 let ty = &plan.locals[local_index].ty;
                 if is_managed_ty(ty) {
-                    let old = self
-                        .builder
-                        .ins()
-                        .load(self.ptr_ty, MemFlags::new(), frame, offset as i32);
+                    let old =
+                        self.builder
+                            .ins()
+                            .load(self.ptr_ty, MemFlags::new(), frame, offset as i32);
                     self.emit_arc_update_edge_if_managed(ty, frame, old, val)?;
                 }
                 self.builder
@@ -5546,10 +4869,10 @@ impl<'a> FuncCodegen<'a> {
                     .expect("binding checked above")
                     .ty;
                 if is_managed_ty(ty) {
-                    let old = self
-                        .builder
-                        .ins()
-                        .load(self.ptr_ty, MemFlags::new(), frame, offset as i32);
+                    let old =
+                        self.builder
+                            .ins()
+                            .load(self.ptr_ty, MemFlags::new(), frame, offset as i32);
                     self.emit_arc_update_edge_if_managed(ty, frame, old, val)?;
                 }
                 self.builder
@@ -5560,10 +4883,10 @@ impl<'a> FuncCodegen<'a> {
                     .expect("async frame param offset");
                 let ty = &plan.params[param_index].ty;
                 if is_managed_ty(ty) {
-                    let old = self
-                        .builder
-                        .ins()
-                        .load(self.ptr_ty, MemFlags::new(), frame, offset as i32);
+                    let old =
+                        self.builder
+                            .ins()
+                            .load(self.ptr_ty, MemFlags::new(), frame, offset as i32);
                     self.emit_arc_update_edge_if_managed(ty, frame, old, val)?;
                 }
                 self.builder
@@ -6385,63 +5708,47 @@ impl<'a> FuncCodegen<'a> {
         // Fast path for non-managed scalars when capacity remains: store in-place
         // without a runtime call (dominant cost in list_sum / push loops).
         if is_list_inline_scalar_elem(elem_ty) {
-            let len = self.builder.ins().load(
-                types::I64,
-                MemFlags::new(),
-                list,
-                ORI_LIST_LEN_OFFSET,
-            );
-            let cap = self.builder.ins().load(
-                types::I64,
-                MemFlags::new(),
-                list,
-                ORI_LIST_CAP_OFFSET,
-            );
-            let has_room = self.builder.ins().icmp(
-                ir::condcodes::IntCC::SignedLessThan,
-                len,
-                cap,
-            );
+            let len =
+                self.builder
+                    .ins()
+                    .load(types::I64, MemFlags::new(), list, ORI_LIST_LEN_OFFSET);
+            let cap =
+                self.builder
+                    .ins()
+                    .load(types::I64, MemFlags::new(), list, ORI_LIST_CAP_OFFSET);
+            let has_room = self
+                .builder
+                .ins()
+                .icmp(ir::condcodes::IntCC::SignedLessThan, len, cap);
 
             let fast = self.builder.create_block();
             let slow = self.builder.create_block();
             let join = self.builder.create_block();
-            self.builder
-                .ins()
-                .brif(has_room, fast, &[], slow, &[]);
+            self.builder.ins().brif(has_room, fast, &[], slow, &[]);
 
             self.builder.seal_block(fast);
             self.builder.switch_to_block(fast);
-            let data = self.builder.ins().load(
-                self.ptr_ty,
-                MemFlags::new(),
-                list,
-                ORI_LIST_DATA_OFFSET,
-            );
+            let data =
+                self.builder
+                    .ins()
+                    .load(self.ptr_ty, MemFlags::new(), list, ORI_LIST_DATA_OFFSET);
             let scale = self.builder.ins().iconst(types::I64, 8);
             let byte_off = self.builder.ins().imul(len, scale);
             let slot = self.builder.ins().iadd(data, byte_off);
-            self.builder
-                .ins()
-                .store(MemFlags::new(), stored, slot, 0);
+            self.builder.ins().store(MemFlags::new(), stored, slot, 0);
             let one = self.builder.ins().iconst(types::I64, 1);
             let new_len = self.builder.ins().iadd(len, one);
             self.builder
                 .ins()
                 .store(MemFlags::new(), new_len, list, ORI_LIST_LEN_OFFSET);
-            let version = self.builder.ins().load(
-                types::I64,
-                MemFlags::new(),
-                list,
-                ORI_LIST_VERSION_OFFSET,
-            );
+            let version =
+                self.builder
+                    .ins()
+                    .load(types::I64, MemFlags::new(), list, ORI_LIST_VERSION_OFFSET);
             let new_version = self.builder.ins().iadd(version, one);
-            self.builder.ins().store(
-                MemFlags::new(),
-                new_version,
-                list,
-                ORI_LIST_VERSION_OFFSET,
-            );
+            self.builder
+                .ins()
+                .store(MemFlags::new(), new_version, list, ORI_LIST_VERSION_OFFSET);
             self.builder.ins().jump(join, &[]);
 
             self.builder.seal_block(slow);
@@ -6484,10 +5791,10 @@ impl<'a> FuncCodegen<'a> {
             .ins()
             .load(types::I64, MemFlags::new(), list, ORI_LIST_LEN_OFFSET);
         let zero = self.builder.ins().iconst(types::I64, 0);
-        let ge_zero = self
-            .builder
-            .ins()
-            .icmp(ir::condcodes::IntCC::SignedGreaterThanOrEqual, index, zero);
+        let ge_zero =
+            self.builder
+                .ins()
+                .icmp(ir::condcodes::IntCC::SignedGreaterThanOrEqual, index, zero);
         let lt_len = self
             .builder
             .ins()
@@ -6498,18 +5805,14 @@ impl<'a> FuncCodegen<'a> {
         let slow = self.builder.create_block();
         let join = self.builder.create_block();
         self.builder.append_block_param(join, types::I64);
-        self.builder
-            .ins()
-            .brif(in_bounds, fast, &[], slow, &[]);
+        self.builder.ins().brif(in_bounds, fast, &[], slow, &[]);
 
         self.builder.seal_block(fast);
         self.builder.switch_to_block(fast);
-        let data = self.builder.ins().load(
-            self.ptr_ty,
-            MemFlags::new(),
-            list,
-            ORI_LIST_DATA_OFFSET,
-        );
+        let data =
+            self.builder
+                .ins()
+                .load(self.ptr_ty, MemFlags::new(), list, ORI_LIST_DATA_OFFSET);
         let scale = self.builder.ins().iconst(types::I64, 8);
         let byte_off = self.builder.ins().imul(index, scale);
         let slot = self.builder.ins().iadd(data, byte_off);
@@ -6517,9 +5820,7 @@ impl<'a> FuncCodegen<'a> {
             .builder
             .ins()
             .load(types::I64, MemFlags::new(), slot, 0);
-        self.builder
-            .ins()
-            .jump(join, &[BlockArg::Value(stored)]);
+        self.builder.ins().jump(join, &[BlockArg::Value(stored)]);
 
         self.builder.seal_block(slow);
         self.builder.switch_to_block(slow);
@@ -6702,20 +6003,6 @@ impl<'a> FuncCodegen<'a> {
             .ok_or_else(|| "missing runtime function `ori_alloc`".to_string())?;
         let size_v = self.builder.ins().iconst(types::I64, size as i64);
         let dtor_v = self.builder.ins().iconst(self.ptr_ty, 0);
-        let call = self.builder.ins().call(alloc_ref, &[size_v, dtor_v]);
-        Ok(self.builder.inst_results(call)[0])
-    }
-
-    fn malloc_bytes_with_dtor(
-        &mut self,
-        size: u32,
-        dtor_v: ir::Value,
-    ) -> Result<ir::Value, String> {
-        let alloc_ref = *self
-            .func_refs
-            .get("ori_alloc")
-            .ok_or_else(|| "missing runtime function `ori_alloc`".to_string())?;
-        let size_v = self.builder.ins().iconst(types::I64, size as i64);
         let call = self.builder.ins().call(alloc_ref, &[size_v, dtor_v]);
         Ok(self.builder.inst_results(call)[0])
     }
@@ -8482,6 +7769,7 @@ impl<'a> FuncCodegen<'a> {
                         self.store_global(name, val);
                     }
                 } else if let HirLValue::Index { base, index } = lvalue {
+                    let value_is_owned = Self::expr_produces_owned_ref(value);
                     let val = self.emit_expr(value)?;
                     let (container, container_ty) = self.emit_lvalue_value(base)?;
                     if let Ty::List(elem_ty) = container_ty {
@@ -8501,8 +7789,14 @@ impl<'a> FuncCodegen<'a> {
                             .get("ori_list_set")
                             .ok_or_else(|| "missing runtime function `ori_list_set`".to_string())?;
                         self.builder.ins().call(set_ref, &[container, idx, stored]);
+                        // The edge owns the new element's +1; drop an owned
+                        // temporary's own +1 (borrowed refs stay untouched).
+                        if value_is_owned && is_managed_ty(&elem_ty) {
+                            self.emit_arc_release_if_managed(&elem_ty, val)?;
+                        }
                     }
                 } else if let HirLValue::Field { base, field } = lvalue {
+                    let value_is_owned = Self::expr_produces_owned_ref(value);
                     let (addr, field_layout, owner) = self.emit_field_lvalue_addr(base, field)?;
                     let val = self.emit_expr_for_expected(value, &field_layout.ty)?;
                     if let Some(contract) = &field_layout.contract {
@@ -8513,6 +7807,11 @@ impl<'a> FuncCodegen<'a> {
                     let old = self.builder.ins().load(cl_ty, MemFlags::new(), addr, 0);
                     self.emit_arc_update_edge_if_managed(&field_layout.ty, owner, old, val)?;
                     self.builder.ins().store(MemFlags::new(), val, addr, 0);
+                    // The edge owns the new value's +1; drop an owned
+                    // temporary's own +1 (borrowed refs stay untouched).
+                    if value_is_owned && is_managed_ty(&field_layout.ty) {
+                        self.emit_arc_release_if_managed(&field_layout.ty, val)?;
+                    }
                 }
             }
             HirStmt::Return(val, _) => self.emit_return(val.as_ref())?,
@@ -10505,12 +9804,7 @@ impl<'a> FuncCodegen<'a> {
         }
     }
 
-    fn bind_pattern(
-        &mut self,
-        pat: &HirPattern,
-        val: ir::Value,
-        ty: &Ty,
-    ) -> Result<(), String> {
+    fn bind_pattern(&mut self, pat: &HirPattern, val: ir::Value, ty: &Ty) -> Result<(), String> {
         match pat {
             HirPattern::Binding(name, bind_ty) => {
                 let bty = if *bind_ty == Ty::Infer(0) {
@@ -11281,6 +10575,7 @@ impl<'a> FuncCodegen<'a> {
                         // Must not use the generic FFI path (which would free
                         // a fresh managed temporary after the call).
                         if name.as_str() == "ori_list_push" && args.len() == 2 {
+                            let value_is_owned = Self::expr_produces_owned_ref(&args[1].value);
                             let list_v = self.emit_expr(&args[0].value)?;
                             let value_v = self.emit_expr(&args[1].value)?;
                             let elem_ty = match &args[0].value.ty {
@@ -11288,6 +10583,11 @@ impl<'a> FuncCodegen<'a> {
                                 _ => args[1].value.ty.clone(),
                             };
                             self.emit_list_push_value(list_v, value_v, &elem_ty)?;
+                            // The list edge owns the element's +1; drop an
+                            // owned temporary's own +1.
+                            if value_is_owned && is_managed_ty(&elem_ty) {
+                                self.emit_arc_release_if_managed(&elem_ty, value_v)?;
+                            }
                             return Ok(self.builder.ins().iconst(types::I8, 0));
                         }
                         let param_tys = self.func_param_tys.get(name).cloned();
@@ -11421,12 +10721,10 @@ impl<'a> FuncCodegen<'a> {
             HirExprKind::Await(inner) => self.emit_await(inner, &expr.ty)?,
             HirExprKind::StructLit { def_id, fields } => {
                 if let Some(layout) = self.struct_layouts.get(def_id).cloned() {
-                    let dtor_v = if let Some(&fref) = self.struct_dtor_refs.get(def_id) {
-                        self.builder.ins().func_addr(self.ptr_ty, fref)
-                    } else {
-                        self.builder.ins().iconst(self.ptr_ty, 0)
-                    };
-                    let base = self.malloc_bytes_with_dtor(layout.size, dtor_v)?;
+                    // Managed fields are owned by their registered ARC edges
+                    // (single cascade owner). A destructor hook would release
+                    // the same fields a second time on owner free.
+                    let base = self.malloc_bytes(layout.size)?;
                     for (fname, fexpr) in fields {
                         let fexpr_is_owned = Self::expr_produces_owned_ref(fexpr);
                         let val = self.emit_expr(fexpr)?;
@@ -11523,19 +10821,35 @@ impl<'a> FuncCodegen<'a> {
             HirExprKind::ListLit { elem_ty, elements } => {
                 let list_ptr = self.emit_new_list()?;
                 for elem in elements {
+                    let owned = Self::expr_produces_owned_ref(elem);
                     let value = self.emit_expr(elem)?;
                     self.emit_list_push_value(list_ptr, value, elem_ty)?;
+                    // The list edge owns the element's +1. Release an owned
+                    // temporary's own +1 so it does not leak.
+                    if owned && is_managed_ty(elem_ty) {
+                        self.emit_arc_release_if_managed(elem_ty, value)?;
+                    }
                 }
                 list_ptr
             }
             HirExprKind::ListSpreadLit { elem_ty, elements } => {
                 let list_ptr = self.emit_new_list()?;
                 for elem in elements {
+                    let owned = Self::expr_produces_owned_ref(&elem.value);
                     let value = self.emit_expr(&elem.value)?;
                     if elem.spread {
                         self.emit_list_extend_from(list_ptr, value, elem_ty)?;
+                        // Extend copies the elements (each copy gets its own
+                        // edge); an owned source list temporary must be
+                        // released afterwards.
+                        if owned {
+                            self.emit_arc_release_if_managed(&elem.value.ty, value)?;
+                        }
                     } else {
                         self.emit_list_push_value(list_ptr, value, elem_ty)?;
+                        if owned && is_managed_ty(elem_ty) {
+                            self.emit_arc_release_if_managed(elem_ty, value)?;
+                        }
                     }
                 }
                 list_ptr
@@ -11555,12 +10869,9 @@ impl<'a> FuncCodegen<'a> {
                 ..
             } => {
                 if let Some(layout) = self.enum_layouts.get(def_id).cloned() {
-                    let dtor_v = if let Some(&fref) = self.enum_dtor_refs.get(def_id) {
-                        self.builder.ins().func_addr(self.ptr_ty, fref)
-                    } else {
-                        self.builder.ins().iconst(self.ptr_ty, 0)
-                    };
-                    let base = self.malloc_bytes_with_dtor(layout.size, dtor_v)?;
+                    // Payload fields are owned by registered ARC edges only;
+                    // see StructLit above.
+                    let base = self.malloc_bytes(layout.size)?;
 
                     if let Some(v_layout) = layout.variant(variant) {
                         // Store the tag at offset 0
@@ -11602,21 +10913,25 @@ impl<'a> FuncCodegen<'a> {
                 let (layout, total, _) = tuple_layout(&elem_tys, self.ptr_ty);
 
                 for (e, (offset, elem_ty)) in elems.iter().zip(layout.iter()) {
+                    let owned = Self::expr_produces_owned_ref(e);
                     let v = self.emit_expr(e)?;
-                    vals_and_offsets.push((v, *offset, elem_ty.clone()));
+                    vals_and_offsets.push((v, *offset, elem_ty.clone(), owned));
                 }
-                let dtor_v = if let Some(&fref) = self.tuple_dtor_refs.get(&elem_tys) {
-                    self.builder.ins().func_addr(self.ptr_ty, fref)
-                } else {
-                    self.builder.ins().iconst(self.ptr_ty, 0)
-                };
-                let base = self.malloc_bytes_with_dtor(total, dtor_v)?;
+                // Elements are owned by registered ARC edges only; see
+                // StructLit above.
+                let base = self.malloc_bytes(total)?;
 
-                for (v, off, elem_ty) in vals_and_offsets {
+                for (v, off, elem_ty, owned) in vals_and_offsets {
                     self.builder
                         .ins()
                         .store(MemFlags::new(), v, base, off as i32);
                     self.emit_arc_register_edge_if_managed(&elem_ty, base, v)?;
+                    // The edge owns the element's +1. Release the temporary's
+                    // own +1 so it does not leak; borrowed refs keep their
+                    // binding's ref untouched.
+                    if owned && is_managed_ty(&elem_ty) {
+                        self.emit_arc_release_if_managed(&elem_ty, v)?;
+                    }
                 }
                 base
             }
@@ -14446,7 +13761,10 @@ fn find_bundled_rust_lld() -> Result<PathBuf, String> {
         }
     }
 
-    Err("could not locate a runnable rust-lld; set ORI_RUST_LLD or install Rust toolchain".to_string())
+    Err(
+        "could not locate a runnable rust-lld; set ORI_RUST_LLD or install Rust toolchain"
+            .to_string(),
+    )
 }
 
 fn discover_bundled_rust_lld_next_to_exe() -> Option<PathBuf> {

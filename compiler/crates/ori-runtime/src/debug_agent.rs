@@ -14,14 +14,14 @@ use std::{
     io::{BufRead, BufReader, Write},
     net::TcpStream,
     sync::{
-        Mutex,
         atomic::{AtomicBool, AtomicU32, Ordering},
+        Mutex,
     },
     thread,
     time::Duration,
 };
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 struct DebugState {
     stream: Option<TcpStream>,

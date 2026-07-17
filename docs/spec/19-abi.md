@@ -228,7 +228,10 @@ Callers never pass the header pointer to retain/release — only the payload.
 
 **Note:** A historical comment in the runtime mentioned `[u32 ref][u32 type_tag]`.
 That is **obsolete**. The live header is refcount + optional destructor function
-pointer. Type-specific cleanup is via the destructor hook, not a type tag field.
+pointer. The hook is reserved for runtime-internal cleanup; cascading release
+of stored managed children goes through registered ARC edges (single cascade
+owner — see `docs/planning/adr-arc-single-cascade-owner.md` and Spec 10).
+Layout guard test: `ori_heap_header_layout_is_stable` (`ori-runtime`).
 
 ### 6.2 Core ARC API (stable symbols)
 

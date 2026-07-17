@@ -10,6 +10,20 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Corrigido
+- **ARC: dono único da cascata (native backend).** Structs/enums/tuples
+  liberavam campos managed **duas vezes** no free do dono (dtor gerado
+  `__dtor_*` + edge ARC registrada): um filho compartilhado com um binding
+  vivo era liberado cedo demais (use-after-free), e stores de elementos que
+  não liberavam o +1 do temporário owned vazavam — **literais de lista
+  aninhada e `lists.push` vazavam em programas reais**. Agora as edges
+  registradas são o único dono (regra uniforme: store → edge → release do
+  temp owned); os hooks `__dtor_*` foram removidos. ADR:
+  [`docs/planning/adr-arc-single-cascade-owner.md`](docs/planning/adr-arc-single-cascade-owner.md);
+  Spec 10 §"Cascade ownership"; regressão: `memory_arc.rs`
+  (`shared_child_*`, `nested_list_*`, `list_index_assign_*`,
+  `field_assign_owned_*`).
+
 ### Notas
 - Working tree after **v0.3.5**.
 - **Web stack feature freeze v1** documented in

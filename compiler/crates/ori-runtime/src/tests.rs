@@ -1446,3 +1446,13 @@ fn rust_runtime_exports_manifest_native_symbols() {
         "manifest runtime symbols missing from Rust runtime: {missing:#?}"
     );
 }
+
+/// ABI layout guard (LANG-MEM-0): generated code and the spec (19-abi)
+/// assume this exact header shape in front of every managed payload.
+#[test]
+fn ori_heap_header_layout_is_stable() {
+    assert_eq!(std::mem::size_of::<OriHeapHeader>(), 16);
+    assert_eq!(std::mem::align_of::<OriHeapHeader>(), 8);
+    assert_eq!(std::mem::offset_of!(OriHeapHeader, refcount), 0);
+    assert_eq!(std::mem::offset_of!(OriHeapHeader, destructor), 8);
+}

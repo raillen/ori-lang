@@ -726,3 +726,255 @@ end
         .unwrap_or_else(|| panic!("missing leaks line: {stdout}"));
     assert_eq!(leaks_line.trim(), "leaks:0");
 }
+
+// ── C1 — single cascade owner (dtor × edges overlap) ───────────────────────
+// Regression tests from docs/planning/historico/nim-study-2026-07-17-c1.md.
+// Before the fix, composite owners released managed fields twice (generated
+// __dtor_* plus the registered ARC edge), so a child shared with a live
+// binding was freed prematurely; list element slots leaked the owned temp +1.
+
+/// S4d: a list shared between a live caller binding and a struct field must
+/// survive the struct owner's death. `live_allocations` must not drop while
+/// the caller binding is still in scope.
+#[test]
+fn compile_runs_native_shared_child_survives_owner_free() {
+    let dir = TestDir::new("shared_child_survives_owner_free");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.list = lists
+import ori.test = test
+
+struct Holder
+    items: list[int]
+end
+
+make_list(n: int) -> list[int]
+    const xs: list[int] = lists.new()
+    var i: int = 0
+    while i < n
+        lists.push(xs, i)
+        i = i + 1
+    end
+    return xs
+end
+
+consume(shared: list[int]) -> int
+    const h: Holder = Holder { items: shared }
+    return lists.len(h.items)
+end
+
+exercise() -> int
+    const xs: list[int] = make_list(4)
+    const before: int = test.live_allocations()
+    const a: int = consume(xs)
+    const after: int = test.live_allocations()
+    if after < before
+        return 0 - 1
+    end
+    const b: int = consume(xs)
+    return lists.len(xs) + a + b
+end
+
+main()
+    const r: int = exercise()
+    const leaked: int = test.assert_no_leaks("shared_child_owner_free")
+    io.print("r:" + string(r))
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "shared_child_owner_free",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "r:12\nleaks:0");
+}
+
+/// S4d via assignment: storing a borrowed binding into a struct field must
+/// leave the binding's own reference intact after the struct owner dies.
+#[test]
+fn compile_runs_native_shared_child_survives_field_assign_owner_free() {
+    let dir = TestDir::new("shared_child_field_assign");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.list = lists
+import ori.test = test
+
+struct Holder
+    items: list[int]
+end
+
+make_list(n: int) -> list[int]
+    const xs: list[int] = lists.new()
+    var i: int = 0
+    while i < n
+        lists.push(xs, i)
+        i = i + 1
+    end
+    return xs
+end
+
+consume_via_assign(shared: list[int]) -> int
+    var h: Holder = Holder { items: make_list(1) }
+    h.items = shared
+    return lists.len(h.items)
+end
+
+exercise() -> int
+    const xs: list[int] = make_list(3)
+    const before: int = test.live_allocations()
+    const a: int = consume_via_assign(xs)
+    const after: int = test.live_allocations()
+    if after < before
+        return 0 - 1
+    end
+    return lists.len(xs) + a
+end
+
+main()
+    const r: int = exercise()
+    const leaked: int = test.assert_no_leaks("shared_child_field_assign")
+    io.print("r:" + string(r))
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "shared_child_field_assign",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "r:6\nleaks:0");
+}
+
+/// S4b: assigning a fresh owned value into a struct field must consume the
+/// temporary's +1 (the edge becomes the only owner besides bindings).
+#[test]
+fn compile_runs_native_field_assign_owned_temp_no_leak() {
+    let dir = TestDir::new("field_assign_owned_temp");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.list = lists
+import ori.test = test
+
+struct Holder
+    items: list[int]
+end
+
+make_list(n: int) -> list[int]
+    const xs: list[int] = lists.new()
+    var i: int = 0
+    while i < n
+        lists.push(xs, i)
+        i = i + 1
+    end
+    return xs
+end
+
+exercise() -> int
+    var h: Holder = Holder { items: make_list(2) }
+    h.items = make_list(5)
+    return lists.len(h.items)
+end
+
+main()
+    const size: int = exercise()
+    const leaked: int = test.assert_no_leaks("field_assign_owned_temp")
+    io.print("size:" + string(size))
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "field_assign_owned_temp",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "size:5\nleaks:0");
+}
+
+/// Nested list literals and `lists.push` with fresh owned elements must not
+/// leak the element temporaries (edge ownership replaces the temp +1).
+#[test]
+fn compile_runs_native_nested_list_literal_and_push_no_leak() {
+    let dir = TestDir::new("nested_list_literal_push");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.list = lists
+import ori.test = test
+
+make_list(n: int) -> list[int]
+    const xs: list[int] = lists.new()
+    var i: int = 0
+    while i < n
+        lists.push(xs, i)
+        i = i + 1
+    end
+    return xs
+end
+
+exercise() -> int
+    const outer: list[list[int]] = [make_list(2), make_list(3)]
+    var inner: list[list[int]] = lists.new()
+    lists.push(inner, make_list(4))
+    return lists.len(outer) + lists.len(inner)
+end
+
+main()
+    const r: int = exercise()
+    const leaked: int = test.assert_no_leaks("nested_list_literal_push")
+    io.print("r:" + string(r))
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "nested_list_literal_push",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "r:3\nleaks:0");
+}
+
+/// Index assignment with a fresh owned element must release both the
+/// replaced element's edge reference and the new temporary's +1.
+#[test]
+fn compile_runs_native_list_index_assign_owned_no_leak() {
+    let dir = TestDir::new("list_index_assign_owned");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.list = lists
+import ori.test = test
+
+make_list(n: int) -> list[int]
+    const xs: list[int] = lists.new()
+    var i: int = 0
+    while i < n
+        lists.push(xs, i)
+        i = i + 1
+    end
+    return xs
+end
+
+exercise() -> int
+    var xs: list[list[int]] = [make_list(1)]
+    xs[0] = make_list(6)
+    return lists.len(xs[0])
+end
+
+main()
+    const r: int = exercise()
+    const leaked: int = test.assert_no_leaks("list_index_assign_owned")
+    io.print("r:" + string(r))
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "list_index_assign_owned",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "r:6\nleaks:0");
+}

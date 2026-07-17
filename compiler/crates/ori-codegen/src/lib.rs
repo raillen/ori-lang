@@ -5,8 +5,8 @@ pub mod native_backend;
 
 pub use c_backend::CCodegen;
 pub use native_backend::{
-    emit_native, emit_native_with_options, jit::run_jit, link, link_with_options, NativeEmitOptions,
-    NativeLinkOptions, NativeLinker,
+    emit_native, emit_native_with_options, jit::run_jit, link, link_with_options,
+    NativeEmitOptions, NativeLinkOptions, NativeLinker,
 };
 
 /// Generate C source code from a `HirModule` (debug / fallback backend).

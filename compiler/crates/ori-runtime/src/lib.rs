@@ -11,11 +11,16 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 // ── Atomic ARC ──────────────────────────────────────────────────────────────
 //
-// Every heap-allocated managed object starts with an 8-byte ArcHeader:
-//   [ref_count: u32][type_tag: u32][... payload ...]
-//                                  ^── ptr passed to retain/release
+// Every heap-allocated managed object starts with a 16-byte OriHeapHeader:
+//   [refcount: AtomicI64][destructor: Option<fn(*mut u8)>][... payload ...]
+//                                                          ^── ptr passed to
+//                                                              retain/release
 //
-// Type tags identify the object kind so the correct destructor is called.
+// The destructor hook is reserved for runtime-internal cleanup (e.g. a
+// list's element storage). Compiler-registered ARC edges are the single
+// owner of stored managed children (see docs/planning/
+// adr-arc-single-cascade-owner.md); a hook must never release them.
+// Layout guard: `ori_heap_header_layout_is_stable` in tests.rs.
 
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::{Condvar, Mutex, OnceLock};
@@ -1843,9 +1848,7 @@ pub unsafe extern "C" fn ori_io_read(stream_ptr: *mut u8, max_bytes: i64) -> *mu
             };
             file.read(&mut buf)
         }
-        RuntimeStreamKind::Stdout
-        | RuntimeStreamKind::Stderr
-        | RuntimeStreamKind::FileWrite => {
+        RuntimeStreamKind::Stdout | RuntimeStreamKind::Stderr | RuntimeStreamKind::FileWrite => {
             return new_result(false, cstring_from_str("Cannot read from output stream"));
         }
     };
@@ -8394,11 +8397,9 @@ pub unsafe extern "C" fn ori_net_connect_async(
     timeout_ms: i64,
 ) -> *mut OriFuture {
     let host_str = cstr_str(host).to_string();
-    spawn_io_result_future(move || {
-        match std::ffi::CString::new(host_str) {
-            Ok(c_host) => ori_net_connect(c_host.as_ptr() as *const u8, port, timeout_ms),
-            Err(_) => new_result(false, cstring_from_str("invalid host string")),
-        }
+    spawn_io_result_future(move || match std::ffi::CString::new(host_str) {
+        Ok(c_host) => ori_net_connect(c_host.as_ptr() as *const u8, port, timeout_ms),
+        Err(_) => new_result(false, cstring_from_str("invalid host string")),
     })
 }
 
@@ -8411,11 +8412,9 @@ pub unsafe extern "C" fn ori_net_connect_tls_async(
     let host_str = cstr_str(host).to_string();
     // TLS handshake stays on the shared I/O pool (blocking path); still does not
     // block the Ori async executor.
-    spawn_io_result_future(move || {
-        match std::ffi::CString::new(host_str) {
-            Ok(c_host) => ori_net_connect_tls(c_host.as_ptr() as *const u8, port, timeout_ms),
-            Err(_) => new_result(false, cstring_from_str("invalid host string")),
-        }
+    spawn_io_result_future(move || match std::ffi::CString::new(host_str) {
+        Ok(c_host) => ori_net_connect_tls(c_host.as_ptr() as *const u8, port, timeout_ms),
+        Err(_) => new_result(false, cstring_from_str("invalid host string")),
     })
 }
 
@@ -8601,12 +8600,7 @@ fn wait_fd_ready(fd: i32, interest: IoInterest) {
                 break;
             }
             if rc > 0
-                && (pfd.revents
-                    & (events
-                        | libc::POLLERR
-                        | libc::POLLHUP
-                        | libc::POLLNVAL))
-                    != 0
+                && (pfd.revents & (events | libc::POLLERR | libc::POLLHUP | libc::POLLNVAL)) != 0
             {
                 break;
             }
@@ -9089,7 +9083,6 @@ pub extern "C" fn ori_math_log10(x: f64) -> f64 {
 pub extern "C" fn ori_math_is_finite(x: f64) -> c_uchar {
     u8::from(x.is_finite()) as c_uchar
 }
-
 
 // ── Password hashing (argon2id, PHC string) — web C10 / SEC9 ─────────────────
 

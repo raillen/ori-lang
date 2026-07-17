@@ -96,26 +96,32 @@ Full scans are **not** performed on every function return (that residual kept
 large-heap interactive programs ~2fps after the LANG-PERF-3 registry fix).
 Tight loops still never collect on each iteration (LANG-PERF-2).
 
-### Type-specific destructors
+### Cascade ownership (single owner: registered edges)
 
-The native backend generates a Cranelift function destructor for each
-composite type that has at least one managed field:
+Registered ARC edges are the **only** owner of a stored managed child
+(ADR: `docs/planning/adr-arc-single-cascade-owner.md`). The invariant:
 
-- **Structs:** `__dtor_struct_{id}` — loads each managed field by offset and
-  calls `ori_arc_release` on it.
-- **Enums:** `__dtor_enum_{id}` — switches on the active variant tag and
-  releases the managed payload fields of that variant only.
-- **Tuples:** `__dtor_tuple_{n}` — releases each managed element by offset.
+> **store → register/update the edge → release the temporary's own +1 if
+> the stored expression produced an owned reference.**
 
-When a managed struct/enum/tuple allocation is created via a literal, the
-codegen registers the generated destructor as the `ori_alloc` destructor hook.
-When the object's refcount drops to zero, the runtime calls that destructor
-before freeing the header, which cascades releases to nested managed fields.
+- Composite allocations (struct/enum/tuple literals) install **no**
+  destructor hook. When an owner's refcount reaches zero, the runtime
+  releases the owner's registered edges, which cascades through nested
+  managed children (structs, enums, tuples, optional/result payloads,
+  collection elements, closure environments, async frames alike).
+- Borrowed references (loads from bindings or fields) keep their existing
+  +1 untouched when stored; the edge adds its own +1.
+- The `ori_alloc` destructor hook remains reserved for runtime-internal
+  cleanup (for example a list's internal element storage). It must not
+  release compiler-registered children — that would reintroduce a double
+  release.
 
-`optional` and `result` do not have dedicated destructors. They rely on
-compiler-registered edges from the optional/result allocation to its managed
-payload: when the optional/result is released, the runtime releases the owned
-edges, which releases the payload.
+Historical note: before 2026-07-17 the backend also generated
+`__dtor_struct_*`/`__dtor_enum_*`/`__dtor_tuple_*` hooks that released the
+same fields the edges owned. The double release could free a child shared
+with a live binding (use-after-free) and masked missing temporary releases
+in element stores. See the ADR and `ori-driver/tests/memory_arc.rs`
+(`shared_child_*`, `nested_list_*`, `*_owned_*` regression tests).
 
 ### Leak check mode
 
