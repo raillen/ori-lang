@@ -34,8 +34,32 @@ pequeno, ordem de µs — critério de fechamento atendido no repro).
 (20k strings vivas + 20k iterações FFI; budget estrito via `ORI_PERF_STRICT=1`,
 `ORI_PERF_FFI_ARC_REGISTRY_BUDGET_MS`).
 
-**Pendente de validação externa:** re-medir o shell ImGui do lab
-(`game-engine-full/ori-studio`) com o runtime re-stageado — fora deste repo.
+### Validação externa (2026-07-17, lab `game-engine-full`)
+
+**Runtime comparado:** instalado (pré-fix, release) vs `ori-lang` staged
+**release** (`cargo build -p ori-runtime --release` +
+`runtime/x86_64-unknown-linux-gnu/`).
+
+| Cenário | Pré-fix | Pós-fix (release) |
+|---------|----------|---------------------|
+| Sintético headless: 50k strings vivas + 10k iterações (extern `labs` + temp gerenciado) | ~3800µs/iter (JIT) | **~5µs/iter** (JIT e AOT) |
+| `perf_probe` ImGui `frame`, **sem** ballast | (baseline lab ~60fps) | **~90–400 fps** (média raylib nos primeiros 30 frames) |
+| `perf_probe` + **50k** strings vivas no heap | ~2fps (sintoma original) | **ainda ~2fps** |
+
+**Conclusão:** o critério de **paridade µs na fronteira FFI** (repro sintético)
+está fechado. O FPS do probe com heap grande **não** volta a 60fps só com o
+fix do registry: residual é o **cycle collector em todo return de função**
+(`native_backend` emite `ori_arc_collect_cycles` quando
+`managed_start == 0 && loop_stack.is_empty()`), O(n+e) sobre o heap vivo —
+`on_update`/`on_draw` e helpers disparam full-heap scan com dezenas de milhares
+de alocações. Desligar o collect cooperativo
+(`ORI_COOPERATIVE_COLLECT_THRESHOLD` alto) **não** muda o FPS; mode `none` vs
+`frame` com 50k ballast também ~2fps → não é ImGui, é o scan no root.
+
+**Follow-up:** `LANG-MEM-3` (collector incremental / suspect roots — ver
+`plano-arc-nim-2026-07-16.md`). Shell Studio completo (`ori-studio/tools/run.sh`)
+ainda não re-medido end-to-end neste ambiente (mesmo residual esperado se o
+heap vivo for grande).
 
 **Nota separada (não bloqueia):** `ori compile` de fonte com 10k funções levou
 ~4min (provável custo quadrático no front/mid-end) — candidato a novo item de

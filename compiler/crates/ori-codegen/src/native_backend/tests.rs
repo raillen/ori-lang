@@ -1183,24 +1183,32 @@ fn discover_bundled_rust_lld_next_to_exe_returns_none_when_absent() {
 
 #[test]
 fn discover_bundled_rust_lld_supports_release_runtime_bin_layout() {
-    let dir = std::env::temp_dir().join(format!("ori_lld_release_layout_{}", std::process::id()));
-    let bin_dir = dir.join("runtime").join("bin");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&bin_dir).unwrap();
+    // Discovery only accepts a candidate that runs `--version` successfully
+    // (validate_rust_lld_runs), so the fixture must be executable. There is no
+    // portable way to fake a runnable `.exe`, so this scenario is unix-only.
+    #[cfg(not(unix))]
+    {
+        return;
+    }
+    #[cfg(unix)]
+    {
+        let dir =
+            std::env::temp_dir().join(format!("ori_lld_release_layout_{}", std::process::id()));
+        let bin_dir = dir.join("runtime").join("bin");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&bin_dir).unwrap();
 
-    let name = if cfg!(windows) {
-        "rust-lld.exe"
-    } else {
-        "rust-lld"
-    };
-    let lld = bin_dir.join(name);
-    std::fs::write(&lld, b"fake lld").unwrap();
+        let lld = bin_dir.join("rust-lld");
+        std::fs::write(&lld, b"#!/bin/sh\nexit 0\n").unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&lld, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-    let discovered = discover_bundled_rust_lld_from_exe_dir(&dir)
-        .expect("release package runtime/bin layout should be discovered");
-    assert_eq!(discovered, lld);
+        let discovered = discover_bundled_rust_lld_from_exe_dir(&dir)
+            .expect("release package runtime/bin layout should be discovered");
+        assert_eq!(discovered, lld);
 
-    let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 #[cfg(windows)]
@@ -1685,6 +1693,7 @@ fn raw_native_link_failure_includes_full_streams() {
         b"raw stderr line",
         NativeLinkOptions {
             raw_diagnostics: true,
+            shared: false,
         },
     );
 

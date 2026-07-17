@@ -312,7 +312,7 @@ end\n";
     lsp.stdin.take();
     let status = wait_with_timeout(&mut lsp.child, Duration::from_secs(5));
     assert!(
-        status.is_some_and(|s| s.ok()),
+        status.is_some_and(|s| s.success()),
         "server should exit cleanly after shutdown+exit, got {status:?}"
     );
 }
