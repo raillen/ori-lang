@@ -165,7 +165,10 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `ori_arc_collect_cycles` still force a full scan. C backend mirrors the gate.
   Spec: `docs/spec/10-memory.md`. Regression:
   `performance_guard::run_function_root_collect_stays_cheap_with_many_live_allocations`.
-  Full suspect-buffer collector remains LANG-MEM-3 F3.
+  Full suspect-buffer collector remains LANG-MEM-3 F3. Lab remeasure
+  (`game-engine-full` `studio_shell`, AOT + release runtime): **~58fps avg**
+  (48–60 over 36 `STUDIO-PERF` samples; was ~2fps); `DIAG-FFI` 100k×`app.fps()`
+  = **5ms** total.
 - **Native loops no longer call `ori_arc_collect_cycles` every iteration**
   (was triggered whenever a block entered with empty managed stack, including
   `while`/`for` bodies). Cycle collection is gated at function-root cleanups

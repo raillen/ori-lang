@@ -74,7 +74,15 @@
 | **LIVE-LINK** | Package smoke uses **SystemLinker only** (not RustcDriver) | 2 | S | **done** | RustcDriver double-links libstd vs `ori-runtime` staticlib (`rust_eh_personality`). |
 | **LIVE-QA** | Daily QA stages + test matrix + skill `ori-lang-qa` | 2 | M | **done** | `tools/qa/*`, `.grok/skills/ori-lang-qa`, agents, Spec 13 quality section |
 | **LIVE-RES** | Residual product surface clean under FREEZE-1 | 1 | S | **done** | Policy + `residual_audit.sh`; intentional residuals remain Spec 14 |
-| **LANG-PERF-3** | FFI call cost scales with binary size (~1.5ms/call large vs 0.55µs small, ~3000×) | 1 | M | **done** | Root cause: ARC registry linear scans (not dispatch). Fixed 2026-07-16: HashMap registry + indexed edges → retain/release O(1). Lab 2026-07-17: sintético 50k vivos 3800µs→**5µs**/iter; ImGui sem ballast ~90+fps; com 50k vivos era ~2fps por full-heap collect em todo return; **mitigado** com `ori_arc_maybe_collect_cycles` (~50fps lab). Residual F3: suspect buffer. Issue: [`issue-ffi-dispatch-large-binary-2026-07-16.md`](issue-ffi-dispatch-large-binary-2026-07-16.md). |
+| **LANG-PERF-3** | FFI call cost scales with binary size (~1.5ms/call large vs 0.55µs small, ~3000×) | 1 | M | **done** | Registry HashMap + maybe_collect. Lab 2026-07-17: sintético 5µs/iter; **studio_shell ~58fps avg** (antes ~2fps); DIAG-FFI 100k×`app.fps` = **5ms**. Issue: [`issue-ffi-dispatch-large-binary-2026-07-16.md`](issue-ffi-dispatch-large-binary-2026-07-16.md). Residual F3: suspect buffer. |
+| **LANG-MEM-0** | ARC header: fix stale layout comment/spec + ABI layout guard test | 1 | S | todo | Plan: [`plano-arc-nim-2026-07-16.md`](plano-arc-nim-2026-07-16.md) F0 |
+| **LANG-MEM-1** | Audit dtor × edges overlap + scenario tests S1–S4 | 1 | M | todo | Plan F1. Study: [`historico/nim-study-2026-07-16-c0.md`](historico/nim-study-2026-07-16-c0.md) |
+| **LANG-MEM-2** | Edge completeness matrix for all managed types | 1 | M | todo | Plan F2. Gate: after LANG-MEM-1 |
+| **LANG-MEM-3** | Cycle collector: suspect buffer + adaptive threshold | 2 | L | partial | **Partial:** amortized function-root `ori_arc_maybe_collect_cycles`. **Remaining F3:** suspect buffer + restricted trial-deletion. Plan F3 |
+| **LANG-MEM-4** | RC elision in codegen | 3 | L | todo | Plan F4 |
+| **LANG-MEM-5** | Spec 10: collector safe points + atomic-RC trade-off | 2 | S | todo | Plan F5 — partial update already in Spec 10 for maybe_collect |
+| **LANG-MEM-6** | ADR: COW for collections | 3 | S | todo | Plan F6 |
+| **LANG-MEM-7** | DX: `ORI_DUMP_ARC` | 3 | S | todo | Plan F7 |
 
 ### Done this focus wave (DX + docs + perf + residual)
 

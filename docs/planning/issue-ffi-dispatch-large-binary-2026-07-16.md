@@ -59,9 +59,25 @@ de alocações. Desligar o collect cooperativo
 **Mitigação 2026-07-17 (LANG-MEM-3 parcial):** function roots e post-await
 passam a chamar `ori_arc_maybe_collect_cycles` (threshold 256 alocações), não
 full scan em todo return. Residual de collector **completo** (buffer de
-suspeitos / passe O(suspeitos)) continua em F3 do plano Nim. Shell Studio
-completo (`ori-studio/tools/run.sh`) ainda não re-medido end-to-end neste
-ambiente.
+suspeitos / passe O(suspeitos)) continua em F3 do plano Nim.
+
+### Re-medida shell Studio (2026-07-17, lab `game-engine-full`)
+
+Binário: `ori-imgui/demos/studio_shell` AOT com compiler local
+(`compiler/target/debug/ori` 0.3.5 + commits LANG-PERF-3 / maybe_collect) e
+runtime **release** staged (`runtime/x86_64-unknown-linux-gnu/libori_runtime.a`
+com `ori_arc_maybe_collect_cycles`). Host: Intel HD Graphics 4000, DISPLAY X11.
+Compile wall ≈52s; run ~75s (`timeout`).
+
+| Métrica | Antes (issue) | Depois (esta sessão) |
+|---------|---------------|----------------------|
+| Shell UI interativo | ~**2fps** | **~48–60fps** (36 amostras `STUDIO-PERF`, média **58**) |
+| `DIAG-FFI: 100k app.fps()` | ~ms/call × 100k (shell morto) | **5 ms** total (~50 ns/call) |
+| Critério “~60fps edit lite” | falha | **atendido** (vsync 60 no host) |
+
+Amostras `STUDIO-PERF` (cada 120 frames): quase todas em 54–60; mínimo 48.
+Timers por seção no log (`update`/`view3d`/`imgui` ms) ficaram 0–1 (resolução
+inteira ms — frame sob orçamento).
 
 **Nota separada (não bloqueia):** `ori compile` de fonte com 10k funções levou
 ~4min (provável custo quadrático no front/mid-end) — candidato a novo item de
