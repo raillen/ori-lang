@@ -1456,3 +1456,124 @@ fn ori_heap_header_layout_is_stable() {
     assert_eq!(std::mem::offset_of!(OriHeapHeader, refcount), 0);
     assert_eq!(std::mem::offset_of!(OriHeapHeader, destructor), 8);
 }
+
+// ── C3 — suspect buffer + partial trial deletion ────────────────────────────
+
+fn reset_arc_state_for_test() {
+    let mut state = arc_state().lock().unwrap();
+    state.allocations.clear();
+    state.edges.clear();
+    state.suspects.clear();
+    TEST_DTOR_CALLS.store(0, AtomicOrdering::SeqCst);
+}
+
+/// Releasing into a cycle records a suspect; the partial pass reclaims the
+/// cycle without scanning unrelated allocations.
+#[test]
+fn partial_collect_reclaims_suspect_cycle() {
+    let _guard = TEST_ARC_LOCK.lock().unwrap();
+    reset_arc_state_for_test();
+
+    unsafe {
+        // Unrelated live allocations must not be touched (and must not be
+        // candidates: no suspects point at them).
+        let bystander = ori_alloc(8, Some(test_destructor));
+        assert!(!bystander.is_null());
+
+        let left = ori_alloc(8, Some(test_destructor));
+        let right = ori_alloc(8, Some(test_destructor));
+        ori_arc_register_edge(left, right);
+        ori_arc_register_edge(right, left);
+        ori_arc_release(left);
+        ori_arc_release(right);
+
+        assert!(
+            !arc_state().lock().unwrap().suspects.is_empty(),
+            "releases into the cycle must record suspects"
+        );
+
+        let (freed, touched) = collect_cycles_from_suspects();
+        assert_eq!(freed, 2, "the orphan cycle is reclaimed");
+        assert_eq!(touched, 2, "only the cycle subgraph is examined");
+        assert_eq!(TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst), 2);
+        assert!(arc_state().lock().unwrap().suspects.is_empty());
+
+        ori_arc_release(bystander);
+    }
+}
+
+/// Objects without outgoing edges can never be cycle members: their releases
+/// must not create suspects and the partial pass must be a no-op.
+#[test]
+fn partial_collect_no_suspects_is_noop() {
+    let _guard = TEST_ARC_LOCK.lock().unwrap();
+    reset_arc_state_for_test();
+
+    unsafe {
+        let a = ori_alloc(8, None);
+        let b = ori_alloc(8, None);
+        ori_arc_retain(a);
+        ori_arc_release(a); // 2 -> 1, no outgoing edges: not a suspect
+
+        assert!(arc_state().lock().unwrap().suspects.is_empty());
+        let (freed, touched) = collect_cycles_from_suspects();
+        assert_eq!((freed, touched), (0, 0));
+
+        ori_arc_release(a);
+        ori_arc_release(b);
+    }
+}
+
+/// A cycle that is still externally referenced survives the partial pass and
+/// is reclaimed by a later pass once the external reference is dropped.
+#[test]
+fn partial_collect_keeps_externally_referenced_cycle() {
+    let _guard = TEST_ARC_LOCK.lock().unwrap();
+    reset_arc_state_for_test();
+
+    unsafe {
+        let left = ori_alloc(8, Some(test_destructor));
+        let right = ori_alloc(8, Some(test_destructor));
+        ori_arc_register_edge(left, right);
+        ori_arc_register_edge(right, left);
+        // Keep one extra external reference on `left`.
+        ori_arc_retain(left);
+
+        // Drop the allocation references: left 3 -> 2, right 2 -> 1.
+        ori_arc_release(left);
+        ori_arc_release(right);
+
+        let (freed, touched) = collect_cycles_from_suspects();
+        assert_eq!(freed, 0, "externally referenced cycle must survive");
+        assert_eq!(touched, 2);
+        assert_eq!(TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst), 0);
+
+        // Drop the last external reference: left 2 -> 1 records a suspect.
+        ori_arc_release(left);
+        let (freed, _) = collect_cycles_from_suspects();
+        assert_eq!(freed, 2, "cycle reclaimed after external ref is gone");
+        assert_eq!(TEST_DTOR_CALLS.load(AtomicOrdering::SeqCst), 2);
+    }
+}
+
+/// An object freed through the normal zero path leaves no stale suspect
+/// behind (O(1) swap-remove bookkeeping).
+#[test]
+fn suspect_slot_cleared_when_object_freed_normally() {
+    let _guard = TEST_ARC_LOCK.lock().unwrap();
+    reset_arc_state_for_test();
+
+    unsafe {
+        let owner = ori_alloc(8, None);
+        let child = ori_alloc(8, None);
+        ori_arc_register_edge(owner, child);
+        ori_arc_retain(owner);
+        ori_arc_release(owner); // 2 -> 1 with outgoing edge: suspect
+        assert_eq!(arc_state().lock().unwrap().suspects.len(), 1);
+
+        ori_arc_release(owner); // 1 -> 0: freed; suspect slot must go too
+        assert!(arc_state().lock().unwrap().suspects.is_empty());
+        let (freed, touched) = collect_cycles_from_suspects();
+        assert_eq!((freed, touched), (0, 0));
+    }
+}

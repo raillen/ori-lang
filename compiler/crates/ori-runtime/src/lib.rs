@@ -35,7 +35,13 @@ pub struct OriHeapHeader {
 struct ArcAllocation {
     header: usize,
     size: usize,
+    /// Index into `ArcState::suspects`, or `NOT_SUSPECT`. Gives O(1)
+    /// dedupe/removal of cycle-root candidates (Nim ORC keeps the same idea
+    /// in the header's `rootIdx`).
+    suspect_idx: usize,
 }
+
+const NOT_SUSPECT: usize = usize::MAX;
 
 /// Ownership edges indexed both ways so edge registration/removal and the bulk
 /// lookups on free (`take_owned_edges`, `remove_incoming_edges`) cost
@@ -110,6 +116,46 @@ struct ArcState {
     /// made every retain/release O(live allocations) (LANG-PERF-3).
     allocations: HashMap<usize, ArcAllocation>,
     edges: ArcEdges,
+    /// Possible cycle roots (Bacon trial deletion): payloads whose refcount
+    /// was decremented to a non-zero value while they owned outgoing edges.
+    /// Only these subgraphs can contain newly unreachable cycles.
+    suspects: Vec<usize>,
+}
+
+impl ArcState {
+    fn mark_suspect(&mut self, payload: usize) {
+        let Some(allocation) = self.allocations.get_mut(&payload) else {
+            return;
+        };
+        if allocation.suspect_idx != NOT_SUSPECT {
+            return;
+        }
+        allocation.suspect_idx = self.suspects.len();
+        self.suspects.push(payload);
+    }
+
+    /// Drops `payload` from the suspect buffer in O(1) (swap-remove).
+    fn clear_suspect(&mut self, payload: usize) {
+        let Some(allocation) = self.allocations.get_mut(&payload) else {
+            return;
+        };
+        let idx = allocation.suspect_idx;
+        if idx == NOT_SUSPECT {
+            return;
+        }
+        allocation.suspect_idx = NOT_SUSPECT;
+        self.suspects.swap_remove(idx);
+        if let Some(&moved) = self.suspects.get(idx) {
+            if let Some(moved_alloc) = self.allocations.get_mut(&moved) {
+                moved_alloc.suspect_idx = idx;
+            }
+        }
+    }
+
+    fn remove_allocation(&mut self, payload: usize) -> Option<ArcAllocation> {
+        self.clear_suspect(payload);
+        self.allocations.remove(&payload)
+    }
 }
 
 static ARC_STATE: OnceLock<Mutex<ArcState>> = OnceLock::new();
@@ -123,20 +169,57 @@ static COOPERATIVE_ALLOC_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// `COOPERATIVE_ALLOC_COUNTER - COOPERATIVE_LAST_COLLECTED` crosses the threshold.
 static COOPERATIVE_LAST_COLLECTED: AtomicU64 = AtomicU64::new(0);
 
-/// Number of managed allocations between cooperative cycle collections. Tuned
-/// to amortize the O(n) trial-deletion scan over many allocations. Override via
-/// `ORI_COOPERATIVE_COLLECT_THRESHOLD` for tests.
+/// Number of managed allocations between cooperative cycle collections.
+/// Adapted at runtime by pass efficacy (see `adapt_cooperative_threshold`)
+/// unless `ORI_COOPERATIVE_COLLECT_THRESHOLD` pins it (tests).
 const DEFAULT_COOPERATIVE_COLLECT_THRESHOLD: u64 = 256;
+const MIN_COOPERATIVE_COLLECT_THRESHOLD: u64 = 64;
+const MAX_COOPERATIVE_COLLECT_THRESHOLD: u64 = 65_536;
 
-fn cooperative_collect_threshold() -> u64 {
-    static OVERRIDE: OnceLock<u64> = OnceLock::new();
-    *OVERRIDE.get_or_init(|| {
-        std::env::var("ORI_COOPERATIVE_COLLECT_THRESHOLD")
+/// Current adaptive threshold (0 = not yet initialized).
+static COOPERATIVE_THRESHOLD: AtomicU64 = AtomicU64::new(0);
+
+/// Returns `(base_threshold, pinned_by_env)`.
+fn cooperative_threshold_config() -> (u64, bool) {
+    static CONFIG: OnceLock<(u64, bool)> = OnceLock::new();
+    *CONFIG.get_or_init(|| {
+        match std::env::var("ORI_COOPERATIVE_COLLECT_THRESHOLD")
             .ok()
             .and_then(|raw| raw.parse::<u64>().ok())
             .filter(|value| *value > 0)
-            .unwrap_or(DEFAULT_COOPERATIVE_COLLECT_THRESHOLD)
+        {
+            Some(pinned) => (pinned, true),
+            None => (DEFAULT_COOPERATIVE_COLLECT_THRESHOLD, false),
+        }
     })
+}
+
+fn cooperative_collect_threshold() -> u64 {
+    let (base, _) = cooperative_threshold_config();
+    let current = COOPERATIVE_THRESHOLD.load(Ordering::Relaxed);
+    if current == 0 {
+        COOPERATIVE_THRESHOLD.store(base, Ordering::Relaxed);
+        base
+    } else {
+        current
+    }
+}
+
+/// Nim-ORC-style feedback: an effective pass (freed >= half of touched)
+/// shrinks the window so cycles are reclaimed sooner; an ineffective pass
+/// grows it so quiet workloads stop paying for scans.
+fn adapt_cooperative_threshold(freed: i64, touched: usize) {
+    let (_, pinned) = cooperative_threshold_config();
+    if pinned || touched == 0 {
+        return;
+    }
+    let current = cooperative_collect_threshold();
+    let next = if freed.saturating_mul(2) >= touched as i64 {
+        (current * 2 / 3).max(MIN_COOPERATIVE_COLLECT_THRESHOLD)
+    } else {
+        (current + current / 2).min(MAX_COOPERATIVE_COLLECT_THRESHOLD)
+    };
+    COOPERATIVE_THRESHOLD.store(next, Ordering::Relaxed);
 }
 
 /// Trigger cycle collection when the allocation counter has advanced past the
@@ -157,9 +240,11 @@ fn maybe_collect_cycles_cooperative() {
         .compare_exchange(last, counter, Ordering::SeqCst, Ordering::Relaxed)
         .is_ok()
     {
-        unsafe {
-            ori_arc_collect_cycles();
-        }
+        // Partial pass over suspect subgraphs only: cooperative safe points
+        // no longer pay O(live heap). Explicit `ori_arc_collect_cycles` /
+        // `ori.test.collect_cycles` keep full-scan semantics.
+        let (freed, touched) = unsafe { collect_cycles_from_suspects() };
+        adapt_cooperative_threshold(freed, touched);
     }
 }
 
@@ -207,6 +292,7 @@ unsafe fn register_allocation(header: *mut OriHeapHeader, payload: *mut u8, size
             ArcAllocation {
                 header: header as usize,
                 size,
+                suspect_idx: NOT_SUSPECT,
             },
         );
     }
@@ -228,8 +314,7 @@ unsafe fn unregister_allocation(ptr: *mut u8) -> Option<*mut OriHeapHeader> {
     let payload = ptr as usize;
     let mut state = arc_state().lock().ok()?;
     state
-        .allocations
-        .remove(&payload)
+        .remove_allocation(payload)
         .map(|allocation| allocation.header as *mut OriHeapHeader)
 }
 
@@ -336,10 +421,25 @@ pub unsafe extern "C" fn ori_arc_release(ptr: *mut u8) {
     if ptr.is_null() {
         return;
     }
-    let Some(header) = header_for_registered(ptr) else {
-        return;
+    let payload = ptr as usize;
+    let old = {
+        let mut state = arc_state().lock().unwrap_or_else(|e| e.into_inner());
+        let Some(allocation) = state.allocations.get(&payload) else {
+            return;
+        };
+        let header = allocation.header as *mut OriHeapHeader;
+        let old = (*header).refcount.fetch_sub(1, Ordering::Release);
+        if old != 1 && state.edges.by_owner.contains_key(&payload) {
+            // Bacon possible root: a refcount decremented to non-zero on an
+            // object with outgoing edges may have disconnected a cycle.
+            state.mark_suspect(payload);
+        }
+        old
     };
-    if (*header).refcount.fetch_sub(1, Ordering::Release) == 1 {
+    if old == 1 {
+        let Some(header) = header_for_registered(ptr) else {
+            return;
+        };
         (*header).refcount.load(Ordering::Acquire); // synchronize
         free_registered_object(ptr, true);
     }
@@ -1566,6 +1666,25 @@ pub unsafe extern "C" fn ori_arc_update_edge(
 /// cycle collection is running.
 #[no_mangle]
 pub unsafe extern "C" fn ori_arc_collect_cycles() -> i64 {
+    let Ok(state) = arc_state().lock() else {
+        return 0;
+    };
+    let candidates: Vec<usize> = state.allocations.keys().copied().collect();
+    collect_cycles_over_candidates(state, candidates)
+}
+
+/// Trial deletion restricted to `candidates` (Bacon synchronous collection).
+///
+/// Edges from owners outside the candidate set are *not* discounted, so they
+/// count as external references — restricting the set can only under-collect,
+/// never free a reachable object. The full collector passes every live
+/// allocation as the candidate set.
+///
+/// Consumes the state guard: it is dropped before destructors run.
+unsafe fn collect_cycles_over_candidates(
+    mut state: std::sync::MutexGuard<'_, ArcState>,
+    candidates: Vec<usize>,
+) -> i64 {
     struct Mark {
         payload: usize,
         header: usize,
@@ -1573,20 +1692,18 @@ pub unsafe extern "C" fn ori_arc_collect_cycles() -> i64 {
         marked: bool,
     }
 
-    let Ok(mut state) = arc_state().lock() else {
-        return 0;
-    };
-    let mut marks: Vec<Mark> = state
-        .allocations
+    let mut marks: Vec<Mark> = candidates
         .iter()
-        .map(|(payload, allocation)| {
-            let header = allocation.header as *mut OriHeapHeader;
-            Mark {
-                payload: *payload,
-                header: allocation.header,
-                trial_count: (*header).refcount.load(Ordering::Acquire),
-                marked: false,
-            }
+        .filter_map(|payload| {
+            state.allocations.get(payload).map(|allocation| {
+                let header = allocation.header as *mut OriHeapHeader;
+                Mark {
+                    payload: *payload,
+                    header: allocation.header,
+                    trial_count: (*header).refcount.load(Ordering::Acquire),
+                    marked: false,
+                }
+            })
         })
         .collect();
     let index_by_payload: HashMap<usize, usize> = marks
@@ -1594,14 +1711,16 @@ pub unsafe extern "C" fn ori_arc_collect_cycles() -> i64 {
         .enumerate()
         .map(|(index, mark)| (mark.payload, index))
         .collect();
-    // Trial deletion: discount references coming from registered edges so
-    // `trial_count > 0` means "externally referenced".
-    for (owner, children) in &state.edges.by_owner {
-        if !index_by_payload.contains_key(owner) {
+    // Trial deletion: discount references coming from registered edges whose
+    // owner is inside the candidate set, so `trial_count > 0` means
+    // "referenced from outside the candidate subgraph".
+    for mark_index in 0..marks.len() {
+        let owner = marks[mark_index].payload;
+        let Some(children) = state.edges.by_owner.get(&owner) else {
             continue;
-        }
-        for child in children {
-            if let Some(&child_index) = index_by_payload.get(child) {
+        };
+        for child in children.clone() {
+            if let Some(&child_index) = index_by_payload.get(&child) {
                 marks[child_index].trial_count -= 1;
             }
         }
@@ -1644,7 +1763,7 @@ pub unsafe extern "C" fn ori_arc_collect_cycles() -> i64 {
     let mut children_to_release = Vec::new();
 
     for &(payload, _) in &collected_pairs {
-        state.allocations.remove(&payload);
+        state.remove_allocation(payload);
         // Surviving children owned by a collected object get their edge
         // reference released after the lock is dropped.
         for child in state.edges.take_children_of(payload) {
@@ -1673,6 +1792,48 @@ pub unsafe extern "C" fn ori_arc_collect_cycles() -> i64 {
     }
 
     collected
+}
+
+/// Partial collection: trial deletion only over the subgraph reachable from
+/// the suspect buffer (possible cycle roots recorded by `ori_arc_release`).
+/// Returns `(freed, touched)`; `touched` is the candidate-subgraph size and
+/// feeds the adaptive cooperative threshold.
+unsafe fn collect_cycles_from_suspects() -> (i64, usize) {
+    let Ok(mut state) = arc_state().lock() else {
+        return (0, 0);
+    };
+    if state.suspects.is_empty() {
+        return (0, 0);
+    }
+    let roots: Vec<usize> = std::mem::take(&mut state.suspects);
+    for &payload in &roots {
+        if let Some(allocation) = state.allocations.get_mut(&payload) {
+            allocation.suspect_idx = NOT_SUSPECT;
+        }
+    }
+    // Closure over outgoing edges: every member of a garbage cycle is
+    // reachable from the suspect that disconnected it.
+    let mut candidate_set: HashSet<usize> = HashSet::new();
+    let mut stack: Vec<usize> = roots
+        .into_iter()
+        .filter(|payload| state.allocations.contains_key(payload))
+        .collect();
+    while let Some(payload) = stack.pop() {
+        if !candidate_set.insert(payload) {
+            continue;
+        }
+        if let Some(children) = state.edges.by_owner.get(&payload) {
+            for &child in children {
+                if state.allocations.contains_key(&child) && !candidate_set.contains(&child) {
+                    stack.push(child);
+                }
+            }
+        }
+    }
+    let candidates: Vec<usize> = candidate_set.into_iter().collect();
+    let touched = candidates.len();
+    let freed = collect_cycles_over_candidates(state, candidates);
+    (freed, touched)
 }
 
 #[no_mangle]

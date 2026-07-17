@@ -2860,9 +2860,22 @@ impl<M: Module> NativeBackend<M> {
             }
             let mut sig = self.module.make_signature();
             for &p in params {
-                sig.params.push(AbiParam::new(p));
+                // C ABI (SysV/LLVM): the caller zero-extends integer args
+                // narrower than 32 bits. Rust `extern "C"` relies on it;
+                // without `uext`, an I8 produced by `sete` carries garbage
+                // in the upper bits and optimized runtime code that reads a
+                // wider register misbehaves (e.g. bool→string printed with
+                // the wrong length).
+                if p.is_int() && p.bits() < 32 {
+                    sig.params.push(AbiParam::new(p).uext());
+                } else {
+                    sig.params.push(AbiParam::new(p));
+                }
             }
             if let Some(r) = ret {
+                // Returns stay unextended: rustc does not guarantee extended
+                // returns for small ints, so the caller must only trust the
+                // low bits (Cranelift's default for a typed I8 return).
                 sig.returns.push(AbiParam::new(r));
             }
             self.func_param_tys.insert(SmolStr::new(name), params_ty);

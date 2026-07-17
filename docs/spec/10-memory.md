@@ -76,21 +76,38 @@ between managed heap objects. `ori_arc_collect_cycles()` reclaims unreachable
 cycles from that registered graph using a trial-deletion algorithm. The return
 value is the number of heap objects reclaimed in the pass.
 
-**Cooperative collection points:** full trial-deletion (`ori_arc_collect_cycles`)
-is **O(live managed allocations)**. Generated code therefore uses an amortized
-gate at most function-level safe points:
+**Suspect buffer (possible cycle roots):** `ori_arc_release` records a
+payload as a *suspect* when it decrements the refcount to a non-zero value
+**and** the object owns outgoing edges (Bacon-style possible roots — only
+such objects can have disconnected a cycle). The buffer supports O(1)
+dedupe/removal via an index stored in the allocation record; objects freed
+through the normal zero path leave no stale entry.
+
+**Cooperative collection points:** generated code uses an amortized gate at
+function-level safe points; when the gate fires, the runtime runs a
+**partial** trial-deletion pass restricted to the subgraph reachable from
+the suspect buffer — cost is O(suspect subgraph), not O(live heap). Edges
+from owners outside that subgraph count as external references, so a
+restricted pass can only under-collect, never free a reachable object.
 
 - At the end of a sync function body (after scope cleanup, before returning),
   when the function is a top-level scope (`managed_start == 0` and not inside a
-  loop body), the backend calls **`ori_arc_maybe_collect_cycles()`**. That runs a
-  full pass only when the process-wide managed allocation counter has advanced
-  by `ORI_COOPERATIVE_COLLECT_THRESHOLD` (default **256**) since the last pass.
+  loop body), the backend calls **`ori_arc_maybe_collect_cycles()`**. The
+  partial pass runs only when the process-wide managed allocation counter has
+  advanced past the cooperative threshold since the last pass.
 - After dropping dead frame values following an `await` resume (if any values
   were released): same amortized gate.
 - Async executor safe points (`ori_executor_drain`, batches inside
   `ori_task_block_on`): same cooperative counter.
-- Explicit full scan from Ori via `ori.test.collect_cycles()` (tests /
-  diagnostics) or the native `ori_arc_collect_cycles` ABI.
+- Explicit **full scan** from Ori via `ori.test.collect_cycles()` (tests /
+  diagnostics) or the native `ori_arc_collect_cycles` ABI — these keep
+  whole-heap semantics (`assert_no_leaks` relies on it).
+
+**Adaptive threshold:** the cooperative threshold starts at **256**
+allocations and adapts by pass efficacy (Nim-ORC-style feedback): a pass
+that frees at least half of what it touched shrinks the window (×2/3, min
+64); an ineffective pass grows it (×1.5, max 65 536). Setting
+`ORI_COOPERATIVE_COLLECT_THRESHOLD` pins the threshold (used by tests).
 
 Full scans are **not** performed on every function return (that residual kept
 large-heap interactive programs ~2fps after the LANG-PERF-3 registry fix).

@@ -4444,3 +4444,31 @@ end
     assert!(!out.has_errors, "{:?}", out.diagnostics);
     assert!(out.c_source.contains("ori_string_eq"), "{}", out.c_source);
 }
+
+/// Regression: ABI zero-extension of sub-32-bit args to extern symbols.
+/// A bool produced by `sete` carried garbage in the upper register bits;
+/// optimized runtime code (rustc/LLVM assumes SysV caller-extension) computed
+/// the string length from the wide register and printed "fals".
+#[test]
+fn compile_runs_bool_from_string_eq_prints_correctly() {
+    let dir = TestDir::new("bool_string_eq_print");
+    dir.write(
+        "main.orl",
+        r#"module app.main
+
+import ori.io = io
+
+main()
+    io.println(string("a" == "b"))
+    io.println(string("same" == "same"))
+end
+"#,
+    );
+    let exe = exe_path(&dir, "bool_string_eq_print");
+    let out = run_compile(&dir.path("main.orl"), Path::new(&exe)).unwrap();
+    assert!(!out.has_errors, "{:?}", out.diagnostics);
+    let output = Command::new(&exe).output().unwrap();
+    assert!(output.status.success(), "{:?}", output);
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert_eq!(stdout.lines().collect::<Vec<_>>(), ["false", "true"]);
+}

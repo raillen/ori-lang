@@ -10,7 +10,29 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Mudado
+- **ARC: collector de ciclos incremental (LANG-MEM-3).** O passe
+  cooperativo deixou de escanear o heap inteiro: `ori_arc_release` registra
+  candidatos a raiz de ciclo (decremento para >0 em objeto com edges de
+  saída) e o passe roda trial deletion apenas no subgrafo desses suspeitos
+  — O(subgrafo), não O(alocações vivas). O threshold cooperativo (256)
+  agora adapta pela eficácia do passe (encolhe ×2/3 quando eficaz, cresce
+  ×1,5 quando não; bounds 64–65 536; `ORI_COOPERATIVE_COLLECT_THRESHOLD`
+  pina o valor). `ori.test.collect_cycles`/`assert_no_leaks` e o símbolo
+  `ori_arc_collect_cycles` mantêm o full scan. Spec 10 atualizado; nota:
+  [`docs/planning/historico/nim-study-2026-07-17-c3.md`](docs/planning/historico/nim-study-2026-07-17-c3.md).
+
 ### Corrigido
+- **ABI nativa: zero-extension de argumentos de 8/16 bits para símbolos
+  externos.** O Cranelift passava um `bool` (I8, ex. resultado de `sete`)
+  com lixo nos bits altos do registrador; o runtime Rust (LLVM assume
+  caller-extension SysV) lia o registrador largo e, p.ex.,
+  `io.println(string("a" == "b"))` imprimia `fals` (length de "true" com
+  conteúdo de "false"). Params < 32 bits nas declarações de runtime agora
+  carregam `uext`. Pré-existente; exposto pela mudança de layout do C3 —
+  o fix também fez 8 testes de `multifile_imports` marcados como
+  pré-quebrados voltarem a passar.
+  Regressão: `ori_spec::compile_runs_bool_from_string_eq_prints_correctly`.
 - **ARC: maps e sets (args owned + posse do resultado de `get`).**
   `maps.set`/`sets.add` (e demais calls de map/set) vazavam o +1 de chaves/
   valores temporários owned; `maps.get` retornava valor borrowed do map que
