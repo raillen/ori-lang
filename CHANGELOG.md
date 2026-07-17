@@ -11,6 +11,16 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Corrigido
+- **ARC: maps e sets (args owned + posse do resultado de `get`).**
+  `maps.set`/`sets.add` (e demais calls de map/set) vazavam o +1 de chaves/
+  valores temporários owned; `maps.get` retornava valor borrowed do map que
+  o codegen tratava como owned (o cleanup do binding roubava o +1 vazado —
+  bugs pareados; corrigir um lado só causaria use-after-free). Agora todos
+  os calls liberam args owned, `maps.get` faz retain do resultado managed e
+  `maps.try_get` devolve optional que possui o payload via edge própria
+  (como `try_remove` já fazia). Regressão: `memory_arc.rs`
+  (`map_managed_values`, `set_owned_elements`, `map_get_value_survives_map_free`,
+  `map_try_get_payload`).
 - **ARC: temporários de string (print / f-string).** `io.print` com
   argumento fresco (concat, f-string, conversões) vazava o +1 do
   temporário, e cada parte/intermediário de f-string vazava (um f-string

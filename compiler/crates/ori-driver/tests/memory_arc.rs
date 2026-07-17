@@ -1053,3 +1053,190 @@ end
     assert!(success, "{stdout}");
     assert_eq!(stdout.trim(), "delta:1\nx3y3z\nleaks:0");
 }
+
+// ── LANG-MEM-2 — map/set owned-arg accounting and borrowed get ─────────────
+// Before the fix, map/set runtime calls leaked the +1 of owned key/value
+// temporaries, and maps.get returned a borrowed value that codegen treated
+// as owned (the binding's scope release stole the leaked +1 - paired bugs).
+
+/// Map with managed values: set (including key overwrite) plus get must not
+/// leak the value temporaries; the overwritten value must be released.
+#[test]
+fn compile_runs_native_map_managed_values_no_leak() {
+    let dir = TestDir::new("map_managed_values");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.list = lists
+import ori.map = maps
+import ori.test = test
+
+make_list(n: int) -> list[int]
+    const xs: list[int] = lists.new()
+    var i: int = 0
+    while i < n
+        lists.push(xs, i)
+        i = i + 1
+    end
+    return xs
+end
+
+exercise() -> int
+    var m: map[string, list[int]] = maps.new()
+    maps.set(m, "a", make_list(2))
+    maps.set(m, "a", make_list(5))
+    maps.set(m, "b", make_list(1))
+    return lists.len(maps.get(m, "a"))
+end
+
+main()
+    const r: int = exercise()
+    const leaked: int = test.assert_no_leaks("map_managed_values")
+    io.print("r:" + string(r))
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "map_managed_values",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "r:5\nleaks:0");
+}
+
+/// Set of strings: fresh owned element temporaries (including a rejected
+/// duplicate) must be released; the set owns stored elements via edges.
+#[test]
+fn compile_runs_native_set_owned_elements_no_leak() {
+    let dir = TestDir::new("set_owned_elements");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.set = sets
+import ori.test = test
+
+exercise() -> int
+    var s: set[string] = sets.new()
+    sets.add(s, "k" + string(1))
+    sets.add(s, "k" + string(1))
+    sets.add(s, "other")
+    return sets.len(s)
+end
+
+main()
+    const r: int = exercise()
+    const leaked: int = test.assert_no_leaks("set_owned_elements")
+    io.print("r:" + string(r))
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "set_owned_elements",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "r:2\nleaks:0");
+}
+
+/// UAF guard: a value read from a map must survive the map's death (the get
+/// result is retained; it does not borrow the map's edge reference).
+#[test]
+fn compile_runs_native_map_get_value_survives_map_free() {
+    let dir = TestDir::new("map_get_survives");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.list = lists
+import ori.map = maps
+import ori.test = test
+
+make_list(n: int) -> list[int]
+    const xs: list[int] = lists.new()
+    var i: int = 0
+    while i < n
+        lists.push(xs, i)
+        i = i + 1
+    end
+    return xs
+end
+
+take_from_map() -> list[int]
+    var m: map[string, list[int]] = maps.new()
+    maps.set(m, "a", make_list(3))
+    return maps.get(m, "a")
+end
+
+exercise() -> int
+    const xs: list[int] = take_from_map()
+    -- o map ja morreu; xs deve continuar valido
+    return lists.len(xs)
+end
+
+main()
+    const r: int = exercise()
+    const leaked: int = test.assert_no_leaks("map_get_survives")
+    io.print("r:" + string(r))
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "map_get_survives",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "r:3\nleaks:0");
+}
+
+/// try_get must produce an optional that owns its managed payload via an
+/// edge, so the payload survives the map and nothing leaks.
+#[test]
+fn compile_runs_native_map_try_get_payload_no_leak() {
+    let dir = TestDir::new("map_try_get_payload");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.list = lists
+import ori.map = maps
+import ori.test = test
+
+make_list(n: int) -> list[int]
+    const xs: list[int] = lists.new()
+    var i: int = 0
+    while i < n
+        lists.push(xs, i)
+        i = i + 1
+    end
+    return xs
+end
+
+take_try() -> optional[list[int]]
+    var m: map[string, list[int]] = maps.new()
+    maps.set(m, "a", make_list(4))
+    return maps.try_get(m, "a")
+end
+
+exercise() -> int
+    const o: optional[list[int]] = take_try()
+    match o
+        case some(xs):
+            return lists.len(xs)
+        case none:
+            return 0
+    end
+    return 0
+end
+
+main()
+    const r: int = exercise()
+    const leaked: int = test.assert_no_leaks("map_try_get_payload")
+    io.print("r:" + string(r))
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "map_try_get_payload",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "r:4\nleaks:0");
+}

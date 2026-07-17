@@ -4839,7 +4839,9 @@ pub unsafe extern "C" fn ori_map_try_get(map: *mut OriMap, key: i64) -> *mut Ori
     if ori_map_contains(map, key) == 0 {
         alloc_optional_int(0, 0)
     } else {
-        alloc_optional_int(1, ori_map_get(map, key))
+        // The optional must own its managed payload via an edge so the
+        // payload survives the map (scalar payloads are unaffected).
+        alloc_optional_borrowed_managed_value(1, ori_map_get(map, key))
     }
 }
 
@@ -4851,7 +4853,7 @@ pub unsafe extern "C" fn ori_map_try_get_string(
     if ori_map_contains_string(map, key) == 0 {
         alloc_optional_int(0, 0)
     } else {
-        alloc_optional_int(1, ori_map_get_string(map, key))
+        alloc_optional_borrowed_managed_value(1, ori_map_get_string(map, key))
     }
 }
 
@@ -4860,7 +4862,7 @@ pub unsafe extern "C" fn ori_map_try_get_custom(map: *mut OriMap, key: i64) -> *
     if ori_map_contains_custom(map, key) == 0 {
         alloc_optional_int(0, 0)
     } else {
-        alloc_optional_int(1, ori_map_get_custom(map, key))
+        alloc_optional_borrowed_managed_value(1, ori_map_get_custom(map, key))
     }
 }
 

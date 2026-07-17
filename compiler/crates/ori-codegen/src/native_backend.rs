@@ -11350,6 +11350,8 @@ impl<'a> FuncCodegen<'a> {
                 if args.len() != 3 {
                     return Err("ori_map_set expects map, key, and value".to_string());
                 }
+                let key_is_owned = Self::expr_produces_owned_ref(&args[1].value);
+                let value_is_owned = Self::expr_produces_owned_ref(&args[2].value);
                 let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
                 let map_value = self.emit_expr_for_expected(&args[2].value, value_ty)?;
                 let stored_key = self.to_list_storage_value(key_value, key_ty);
@@ -11359,43 +11361,71 @@ impl<'a> FuncCodegen<'a> {
                     .call(fref, &[map_v, stored_key, stored_value]);
                 self.emit_arc_register_edge_if_managed(key_ty, map_v, key_value)?;
                 self.emit_arc_register_edge_if_managed(value_ty, map_v, map_value)?;
+                // The map edges own the stored key/value +1; drop the owned
+                // temporaries' own +1 (borrowed refs stay untouched).
+                if key_is_owned && is_managed_ty(key_ty) {
+                    self.emit_arc_release_if_managed(key_ty, key_value)?;
+                }
+                if value_is_owned && is_managed_ty(value_ty) {
+                    self.emit_arc_release_if_managed(value_ty, map_value)?;
+                }
                 Ok(self.builder.ins().iconst(types::I8, 0))
             }
             "ori_map_get" => {
                 if args.len() != 2 {
                     return Err("ori_map_get expects map and key".to_string());
                 }
+                let key_is_owned = Self::expr_produces_owned_ref(&args[1].value);
                 let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
                 let stored_key = self.to_list_storage_value(key_value, key_ty);
                 let call = self.builder.ins().call(fref, &[map_v, stored_key]);
                 let stored_value = self.builder.inst_results(call)[0];
-                Ok(self.from_list_storage_value(stored_value, value_ty))
+                if key_is_owned && is_managed_ty(key_ty) {
+                    self.emit_arc_release_if_managed(key_ty, key_value)?;
+                }
+                let result = self.from_list_storage_value(stored_value, value_ty);
+                // Calls produce owned references: retain the managed result
+                // so the caller's release does not steal the map's edge +1.
+                self.emit_arc_retain_if_managed(value_ty, result)?;
+                Ok(result)
             }
             "ori_map_try_get" | "ori_map_try_remove" => {
                 if args.len() != 2 {
                     return Err(format!("{name} expects map and key"));
                 }
+                let key_is_owned = Self::expr_produces_owned_ref(&args[1].value);
                 let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
                 let stored_key = self.to_list_storage_value(key_value, key_ty);
                 let call = self.builder.ins().call(fref, &[map_v, stored_key]);
+                if key_is_owned && is_managed_ty(key_ty) {
+                    self.emit_arc_release_if_managed(key_ty, key_value)?;
+                }
                 Ok(self.builder.inst_results(call)[0])
             }
             "ori_map_contains" => {
                 if args.len() != 2 {
                     return Err("ori_map_contains expects map and key".to_string());
                 }
+                let key_is_owned = Self::expr_produces_owned_ref(&args[1].value);
                 let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
                 let stored_key = self.to_list_storage_value(key_value, key_ty);
                 let call = self.builder.ins().call(fref, &[map_v, stored_key]);
+                if key_is_owned && is_managed_ty(key_ty) {
+                    self.emit_arc_release_if_managed(key_ty, key_value)?;
+                }
                 Ok(self.builder.inst_results(call)[0])
             }
             "ori_map_remove" => {
                 if args.len() != 2 {
                     return Err("ori_map_remove expects map and key".to_string());
                 }
+                let key_is_owned = Self::expr_produces_owned_ref(&args[1].value);
                 let key_value = self.emit_expr_for_expected(&args[1].value, key_ty)?;
                 let stored_key = self.to_list_storage_value(key_value, key_ty);
                 self.builder.ins().call(fref, &[map_v, stored_key]);
+                if key_is_owned && is_managed_ty(key_ty) {
+                    self.emit_arc_release_if_managed(key_ty, key_value)?;
+                }
                 Ok(self.builder.ins().iconst(types::I8, 0))
             }
             _ => Err(native_codegen_unsupported(format!(
@@ -11703,28 +11733,42 @@ impl<'a> FuncCodegen<'a> {
                 if args.len() != 2 {
                     return Err("ori_set_add expects set and value".to_string());
                 }
+                let value_is_owned = Self::expr_produces_owned_ref(&args[1].value);
                 let value = self.emit_expr_for_expected(&args[1].value, elem_ty)?;
                 let stored = self.to_list_storage_value(value, elem_ty);
                 self.builder.ins().call(fref, &[set_v, stored]);
                 self.emit_arc_register_edge_if_managed(elem_ty, set_v, value)?;
+                // The set edge owns the stored element's +1; drop an owned
+                // temporary's own +1 (borrowed refs stay untouched).
+                if value_is_owned && is_managed_ty(elem_ty) {
+                    self.emit_arc_release_if_managed(elem_ty, value)?;
+                }
                 Ok(self.builder.ins().iconst(types::I8, 0))
             }
             "ori_set_contains" => {
                 if args.len() != 2 {
                     return Err("ori_set_contains expects set and value".to_string());
                 }
+                let value_is_owned = Self::expr_produces_owned_ref(&args[1].value);
                 let value = self.emit_expr_for_expected(&args[1].value, elem_ty)?;
                 let stored = self.to_list_storage_value(value, elem_ty);
                 let call = self.builder.ins().call(fref, &[set_v, stored]);
+                if value_is_owned && is_managed_ty(elem_ty) {
+                    self.emit_arc_release_if_managed(elem_ty, value)?;
+                }
                 Ok(self.builder.inst_results(call)[0])
             }
             "ori_set_remove" | "ori_set_try_remove" => {
                 if args.len() != 2 {
                     return Err(format!("{name} expects set and value"));
                 }
+                let value_is_owned = Self::expr_produces_owned_ref(&args[1].value);
                 let value = self.emit_expr_for_expected(&args[1].value, elem_ty)?;
                 let stored = self.to_list_storage_value(value, elem_ty);
                 let call = self.builder.ins().call(fref, &[set_v, stored]);
+                if value_is_owned && is_managed_ty(elem_ty) {
+                    self.emit_arc_release_if_managed(elem_ty, value)?;
+                }
                 if name == "ori_set_try_remove" {
                     Ok(self.builder.inst_results(call)[0])
                 } else {
