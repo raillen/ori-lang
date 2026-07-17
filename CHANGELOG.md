@@ -11,6 +11,14 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Corrigido
+- **ARC: temporários de string (print / f-string).** `io.print` com
+  argumento fresco (concat, f-string, conversões) vazava o +1 do
+  temporário, e cada parte/intermediário de f-string vazava (um f-string
+  de 5 partes deixava 7 alocações vivas). Agora o branch de print libera
+  args owned após a chamada e a interpolação libera intermediários e
+  partes conforme consumidos (bindings borrowed preservados). Regressão:
+  `memory_arc.rs` (`print_string_temps`, `fstring_intermediates`). Nota:
+  [`docs/planning/historico/nim-study-2026-07-17-c2.md`](docs/planning/historico/nim-study-2026-07-17-c2.md).
 - **ARC: dono único da cascata (native backend).** Structs/enums/tuples
   liberavam campos managed **duas vezes** no free do dono (dtor gerado
   `__dtor_*` + edge ARC registrada): um filho compartilhado com um binding

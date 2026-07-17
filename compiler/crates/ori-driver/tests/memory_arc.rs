@@ -978,3 +978,78 @@ end
     assert!(success, "{stdout}");
     assert_eq!(stdout.trim(), "r:6\nleaks:0");
 }
+
+// ── C2 — string temporary accounting (print / interpolation) ───────────────
+// Before the fix, io.print with a fresh string argument leaked the temp's +1,
+// and every f-string part/intermediate concat leaked (7 live allocations for
+// a five-part f-string bound to a local).
+
+/// io.print with concat and f-string arguments must release the temporaries;
+/// printing a borrowed binding must NOT release the binding's reference.
+#[test]
+fn compile_runs_native_print_string_temps_no_leak() {
+    let dir = TestDir::new("print_string_temps");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.test = test
+
+exercise()
+    io.print("x:" + string(1))
+    io.print(f"p{40 + 2}q")
+    const s: string = "keep" + string(9)
+    io.print(s)
+    io.print(s)
+end
+
+main()
+    exercise()
+    const leaked: int = test.assert_no_leaks("print_string_temps")
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "print_string_temps",
+    );
+    assert!(success, "{stdout}");
+    let lines = stdout.lines().collect::<Vec<_>>();
+    assert_eq!(lines.first().copied(), Some("x:1"), "{stdout}");
+    assert_eq!(lines.get(1).copied(), Some("p42q"), "{stdout}");
+    assert_eq!(lines.get(2).copied(), Some("keep9"), "{stdout}");
+    assert_eq!(lines.get(3).copied(), Some("keep9"), "{stdout}");
+    assert_eq!(lines.last().copied(), Some("leaks:0"), "{stdout}");
+}
+
+/// An f-string bound to a local must leave exactly the final string alive:
+/// scalar conversions and intermediate concats are released as they are
+/// consumed.
+#[test]
+fn compile_runs_native_fstring_intermediates_no_leak() {
+    let dir = TestDir::new("fstring_intermediates");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.test = test
+
+exercise()
+    const before: int = test.live_allocations()
+    const s: string = f"x{1 + 2}y{3}z"
+    const after: int = test.live_allocations()
+    io.print("delta:" + string(after - before))
+    io.print(s)
+end
+
+main()
+    exercise()
+    const leaked: int = test.assert_no_leaks("fstring_intermediates")
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "fstring_intermediates",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "delta:1\nx3y3z\nleaks:0");
+}

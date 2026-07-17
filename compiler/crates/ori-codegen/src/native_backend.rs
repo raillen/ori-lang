@@ -6152,15 +6152,39 @@ impl<'a> FuncCodegen<'a> {
             ptr: self.string_ptr("")?,
             len: self.builder.ins().iconst(types::I64, 0),
         };
+        let mut current_owned = false;
         for part in parts {
-            let next = match part {
-                HirStrPart::Literal(s) => StringParts {
-                    ptr: self.string_ptr(s.as_str())?,
-                    len: self.builder.ins().iconst(types::I64, s.len() as i64),
-                },
-                HirStrPart::Expr(expr) => self.emit_as_string_parts(expr)?,
+            let (next, next_owned) = match part {
+                HirStrPart::Literal(s) => (
+                    StringParts {
+                        ptr: self.string_ptr(s.as_str())?,
+                        len: self.builder.ins().iconst(types::I64, s.len() as i64),
+                    },
+                    false,
+                ),
+                HirStrPart::Expr(expr) => {
+                    // Scalar conversions allocate a fresh managed string in
+                    // the runtime; string-typed parts follow expression
+                    // ownership (borrowed bindings must not be released).
+                    let owned = if matches!(expr.ty, Ty::String | Ty::Infer(_)) {
+                        Self::expr_produces_owned_ref(expr)
+                    } else {
+                        true
+                    };
+                    (self.emit_as_string_parts(expr)?, owned)
+                }
             };
-            current = self.concat_string_parts(current, next)?;
+            let merged = self.concat_string_parts(current, next)?;
+            // The concat copied both inputs; release fresh temporaries so
+            // intermediate results do not leak.
+            if current_owned {
+                self.emit_arc_release_if_managed(&Ty::String, current.ptr)?;
+            }
+            if next_owned {
+                self.emit_arc_release_if_managed(&Ty::String, next.ptr)?;
+            }
+            current = merged;
+            current_owned = true;
         }
         Ok(current)
     }
@@ -10403,6 +10427,7 @@ impl<'a> FuncCodegen<'a> {
                     if name == "ori_io_print" || name == "ori_io_eprint" {
                         if let Some(&fref) = self.func_refs.get(name.as_str()) {
                             let mut cl_args = Vec::new();
+                            let mut owned_temps: Vec<(ir::Value, Ty)> = Vec::new();
                             for a in args {
                                 // ori_io_print always takes (ptr, len); string-like args
                                 // use length-aware parts or the Ori runtime length helper.
@@ -10411,20 +10436,34 @@ impl<'a> FuncCodegen<'a> {
                                 let is_ptr_like =
                                     cl_type(&a.value.ty, self.ptr_ty) == Some(self.ptr_ty);
                                 if is_known_string {
+                                    let owned = Self::expr_produces_owned_ref(&a.value);
                                     let parts = self.emit_as_string_parts(&a.value)?;
                                     cl_args.push(parts.ptr);
                                     cl_args.push(parts.len);
+                                    // The print call borrows the string; a
+                                    // fresh +1 temporary must be released
+                                    // after the call or it leaks.
+                                    if owned {
+                                        owned_temps.push((parts.ptr, Ty::String));
+                                    }
                                 } else if is_ptr_like {
+                                    let owned = Self::expr_produces_owned_ref(&a.value);
                                     let v = self.emit_expr(&a.value)?;
                                     let len = self.str_len_from_ptr(v)?;
                                     cl_args.push(v);
                                     cl_args.push(len);
+                                    if owned && is_managed_ty(&a.value.ty) {
+                                        owned_temps.push((v, a.value.ty.clone()));
+                                    }
                                 } else {
                                     let v = self.emit_expr(&a.value)?;
                                     cl_args.push(v);
                                 }
                             }
                             self.builder.ins().call(fref, &cl_args);
+                            for (temp, ty) in owned_temps {
+                                self.emit_arc_release_if_managed(&ty, temp)?;
+                            }
                             self.builder.ins().iconst(types::I8, 0)
                         } else {
                             return Err("missing runtime function `ori_io_print`".to_string());
