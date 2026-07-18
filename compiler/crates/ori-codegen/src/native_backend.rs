@@ -2847,6 +2847,35 @@ impl<M: Module> NativeBackend<M> {
     }
 
     /// Declare C library / runtime functions used by the stdlib mapping.
+    /// FuncId index → ARC runtime symbol, for `ORI_DUMP_ARC` (LANG-MEM-7).
+    /// Returns an empty map when the env var is unset so the per-function
+    /// call stays free in normal builds.
+    fn arc_dump_symbols(&self) -> HashMap<u32, &'static str> {
+        let mut map = HashMap::new();
+        if std::env::var("ORI_DUMP_ARC").map_or(true, |v| v.is_empty() || v == "0") {
+            return map;
+        }
+        const ARC_SYMBOLS: &[&str] = &[
+            "ori_arc_retain",
+            "ori_arc_release",
+            "ori_arc_register_edge",
+            "ori_arc_unregister_edge",
+            "ori_arc_update_edge",
+            "ori_arc_maybe_collect_cycles",
+            "ori_arc_collect_cycles",
+        ];
+        for &symbol in ARC_SYMBOLS {
+            if let Some(id) = self
+                .stdlib_ids
+                .get(symbol)
+                .or_else(|| self.func_ids.get(symbol))
+            {
+                map.insert(id.as_u32(), symbol);
+            }
+        }
+        map
+    }
+
     fn declare_stdlib(&mut self) -> Result<(), String> {
         let pt = self.ptr_ty;
         let mut declared_imports = HashMap::new();
@@ -4171,6 +4200,8 @@ impl<M: Module> NativeBackend<M> {
             }
             // LANG-PERF-2-0: dump CLIF when ORI_DUMP_CLIF=1 or a file path.
             maybe_dump_clif(f.name.as_str(), &ctx);
+            // LANG-MEM-7: dump inserted ARC ops when ORI_DUMP_ARC is set.
+            maybe_dump_arc(f.name.as_str(), &ctx, &self.arc_dump_symbols());
             self.module
                 .define_function(func_id, &mut ctx)
                 .map_err(|e| format!("define '{}': {e}", f.name))?;
@@ -6289,6 +6320,27 @@ impl<'a> FuncCodegen<'a> {
         Ok(())
     }
 
+    /// Full-frame cleanup for a sync `return`. When `transfer_var` is set,
+    /// exactly one release (the innermost entry for that variable, i.e. the
+    /// binding whose +1 the return transfers to the caller) is skipped.
+    fn emit_return_scope_cleanup(&mut self, transfer_var: Option<Variable>) -> Result<(), String> {
+        self.emit_using_cleanup_calls_from(0)?;
+        let cleanups: Vec<ManagedCleanup> = self.managed_stack.to_vec();
+        let mut transfer_pending = transfer_var;
+        for cleanup in cleanups.iter().rev() {
+            if transfer_pending == Some(cleanup.var) {
+                transfer_pending = None;
+                continue;
+            }
+            let value = self.builder.use_var(cleanup.var);
+            self.emit_arc_release_if_managed(&cleanup.ty, value)?;
+        }
+        if self.loop_stack.is_empty() {
+            self.emit_arc_maybe_collect_cycles()?;
+        }
+        Ok(())
+    }
+
     fn emit_dispose_call(&mut self, cleanup: &UsingCleanup) -> Result<(), String> {
         let Some(func_name) = self.dispose_func_name_for_ty(&cleanup.ty) else {
             return Err(format!(
@@ -6659,15 +6711,33 @@ impl<'a> FuncCodegen<'a> {
             return Ok(());
         }
         let return_expr_is_owned = val.map(Self::expr_produces_owned_ref).unwrap_or(false);
+        // Return-transfer elision (LANG-MEM-4): returning a managed local
+        // hands the binding's own +1 to the caller instead of emitting a
+        // retain (for the return) plus a release (frame cleanup) on the
+        // same value. Only a plain `Var` of the exact return type is a
+        // transfer; anything else keeps the retain/cleanup pair.
+        let transfer_var = val.and_then(|expr| {
+            let HirExprKind::Var(name) = &expr.kind else {
+                return None;
+            };
+            if expr.ty != return_ty || !is_managed_ty(&return_ty) {
+                return None;
+            }
+            let (var, _) = self.lookup_var(name)?;
+            self.managed_stack
+                .iter()
+                .any(|cleanup| cleanup.var == var)
+                .then_some(var)
+        });
         let return_value = val
             .map(|e| self.emit_expr_for_expected(e, &return_ty))
             .transpose()?;
         if let Some(value) = return_value {
-            if !return_expr_is_owned {
+            if !return_expr_is_owned && transfer_var.is_none() {
                 self.emit_arc_retain_if_managed(&return_ty, value)?;
             }
         }
-        self.emit_scope_cleanup_calls_from(0, 0)?;
+        self.emit_return_scope_cleanup(transfer_var)?;
         if let Some(v) = return_value {
             self.builder.ins().return_(&[v]);
         } else {
@@ -13109,6 +13179,70 @@ impl<'a> FuncCodegen<'a> {
 }
 
 // == Public entry points ==
+
+/// When `ORI_DUMP_ARC=1` (or a path in `ORI_DUMP_ARC`), append a per-function
+/// summary of the ARC runtime calls present in the final CLIF — retain,
+/// release and edge traffic — to stderr or the given file. This is the
+/// `--expandArc` analog (LANG-MEM-7): it makes inserted RC ops visible so
+/// elision work (LANG-MEM-4) can count them before/after.
+fn maybe_dump_arc(
+    func_name: &str,
+    ctx: &cranelift_codegen::Context,
+    arc_symbol_by_func_index: &HashMap<u32, &'static str>,
+) {
+    let Ok(spec) = std::env::var("ORI_DUMP_ARC") else {
+        return;
+    };
+    if spec.is_empty() || spec == "0" {
+        return;
+    }
+    let mut counts: Vec<(&'static str, u32)> = Vec::new();
+    let mut sequence: Vec<&'static str> = Vec::new();
+    for block in ctx.func.layout.blocks() {
+        for inst in ctx.func.layout.block_insts(block) {
+            let ir::InstructionData::Call { func_ref, .. } = ctx.func.dfg.insts[inst] else {
+                continue;
+            };
+            let ir::ExternalName::User(name_ref) = ctx.func.dfg.ext_funcs[func_ref].name else {
+                continue;
+            };
+            let user_name = &ctx.func.params.user_named_funcs()[name_ref];
+            let Some(symbol) = arc_symbol_by_func_index.get(&user_name.index) else {
+                continue;
+            };
+            sequence.push(symbol);
+            match counts.iter_mut().find(|(s, _)| s == symbol) {
+                Some((_, n)) => *n += 1,
+                None => counts.push((symbol, 1)),
+            }
+        }
+    }
+    let mut text = format!(";; ---- ARC ops for {func_name} ----\n");
+    if sequence.is_empty() {
+        text.push_str(";;   (none)\n");
+    } else {
+        text.push_str(";;  ");
+        for (symbol, n) in &counts {
+            text.push_str(&format!(" {symbol}={n}"));
+        }
+        text.push('\n');
+        text.push_str(&format!(";;   seq: {}\n", sequence.join(" ")));
+    }
+    if spec == "1" {
+        eprint!("{text}");
+        return;
+    }
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&spec)
+    {
+        let _ = write!(f, "{text}");
+    } else {
+        eprint!("{text}");
+    }
+}
 
 /// When `ORI_DUMP_CLIF=1` (or a path in `ORI_DUMP_CLIF`), append the CLIF text
 /// for `func_name` to stderr or the given file (LANG-PERF-2-0).

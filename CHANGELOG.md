@@ -11,6 +11,15 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Mudado
+- **ARC: elisão de RC no return (LANG-MEM-4, ação 1).** `return x` de um
+  local managed transfere o +1 do binding ao caller — o par
+  `retain`(retorno) + `release`(cleanup do frame) não é mais emitido.
+  Builders no padrão `const xs = ...; return xs` ficam com zero operações
+  de RC.
+- **DX: `ORI_DUMP_ARC` (LANG-MEM-7).** Com `ORI_DUMP_ARC=1` (ou caminho de
+  arquivo), o compile imprime por função as operações ARC inseridas
+  (contagens + sequência) — análogo do `--expandArc` do Nim, para medir
+  elisões e auditar inserções.
 - **ARC: collector de ciclos incremental (LANG-MEM-3).** O passe
   cooperativo deixou de escanear o heap inteiro: `ori_arc_release` registra
   candidatos a raiz de ciclo (decremento para >0 em objeto com edges de
