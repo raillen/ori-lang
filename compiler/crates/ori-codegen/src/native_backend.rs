@@ -6629,6 +6629,7 @@ impl<'a> FuncCodegen<'a> {
                 | HirExprKind::Call { .. }
                 | HirExprKind::MethodCall { .. }
                 | HirExprKind::Some_(_)
+                | HirExprKind::None_
                 | HirExprKind::Ok_(_)
                 | HirExprKind::Err_(_)
                 | HirExprKind::Await(_)
@@ -7827,11 +7828,22 @@ impl<'a> FuncCodegen<'a> {
                 let value_is_owned = Self::expr_produces_owned_ref(value);
                 let val = self.emit_expr_for_expected(value, ty)?;
                 if let Some(cl_ty) = cl_type(ty, self.ptr_ty) {
-                    let var = self.lookup_var(name).map(|(v, _)| v).unwrap_or_else(|| {
-                        let v = self.builder.declare_var(cl_ty);
-                        self.insert_var(name.clone(), (v, ty.clone()));
-                        v
-                    });
+                    // A same-named binding from an ENCLOSING scope (e.g. an
+                    // outer match arm or if-some still on the scope stack)
+                    // must not be reused if its native type differs — the
+                    // Cranelift Variable was declared with that type, and
+                    // def_var with a different type panics internally. Only
+                    // reuse when the type matches; otherwise shadow with a
+                    // fresh Variable (matches normal lexical shadowing).
+                    let var = self
+                        .lookup_var(name)
+                        .filter(|(_, existing_ty)| existing_ty == ty)
+                        .map(|(v, _)| v)
+                        .unwrap_or_else(|| {
+                            let v = self.builder.declare_var(cl_ty);
+                            self.insert_var(name.clone(), (v, ty.clone()));
+                            v
+                        });
                     self.builder.def_var(var, val);
                     if is_managed_ty(ty) {
                         if !value_is_owned {
@@ -8013,11 +8025,22 @@ impl<'a> FuncCodegen<'a> {
                 let value_is_owned = Self::expr_produces_owned_ref(value);
                 let val = self.emit_expr_for_expected(value, ty)?;
                 if let Some(cl_ty) = cl_type(ty, self.ptr_ty) {
-                    let var = self.lookup_var(name).map(|(v, _)| v).unwrap_or_else(|| {
-                        let v = self.builder.declare_var(cl_ty);
-                        self.insert_var(name.clone(), (v, ty.clone()));
-                        v
-                    });
+                    // A same-named binding from an ENCLOSING scope (e.g. an
+                    // outer match arm or if-some still on the scope stack)
+                    // must not be reused if its native type differs — the
+                    // Cranelift Variable was declared with that type, and
+                    // def_var with a different type panics internally. Only
+                    // reuse when the type matches; otherwise shadow with a
+                    // fresh Variable (matches normal lexical shadowing).
+                    let var = self
+                        .lookup_var(name)
+                        .filter(|(_, existing_ty)| existing_ty == ty)
+                        .map(|(v, _)| v)
+                        .unwrap_or_else(|| {
+                            let v = self.builder.declare_var(cl_ty);
+                            self.insert_var(name.clone(), (v, ty.clone()));
+                            v
+                        });
                     self.builder.def_var(var, val);
                     if is_managed_ty(ty) {
                         if !value_is_owned {
@@ -8233,6 +8256,13 @@ impl<'a> FuncCodegen<'a> {
         else_: Option<&HirBlock>,
     ) -> Result<(), String> {
         // 1. Emit the optional expression (returns a pointer to the stack struct)
+        // A fresh owned optional (not a bound Var) has no binding to release
+        // it and payload extraction below is a plain load (a borrow); retain
+        // the extracted payload and release the wrapper once bound, on both
+        // branches, mirroring emit_match's scrutinee handling. This needs a
+        // real else block on both paths (even without a user `else`) so the
+        // release has somewhere to run before falling into merge_blk.
+        let value_owned = Self::expr_produces_owned_ref(value) && is_managed_ty(&value.ty);
         let opt_ptr = self.emit_expr(value)?;
         // 2. Read has_value (byte 0)
         let has_val = self
@@ -8241,7 +8271,7 @@ impl<'a> FuncCodegen<'a> {
             .load(types::I8, MemFlags::new(), opt_ptr, 0);
         let then_blk = self.builder.create_block();
         let merge_blk = self.builder.create_block();
-        let else_blk = if else_.is_some() {
+        let else_blk = if else_.is_some() || value_owned {
             self.builder.create_block()
         } else {
             merge_blk
@@ -8254,31 +8284,67 @@ impl<'a> FuncCodegen<'a> {
         self.builder.switch_to_block(then_blk);
         self.terminated = false;
         self.push_scope();
+        let managed_cleanup_start = self.managed_stack.len();
         if let Some(cl_ty) = cl_type(inner_ty, self.ptr_ty) {
             let (val_off, _) = optional_layout(inner_ty, self.ptr_ty);
             let inner_val =
                 self.builder
                     .ins()
                     .load(cl_ty, MemFlags::new(), opt_ptr, val_off as i32);
-            let var = self.lookup_var(binding).map(|(v, _)| v).unwrap_or_else(|| {
-                let v = self.builder.declare_var(cl_ty);
-                self.insert_var(binding.clone(), (v, inner_ty.clone()));
-                v
-            });
+            // A same-named binding from an ENCLOSING scope (e.g. an
+            // outer match arm or if-some still on the scope stack)
+            // must not be reused if its native type differs — the
+            // Cranelift Variable was declared with that type, and
+            // def_var with a different type panics internally. Only
+            // reuse when the type matches; otherwise shadow with a
+            // fresh Variable (matches normal lexical shadowing).
+            let var = self
+                .lookup_var(binding)
+                .filter(|(_, existing_ty)| existing_ty == inner_ty)
+                .map(|(v, _)| v)
+                .unwrap_or_else(|| {
+                    let v = self.builder.declare_var(cl_ty);
+                    self.insert_var(binding.clone(), (v, inner_ty.clone()));
+                    v
+                });
             self.builder.def_var(var, inner_val);
+            if value_owned && is_managed_ty(inner_ty) {
+                self.emit_arc_retain_if_managed(inner_ty, inner_val)?;
+                // Register for scope-exit release (or return-transfer
+                // elision) below — mirrors emit_match's bind_pattern.
+                self.managed_stack.push(ManagedCleanup {
+                    var,
+                    ty: inner_ty.clone(),
+                });
+            }
             self.store_async_local_if_any(binding, inner_val)?;
         }
+        if value_owned {
+            self.emit_arc_release_if_managed(&value.ty, opt_ptr)?;
+        }
         self.emit_block(then)?;
+        if !self.terminated {
+            self.emit_managed_cleanup_calls_from(managed_cleanup_start)?;
+        }
+        self.managed_stack.truncate(managed_cleanup_start);
         self.pop_scope();
         if !self.terminated {
             self.builder.ins().jump(merge_blk, &[]);
         }
-        // else block (if any)
-        if let Some(eb) = else_ {
+        // else block: runs on the has_val==false path. Always entered when
+        // `value_owned` (even without a user `else`) so the "none" wrapper
+        // gets released; otherwise only entered for a user-provided `else`.
+        if else_.is_some() || value_owned {
             self.builder.seal_block(else_blk);
             self.builder.switch_to_block(else_blk);
             self.terminated = false;
-            self.emit_block(eb)?;
+            // `none` case: no payload to retain, still release the wrapper.
+            if value_owned {
+                self.emit_arc_release_if_managed(&value.ty, opt_ptr)?;
+            }
+            if let Some(eb) = else_ {
+                self.emit_block(eb)?;
+            }
             if !self.terminated {
                 self.builder.ins().jump(merge_blk, &[]);
             }
@@ -8324,11 +8390,22 @@ impl<'a> FuncCodegen<'a> {
                 self.builder
                     .ins()
                     .load(cl_ty, MemFlags::new(), opt_ptr, val_off as i32);
-            let var = self.lookup_var(binding).map(|(v, _)| v).unwrap_or_else(|| {
-                let v = self.builder.declare_var(cl_ty);
-                self.insert_var(binding.clone(), (v, inner_ty.clone()));
-                v
-            });
+            // A same-named binding from an ENCLOSING scope (e.g. an
+            // outer match arm or if-some still on the scope stack)
+            // must not be reused if its native type differs — the
+            // Cranelift Variable was declared with that type, and
+            // def_var with a different type panics internally. Only
+            // reuse when the type matches; otherwise shadow with a
+            // fresh Variable (matches normal lexical shadowing).
+            let var = self
+                .lookup_var(binding)
+                .filter(|(_, existing_ty)| existing_ty == inner_ty)
+                .map(|(v, _)| v)
+                .unwrap_or_else(|| {
+                    let v = self.builder.declare_var(cl_ty);
+                    self.insert_var(binding.clone(), (v, inner_ty.clone()));
+                    v
+                });
             self.builder.def_var(var, inner_val);
             self.store_async_local_if_any(binding, inner_val)?;
         }
@@ -9732,6 +9809,14 @@ impl<'a> FuncCodegen<'a> {
 
     fn emit_match(&mut self, scrutinee: &HirExpr, arms: &[HirArm]) -> Result<(), String> {
         let scr = self.emit_expr(scrutinee)?;
+        // A fresh owned scrutinee (e.g. `match some_call()`, not a bound Var)
+        // has no binding to release it at scope exit and `bind_pattern`
+        // extracts payloads as plain loads (borrows), so without this the
+        // scrutinee — and anything only it owns via edge — leaks every
+        // match. Retain each extracted managed binding so it survives
+        // independently, then release the scrutinee once bound.
+        let scrutinee_owned =
+            Self::expr_produces_owned_ref(scrutinee) && is_managed_ty(&scrutinee.ty);
         let exit = self.builder.create_block();
         for arm in arms {
             let arm_blk = self.builder.create_block();
@@ -9742,8 +9827,25 @@ impl<'a> FuncCodegen<'a> {
             self.builder.switch_to_block(arm_blk);
             self.terminated = false;
             self.push_scope();
-            self.bind_pattern(&arm.pattern, scr, &scrutinee.ty)?;
+            // Captured before bind_pattern so its retained bindings (if any)
+            // are release-tracked for THIS arm only. Every arm re-enters this
+            // loop and calls bind_pattern again, so leaving those entries in
+            // managed_stack across arms would let a later arm's cleanup (or
+            // a statement after the match) try to release a Variable that
+            // only THIS, not-taken-at-runtime arm ever defined.
+            let managed_cleanup_start = self.managed_stack.len();
+            self.bind_pattern(&arm.pattern, scr, &scrutinee.ty, scrutinee_owned)?;
+            if scrutinee_owned {
+                self.emit_arc_release_if_managed(&scrutinee.ty, scr)?;
+            }
             self.emit_scoped_stmts(&arm.body)?;
+            if !self.terminated {
+                // A terminated arm (return/break/continue) already released
+                // or transferred these bindings along that path; only a
+                // normal fallthrough still needs an explicit release here.
+                self.emit_managed_cleanup_calls_from(managed_cleanup_start)?;
+            }
+            self.managed_stack.truncate(managed_cleanup_start);
             self.pop_scope();
             if !self.terminated {
                 self.builder.ins().jump(exit, &[]);
@@ -9911,7 +10013,22 @@ impl<'a> FuncCodegen<'a> {
         }
     }
 
-    fn bind_pattern(&mut self, pat: &HirPattern, val: ir::Value, ty: &Ty) -> Result<(), String> {
+    /// Binds `pat` to the payload(s) extracted from `val` (of type `ty`).
+    ///
+    /// Extraction is a plain load (a borrow of `val`'s lifetime) — safe as
+    /// long as `val` outlives the bound names, which normally holds because
+    /// `val` is a container the caller keeps alive (a local binding, a
+    /// field). When `retain_bindings` is set (the scrutinee was a fresh
+    /// owned temporary about to be released once bound — see `emit_match`),
+    /// every managed leaf binding is retained here so it survives
+    /// independently of that release.
+    fn bind_pattern(
+        &mut self,
+        pat: &HirPattern,
+        val: ir::Value,
+        ty: &Ty,
+        retain_bindings: bool,
+    ) -> Result<(), String> {
         match pat {
             HirPattern::Binding(name, bind_ty) => {
                 let bty = if *bind_ty == Ty::Infer(0) {
@@ -9920,12 +10037,34 @@ impl<'a> FuncCodegen<'a> {
                     bind_ty
                 };
                 if let Some(cl_ty) = cl_type(bty, self.ptr_ty) {
-                    let var = self.lookup_var(name).map(|(v, _)| v).unwrap_or_else(|| {
-                        let v = self.builder.declare_var(cl_ty);
-                        self.insert_var(name.clone(), (v, bty.clone()));
-                        v
-                    });
+                    // A same-named binding from an ENCLOSING scope (e.g. an
+                    // outer match arm or if-some still on the scope stack)
+                    // must not be reused if its native type differs — the
+                    // Cranelift Variable was declared with that type, and
+                    // def_var with a different type panics internally. Only
+                    // reuse when the type matches; otherwise shadow with a
+                    // fresh Variable (matches normal lexical shadowing).
+                    let var = self
+                        .lookup_var(name)
+                        .filter(|(_, existing_ty)| existing_ty == bty)
+                        .map(|(v, _)| v)
+                        .unwrap_or_else(|| {
+                            let v = self.builder.declare_var(cl_ty);
+                            self.insert_var(name.clone(), (v, bty.clone()));
+                            v
+                        });
                     self.builder.def_var(var, val);
+                    if retain_bindings && is_managed_ty(bty) {
+                        self.emit_arc_retain_if_managed(bty, val)?;
+                        // Register for scope-exit release (or return-transfer
+                        // elision) exactly like a `let`/`const` local — the
+                        // retain above gave it its own +1, independent of
+                        // the scrutinee released right after bind_pattern.
+                        self.managed_stack.push(ManagedCleanup {
+                            var,
+                            ty: bty.clone(),
+                        });
+                    }
                     // Match bindings must land in the async frame: after `await`
                     // resume, `reload_async_frame_vars` reloads locals from the
                     // frame. Without this store, handles like Connection become
@@ -9946,7 +10085,7 @@ impl<'a> FuncCodegen<'a> {
                                 let cl = cl_type(&fi.ty, self.ptr_ty).unwrap_or(types::I64);
                                 let fval =
                                     self.builder.ins().load(cl, MemFlags::new(), val, total_off);
-                                self.bind_pattern(fpat, fval, &fi.ty)?;
+                                self.bind_pattern(fpat, fval, &fi.ty, retain_bindings)?;
                             }
                         }
                     }
@@ -9964,7 +10103,7 @@ impl<'a> FuncCodegen<'a> {
                     .builder
                     .ins()
                     .load(cl, MemFlags::new(), val, val_off as i32);
-                self.bind_pattern(inner, fval, inner_ty)?;
+                self.bind_pattern(inner, fval, inner_ty, retain_bindings)?;
             }
             HirPattern::Ok_(inner) => {
                 let inner_ty = if let Ty::Result(ok, _) = ty {
@@ -9982,7 +10121,7 @@ impl<'a> FuncCodegen<'a> {
                     .builder
                     .ins()
                     .load(cl, MemFlags::new(), val, pay_off as i32);
-                self.bind_pattern(inner, fval, inner_ty)?;
+                self.bind_pattern(inner, fval, inner_ty, retain_bindings)?;
             }
             HirPattern::Err_(inner) => {
                 let inner_ty = if let Ty::Result(_, err) = ty {
@@ -10000,7 +10139,7 @@ impl<'a> FuncCodegen<'a> {
                     .builder
                     .ins()
                     .load(cl, MemFlags::new(), val, pay_off as i32);
-                self.bind_pattern(inner, fval, inner_ty)?;
+                self.bind_pattern(inner, fval, inner_ty, retain_bindings)?;
             }
             HirPattern::Tuple(patterns) => {
                 if let Ty::Tuple(elems) = ty {
@@ -10011,7 +10150,7 @@ impl<'a> FuncCodegen<'a> {
                             self.builder
                                 .ins()
                                 .load(cl, MemFlags::new(), val, *offset as i32);
-                        self.bind_pattern(pat, fval, elem_ty)?;
+                        self.bind_pattern(pat, fval, elem_ty, retain_bindings)?;
                     }
                 }
             }

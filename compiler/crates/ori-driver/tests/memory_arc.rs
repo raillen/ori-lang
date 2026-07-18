@@ -1240,3 +1240,221 @@ end
     assert!(success, "{stdout}");
     assert_eq!(stdout.trim(), "r:4\nleaks:0");
 }
+
+// ── LANG-MEM: match/if-some scrutinee release (found while re-verifying an
+// external report of ori.fs memory corruption under multi-module linking) ─
+//
+// bind_pattern extracted match/if-some payloads as plain loads (borrows of
+// the scrutinee), but emit_match/emit_if_some never released a scrutinee
+// that was itself a fresh owned temporary (e.g. `match some_call()`, not a
+// bound Var). The scrutinee — and, for codegen-constructed Ok_/Some_/Err_
+// values, anything it owned via an ARC edge — leaked on every match.
+
+/// A managed value read out of a fresh `result[...]` scrutinee not bound to
+/// a variable must not leak the result wrapper.
+#[test]
+fn compile_runs_native_match_owned_result_scrutinee_no_leak() {
+    let dir = TestDir::new("match_owned_result_scrutinee");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.test = test
+
+mk(i: int) -> result[string, string]
+    return ok("hi-" + string(i))
+end
+
+exercise(n: int) -> int
+    var i: int = 0
+    var total: int = 0
+    while i < n
+        match mk(i)
+            case ok(x):
+                total = total + 1
+            case err(_):
+                total = total + 0
+        end
+        i = i + 1
+    end
+    return total
+end
+
+main()
+    const r: int = exercise(20)
+    const leaked: int = test.assert_no_leaks("match_owned_result_scrutinee")
+    io.print("r:" + string(r))
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "match_owned_result_scrutinee",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "r:20\nleaks:0");
+}
+
+/// A payload extracted from a fresh owned `match` scrutinee and returned
+/// from the enclosing function must survive the scrutinee's release
+/// (return-transfer elision must apply to the extracted binding too).
+#[test]
+fn compile_runs_native_match_owned_scrutinee_payload_returned_no_leak() {
+    let dir = TestDir::new("match_owned_scrutinee_payload_returned");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.test = test
+
+mk(i: int) -> result[string, string]
+    return ok("payload-" + string(i))
+end
+
+unwrap_or_default(i: int) -> string
+    match mk(i)
+        case ok(text):
+            return text
+        case err(_):
+            return "fallback"
+    end
+    return "fallback"
+end
+
+exercise(n: int) -> int
+    var i: int = 0
+    var total: int = 0
+    while i < n
+        const text: string = unwrap_or_default(i)
+        total = total + str_len(text)
+        i = i + 1
+    end
+    return total
+end
+
+str_len(s: string) -> int
+    return len(s)
+end
+
+main()
+    const r: int = exercise(20)
+    const leaked: int = test.assert_no_leaks("match_owned_scrutinee_payload_returned")
+    io.print("r:" + string(r))
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "match_owned_scrutinee_payload_returned",
+    );
+    assert!(success, "{stdout}");
+    // "payload-0".."payload-9" are 9 chars each (90), "payload-10".."payload-19"
+    // are 10 chars each (100): 90 + 100 = 190.
+    assert_eq!(stdout.trim(), "r:190\nleaks:0");
+}
+
+/// A managed payload extracted from a fresh owned `optional[...]` scrutinee
+/// via `if some(x) = ...` must not leak the optional wrapper, on both the
+/// some and none paths.
+#[test]
+fn compile_runs_native_if_some_owned_scrutinee_no_leak() {
+    let dir = TestDir::new("if_some_owned_scrutinee");
+    let (stdout, _stderr, success) = compile_and_run_with_leak_check(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+import ori.test = test
+
+mk(i: int) -> optional[string]
+    if i % 2 == 0
+        return some("even-" + string(i))
+    end
+    return none
+end
+
+exercise(n: int) -> int
+    var i: int = 0
+    var total: int = 0
+    while i < n
+        if some(x) = mk(i)
+            total = total + 1
+        end
+        i = i + 1
+    end
+    return total
+end
+
+main()
+    const r: int = exercise(20)
+    const leaked: int = test.assert_no_leaks("if_some_owned_scrutinee")
+    io.print("r:" + string(r))
+    io.print("leaks:" + string(leaked))
+end
+"#,
+        "if_some_owned_scrutinee",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "r:10\nleaks:0");
+}
+
+// ── LANG-MEM: nested match binding shadowing (Cranelift crash) ─────────────
+//
+// bind_pattern/HirStmt::Let/emit_if_some/emit_while_some reused an existing
+// Cranelift Variable whenever `lookup_var` found a same-named binding
+// ANYWHERE on the current scope stack — including an enclosing match arm or
+// if-some still in scope. When the reused binding's native type differed
+// (e.g. an outer `float` payload vs. an inner `string` payload sharing the
+// name `value`), Cranelift panicked internally on `def_var`
+// ("declared type of variable varN doesn't match type of value vNN").
+
+/// Two nested matches over different enum types that both bind a payload
+/// under the same name, with genuinely different native Cranelift types
+/// (float vs. string — different register classes), must not crash the
+/// backend and must resolve each binding to its own value.
+#[test]
+fn compile_runs_native_nested_match_same_binding_name_different_types() {
+    let dir = TestDir::new("nested_match_shadow_types");
+    let (stdout, _stderr, success) = compile_and_run(
+        &dir,
+        r#"module app.main
+
+import ori.io = io
+
+enum Outer
+    Empty
+    Wrapped(value: float)
+end
+
+enum Inner
+    None_
+    Wrapped(value: string)
+end
+
+make_inner(tag: string) -> Inner
+    return Inner.Wrapped(value: tag)
+end
+
+top(o: Outer, tag: string) -> string
+    match o
+        case Empty:
+            return "empty"
+        case Wrapped(value):
+            match make_inner(tag)
+                case None_:
+                    return "none"
+                case Wrapped(value):
+                    return value
+            end
+            return "fallthrough"
+    end
+    return "outer-fallthrough"
+end
+
+main()
+    io.println(top(Outer.Wrapped(value: 3.5), "inner-value"))
+end
+"#,
+        "nested_match_shadow_types",
+    );
+    assert!(success, "{stdout}");
+    assert_eq!(stdout.trim(), "inner-value");
+}

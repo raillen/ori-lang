@@ -32,6 +32,24 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   [`docs/planning/historico/nim-study-2026-07-17-c3.md`](docs/planning/historico/nim-study-2026-07-17-c3.md).
 
 ### Corrigido
+- **ARC: scrutinee owned de `match`/`if some` era vazado.** Um scrutinee
+  managed fresco (ex. `match mk(i)` direto, sem binding) nunca era
+  liberado — 1-2 alocações vazadas por execução do match; o mesmo em
+  `if some(x) = mk(i)`. Agora os payloads extraídos ganham +1 próprio
+  (registrados para cleanup por arm) e o wrapper é liberado nos dois
+  caminhos. `none` também entrou na lista de expressões owned (o wrapper
+  optional de `return none` ficava sem dono). Regressão: `memory_arc.rs`
+  (`match_owned_*`, `if_some_owned_*`).
+- **Codegen: crash do Cranelift com nomes de binding repetidos em match
+  aninhado.** Reusar o nome de payload (ex. `value`) em matches aninhados
+  de tipos nativos diferentes (float × string) derrubava o compilador com
+  panic interno (`declared type of variable varN doesn't match type of
+  value vNN`): a `Variable` era reusada de qualquer escopo sem checar o
+  tipo. Agora só é reusada com tipo idêntico; caso contrário há shadowing
+  léxico correto. Afetava `match`, `let`, `using`, `if some`/`while some`.
+  Regressão: `memory_arc.rs` (`nested_match_same_binding_name_*`).
+  Verificação completa dos 4 bugs reportados pelo projeto native-ori-ide:
+  [`docs/planning/historico/bugcheck-native-ori-ide-2026-07-18.md`](docs/planning/historico/bugcheck-native-ori-ide-2026-07-18.md).
 - **ABI nativa: zero-extension de argumentos de 8/16 bits para símbolos
   externos.** O Cranelift passava um `bool` (I8, ex. resultado de `sete`)
   com lixo nos bits altos do registrador; o runtime Rust (LLVM assume

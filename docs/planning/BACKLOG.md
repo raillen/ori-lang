@@ -83,6 +83,9 @@
 | **LANG-MEM-5** | Spec 10: collector safe points + atomic-RC trade-off | 2 | S | todo | Plan F5 — partial update already in Spec 10 for maybe_collect |
 | **LANG-MEM-6** | ADR: COW for collections | 3 | S | todo | Plan F6 |
 | **LANG-MEM-7** | DX: `ORI_DUMP_ARC` | 3 | S | **done** | **2026-07-17**: per-function ARC op counts + sequence from final CLIF (expandArc analog); zero cost without the env var. Note: [`historico/nim-study-2026-07-17-c4-c7.md`](historico/nim-study-2026-07-17-c4-c7.md) |
+| **LANG-MEM-8** | Match/if-some owned scrutinee release + Cranelift var-reuse type guard | 1 | M | **done** | **Fixed 2026-07-18** while verifying external bug reports (note [`historico/bugcheck-native-ori-ide-2026-07-18.md`](historico/bugcheck-native-ori-ide-2026-07-18.md)): fresh owned scrutinees of `match`/`if some` leaked every execution; same-named bindings across nested matches with different native types crashed Cranelift (`declared type of variable...`). Also added `None_` to owned-ref exprs. 4 regression tests in `memory_arc.rs` |
+| **LANG-MEM-9** | Runtime `new_result`/`new_optional_*` bypass ARC (raw malloc, ~134 sites) | 1 | L | todo | `ori.fs.read_text` etc. build result/optional wrappers with `libc::malloc` — invisible to the ARC registry, codegen releases become no-ops (20 leaks per 20 `fs.read_text_or` calls). Migrate to `ori_alloc` + edges; own campaign. Note: bugcheck 2026-07-18 §5.1 |
+| **LANG-FRONT-1** | Bare builtin `len` shadows local variable (`undefined variable ori_len`) | 2 | S | todo | `const len: int = lists.len(xs)` fails in native codegen — name resolution prefers the prefixless builtin (`stdlib!("len", ...)`) over the local binding. Frontend fix (ori-types/ori-hir). Note: bugcheck 2026-07-18 §5.2 |
 
 ### Done this focus wave (DX + docs + perf + residual)
 
