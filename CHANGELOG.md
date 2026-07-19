@@ -59,6 +59,25 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   apenas em qual wrapper é inspecionado e qual lado é ligado. Diagnósticos
   novos: `type.ifok_not_result` e `type.iferr_not_result`.
 
+- **Or-patterns — `case North or South:`.** Dois casos que fazem a mesma
+  coisa não precisam mais repetir o corpo.
+
+  ```ori
+  match direcao
+  case Norte or Sul:
+      io.println("vertical")
+  case Leste or Oeste:
+      io.println("horizontal")
+  end
+  ```
+
+  O separador é a palavra **`or`**, não `|`: a Ori já escreve os operadores
+  lógicos com palavras, e a vírgula já tem dono dentro do `case` (campos de
+  payload). Alternativas **não podem ligar valores**
+  (`match.or_pattern_binding`) — cada uma teria que ligar os mesmos nomes nos
+  mesmos tipos, e quem lê é que ficaria conferindo isso. Para exaustividade,
+  `case a or b:` conta exatamente como `case a:` mais `case b:`.
+
 ### Corrigido
 - **DCE apagava binding usado só como escrutínio de expressão nova.** A
   eliminação de código morto não contava usos dentro de tipos de expressão
