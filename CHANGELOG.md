@@ -10,6 +10,12 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.6] — 2026-07-19
+
+Patch release da janela FREEZE-1 (correções de memória/codegen, sem mudança
+de superfície da linguagem): campanha ARC do estudo Nim (LANG-MEM-0…9),
+DCE de closures, shadowing de builtins e ABI de argumentos sub-32-bit.
+
 ### Mudado
 - **ARC: elisão de RC no return (LANG-MEM-4, ação 1).** `return x` de um
   local managed transfere o +1 do binding ao caller — o par
@@ -132,7 +138,6 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `field_assign_owned_*`).
 
 ### Notas
-- Working tree after **v0.3.5**.
 - **Web stack feature freeze v1** documented in
   [`packages/FREEZE-WEB.md`](packages/FREEZE-WEB.md) and
   [`packages/README.md`](packages/README.md). Ready for polish + official
