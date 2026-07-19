@@ -10,6 +10,13 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.7] — 2026-07-19
+
+Patch release da janela FREEZE-1: `ori update` (self-update do toolchain),
+correção do bug silencioso dos guards de `match` (JIT, AOT e backend C),
+destrava do CI `native-route`, e spec/tour sincronizados com a implementação.
+Sem mudança de superfície da linguagem.
+
 ### Adicionado
 - **`ori update` — self-update do toolchain (LANG-CLI-1).** Instalações via
   pacote (tar.gz/zip) se atualizam sozinhas: `ori update --check` informa se
@@ -40,6 +47,16 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cargo; a busca do runtime staged continua na raiz do repo. Isso
   destrava o workflow `native-route`, vermelho desde a separação do
   runtime staged.
+
+### Documentação
+- **Spec 05 §`is` reescrito para o comportamento real:** teste de tipo com
+  resultado `bool` (`any[Trait]` em runtime via vtable; LHS concreto
+  estático), **sem** narrowing e **sem** operandos enum — variantes se
+  discriminam com `match`/`case`. O texto antigo prometia narrowing e
+  enums, nenhum dos dois implementado.
+- **Tour (EN/PT) ganhou três recursos já implementados e invisíveis:**
+  guards de `match` com `case else`, binding condicional
+  `if some(x) = expr`, e a update expression `base with { … } end`.
 
 ## [0.3.6] — 2026-07-19
 
