@@ -10,6 +10,17 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Adicionado
+- **`ori update` — self-update do toolchain (LANG-CLI-1).** Instalações via
+  pacote (tar.gz/zip) se atualizam sozinhas: `ori update --check` informa se
+  há release novo; `ori update` baixa o pacote da plataforma, verifica o
+  sha256 do manifest do release (divergência aborta antes de tocar em
+  qualquer arquivo), extrai com o `tar` do sistema e faz swap in-place com
+  staging + rollback no mesmo filesystem. Recusa instalações do gerenciador
+  do sistema (`.deb`) e builds de desenvolvimento. Testes: 5 unit + E2E
+  hermético contra servidor HTTP local (`tests/self_update.rs`). Docs:
+  seção "Updating" em `docs/install.md`/`install.pt-BR.md`.
+
 ### Corrigido
 - **CI: fallback de build do runtime nativo rodava fora do workspace.** Sem
   o `runtime/<target>/libori_runtime.a` staged (caso do CI), o driver
