@@ -100,6 +100,30 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   extra, sem alocação, e sem deixar rastro no código gerado (o backend C não
   emite construtor nenhum, verificado por teste).
 
+- **Cabeçalho compacto `apply Type use Trait`.** Uma trait só é o caso comum,
+  e a forma aninhada gastava um nível inteiro de indentação para não dizer
+  nada a mais:
+
+  ```ori
+  apply Circle use Drawable
+      draw(self, canvas: Canvas)
+          canvas.draw_circle(self.center, self.radius)
+      end
+  end
+  ```
+
+  Qual forma vale é decidido pelo **conteúdo**, nunca pelo escritor — mesmo
+  princípio do `elif`. Um bloco aninhado cujo corpo inteiro é uma seção `use`
+  passa a ser rejeitado (`apply.redundant_use_block`); a forma aninhada
+  continua obrigatória quando o cabeçalho compacto não dá conta (duas ou mais
+  traits, ou membros próprios junto com a trait). Como newline não é token, a
+  forma é reconhecida pelo layout: `use` na mesma linha abre a compacta.
+
+  **Migração:** `ori migrate-syntax` colapsa a forma antiga sozinho — e só a
+  inequívoca (exige que a seção `use` seja dona do corpo inteiro), deixando o
+  resto para o diagnóstico, que imprime a linha exata a escrever. `stdlib` e
+  `examples` já migrados.
+
 ### Corrigido
 - **Diagnósticos de tipo vazavam `<def DefId(16)>` para o leitor.** Era a
   primeira coisa que alguém veria ao usar um `newtype` errado — numa feature
