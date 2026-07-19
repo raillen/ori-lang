@@ -44,6 +44,21 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   do `select` usado pelo `if` expressão; backend C usa temporária de resultado
   + cadeia `if`/`goto`. ARC: o valor que sai é sempre *owned*.
 
+- **`if ok(v) =` e `if err(e) =` — binding condicional para `result`.** O
+  `if some(x) = expr` existia desde o S3, mas a mesma forma para
+  `result[T, E]` faltava — tratar um erro localmente exigia `match` mesmo
+  quando só um dos lados importava. A assimetria fecha aqui; não é forma
+  nova, é a mesma aplicada aos dois wrappers que faltavam.
+
+  ```ori
+  if ok(valor) = divide(10, 2)      -- liga T quando deu certo
+  if err(motivo) = divide(1, 0)     -- liga E quando NÃO deu certo
+  ```
+
+  As três formas dividem um nó só (`kind: UnwrapKind`), já que diferem
+  apenas em qual wrapper é inspecionado e qual lado é ligado. Diagnósticos
+  novos: `type.ifok_not_result` e `type.iferr_not_result`.
+
 ### Corrigido
 - **DCE apagava binding usado só como escrutínio de expressão nova.** A
   eliminação de código morto não contava usos dentro de tipos de expressão
