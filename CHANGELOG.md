@@ -78,7 +78,36 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   mesmos tipos, e quem lê é que ficaria conferindo isso. Para exaustividade,
   `case a or b:` conta exatamente como `case a:` mais `case b:`.
 
+- **`newtype` — tipos nominais com custo zero.** O `alias` dá nome a um tipo
+  existente e deixa os valores circularem livremente. Faltava dizer a outra
+  coisa: "tem a forma de um int, mas não é um int". Por isso valores de
+  domínio acabavam todos como `int`, e trocar dois deles compilava numa boa.
+
+  ```ori
+  newtype UserId = int
+  newtype AccountId = int
+
+  transfer(from: AccountId, to: AccountId, by: UserId)
+  ```
+
+  Agora essa assinatura é um contrato defendido pelo compilador, e o
+  diagnóstico nomeia os tipos: `argument 1 expects `AccountId`, found
+  `UserId``. Conversão escrita nos dois sentidos — `UserId(7)` entra,
+  `int(id)` / `string(mail)` sai.
+
+  **Custo zero de verdade:** o tipo é apagado no lowering para HIR, então um
+  `newtype` sobre `int` **é** um `int` em tempo de execução — sem struct
+  extra, sem alocação, e sem deixar rastro no código gerado (o backend C não
+  emite construtor nenhum, verificado por teste).
+
 ### Corrigido
+- **Diagnósticos de tipo vazavam `<def DefId(16)>` para o leitor.** Era a
+  primeira coisa que alguém veria ao usar um `newtype` errado — numa feature
+  que existe para tornar os tipos de domínio legíveis, uma mensagem ilegível
+  anula o propósito. Novo `Ty::display_in(def_map)` imprime os nomes
+  declarados; as mensagens de argumento e retorno passaram a usá-lo.
+  `display()` mantém o id cru como fallback (não tem def map à mão); a
+  limpeza ampla segue registrada no roadmap.
 - **DCE apagava binding usado só como escrutínio de expressão nova.** A
   eliminação de código morto não contava usos dentro de tipos de expressão
   recém-adicionados (a travessia tinha catch-all), então `const n = 2` seguido
