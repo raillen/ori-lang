@@ -10,6 +10,17 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Corrigido
+- **CI: fallback de build do runtime nativo rodava fora do workspace.** Sem
+  o `runtime/<target>/libori_runtime.a` staged (caso do CI), o driver
+  tentava `cargo build -p ori-runtime --lib` na raiz do repositório — que
+  não tem `Cargo.toml` (o workspace fica em `compiler/`) — e todo teste
+  que executa binário nativo falhava com `native.runtime_missing`. O
+  fallback (e a resolução de `target/`) agora usa a raiz do workspace
+  cargo; a busca do runtime staged continua na raiz do repo. Isso
+  destrava o workflow `native-route`, vermelho desde a separação do
+  runtime staged.
+
 ## [0.3.6] — 2026-07-19
 
 Patch release da janela FREEZE-1 (correções de memória/codegen, sem mudança
