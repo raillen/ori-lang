@@ -22,6 +22,15 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   seção "Updating" em `docs/install.md`/`install.pt-BR.md`.
 
 ### Corrigido
+- **Guards de `match` eram silenciosamente ignorados.** `case padrão if
+  condição:` parseava e passava no type check, mas o lowering AST→HIR
+  descartava o guard — o primeiro braço com binding capturava qualquer
+  valor em tempo de execução, nos três caminhos (JIT, AOT e backend C),
+  ao contrário do que a Spec 06 §match promete. O guard agora é avaliado
+  com os bindings do padrão em escopo; quando falso, a execução cai para
+  o teste do braço seguinte (liberando apenas os retains dos bindings do
+  braço rejeitado — o scrutinee segue vivo para os próximos testes).
+  Regressão coberta nos três caminhos (`ori_spec`, `jit_run`, emissão C).
 - **CI: fallback de build do runtime nativo rodava fora do workspace.** Sem
   o `runtime/<target>/libori_runtime.a` staged (caso do CI), o driver
   tentava `cargo build -p ori-runtime --lib` na raiz do repositório — que
