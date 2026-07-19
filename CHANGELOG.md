@@ -8,7 +8,48 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [Unreleased] — linha `0.4`
+
+> **FREEZE-1 closed 2026-07-19.** A janela de congelamento da superfície
+> (aberta em 2026-07-13) cumpriu o papel: a série `0.3.x` inteira saiu sem
+> nenhuma quebra intencional de superfície. A linha de desenvolvimento passa
+> a ser **`0.4`** (`compiler/Cargo.toml` = `0.4.0`), onde entram as adições de
+> sintaxe decididas em 2026-07-19. **ABI-1 (`ori-native-abi-1`) continua em
+> vigor** — nada aqui muda layout nativo. Detalhes e regras da nova linha:
+> [`docs/planning/freeze-and-abi-gates.md`](docs/planning/freeze-and-abi-gates.md).
+>
+> Programas `0.3.x` seguem compilando; programas que usam a superfície `0.4`
+> não compilam em toolchains `0.3.x` — é justamente o motivo da nova linha.
+
+### Adicionado
+- **`match` como expressão.** Cada braço tem um corpo de **uma expressão** e o
+  `match` inteiro produz um valor, então derivar um valor de um padrão não
+  exige mais uma variável mutável temporária — e some junto a classe de bug
+  "esqueci de atribuir em um dos braços" (a exaustividade já garante valor em
+  todo caminho).
+
+  ```ori
+  const nota: string = match score
+  case n if n >= 90: "A"
+  case else: "C"
+  end
+  ```
+
+  Não é uma segunda forma de escrever a mesma coisa: o `if` já tem esse par
+  (comando × expressão), e a **posição** decide qual vale — o escritor nunca
+  escolhe. Guards funcionam igual à forma de comando, os braços **não** são
+  avaliados especulativamente (exatamente um corpo executa), e todos precisam
+  produzir o mesmo tipo (diagnóstico novo `type.match_arm_mismatch`).
+  Implementação: Cranelift converge os braços num *block param* (phi) em vez
+  do `select` usado pelo `if` expressão; backend C usa temporária de resultado
+  + cadeia `if`/`goto`. ARC: o valor que sai é sempre *owned*.
+
+### Corrigido
+- **DCE apagava binding usado só como escrutínio de expressão nova.** A
+  eliminação de código morto não contava usos dentro de tipos de expressão
+  recém-adicionados (a travessia tinha catch-all), então `const n = 2` seguido
+  de um `match n` em posição de valor perdia o `n` e o codegen falhava com
+  `undefined variable`. Achado ao implementar o `match` expressão.
 
 ## [0.3.7] — 2026-07-19
 
