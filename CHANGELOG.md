@@ -145,6 +145,27 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `type.unknown_field`, `parse.empty_destructure`.
 
 ### Corrigido
+- **Associated types em `apply … use …` eram parseados e ignorados.** Um
+  `type Item = int` dentro de uma seção `use Trait` era coletado pelo parser
+  e descartado: nada mais lia aquilo, então usar `Item` na assinatura da
+  própria seção dava `undefined type Item`.
+
+  ```ori
+  apply Bag use Container
+      type Item = string
+      first_item(self) -> Item
+          return self.label
+      end
+  end
+  ```
+
+  O lowering para HIR já tratava isso; faltava nas **duas** fases anteriores
+  (montagem das assinaturas no resolve, e comparação/checagem no checker) —
+  as duas precisavam da correção para o nome resolver. O escopo continua
+  estrito: os aliases valem só dentro da própria seção `use`, e um associated
+  type que resolve para o tipo errado continua reprovando na comparação com a
+  trait. Fecha o terceiro dos três bugs de sistema de tipos do §3 do roadmap
+  (const generics e HKT seguem abertos).
 - **Chamada de método ficava sem tipo de retorno quando o contexto não dava
   um.** Ao resolver o método pelo caminho, o lowering preenchia `Ty::Infer` em
   vez de ler a assinatura do próprio método. Resultado: `const d =
