@@ -145,6 +145,21 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `type.unknown_field`, `parse.empty_destructure`.
 
 ### Corrigido
+- **Chamada de método ficava sem tipo de retorno quando o contexto não dava
+  um.** Ao resolver o método pelo caminho, o lowering preenchia `Ty::Infer` em
+  vez de ler a assinatura do próprio método. Resultado: `const d =
+  p.double()` (sem anotação) ou `f"{p.double()}"` chegavam ao codegen sem
+  tipo e falhavam com *"native interpolated strings do not support expression
+  type `_#0`"*. A f-string era só onde o problema aparecia — a anotação em
+  `const d: int = p.double()` vinha escondendo o bug.
+- **Análise de retorno exigia `case else` em `match` já exaustivo.** Um
+  `match` sobre enum que listava todas as variantes e retornava em todos os
+  braços ainda era reportado como "pode terminar sem retornar", obrigando a
+  escrever um `case else` morto só para satisfazer a checagem. A análise de
+  retorno não tem tipos (são funções livres) e não conseguia recalcular a
+  cobertura, então a exaustividade passou a ser **registrada pelo checker**
+  no momento em que ele já a calcula. A checagem segue estrita: `match` com
+  variante faltando, ou com braço que não retorna, continua sendo reportado.
 - **Diagnósticos de tipo vazavam `<def DefId(16)>` para o leitor.** Era a
   primeira coisa que alguém veria ao usar um `newtype` errado — numa feature
   que existe para tornar os tipos de domínio legíveis, uma mensagem ilegível
