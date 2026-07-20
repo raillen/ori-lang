@@ -144,6 +144,34 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   vazamento). Diagnósticos novos: `type.destructure_not_struct`,
   `type.unknown_field`, `parse.empty_destructure`.
 
+- **Const generics com argumentos nomeados.** Declarar
+  `struct Buffer[const size: int]` já parseava, mas o tipo não dava para
+  usar: `Buffer { used: 0 }` produzia `Buffer` sem argumento e nunca casava
+  com a anotação.
+
+  ```ori
+  struct Buffer[const size: int]
+      used: int
+  end
+
+  const b: Buffer[size: 8] = Buffer { used: 0 }
+  ```
+
+  **Por que nomeados:** `[]` serve tanto para argumento de tipo quanto para
+  índice, e um número solto entre colchetes (`Buffer[8]`) lê igualzinho a
+  `frutas[8]` — é o único ponto onde a posição deixa de desambiguar para
+  quem lê (e, como o sentinela mostrava, para o parser). Com nome, não há
+  confusão: índice nunca tem `nome:`. Colchetes angulares foram considerados
+  e recusados — `<` e `>` **são** operadores de comparação, então `Buffer<8>`
+  trocaria uma ambiguidade leve por uma dura no parser, e ainda deixaria um
+  número solto entre delimitadores.
+
+  O valor faz parte da identidade do tipo: `Buffer[size: 8]` e
+  `Buffer[size: 16]` são **tipos diferentes**. O literal herda os argumentos
+  **const** do tipo esperado (o valor só aparece na anotação) — argumentos de
+  tipo continuam vindo dos campos, de propósito. A constante é um marcador de
+  compilação: não ocupa espaço e não chega ao runtime.
+
 - **Associated types passam a usar `alias`; a palavra `type` saiu da
   linguagem.** A linguagem tinha três palavras para dar nome a um tipo:
   `alias` (transparente), `newtype` (nominal) e `type` (associado, só dentro
