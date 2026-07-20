@@ -144,6 +144,28 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   vazamento). Diagnósticos novos: `type.destructure_not_struct`,
   `type.unknown_field`, `parse.empty_destructure`.
 
+- **Associated types passam a usar `alias`; a palavra `type` saiu da
+  linguagem.** A linguagem tinha três palavras para dar nome a um tipo:
+  `alias` (transparente), `newtype` (nominal) e `type` (associado, só dentro
+  de `use`). As duas primeiras são um par justificado — significados opostos.
+  A terceira era uma segunda palavra para o que `alias` já significa: um nome
+  transparente para um tipo. Estar dentro de uma seção `use` é o que a torna
+  associada; isso não precisava de palavra própria.
+
+  ```ori
+  apply Bag use Container
+      alias Item = string
+      first_item(self) -> Item
+          return self.label
+      end
+  end
+  ```
+
+  `type Name = …` agora é rejeitado (`parse.associated_type_keyword_removed`)
+  e o `ori migrate-syntax` reescreve. Nada na stdlib ou nos examples usava a
+  forma antiga. Bônus: `type` volta a ser identificador comum (era uma
+  keyword contextual).
+
 ### Corrigido
 - **Associated types em `apply … use …` eram parseados e ignorados.** Um
   `type Item = int` dentro de uma seção `use Trait` era coletado pelo parser
