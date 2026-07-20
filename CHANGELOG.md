@@ -124,6 +124,26 @@ e o projeto adere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   resto para o diagnóstico, que imprime a linha exata a escrever. `stdlib` e
   `examples` já migrados.
 
+- **Destructuring de struct.** Pegar três campos de uma struct obrigava a
+  repetir o nome dela em cada linha:
+
+  ```ori
+  const Point { x, y } = get_pos()      -- tipo escrito
+  const { x, y } = get_pos()            -- tipo inferido (regra da opção B)
+  const Point { x: px, y: py } = pos    -- renomeando ao ligar
+  var { x, y } = get_pos()              -- bindings mutáveis
+  ```
+
+  **Só campos de struct.** A Ori tem tuplas, mas `const (a, b) = …` devolveria
+  ao leitor a pergunta "o que era o campo 2 mesmo?" — exatamente o custo que
+  essa forma existe para remover, então ficam de fora.
+
+  O lowering desugara para uma temporária mais um acesso de campo por nome —
+  por isso a feature não precisou de nó novo no HIR nem de nada no codegen, e
+  campos gerenciados se comportam como qualquer outro binding (com teste de
+  vazamento). Diagnósticos novos: `type.destructure_not_struct`,
+  `type.unknown_field`, `parse.empty_destructure`.
+
 ### Corrigido
 - **Diagnósticos de tipo vazavam `<def DefId(16)>` para o leitor.** Era a
   primeira coisa que alguém veria ao usar um `newtype` errado — numa feature
